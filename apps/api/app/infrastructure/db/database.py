@@ -8,7 +8,7 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql+psycopg://spintlogic:spintlogic@localhost:5432/spintlogic_dev",
+    "postgresql+psycopg://sprintlogic:sprintlogic@localhost:5432/sprintlogic_dev",
 )
 
 

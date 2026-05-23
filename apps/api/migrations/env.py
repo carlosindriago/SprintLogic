@@ -13,7 +13,7 @@ config = context.config
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql+psycopg://spintlogic:spintlogic@localhost:5432/spintlogic_dev",
+    "postgresql+psycopg://sprintlogic:sprintlogic@localhost:5432/sprintlogic_dev",
 )
 config.set_main_option("sqlalchemy.url", DATABASE_URL)
 

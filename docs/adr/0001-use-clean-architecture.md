@@ -7,7 +7,7 @@ Use Clean Architecture
 Accepted
 
 ## Context
-SpintLogic is being built as a B2B SaaS that will evolve across multiple domains, integrations, and delivery teams. We need an architecture that protects business rules from framework churn, infrastructure concerns, and UI changes. The team also wants long-term maintainability, strong testability, and clear boundaries inside a monorepo.
+sprintLogic is being built as a B2B SaaS that will evolve across multiple domains, integrations, and delivery teams. We need an architecture that protects business rules from framework churn, infrastructure concerns, and UI changes. The team also wants long-term maintainability, strong testability, and clear boundaries inside a monorepo.
 
 ## Decision
 We will adopt Clean Architecture across the backend and respect equivalent separation principles across the monorepo. Core business rules will live in domain and application layers, while frameworks, persistence, transport, and third-party providers will remain in infrastructure/interface layers. Dependencies must point inward, and the domain must remain independent from FastAPI, ORMs, queues, and external SDKs.

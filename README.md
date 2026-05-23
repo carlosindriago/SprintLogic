@@ -1,4 +1,4 @@
-# SpintLogic
+# sprintLogic
 
 Planificación inicial del producto antes de escribir código.
 
