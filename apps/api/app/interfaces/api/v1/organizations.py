@@ -5,9 +5,13 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel, ConfigDict
+from sqlalchemy.orm import Session
 
 from app.application.create_organization import CreateOrganization
-from app.domain.organization import Organization
+from app.infrastructure.db.database import get_db_session
+from app.infrastructure.repositories.sqlalchemy_organization_repository import (
+    SQLAlchemyOrganizationRepository,
+)
 from app.interfaces.organization_repository import OrganizationRepository
 
 router = APIRouter(prefix="/organizations", tags=["organizations"])
@@ -25,8 +29,10 @@ class OrganizationResponse(BaseModel):
     created_at: datetime
 
 
-async def get_organization_repository() -> OrganizationRepository:
-    raise NotImplementedError("Organization repository dependency is not configured")
+async def get_organization_repository(
+    session: Session = Depends(get_db_session),
+) -> OrganizationRepository:
+    return SQLAlchemyOrganizationRepository(session)
 
 
 @router.post("", response_model=OrganizationResponse, status_code=status.HTTP_201_CREATED)
