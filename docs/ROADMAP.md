@@ -11,7 +11,8 @@ Cerrar la base estratégica y técnica antes del desarrollo.
 - reglas de desarrollo;
 - backlog MVP priorizado;
 - diccionario inicial de métricas;
-- diseño del modelo multi-tenant.
+- diseño del modelo multi-tenant;
+- **definición de integración Git y motor de IA.**
 
 ### Gate de salida
 - stack aprobado;
@@ -51,14 +52,31 @@ Llevar el tablero Kanban al primer nivel usable.
 - asignaciones;
 - prioridades;
 - tipos de tarea;
-- bloqueos y dependencias básicas.
+- bloqueos y dependencias básicas;
+- **generación automática de tareas y subtareas con IA.**
 
 ### Resultado esperado
-El equipo puede planificar y operar trabajo diario en la plataforma.
+El equipo puede planificar y operar trabajo diario en la plataforma con asistencia de IA.
 
 ---
 
-## Fase 3 — Focus & Time Intelligence
+## Fase 3 — AI Git Workflow & Code Traceability
+
+### Objetivo
+Unir la tarea con el código real y automatizar buenas prácticas de desarrollo con IA.
+
+### Entregables
+- creación de ramas sugeridas por IA;
+- autogeneración de mensajes de commit semánticos;
+- visualización de ramas, commits y PRs en la tarea;
+- auditoría visual del diff del código desde la plataforma.
+
+### Resultado esperado
+El desarrollador codifica, y la herramienta garantiza que Git siga el flujo perfecto y quede trazable a la tarea.
+
+---
+
+## Fase 4 — Focus & Time Intelligence
 
 ### Objetivo
 Capturar el trabajo real con la menor fricción posible.
@@ -130,13 +148,12 @@ Producto listo para pilotos y primeros clientes.
 ## Secuencia recomendada de implementación
 
 1. Tenancy y auth
-2. Proyectos y board
-3. Tareas y estados
-4. Timer y sesiones
+2. Proyectos, board y AI Planning
+3. Integración Git (Ramas, Commits, Diffs)
+4. Tareas, estados y timer
 5. Métricas base
-6. Dashboard
-7. Reportes
-8. Hardening
+6. Dashboard y Reportes
+7. Hardening
 
 ## Backlog post-MVP
 

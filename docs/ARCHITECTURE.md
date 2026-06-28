@@ -26,6 +26,8 @@ Esto permite velocidad de entrega hoy, sin cerrar el camino a separar servicios 
 | Queue / cache | Redis | colas, locks, cache, rate limiting, idempotencia |
 | Workers | Celery | PDFs, emails, snapshots y jobs programados |
 | Reportes | HTML + PDF renderer | un solo template para web/PDF |
+| IA | LangChain / LiteLLM o SDK directo | agnosticisimo de LLMs, parseo estructurado |
+| Integración Git | PyGithub / GitLab API | acceso a repos, branches y commits desde backend |
 | Email | Resend | simple para reportes transaccionales |
 | Observabilidad | Sentry + OpenTelemetry + logs estructurados | errores, trazas y diagnóstico |
 | Analítica de uso | PostHog | adopción, funnels y product analytics |
@@ -108,20 +110,27 @@ Infrastructure → Application / Domain contracts
 - tiempo efectivo;
 - sesiones activas.
 
-### 5.5 Analytics Engine
+### 5.5 AI & Git Automation Engine
+- prompts de generación de tareas;
+- generador de nombres de ramas (branching rules);
+- autogeneración de commit messages semánticos;
+- sincronización de repositorios, ramas y PRs (Git Gateway);
+- extracción de diffs.
+
+### 5.6 Analytics Engine
 - agregaciones por tarea, persona, sprint y proyecto;
 - proyecciones;
 - snapshots diarios;
 - cálculo de KPIs.
 
-### 5.6 Reporting
+### 5.7 Reporting
 - plantillas;
 - generación PDF;
 - scheduling;
 - envío por email;
 - historial de reportes.
 
-### 5.7 Notification Layer
+### 5.8 Notification Layer
 - eventos críticos;
 - recordatorios;
 - alertas de riesgo;
@@ -137,6 +146,7 @@ Next.js Web App
 FastAPI Application
    ├── Identity & Org
    ├── Projects / Tasks
+   ├── AI & Git Automation Engine
    ├── Focus Sessions
    ├── Analytics
    ├── Reports
@@ -161,6 +171,9 @@ PostgreSQL  ←→  Supabase Auth / Realtime
 - `tasks`
 - `task_dependencies`
 - `task_assignments`
+- `git_repositories`
+- `git_branches`
+- `git_commits`
 - `focus_sessions`
 - `focus_interruptions`
 - `time_entries` *(derivada o materializada según diseño final)*

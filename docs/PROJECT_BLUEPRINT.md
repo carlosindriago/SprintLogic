@@ -2,31 +2,31 @@
 
 ## 1. Visión
 
-Construir una plataforma SaaS B2B para equipos de desarrollo que una **gestión visual del trabajo**, **time tracking real**, **Pomodoro por tarea** y **analítica operativa** para convertir la gestión de proyectos en un sistema medible, predecible y reportable.
+Construir una plataforma SaaS B2B que sea el **centro de comando integral del ciclo de desarrollo**. Uniendo gestión visual, un motor de **Inteligencia Artificial para planificación y ejecución de Git**, y analítica operativa. SprintLogic no solo mide el trabajo, sino que **asiste activamente al desarrollador** (generando ramas, sugiriendo commits y verificando diffs) para forzar un flujo de trabajo ágil, estandarizado y profesional.
 
 ## 2. Problema que resuelve
 
 Las herramientas actuales suelen resolver solo una parte:
 
 - gestionan tareas, pero no la realidad operativa;
-- registran tiempo, pero con fricción y baja calidad de dato;
-- generan reporting manual y tardío;
-- no ayudan a proyectar atrasos, sobrecargas y costo de interrupciones.
+- el código (Git) y la tarea viven desconectados, lo que dificulta la trazabilidad;
+- los flujos de Git (ramas, commits atómicos) dependen puramente de la disciplina humana y suelen degradarse;
+- registran tiempo con fricción y generan reporting manual y tardío.
 
 ## 3. Tesis de producto
 
 Si el trabajo real se captura en el momento en que ocurre, y ese dato se conecta con tareas, estimaciones, capacidad y resultados, entonces la empresa puede:
 
-- estimar mejor;
-- detectar desvíos antes;
-- reducir retrabajo;
-- reportar automáticamente a liderazgo y clientes;
-- mejorar continuamente su sistema de trabajo.
+- estandarizar y automatizar la creación de ramas y commits atómicos con IA;
+- auditar los cambios reales del código (diffs) contra la tarea planificada;
+- detectar desvíos antes y reducir retrabajo;
+- reportar automáticamente a liderazgo y mejorar continuamente el sistema de trabajo.
 
 ## 4. Usuarios objetivo
 
 ### Developer
 - Quiere claridad de tareas, foco y mínima fricción.
+- Necesita que "hacer lo correcto" (crear ramas bien nombradas, commits semánticos) sea automático gracias a la IA.
 - Necesita registrar trabajo sin “rellenar horas” después.
 
 ### Team Lead / Project Manager
@@ -39,10 +39,9 @@ Si el trabajo real se captura en el momento en que ocurre, y ese dato se conecta
 ## 5. Propuesta de valor
 
 ### Para el equipo
-- foco por tarea;
-- menos multitarea invisible;
-- claridad de prioridades;
-- trazabilidad del trabajo real.
+- automatización del workflow de Git (ramas y commits semánticos generados por IA);
+- foco por tarea y menos multitarea invisible;
+- trazabilidad absoluta entre el diff de código y la tarea original.
 
 ### Para gestión
 - tablero vivo;
@@ -65,6 +64,7 @@ Si el trabajo real se captura en el momento en que ocurre, y ese dato se conecta
 5. **Arquitectura modular monolith primero, microservicios después solo si el negocio lo exige**.
 6. **Todo KPI debe tener definición única y trazable**.
 7. **Toda automatización debe ser explicable al usuario**.
+8. **La IA es un Copiloto, no un Bloqueo**: La Inteligencia Artificial actúa como un acelerador para generar ramas, tareas y commits, pero NUNCA bloquea el flujo. El desarrollador siempre tiene la opción de operar de manera 100% manual y retiene el control absoluto de sus acciones.
 
 ## 7. Alcance MVP
 
@@ -76,17 +76,10 @@ Si el trabajo real se captura en el momento en que ocurre, y ese dato se conecta
 4. Tareas con estimación, prioridad, tipo, asignación y bloqueo.
 5. Focus Timer por tarea con sesiones, pausas y motivo de interrupción.
 6. Time tracking automático derivado de sesiones.
-7. Dashboard ejecutivo por proyecto.
-8. Reporte semanal automático en web + PDF.
-9. Métricas base:
-   - throughput;
-   - lead time;
-   - cycle time;
-   - WIP;
-   - estimado vs real;
-   - horas foco vs horas registradas;
-   - costo de interrupciones;
-   - predicción simple de finalización.
+7. **AI Git Assistant**: generación automática de nombres de ramas y mensajes de commit basados en la tarea activa.
+8. **Git Workflow Auditor**: visualización de ramas, commits y diffs directamente desde la tarea para revisión rápida.
+9. Dashboard ejecutivo por proyecto y Reporte semanal automático.
+10. Métricas base (throughput, lead time, cycle time, WIP).
 
 ### Fuera del MVP
 
@@ -101,10 +94,10 @@ Si el trabajo real se captura en el momento en que ocurre, y ese dato se conecta
 ## 8. Épicas del MVP
 
 1. **Foundation & tenancy**
-2. **Work management**
-3. **Focus & time intelligence**
-4. **Analytics & executive dashboard**
-5. **Reporting & notifications**
+2. **Work management & AI Planning**
+3. **AI Git Workflow & Code Traceability**
+4. **Focus & time intelligence**
+5. **Analytics, executive dashboard & reporting**
 6. **Security, observability & hardening**
 
 ## 9. KPIs de producto
@@ -116,7 +109,7 @@ Si el trabajo real se captura en el momento en que ocurre, y ese dato se conecta
 
 ### Operación
 - porcentaje de tareas con estimación;
-- porcentaje de tareas con tiempo real capturado;
+- porcentaje de tareas en las que la IA generó el commit/rama;
 - ratio de sesiones completadas vs interrumpidas.
 
 ### Valor de negocio
