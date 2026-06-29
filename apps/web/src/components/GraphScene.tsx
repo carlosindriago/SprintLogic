@@ -68,23 +68,19 @@ export default function GraphScene({ projectId, onNodeClick }: { projectId: numb
     ctx.moveTo(link.source.x, link.source.y);
     ctx.lineTo(link.target.x, link.target.y);
 
+    const grad = ctx.createLinearGradient(link.source.x, link.source.y, link.target.x, link.target.y);
     if (link.type === "IMPORTS") {
-      ctx.lineWidth = 0.5 / globalScale; // Very thin
-      // White gradient: fades at edges, bright in the center
-      const grad = ctx.createLinearGradient(link.source.x, link.source.y, link.target.x, link.target.y);
-      grad.addColorStop(0, "rgba(255, 255, 255, 0.05)");
-      grad.addColorStop(0.5, "rgba(255, 255, 255, 0.75)");
-      grad.addColorStop(1, "rgba(255, 255, 255, 0.05)");
-      ctx.strokeStyle = grad;
+      ctx.lineWidth = 0.6 / globalScale;
+      grad.addColorStop(0, "rgba(203, 213, 225, 0.0)");   // slate-300 transparent
+      grad.addColorStop(0.5, "rgba(203, 213, 225, 0.6)"); // slate-300 semi-bright center
+      grad.addColorStop(1, "rgba(203, 213, 225, 0.0)");   // slate-300 transparent
     } else {
-      ctx.lineWidth = 0.2 / globalScale; // Extremely thin for standard contains
-      const grad = ctx.createLinearGradient(link.source.x, link.source.y, link.target.x, link.target.y);
-      grad.addColorStop(0, "rgba(148, 163, 184, 0.05)");
-      grad.addColorStop(0.5, "rgba(148, 163, 184, 0.3)");
-      grad.addColorStop(1, "rgba(148, 163, 184, 0.05)");
-      ctx.strokeStyle = grad;
+      ctx.lineWidth = 0.25 / globalScale;
+      grad.addColorStop(0, "rgba(148, 163, 184, 0.0)");   // slate-400 transparent
+      grad.addColorStop(0.5, "rgba(148, 163, 184, 0.25)"); // slate-400 faint center
+      grad.addColorStop(1, "rgba(148, 163, 184, 0.0)");   // slate-400 transparent
     }
-    
+    ctx.strokeStyle = grad;
     ctx.stroke();
   };
 
