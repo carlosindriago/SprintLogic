@@ -56,7 +56,7 @@ export default function Home() {
 
   return (
     <div className="h-screen w-full bg-slate-950 text-slate-200 overflow-hidden">
-      <ResizablePanelGroup direction="horizontal" autoSaveId="sprintlogic-layout">
+      <ResizablePanelGroup direction="horizontal">
         <ResizablePanel id="sidebar-left" order={1} defaultSize={20} minSize={15} maxSize={40} className="bg-slate-900 border-r border-slate-800 flex flex-col min-w-0 overflow-hidden">
           <ScrollArea className="flex-1">
             <div className="p-4 flex flex-col gap-4">
