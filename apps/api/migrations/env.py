@@ -6,14 +6,14 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
-from app.infrastructure.db.database import Base
+from app.infrastructure.db.database import Base, DB_PATH
 from app.infrastructure.db import models  # noqa: F401
 
 config = context.config
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql+psycopg://sprintlogic:sprintlogic@localhost:5432/sprintlogic_dev",
+    f"sqlite:///{DB_PATH}",
 )
 config.set_main_option("sqlalchemy.url", DATABASE_URL)
 

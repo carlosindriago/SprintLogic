@@ -27,7 +27,6 @@ class ProjectStatus(Enum):
 class Project:
     name: str
     slug: str
-    organization_id: UUID
     status: ProjectStatus = field(default=ProjectStatus.BACKLOG)
     id: UUID = field(default_factory=uuid4)
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))

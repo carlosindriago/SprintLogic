@@ -1,10 +1,6 @@
 from fastapi import FastAPI
 
-from app.interfaces.api.v1.organizations import router as organizations_router
-
 app = FastAPI(title="sprintLogic API")
-
-app.include_router(organizations_router, prefix="/api/v1")
 
 
 @app.get("/health")
