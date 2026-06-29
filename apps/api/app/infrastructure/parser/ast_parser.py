@@ -179,6 +179,10 @@ class ASTParserService:
                                 target_id=target_id,
                                 type=EdgeType.IMPORTS
                             ))
-                        break
-                        
-        return all_nodes, all_edges
+        # Deduplicate edges to prevent DB IntegrityError (UNIQUE constraint failed)
+        unique_edges = {}
+        for edge in all_edges:
+            key = (edge.source_id, edge.target_id, edge.type)
+            unique_edges[key] = edge
+            
+        return all_nodes, list(unique_edges.values())
