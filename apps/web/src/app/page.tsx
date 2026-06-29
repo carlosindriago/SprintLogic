@@ -14,6 +14,7 @@ import { scanProject, getFileContent } from "@/lib/api";
 import Editor from "@monaco-editor/react";
 
 const GraphScene = dynamic(() => import("@/components/GraphScene"), { ssr: false });
+const JarvisChat = dynamic(() => import("@/components/JarvisChat"), { ssr: false });
 
 export default function Home() {
   const [path, setPath] = useState("");
@@ -100,6 +101,26 @@ export default function Home() {
 
               <Card className="bg-slate-800 border-slate-700 text-slate-200">
                 <CardHeader className="p-4 pb-2">
+                  <CardTitle className="text-sm font-medium">Configuración</CardTitle>
+                </CardHeader>
+                <CardContent className="p-4 pt-0">
+                  <Button variant="outline" className="w-full bg-slate-900 border-slate-700 hover:bg-slate-800 text-xs mt-2" onClick={() => {
+                    const key = prompt("Ingresa tu API Key de Gemini:");
+                    if (key) {
+                      fetch("http://localhost:8000/api/v1/settings/api-key", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ api_key: key })
+                      }).then(() => alert("API Key guardada!"));
+                    }
+                  }}>
+                    🔑 Configurar Gemini API Key
+                  </Button>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-slate-800 border-slate-700 text-slate-200">
+                <CardHeader className="p-4 pb-2">
                   <CardTitle className="text-sm font-medium">Git Status</CardTitle>
                 </CardHeader>
                 <CardContent className="p-4 pt-0 text-xs text-slate-400">
@@ -173,25 +194,28 @@ export default function Home() {
           </div>
         </ResizablePanel>
 
-        {selectedNode && (
+        {(selectedNode || true) && (
           <>
             <ResizableHandle className="bg-slate-800 w-1 hover:bg-blue-500 transition-colors" />
             <ResizablePanel id="sidebar-right" defaultSize="30%" minSize="200px" className="bg-[#1e1e1e] flex flex-col border-l border-slate-800 min-w-0 overflow-hidden">
-              <div className="flex items-center justify-between p-3 border-b border-slate-800 bg-slate-900">
-                <span className="text-sm font-mono text-slate-300 truncate" title={selectedNode.file_path}>
-                  {selectedNode.name || "Archivo"}
-                </span>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  className="h-6 w-6 p-0 text-slate-400 hover:text-white"
-                  onClick={() => setSelectedNode(null)}
-                >
-                  &times;
-                </Button>
+              <div className="flex items-center gap-2 px-2 pt-2 border-b border-slate-800 bg-slate-900">
+                <button className={`px-3 py-1.5 text-xs font-medium rounded-t border-b-2 ${selectedNode ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-slate-300'}`}>Inspector</button>
+                <button className={`px-3 py-1.5 text-xs font-medium rounded-t border-b-2 ${!selectedNode ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-slate-300'}`}>Jarvis</button>
+                {selectedNode && (
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-6 w-6 p-0 text-slate-400 hover:text-white ml-auto mb-1"
+                    onClick={() => setSelectedNode(null)}
+                  >
+                    &times;
+                  </Button>
+                )}
               </div>
-              <div className="flex-1 relative">
-                {loadingFile ? (
+              <div className="flex-1 relative overflow-hidden">
+                {!selectedNode ? (
+                  <JarvisChat projectId={projectId} />
+                ) : loadingFile ? (
                   <div className="absolute inset-0 flex items-center justify-center text-slate-500">
                     Cargando código...
                   </div>

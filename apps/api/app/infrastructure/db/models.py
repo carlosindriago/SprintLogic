@@ -41,3 +41,24 @@ class GitRepositoryModel(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     path: Mapped[str] = mapped_column(String(1024), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+
+class JarvisMemoryModel(Base):
+    __tablename__ = "jarvis_memories"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    project_id: Mapped[int | None] = mapped_column(ForeignKey("git_repositories.id", ondelete="CASCADE"), nullable=True)
+    memory_type: Mapped[str] = mapped_column(String(50), nullable=False) # e.g. "decision", "summary"
+    topic: Mapped[str] = mapped_column(String(255), nullable=False)
+    content: Mapped[str] = mapped_column(String, nullable=False) # Text equivalent
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+class ContextSnippetModel(Base):
+    __tablename__ = "context_snippets"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    project_id: Mapped[int | None] = mapped_column(ForeignKey("git_repositories.id", ondelete="CASCADE"), nullable=True)
+    type: Mapped[str] = mapped_column(String(50), nullable=False) # e.g. "dependency", "doc"
+    content: Mapped[str] = mapped_column(String, nullable=False)
+    # The actual vectors will be stored in a raw sqlite-vec virtual table `vec_context_snippets`
+    # linked by rowid = ContextSnippetModel.id
+

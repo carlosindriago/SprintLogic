@@ -1,15 +1,22 @@
 fastapi>=0.115.0
 uvicorn[standard]>=0.30.0
 pytest>=8.0.0
+pytest-asyncio>=0.23.0
 sqlalchemy>=2.0.0
 httpx>=0.28.0
 alembic>=1.16.0
 aiosqlite>=0.20.0
+sqlite-vec>=0.1.6
 keyring>=25.0.0
 litellm>=1.0.0
 tree-sitter>=0.23.0
 tree-sitter-python>=0.23.0
 tree-sitter-typescript>=0.23.0
+tree-sitter-java
+tree-sitter-php
+tree-sitter-go
+tree-sitter-html
+tree-sitter-css
 
 [dev]
 ruff>=0.9.0

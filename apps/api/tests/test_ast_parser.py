@@ -11,7 +11,7 @@ def my_function():
     pass
 """
     file_path = "fake/path.py"
-    nodes, edges = extract_nodes_from_code(file_path, code, ".py")
+    nodes, edges, _ = extract_nodes_from_code(file_path, code, ".py")
     
     assert len(nodes) == 4 # File, MyClass, my_method, my_function
     
