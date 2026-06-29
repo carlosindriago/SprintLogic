@@ -57,7 +57,7 @@ export default function Home() {
   return (
     <div className="h-screen w-full bg-slate-950 text-slate-200 overflow-hidden">
       <ResizablePanelGroup direction="horizontal">
-        <ResizablePanel id="sidebar-left" defaultSize={20} minSize={15} maxSize={40} className="bg-slate-900 border-r border-slate-800 flex flex-col min-w-0 overflow-hidden">
+        <ResizablePanel id="sidebar-left" defaultSize="260px" minSize="220px" maxSize="40%" className="bg-slate-900 border-r border-slate-800 flex flex-col min-w-0 overflow-hidden">
           <ScrollArea className="flex-1">
             <div className="p-4 flex flex-col gap-4">
               <h2 className="text-lg font-semibold text-slate-100 truncate">SprintLogic IDE</h2>
@@ -125,7 +125,7 @@ export default function Home() {
 
         <ResizableHandle className="bg-slate-800 w-1 hover:bg-blue-500 transition-colors" />
 
-        <ResizablePanel id="main-graph" defaultSize={60} minSize={30} className="min-w-0 overflow-hidden flex flex-col">
+        <ResizablePanel id="main-graph" defaultSize="60%" minSize="300px" className="min-w-0 overflow-hidden flex flex-col">
           <div className="flex-1 relative min-w-0 overflow-hidden">
             {projectId === null ? (
               <div className="flex flex-col items-center justify-center h-full bg-slate-950 text-center px-4">
@@ -176,7 +176,7 @@ export default function Home() {
         {selectedNode && (
           <>
             <ResizableHandle className="bg-slate-800 w-1 hover:bg-blue-500 transition-colors" />
-            <ResizablePanel id="sidebar-right" defaultSize={30} minSize={20} className="bg-[#1e1e1e] flex flex-col border-l border-slate-800 min-w-0 overflow-hidden">
+            <ResizablePanel id="sidebar-right" defaultSize="30%" minSize="200px" className="bg-[#1e1e1e] flex flex-col border-l border-slate-800 min-w-0 overflow-hidden">
               <div className="flex items-center justify-between p-3 border-b border-slate-800 bg-slate-900">
                 <span className="text-sm font-mono text-slate-300 truncate" title={selectedNode.file_path}>
                   {selectedNode.name || "Archivo"}
