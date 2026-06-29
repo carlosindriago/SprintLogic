@@ -36,6 +36,7 @@ export default function Home() {
   const [openAiKey, setOpenAiKey] = useState("");
   const [anthropicKey, setAnthropicKey] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [addProjectOpen, setAddProjectOpen] = useState(false);
 
   useEffect(() => {
     fetchProjects();
@@ -58,6 +59,7 @@ export default function Home() {
   const handleScan = async () => {
     if (!path) return;
     setLoading(true);
+    setAddProjectOpen(false);
     try {
       const data = await scanProject(path);
       setProjectId(data.project_id);
@@ -172,12 +174,10 @@ export default function Home() {
                     <div className="text-xs text-slate-400 mb-2">No hay proyectos guardados.</div>
                   )}
 
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button variant="outline" className="w-full bg-slate-900 border-slate-700 hover:bg-slate-800 text-xs">
-                        <Plus className="w-3 h-3 mr-2" /> Añadir Proyecto Local
-                      </Button>
-                    </DialogTrigger>
+                  <Button variant="outline" className="w-full bg-slate-900 border-slate-700 hover:bg-slate-800 text-xs" onClick={() => setAddProjectOpen(true)}>
+                    <Plus className="w-3 h-3 mr-2" /> Añadir Proyecto Local
+                  </Button>
+                  <Dialog open={addProjectOpen} onOpenChange={setAddProjectOpen}>
                     <DialogContent className="sm:max-w-[425px] bg-slate-900 text-slate-200 border-slate-800">
                       <DialogHeader>
                         <DialogTitle>Añadir Proyecto Local</DialogTitle>
