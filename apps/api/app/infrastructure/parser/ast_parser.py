@@ -2,6 +2,11 @@ import os
 import tree_sitter
 import tree_sitter_python
 import tree_sitter_typescript
+import tree_sitter_java
+import tree_sitter_php
+import tree_sitter_go
+import tree_sitter_html
+import tree_sitter_css
 
 from app.domain.graph_models import GraphNode, NodeLabel, GraphEdge, EdgeType
 
@@ -12,6 +17,17 @@ def get_language(ext):
         return tree_sitter.Language(tree_sitter_typescript.language_typescript())
     elif ext == ".tsx":
         return tree_sitter.Language(tree_sitter_typescript.language_tsx())
+    elif ext == ".java":
+        return tree_sitter.Language(tree_sitter_java.language())
+    elif ext == ".php":
+        # Note: tree_sitter_php has multiple languages, usually language_php()
+        return tree_sitter.Language(tree_sitter_php.language_php())
+    elif ext == ".go":
+        return tree_sitter.Language(tree_sitter_go.language())
+    elif ext in (".html", ".htm"):
+        return tree_sitter.Language(tree_sitter_html.language())
+    elif ext == ".css":
+        return tree_sitter.Language(tree_sitter_css.language())
     return None
 
 def extract_nodes_from_code(file_path: str, code: bytes, ext: str):
@@ -99,7 +115,7 @@ class ASTParserService:
             
             for file in files:
                 ext = os.path.splitext(file)[1]
-                if ext in (".py", ".ts", ".tsx"):
+                if ext in (".py", ".ts", ".tsx", ".java", ".php", ".go", ".html", ".htm", ".css"):
                     file_path = os.path.join(root, file)
                     try:
                         with open(file_path, "rb") as f:
