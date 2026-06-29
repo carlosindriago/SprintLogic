@@ -8,7 +8,7 @@ interface Message {
   content: string;
 }
 
-export default function JarvisChat({ projectId }: { projectId: number | null }) {
+export default function JarvisChat({ projectId }: { projectId: string | null }) {
   const [messages, setMessages] = useState<Message[]>([
     { role: "assistant", content: "Hola, soy Jarvis. ¿En qué te ayudo hoy?" }
   ]);

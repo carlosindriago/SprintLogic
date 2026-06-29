@@ -54,6 +54,7 @@ export default function Home() {
   const [selectedNode, setSelectedNode] = useState<any | null>(null);
   const [fileContent, setFileContent] = useState<string>("");
   const [loadingFile, setLoadingFile] = useState(false);
+  const [isMaximized, setIsMaximized] = useState(false);
 
   const handleScan = async () => {
     if (!path) return;
@@ -89,7 +90,9 @@ export default function Home() {
   return (
     <div className="h-screen w-full bg-slate-950 text-slate-200 overflow-hidden">
       <ResizablePanelGroup direction="horizontal">
-        <ResizablePanel id="sidebar-left" defaultSize="260px" minSize="220px" maxSize="40%" className="bg-slate-900 border-r border-slate-800 flex flex-col min-w-0 overflow-hidden">
+        {!isMaximized && (
+          <>
+            <ResizablePanel id="sidebar-left" defaultSize="260px" minSize="220px" maxSize="40%" className="bg-slate-900 border-r border-slate-800 flex flex-col min-w-0 overflow-hidden">
           <ScrollArea className="flex-1">
             <div className="p-4 flex flex-col gap-4">
               <div className="flex items-center justify-between">
@@ -241,73 +244,93 @@ export default function Home() {
           </ScrollArea>
         </ResizablePanel>
 
-        <ResizableHandle className="bg-slate-800 w-1 hover:bg-blue-500 transition-colors" />
+        {!isMaximized && (
+          <>
+            <ResizableHandle className="bg-slate-800 w-1 hover:bg-blue-500 transition-colors" />
 
-        <ResizablePanel id="main-graph" defaultSize="60%" minSize="300px" className="min-w-0 overflow-hidden flex flex-col">
-          <div className="flex-1 relative min-w-0 overflow-hidden">
-            {projectId === null ? (
-              <div className="flex flex-col items-center justify-center h-full bg-slate-950 text-center px-4">
-                <div className="w-16 h-16 bg-blue-500/10 text-blue-400 rounded-full flex items-center justify-center mb-6">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
-                </div>
-                <h3 className="text-3xl font-bold tracking-tight text-slate-100 mb-3">Bienvenido a SprintLogic</h3>
-                <p className="text-slate-400 max-w-md mb-8 leading-relaxed">
-                  Para comenzar, carga un proyecto local ingresando la ruta absoluta del repositorio. El motor AST escaneará y renderizará tu base de código en 2D.
-                </p>
-                <div className="flex w-full max-w-lg items-center space-x-2">
-                  <div className="flex flex-1 items-center space-x-2">
-                    <input
-                      type="text"
-                      value={path}
-                      onChange={(e) => setPath(e.target.value)}
-                      placeholder="/ruta/absoluta/a/tu/proyecto"
-                      className="flex-1 min-w-0 bg-slate-900 border border-slate-700 rounded-md p-2.5 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-                    />
-                    <Button onClick={async () => {
-                      try {
-                        const { open } = await import("@tauri-apps/plugin-dialog");
-                        const selected = await open({
-                          directory: true,
-                          multiple: false,
-                        });
-                        if (selected && typeof selected === "string") {
-                          setPath(selected);
-                        }
-                      } catch (err) {
-                        console.error("Failed to open dialog:", err);
-                      }
-                    }} variant="outline" className="px-3 bg-slate-800 border-slate-700 hover:bg-slate-700 h-10 whitespace-nowrap">
-                      Examinar...
-                    </Button>
+            <ResizablePanel id="main-graph" defaultSize="60%" minSize="300px" className="min-w-0 overflow-hidden flex flex-col">
+              <div className="flex-1 relative min-w-0 overflow-hidden">
+                {projectId === null ? (
+                  <div className="flex flex-col items-center justify-center h-full bg-slate-950 text-center px-4">
+                    <div className="w-16 h-16 bg-blue-500/10 text-blue-400 rounded-full flex items-center justify-center mb-6">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
+                    </div>
+                    <h3 className="text-3xl font-bold tracking-tight text-slate-100 mb-3">Bienvenido a SprintLogic</h3>
+                    <p className="text-slate-400 max-w-md mb-8 leading-relaxed">
+                      Para comenzar, carga un proyecto local ingresando la ruta absoluta del repositorio. El motor AST escaneará y renderizará tu base de código en 2D.
+                    </p>
+                    <div className="flex w-full max-w-lg items-center space-x-2">
+                      <div className="flex flex-1 items-center space-x-2">
+                        <input
+                          type="text"
+                          value={path}
+                          onChange={(e) => setPath(e.target.value)}
+                          placeholder="/ruta/absoluta/a/tu/proyecto"
+                          className="flex-1 min-w-0 bg-slate-900 border border-slate-700 rounded-md p-2.5 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                        />
+                        <Button onClick={async () => {
+                          try {
+                            const { open } = await import("@tauri-apps/plugin-dialog");
+                            const selected = await open({
+                              directory: true,
+                              multiple: false,
+                            });
+                            if (selected && typeof selected === "string") {
+                              setPath(selected);
+                            }
+                          } catch (err) {
+                            console.error("Failed to open dialog:", err);
+                          }
+                        }} variant="outline" className="px-3 bg-slate-800 border-slate-700 hover:bg-slate-700 h-10 whitespace-nowrap">
+                          Examinar...
+                        </Button>
+                      </div>
+                      <Button onClick={handleScan} disabled={loading || !path} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md h-10 whitespace-nowrap">
+                        {loading ? "Escaneando..." : "Cargar Proyecto"}
+                      </Button>
+                    </div>
                   </div>
-                  <Button onClick={handleScan} disabled={loading || !path} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md h-10 whitespace-nowrap">
-                    {loading ? "Escaneando..." : "Cargar Proyecto"}
-                  </Button>
-                </div>
+                ) : (
+                  <GraphScene projectId={projectId} onNodeClick={handleNodeClick} />
+                )}
               </div>
-            ) : (
-              <GraphScene projectId={projectId} onNodeClick={handleNodeClick} />
-            )}
-          </div>
-        </ResizablePanel>
+            </ResizablePanel>
+          </>
+        )}
 
         {(selectedNode || true) && (
           <>
-            <ResizableHandle className="bg-slate-800 w-1 hover:bg-blue-500 transition-colors" />
-            <ResizablePanel id="sidebar-right" defaultSize="30%" minSize="200px" className="bg-[#1e1e1e] flex flex-col border-l border-slate-800 min-w-0 overflow-hidden">
+            {!isMaximized && <ResizableHandle className="bg-slate-800 w-1 hover:bg-blue-500 transition-colors" />}
+            <ResizablePanel id="sidebar-right" defaultSize={isMaximized ? 100 : 30} minSize={isMaximized ? 100 : 20} className="bg-[#1e1e1e] flex flex-col border-l border-slate-800 min-w-0 overflow-hidden">
               <div className="flex items-center gap-2 px-2 pt-2 border-b border-slate-800 bg-slate-900">
                 <button className={`px-3 py-1.5 text-xs font-medium rounded-t border-b-2 ${selectedNode ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-slate-300'}`}>Inspector</button>
                 <button className={`px-3 py-1.5 text-xs font-medium rounded-t border-b-2 ${!selectedNode ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-slate-300'}`}>Jarvis</button>
-                {selectedNode && (
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="h-6 w-6 p-0 text-slate-400 hover:text-white ml-auto mb-1"
-                    onClick={() => setSelectedNode(null)}
-                  >
-                    &times;
-                  </Button>
-                )}
+                
+                <div className="ml-auto flex items-center gap-1">
+                  {selectedNode && (
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-6 px-2 py-0 text-xs text-slate-400 hover:text-white mb-1"
+                      onClick={() => setIsMaximized(!isMaximized)}
+                    >
+                      {isMaximized ? "Contraer" : "Expandir"}
+                    </Button>
+                  )}
+                  {selectedNode && (
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-6 w-6 p-0 text-slate-400 hover:text-white mb-1"
+                      onClick={() => {
+                        setSelectedNode(null);
+                        setIsMaximized(false);
+                      }}
+                    >
+                      &times;
+                    </Button>
+                  )}
+                </div>
               </div>
               <div className="flex-1 relative overflow-hidden">
                 {!selectedNode ? (
