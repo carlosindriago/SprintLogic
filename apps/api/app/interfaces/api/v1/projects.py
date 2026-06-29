@@ -61,3 +61,15 @@ async def get_project_graph(project_id: int, session: AsyncSession = Depends(get
     ]
     
     return {"nodes": nodes_dict, "links": links_dict}
+
+@router.get("/projects/file")
+async def get_file_content(path: str):
+    import os
+    if not os.path.exists(path) or not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail="File not found")
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            content = f.read()
+        return {"content": content}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

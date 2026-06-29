@@ -11,7 +11,7 @@ const ForceGraph3D = dynamic(() => import("react-force-graph-3d"), {
   ssr: false,
 }) as any;
 
-export default function GraphScene({ projectId }: { projectId: number | null }) {
+export default function GraphScene({ projectId, onNodeClick }: { projectId: number | null, onNodeClick?: (node: any) => void }) {
   const [graphData, setGraphData] = useState<{ nodes: any[], links: any[] }>({ nodes: [], links: [] });
 
   useEffect(() => {
@@ -43,6 +43,7 @@ export default function GraphScene({ projectId }: { projectId: number | null }) 
         linkDirectionalArrowLength={4}
         linkDirectionalArrowRelPos={1}
         nodeLabel="name"
+        onNodeClick={onNodeClick}
       />
     </div>
   );

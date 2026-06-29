@@ -10,7 +10,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import dynamic from "next/dynamic";
 import { useState } from "react";
-import { scanProject } from "@/lib/api";
+import { scanProject, getFileContent } from "@/lib/api";
+import Editor from "@monaco-editor/react";
 
 const GraphScene = dynamic(() => import("@/components/GraphScene"), { ssr: false });
 
@@ -19,17 +20,37 @@ export default function Home() {
   const [projectId, setProjectId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
 
+  const [selectedNode, setSelectedNode] = useState<any | null>(null);
+  const [fileContent, setFileContent] = useState<string>("");
+  const [loadingFile, setLoadingFile] = useState(false);
+
   const handleScan = async () => {
     if (!path) return;
     setLoading(true);
     try {
       const data = await scanProject(path);
       setProjectId(data.project_id);
+      setSelectedNode(null); // Reset selection on new scan
     } catch (e) {
       console.error(e);
       alert("Error scanning project");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleNodeClick = async (node: any) => {
+    if (!node.file_path) return;
+    setSelectedNode(node);
+    setLoadingFile(true);
+    try {
+      const content = await getFileContent(node.file_path);
+      setFileContent(content);
+    } catch (e) {
+      console.error(e);
+      setFileContent("// Error loading file contents");
+    } finally {
+      setLoadingFile(false);
     }
   };
 
@@ -147,10 +168,52 @@ export default function Home() {
                 </div>
               </div>
             ) : (
-              <GraphScene projectId={projectId} />
+              <GraphScene projectId={projectId} onNodeClick={handleNodeClick} />
             )}
           </div>
         </ResizablePanel>
+
+        {selectedNode && (
+          <>
+            <ResizableHandle className="bg-slate-800 w-1 hover:bg-blue-500 transition-colors" />
+            <ResizablePanel defaultSize={30} minSize={20} className="bg-[#1e1e1e] flex flex-col border-l border-slate-800">
+              <div className="flex items-center justify-between p-3 border-b border-slate-800 bg-slate-900">
+                <span className="text-sm font-mono text-slate-300 truncate" title={selectedNode.file_path}>
+                  {selectedNode.name || "Archivo"}
+                </span>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-6 w-6 p-0 text-slate-400 hover:text-white"
+                  onClick={() => setSelectedNode(null)}
+                >
+                  &times;
+                </Button>
+              </div>
+              <div className="flex-1 relative">
+                {loadingFile ? (
+                  <div className="absolute inset-0 flex items-center justify-center text-slate-500">
+                    Cargando código...
+                  </div>
+                ) : (
+                  <Editor
+                    height="100%"
+                    theme="vs-dark"
+                    path={selectedNode.file_path}
+                    value={fileContent}
+                    options={{
+                      readOnly: true,
+                      minimap: { enabled: false },
+                      fontSize: 13,
+                      wordWrap: "on",
+                      padding: { top: 16 }
+                    }}
+                  />
+                )}
+              </div>
+            </ResizablePanel>
+          </>
+        )}
       </ResizablePanelGroup>
     </div>
   );
