@@ -10,6 +10,13 @@ cd ../..
 # Capturamos la señal de salida para limpiar los procesos en segundo plano
 trap "echo 'Shutting down SprintLogic Backend (PID: $BACKEND_PID)...'; kill $BACKEND_PID" EXIT
 
-echo "Starting SprintLogic Frontend (Tauri)..."
 cd apps/web
-npx @tauri-apps/cli dev
+if ! command -v cargo &> /dev/null
+then
+    echo "[WARNING] Rust/Cargo no está instalado. Iniciando SprintLogic en modo Web (Fallback)..."
+    echo "Para compilar la aplicación de escritorio, instala Rust: https://tauri.app/v1/guides/getting-started/prerequisites"
+    npm run dev
+else
+    echo "Starting SprintLogic Frontend (Tauri Desktop)..."
+    npx @tauri-apps/cli dev
+fi
