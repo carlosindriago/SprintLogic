@@ -7,9 +7,11 @@ import { cn } from "@/lib/utils"
 function ResizablePanelGroup({
   className,
   direction,
+  style,
   ...props
 }: Omit<ResizablePrimitive.GroupProps, "orientation"> & {
   direction: "horizontal" | "vertical"
+  style?: React.CSSProperties
 }) {
   return (
     <ResizablePrimitive.Group
@@ -19,6 +21,7 @@ function ResizablePanelGroup({
         "flex h-full w-full data-[panel-group-direction=vertical]:flex-col aria-[orientation=vertical]:flex-col",
         className
       )}
+      style={{ height: "100%", ...style }}
       {...props}
     />
   )
