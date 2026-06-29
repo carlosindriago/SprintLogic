@@ -35,7 +35,7 @@ export default function Home() {
 
   return (
     <div className="h-screen w-full bg-slate-950 text-slate-200 overflow-hidden">
-      <ResizablePanelGroup orientation="horizontal">
+      <ResizablePanelGroup direction="horizontal">
         <ResizablePanel defaultSize={20} minSize={15} maxSize={40} className="bg-slate-900 border-r border-slate-800">
           <ScrollArea className="h-full">
             <div className="p-4 flex flex-col gap-4">
@@ -88,7 +88,31 @@ export default function Home() {
 
         <ResizablePanel defaultSize={80}>
           <div className="h-full w-full relative">
-            <GraphScene projectId={projectId} />
+            {projectId === null ? (
+              <div className="flex flex-col items-center justify-center h-full bg-slate-950 text-center px-4">
+                <div className="w-16 h-16 bg-blue-500/10 text-blue-400 rounded-full flex items-center justify-center mb-6">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
+                </div>
+                <h3 className="text-3xl font-bold tracking-tight text-slate-100 mb-3">Bienvenido a SprintLogic</h3>
+                <p className="text-slate-400 max-w-md mb-8 leading-relaxed">
+                  Para comenzar, carga un proyecto local ingresando la ruta absoluta del repositorio. El motor AST escaneará y renderizará tu base de código en 3D.
+                </p>
+                <div className="flex w-full max-w-md items-center space-x-2">
+                  <input
+                    type="text"
+                    value={path}
+                    onChange={(e) => setPath(e.target.value)}
+                    placeholder="/ruta/absoluta/a/tu/proyecto"
+                    className="flex-1 bg-slate-900 border border-slate-700 rounded-md p-2.5 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                  />
+                  <Button onClick={handleScan} disabled={loading || !path} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md">
+                    {loading ? "Escaneando..." : "Cargar Proyecto"}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <GraphScene projectId={projectId} />
+            )}
           </div>
         </ResizablePanel>
       </ResizablePanelGroup>
