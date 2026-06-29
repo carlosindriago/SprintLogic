@@ -84,11 +84,63 @@ async def get_project_graph(project_id: str, session: AsyncSession = Depends(get
     
     return {"nodes": nodes_dict, "links": links_dict}
 
-@router.get("/projects/file")
-async def get_file_content(path: str):
+@router.get("/projects/{project_id}/files")
+async def get_project_files(project_id: str, session: AsyncSession = Depends(get_db_session)):
+    try:
+        project_uuid = UUID(project_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+        
+    repo = SQLAlchemyProjectRepository(session)
+    project = await repo.get_project(project_uuid)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+        
+    import os
+    
+    def build_tree(path):
+        name = os.path.basename(path)
+        is_dir = os.path.isdir(path)
+        node = {"name": name, "path": path, "type": "directory" if is_dir else "file"}
+        
+        if is_dir:
+            try:
+                children = []
+                for entry in os.scandir(path):
+                    if entry.name in ('.git', 'node_modules', '.venv', '__pycache__'):
+                        continue
+                    children.append(build_tree(entry.path))
+                node["children"] = sorted(children, key=lambda x: (x['type'] != 'directory', x['name']))
+            except PermissionError:
+                node["children"] = []
+        return node
+
+    if not os.path.exists(project.path):
+        raise HTTPException(status_code=404, detail="Project path not found on disk")
+        
+    tree = build_tree(project.path)
+    return tree
+
+@router.get("/projects/{project_id}/file/content")
+async def get_project_file_content(project_id: str, path: str, session: AsyncSession = Depends(get_db_session)):
+    try:
+        project_uuid = UUID(project_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+        
+    repo = SQLAlchemyProjectRepository(session)
+    project = await repo.get_project(project_uuid)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
     import os
     if not os.path.exists(path) or not os.path.isfile(path):
         raise HTTPException(status_code=404, detail="File not found")
+        
+    # Basic security check: ensure path is inside project.path
+    if not os.path.abspath(path).startswith(os.path.abspath(project.path)):
+        raise HTTPException(status_code=403, detail="Path is outside project directory")
+
     try:
         with open(path, "r", encoding="utf-8") as f:
             content = f.read()

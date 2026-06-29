@@ -1,8 +1,10 @@
 import pytest
 import os
+import uuid
 from unittest.mock import AsyncMock, patch
 from app.application.scan_repo import ScanLocalRepository
-from app.domain.git_models import GitBranch, GitCommit, GitRepository
+from app.domain.git_models import GitBranch, GitCommit
+from app.domain.project import Project
 
 @pytest.fixture
 def mock_gateway():
@@ -16,10 +18,11 @@ def mock_gateway():
 @pytest.fixture
 def mock_repository():
     repo = AsyncMock()
-    async def save(repo_in):
-        repo_in.id = 1
-        return repo_in
-    repo.save_repository.side_effect = save
+    async def save(project_in):
+        if not project_in.id:
+            project_in.id = uuid.uuid4()
+        return project_in
+    repo.save_project.side_effect = save
     return repo
 
 @pytest.mark.asyncio
@@ -29,13 +32,13 @@ async def test_scan_local_repository_success(mock_exists, mock_gateway, mock_rep
     
     result = await use_case.execute("/fake/path/myrepo")
     
-    assert result.id == 1
+    assert result.id is not None
     assert result.path == "/fake/path/myrepo"
     assert result.name == "myrepo"
     
     mock_gateway.get_current_branch.assert_called_once_with("/fake/path/myrepo")
     mock_gateway.get_recent_commits.assert_called_once_with("/fake/path/myrepo", limit=1)
-    mock_repository.save_repository.assert_called_once()
+    mock_repository.save_project.assert_called_once()
 
 @pytest.mark.asyncio
 @patch('os.path.exists', return_value=False)
@@ -46,4 +49,4 @@ async def test_scan_local_repository_not_found(mock_exists, mock_gateway, mock_r
         await use_case.execute("/missing/path")
         
     mock_gateway.get_current_branch.assert_not_called()
-    mock_repository.save_repository.assert_not_called()
+    mock_repository.save_project.assert_not_called()

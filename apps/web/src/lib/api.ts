@@ -39,8 +39,14 @@ export async function getProjectGraph(projectId: string): Promise<{ nodes: any[]
   return response.json();
 }
 
-export const getFileContent = async (path: string) => {
-  const res = await fetch(`${API_BASE_URL}/projects/file?path=${encodeURIComponent(path)}`);
+export const getProjectFiles = async (projectId: string) => {
+  const res = await fetch(`${API_BASE_URL}/projects/${projectId}/files`);
+  if (!res.ok) throw new Error("Failed to fetch project files");
+  return res.json();
+};
+
+export const getFileContent = async (projectId: string, path: string) => {
+  const res = await fetch(`${API_BASE_URL}/projects/${projectId}/file/content?path=${encodeURIComponent(path)}`);
   if (!res.ok) throw new Error("Failed to fetch file content");
   const data = await res.json();
   return data.content;

@@ -21,7 +21,9 @@ import { Settings, FolderOpen, Plus } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useState, useEffect } from "react";
 import { scanProject, getFileContent, getProjects } from "@/lib/api";
-import Editor from "@monaco-editor/react";
+import { Switch } from "@/components/ui/switch";
+import Editor, { useMonaco } from "@monaco-editor/react";
+import FileTree from "@/components/FileTree";
 
 const GraphScene = dynamic(() => import("@/components/GraphScene"), { ssr: false });
 const JarvisChat = dynamic(() => import("@/components/JarvisChat"), { ssr: false });
@@ -37,6 +39,10 @@ export default function Home() {
   const [anthropicKey, setAnthropicKey] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [addProjectOpen, setAddProjectOpen] = useState(false);
+  const [vimMode, setVimMode] = useState(false);
+  const [vimInstance, setVimInstance] = useState<any>(null);
+  
+  const monaco = useMonaco();
 
   useEffect(() => {
     fetchProjects();
@@ -78,7 +84,7 @@ export default function Home() {
     setSelectedNode(node);
     setLoadingFile(true);
     try {
-      const content = await getFileContent(node.file_path);
+      const content = await getFileContent(projectId!, node.file_path);
       setFileContent(content);
     } catch (e) {
       console.error(e);
@@ -139,6 +145,10 @@ export default function Home() {
                           onChange={(e) => setAnthropicKey(e.target.value)}
                           className="col-span-3 bg-slate-800 border-slate-700"
                         />
+                      </div>
+                      <div className="flex items-center space-x-2 pt-2 border-t border-slate-800 mt-2">
+                        <Switch id="vim-mode" checked={vimMode} onCheckedChange={setVimMode} />
+                        <Label htmlFor="vim-mode">Habilitar Modo Vim</Label>
                       </div>
                     </div>
                     <div className="flex justify-end">
@@ -222,10 +232,10 @@ export default function Home() {
 
               <Card className="bg-slate-800 border-slate-700 text-slate-200">
                 <CardHeader className="p-4 pb-2">
-                  <CardTitle className="text-sm font-medium">Git Status / Branches</CardTitle>
+                  <CardTitle className="text-sm font-medium">Explorador de Archivos</CardTitle>
                 </CardHeader>
-                <CardContent className="p-4 pt-0 text-xs text-slate-400">
-                  Pronto...
+                <CardContent className="p-0 text-xs text-slate-400">
+                  {projectId ? <FileTree projectId={projectId} onFileSelect={(path) => handleNodeClick({ file_path: path })} /> : <div className="p-4">Selecciona un proyecto...</div>}
                 </CardContent>
               </Card>
 
@@ -344,6 +354,33 @@ export default function Home() {
                     theme="vs-dark"
                     path={selectedNode.file_path}
                     value={fileContent}
+                    onMount={(editor, monaco) => {
+                      if (vimMode) {
+                        import("monaco-vim").then(({ initVimMode }) => {
+                          const statusNode = document.createElement('div');
+                          statusNode.style.padding = '2px 8px';
+                          statusNode.style.fontSize = '12px';
+                          statusNode.style.backgroundColor = '#1e1e1e';
+                          statusNode.style.borderTop = '1px solid #333';
+                          statusNode.style.color = '#fff';
+                          editor.getContainerDomNode().parentElement?.appendChild(statusNode);
+                          
+                          const vim = initVimMode(editor, statusNode);
+                          setVimInstance(vim);
+                        });
+                      }
+                      
+                      // Auto-scroll logic if AST metadata exists
+                      if (selectedNode.metadata) {
+                        try {
+                          const meta = JSON.parse(selectedNode.metadata);
+                          if (meta.start_line) {
+                            editor.revealLineInCenter(meta.start_line);
+                            editor.setPosition({ lineNumber: meta.start_line, column: 1 });
+                          }
+                        } catch (e) {}
+                      }
+                    }}
                     options={{
                       readOnly: true,
                       minimap: { enabled: false },
