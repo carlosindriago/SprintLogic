@@ -36,8 +36,8 @@ export default function Home() {
   return (
     <div className="h-screen w-full bg-slate-950 text-slate-200 overflow-hidden">
       <ResizablePanelGroup direction="horizontal">
-        <ResizablePanel defaultSize={20} minSize={15} maxSize={40} className="bg-slate-900 border-r border-slate-800">
-          <ScrollArea className="h-full">
+        <ResizablePanel defaultSize={25} minSize={20} maxSize={40} className="bg-slate-900 border-r border-slate-800 flex flex-col">
+          <ScrollArea className="flex-1">
             <div className="p-4 flex flex-col gap-4">
               <h2 className="text-lg font-semibold text-slate-100">SprintLogic IDE</h2>
 
@@ -46,14 +46,32 @@ export default function Home() {
                   <CardTitle className="text-sm font-medium">Load Project</CardTitle>
                 </CardHeader>
                 <CardContent className="p-4 flex flex-col gap-2">
-                  <input
-                    type="text"
-                    value={path}
-                    onChange={(e) => setPath(e.target.value)}
-                    placeholder="/path/to/project"
-                    className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
-                  />
-                  <Button onClick={handleScan} disabled={loading} className="w-full">
+                  <div className="flex w-full items-center space-x-2">
+                    <input
+                      type="text"
+                      value={path}
+                      onChange={(e) => setPath(e.target.value)}
+                      placeholder="/path/to/project"
+                      className="flex-1 bg-slate-900 border border-slate-700 rounded p-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
+                    />
+                    <Button onClick={async () => {
+                      try {
+                        const { open } = await import("@tauri-apps/plugin-dialog");
+                        const selected = await open({
+                          directory: true,
+                          multiple: false,
+                        });
+                        if (selected && typeof selected === "string") {
+                          setPath(selected);
+                        }
+                      } catch (err) {
+                        console.error("Failed to open dialog:", err);
+                      }
+                    }} variant="outline" className="px-3 bg-slate-800 border-slate-700 hover:bg-slate-700">
+                      Examinar...
+                    </Button>
+                  </div>
+                  <Button onClick={handleScan} disabled={loading || !path} className="w-full">
                     {loading ? "Cargando..." : "Cargar Proyecto Local"}
                   </Button>
                 </CardContent>
@@ -97,15 +115,33 @@ export default function Home() {
                 <p className="text-slate-400 max-w-md mb-8 leading-relaxed">
                   Para comenzar, carga un proyecto local ingresando la ruta absoluta del repositorio. El motor AST escaneará y renderizará tu base de código en 3D.
                 </p>
-                <div className="flex w-full max-w-md items-center space-x-2">
-                  <input
-                    type="text"
-                    value={path}
-                    onChange={(e) => setPath(e.target.value)}
-                    placeholder="/ruta/absoluta/a/tu/proyecto"
-                    className="flex-1 bg-slate-900 border border-slate-700 rounded-md p-2.5 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-                  />
-                  <Button onClick={handleScan} disabled={loading || !path} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md">
+                <div className="flex w-full max-w-lg items-center space-x-2">
+                  <div className="flex flex-1 items-center space-x-2">
+                    <input
+                      type="text"
+                      value={path}
+                      onChange={(e) => setPath(e.target.value)}
+                      placeholder="/ruta/absoluta/a/tu/proyecto"
+                      className="flex-1 bg-slate-900 border border-slate-700 rounded-md p-2.5 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                    />
+                    <Button onClick={async () => {
+                      try {
+                        const { open } = await import("@tauri-apps/plugin-dialog");
+                        const selected = await open({
+                          directory: true,
+                          multiple: false,
+                        });
+                        if (selected && typeof selected === "string") {
+                          setPath(selected);
+                        }
+                      } catch (err) {
+                        console.error("Failed to open dialog:", err);
+                      }
+                    }} variant="outline" className="px-3 bg-slate-800 border-slate-700 hover:bg-slate-700 h-10">
+                      Examinar...
+                    </Button>
+                  </div>
+                  <Button onClick={handleScan} disabled={loading || !path} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md h-10">
                     {loading ? "Escaneando..." : "Cargar Proyecto"}
                   </Button>
                 </div>
