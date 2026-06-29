@@ -34,3 +34,10 @@ class GraphEdgeModel(Base):
     source_id: Mapped[str] = mapped_column(ForeignKey("graph_nodes.id", ondelete="CASCADE"), primary_key=True)
     target_id: Mapped[str] = mapped_column(ForeignKey("graph_nodes.id", ondelete="CASCADE"), primary_key=True)
     type: Mapped[EdgeType] = mapped_column(SQLAlchemyEnum(EdgeType), primary_key=True)
+
+class GitRepositoryModel(Base):
+    __tablename__ = "git_repositories"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    path: Mapped[str] = mapped_column(String(1024), nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
