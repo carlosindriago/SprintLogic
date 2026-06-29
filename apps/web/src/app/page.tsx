@@ -22,11 +22,12 @@ import dynamic from "next/dynamic";
 import { useState, useEffect } from "react";
 import { scanProject, getFileContent, getProjects } from "@/lib/api";
 import { Switch } from "@/components/ui/switch";
+import JarvisChat from "@/components/JarvisChat";
+import KanbanBoard from "@/components/KanbanBoard";
 import Editor, { useMonaco } from "@monaco-editor/react";
 import FileTree from "@/components/FileTree";
 
 const GraphScene = dynamic(() => import("@/components/GraphScene"), { ssr: false });
-const JarvisChat = dynamic(() => import("@/components/JarvisChat"), { ssr: false });
 
 export default function Home() {
   const [path, setPath] = useState("");
@@ -37,9 +38,12 @@ export default function Home() {
   const [geminiKey, setGeminiKey] = useState("");
   const [openAiKey, setOpenAiKey] = useState("");
   const [anthropicKey, setAnthropicKey] = useState("");
+  const [openRouterKey, setOpenRouterKey] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [addProjectOpen, setAddProjectOpen] = useState(false);
   const [vimMode, setVimMode] = useState(false);
+  const [centerTab, setCenterTab] = useState<'graph' | 'kanban'>('graph');
+  const [activeRightTab, setActiveRightTab] = useState<'inspector' | 'jarvis'>('jarvis');
   const [vimInstance, setVimInstance] = useState<any>(null);
   
   const monaco = useMonaco();
@@ -80,15 +84,17 @@ export default function Home() {
   };
 
   const handleNodeClick = async (node: any) => {
-    if (!node.file_path) return;
     setSelectedNode(node);
+    setActiveRightTab('inspector');
+    if (!node.file_path) return;
+    
     setLoadingFile(true);
     try {
       const content = await getFileContent(projectId!, node.file_path);
       setFileContent(content);
     } catch (e) {
       console.error(e);
-      setFileContent("// Error loading file contents");
+      setFileContent("// Error loading file");
     } finally {
       setLoadingFile(false);
     }
@@ -146,15 +152,33 @@ export default function Home() {
                           className="col-span-3 bg-slate-800 border-slate-700"
                         />
                       </div>
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="openrouter" className="text-right text-xs">OpenRouter Key</Label>
+                        <Input
+                          id="openrouter"
+                          type="password"
+                          value={openRouterKey}
+                          onChange={(e) => setOpenRouterKey(e.target.value)}
+                          className="col-span-3 bg-slate-800 border-slate-700"
+                        />
+                      </div>
                       <div className="flex items-center space-x-2 pt-2 border-t border-slate-800 mt-2">
                         <Switch id="vim-mode" checked={vimMode} onCheckedChange={setVimMode} />
                         <Label htmlFor="vim-mode">Habilitar Modo Vim</Label>
                       </div>
                     </div>
                     <div className="flex justify-end">
-                      <Button onClick={() => {
-                        // TODO: Save to backend
-                        setSettingsOpen(false);
+                      <Button onClick={async () => {
+                        try {
+                          if (geminiKey) await saveApiKey("gemini", geminiKey);
+                          if (openAiKey) await saveApiKey("openai", openAiKey);
+                          if (anthropicKey) await saveApiKey("anthropic", anthropicKey);
+                          if (openRouterKey) await saveApiKey("openrouter", openRouterKey);
+                          setSettingsOpen(false);
+                          alert("Configuración guardada correctamente");
+                        } catch (e) {
+                          alert("Error al guardar la configuración");
+                        }
                       }}>Guardar Configuración</Button>
                     </div>
                   </DialogContent>
@@ -300,7 +324,19 @@ export default function Home() {
                     </div>
                   </div>
                 ) : (
-                  <GraphScene projectId={projectId} onNodeClick={handleNodeClick} />
+                  <div className="flex flex-col h-full">
+                    <div className="flex items-center gap-2 px-4 pt-2 border-b border-slate-800 bg-slate-900">
+                      <button onClick={() => setCenterTab('graph')} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${centerTab === 'graph' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-slate-300'}`}>Grafo 2D</button>
+                      <button onClick={() => setCenterTab('kanban')} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${centerTab === 'kanban' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-slate-300'}`}>Kanban (Sprints)</button>
+                    </div>
+                    <div className="flex-1 relative overflow-hidden bg-slate-950">
+                      {centerTab === 'graph' ? (
+                        <GraphScene projectId={projectId} onNodeClick={handleNodeClick} />
+                      ) : (
+                        <KanbanBoard projectId={projectId} />
+                      )}
+                    </div>
+                  </div>
                 )}
               </div>
             </ResizablePanel>
@@ -312,8 +348,8 @@ export default function Home() {
             {!isMaximized && <ResizableHandle className="bg-slate-800 w-1 hover:bg-blue-500 transition-colors" />}
             <ResizablePanel id="sidebar-right" defaultSize={isMaximized ? 100 : 30} minSize={isMaximized ? 100 : 20} className="bg-[#1e1e1e] flex flex-col border-l border-slate-800 min-w-0 overflow-hidden">
               <div className="flex items-center gap-2 px-2 pt-2 border-b border-slate-800 bg-slate-900">
-                <button className={`px-3 py-1.5 text-xs font-medium rounded-t border-b-2 ${selectedNode ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-slate-300'}`}>Inspector</button>
-                <button className={`px-3 py-1.5 text-xs font-medium rounded-t border-b-2 ${!selectedNode ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-slate-300'}`}>Jarvis</button>
+                <button onClick={() => setActiveRightTab('inspector')} className={`px-3 py-1.5 text-xs font-medium rounded-t border-b-2 ${activeRightTab === 'inspector' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-slate-300'}`}>Inspector</button>
+                <button onClick={() => setActiveRightTab('jarvis')} className={`px-3 py-1.5 text-xs font-medium rounded-t border-b-2 ${activeRightTab === 'jarvis' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-slate-300'}`}>Jarvis</button>
                 
                 <div className="ml-auto flex items-center gap-1">
                   {selectedNode && (
@@ -342,8 +378,12 @@ export default function Home() {
                 </div>
               </div>
               <div className="flex-1 relative overflow-hidden">
-                {!selectedNode ? (
+                {activeRightTab === 'jarvis' ? (
                   <JarvisChat projectId={projectId} />
+                ) : !selectedNode ? (
+                  <div className="absolute inset-0 flex items-center justify-center text-slate-500 text-sm">
+                    Selecciona un archivo en el explorador o el grafo.
+                  </div>
                 ) : loadingFile ? (
                   <div className="absolute inset-0 flex items-center justify-center text-slate-500">
                     Cargando código...

@@ -100,17 +100,31 @@ class JarvisAgent:
             
         return "Unknown tool."
 
-    async def chat(self, messages: List[Dict[str, str]]) -> str:
+    def _get_provider(self, model: str) -> str:
+        model_lower = model.lower()
+        if "gemini" in model_lower:
+            return "gemini"
+        elif "claude" in model_lower or "anthropic" in model_lower:
+            return "anthropic"
+        elif "gpt" in model_lower or "openai" in model_lower:
+            return "openai"
+        elif "openrouter" in model_lower:
+            return "openrouter"
+        return "gemini"
+
+    async def chat(self, messages: List[Dict[str, str]], model: str = "gemini/gemini-1.5-pro-latest") -> str:
         """
         Processes a chat conversation and allows Jarvis to call tools before returning a final response.
         """
-        api_key = CredentialManager.get_api_key()
-        if not api_key:
-            raise ValueError("API Key not configured.")
+        provider = self._get_provider(model)
+        api_key = CredentialManager.get_api_key(provider)
+        
+        if not api_key and provider != "openrouter" and "ollama" not in model.lower():
+            raise ValueError(f"API Key for {provider} not configured.")
 
         # Prepare LiteLLM call
         response = await litellm.acompletion(
-            model=self.model,
+            model=model,
             messages=messages,
             tools=self.tools,
             api_key=api_key
@@ -134,7 +148,7 @@ class JarvisAgent:
             
             # Second call to get final answer
             second_response = await litellm.acompletion(
-                model=self.model,
+                model=model,
                 messages=messages,
                 api_key=api_key
             )

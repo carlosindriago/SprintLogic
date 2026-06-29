@@ -147,3 +147,95 @@ async def get_project_file_content(project_id: str, path: str, session: AsyncSes
         return {"content": content}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+from sse_starlette.sse import EventSourceResponse
+import asyncio
+from app.infrastructure.kanban_sync import kanban_sync
+from app.infrastructure.file_watcher import file_watcher
+from watchfiles import Change
+
+# Global event queue for SSE per project
+project_event_queues: Dict[str, List[asyncio.Queue]] = {}
+
+async def file_watcher_callback(project_id: str, change: Change, filepath: str):
+    if project_id in project_event_queues:
+        event = {
+            "type": "file_change",
+            "change": change.name,
+            "filepath": filepath
+        }
+        # If tasks.md changed, send a specific kanban_update event
+        if filepath.endswith("tasks.md"):
+            event["type"] = "kanban_update"
+            
+        for q in project_event_queues[project_id]:
+            await q.put(event)
+
+file_watcher.add_callback(file_watcher_callback)
+
+@router.get("/projects/{project_id}/events")
+async def project_events(project_id: str, session: AsyncSession = Depends(get_db_session)):
+    try:
+        project_uuid = UUID(project_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+
+    repo = SQLAlchemyProjectRepository(session)
+    project = await repo.get_project(project_uuid)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Start watcher for this project
+    await file_watcher.start_watching(project_id, project.path)
+
+    q = asyncio.Queue()
+    if project_id not in project_event_queues:
+        project_event_queues[project_id] = []
+    project_event_queues[project_id].append(q)
+
+    async def event_generator():
+        try:
+            while True:
+                event = await q.get()
+                import json
+                yield {"data": json.dumps(event)}
+        except asyncio.CancelledError:
+            project_event_queues[project_id].remove(q)
+            if not project_event_queues[project_id]:
+                del project_event_queues[project_id]
+                await file_watcher.stop_watching(project_id)
+
+    return EventSourceResponse(event_generator())
+
+@router.get("/projects/{project_id}/tasks")
+async def get_project_tasks(project_id: str, session: AsyncSession = Depends(get_db_session)):
+    try:
+        project_uuid = UUID(project_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+
+    repo = SQLAlchemyProjectRepository(session)
+    project = await repo.get_project(project_uuid)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    tasks = kanban_sync.read_tasks(project.path)
+    return {"tasks": tasks}
+
+class SaveTasksRequest(BaseModel):
+    tasks: List[Dict[str, Any]]
+
+@router.post("/projects/{project_id}/tasks")
+async def save_project_tasks(project_id: str, request: SaveTasksRequest, session: AsyncSession = Depends(get_db_session)):
+    try:
+        project_uuid = UUID(project_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+
+    repo = SQLAlchemyProjectRepository(session)
+    project = await repo.get_project(project_uuid)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    kanban_sync.write_tasks(project.path, request.tasks)
+    return {"status": "success"}

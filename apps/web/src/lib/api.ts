@@ -51,3 +51,20 @@ export const getFileContent = async (projectId: string, path: string) => {
   const data = await res.json();
   return data.content;
 };
+
+export const saveApiKey = async (provider: string, apiKey: string) => {
+  const response = await fetch(`${API_BASE_URL}/api-key/${provider}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ api_key: apiKey }),
+  });
+  
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Failed to save API key for ${provider}: ${error}`);
+  }
+  
+  return response.json();
+};

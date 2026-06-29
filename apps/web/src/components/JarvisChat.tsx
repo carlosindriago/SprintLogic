@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import ReactMarkdown from "react-markdown";
 
 interface Message {
@@ -8,12 +9,20 @@ interface Message {
   content: string;
 }
 
+const MODELS = [
+  { value: "gemini/gemini-1.5-pro-latest", label: "Gemini 1.5 Pro" },
+  { value: "openai/gpt-4o", label: "GPT-4o" },
+  { value: "anthropic/claude-3-5-sonnet-20240620", label: "Claude 3.5 Sonnet" },
+  { value: "openrouter/ollama/llama3", label: "Ollama (Llama 3)" }
+];
+
 export default function JarvisChat({ projectId }: { projectId: string | null }) {
   const [messages, setMessages] = useState<Message[]>([
     { role: "assistant", content: "Hola, soy Jarvis. ¿En qué te ayudo hoy?" }
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [selectedModel, setSelectedModel] = useState(MODELS[0].value);
 
   const sendMessage = async () => {
     if (!input.trim()) return;
@@ -29,7 +38,8 @@ export default function JarvisChat({ projectId }: { projectId: string | null }) 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           messages: newMessages.map(m => ({ role: m.role, content: m.content })),
-          project_id: projectId
+          project_id: projectId,
+          model: selectedModel
         })
       });
       
@@ -50,6 +60,19 @@ export default function JarvisChat({ projectId }: { projectId: string | null }) 
 
   return (
     <div className="flex flex-col h-full bg-[#1e1e1e] text-slate-200">
+      <div className="flex justify-between items-center p-2 border-b border-slate-800 bg-slate-900 text-xs">
+        <span className="font-semibold px-2 text-slate-400">Jarvis AI</span>
+        <Select value={selectedModel} onValueChange={setSelectedModel}>
+          <SelectTrigger className="w-[180px] h-7 text-xs bg-slate-800 border-slate-700">
+            <SelectValue placeholder="Selecciona un modelo" />
+          </SelectTrigger>
+          <SelectContent className="bg-slate-800 border-slate-700 text-slate-200">
+            {MODELS.map(m => (
+              <SelectItem key={m.value} value={m.value} className="text-xs">{m.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
       <ScrollArea className="flex-1 p-4">
         <div className="flex flex-col gap-4">
           {messages.map((m, i) => (

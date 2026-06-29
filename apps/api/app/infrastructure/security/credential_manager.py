@@ -5,22 +5,25 @@ class CredentialManager:
     """Manages AI API credentials securely using the OS keyring."""
     
     NAMESPACE = "sprintlogic"
-    KEY_NAME = "ai_api_key"
+    
+    @staticmethod
+    def _get_key_name(provider: str) -> str:
+        return f"{provider}_api_key".lower()
 
     @classmethod
-    def save_api_key(cls, api_key: str) -> None:
-        """Saves the API key securely."""
-        keyring.set_password(cls.NAMESPACE, cls.KEY_NAME, api_key)
+    def save_api_key(cls, provider: str, api_key: str) -> None:
+        """Saves the API key securely for a specific provider."""
+        keyring.set_password(cls.NAMESPACE, cls._get_key_name(provider), api_key)
 
     @classmethod
-    def get_api_key(cls) -> str | None:
-        """Retrieves the API key."""
-        return keyring.get_password(cls.NAMESPACE, cls.KEY_NAME)
+    def get_api_key(cls, provider: str) -> str | None:
+        """Retrieves the API key for a specific provider."""
+        return keyring.get_password(cls.NAMESPACE, cls._get_key_name(provider))
 
     @classmethod
-    def delete_api_key(cls) -> None:
-        """Deletes the API key."""
+    def delete_api_key(cls, provider: str) -> None:
+        """Deletes the API key for a specific provider."""
         try:
-            keyring.delete_password(cls.NAMESPACE, cls.KEY_NAME)
+            keyring.delete_password(cls.NAMESPACE, cls._get_key_name(provider))
         except keyring.errors.PasswordDeleteError:
             pass

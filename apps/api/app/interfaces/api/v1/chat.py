@@ -10,7 +10,8 @@ router = APIRouter()
 
 class ChatRequest(BaseModel):
     messages: List[Dict[str, Any]]
-    project_id: Optional[int] = None
+    project_id: Optional[str] = None
+    model: str = "gemini-1.5-pro-latest"
 
 class ChatResponse(BaseModel):
     response: str
@@ -20,7 +21,7 @@ async def chat_with_jarvis(request: ChatRequest, session: AsyncSession = Depends
     """Handles chat messages with Jarvis and manages tool calls."""
     try:
         agent = JarvisAgent(session=session, project_id=request.project_id)
-        response_text = await agent.chat(request.messages)
+        response_text = await agent.chat(request.messages, model=request.model)
         return {"response": response_text}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
