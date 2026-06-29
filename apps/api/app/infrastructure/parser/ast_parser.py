@@ -61,6 +61,7 @@ def extract_nodes_from_code(file_path: str, code: bytes, ext: str):
     
     nodes = []
     edges = []
+    imports = set()
     
     file_node_id = f"file:{file_path}"
     file_node = GraphNode(
@@ -72,6 +73,17 @@ def extract_nodes_from_code(file_path: str, code: bytes, ext: str):
     nodes.append(file_node)
     
     def traverse(node):
+        if "import" in node.type or "require" in node.type:
+            for child in node.children:
+                if "string" in child.type:
+                    imp = code[child.start_byte:child.end_byte].decode("utf-8").strip("\"'")
+                    if imp:
+                        imports.add(imp)
+                elif child.type in ("dotted_name", "identifier"):
+                    imp = code[child.start_byte:child.end_byte].decode("utf-8")
+                    if imp:
+                        imports.add(imp)
+
         if node.type in ("class_definition", "class_declaration"):
             name_node = None
             for child in node.children:
@@ -118,7 +130,7 @@ def extract_nodes_from_code(file_path: str, code: bytes, ext: str):
             traverse(child)
 
     traverse(tree.root_node)
-    return nodes, edges
+    return nodes, edges, imports
 
 class ASTParserService:
     def __init__(self, ignore_dirs=None):
@@ -130,6 +142,7 @@ class ASTParserService:
     def parse_directory(self, dir_path: str):
         all_nodes = []
         all_edges = []
+        file_imports = {}
         
         for root, dirs, files in os.walk(dir_path):
             dirs[:] = [d for d in dirs if d not in self.ignore_dirs]
@@ -141,10 +154,31 @@ class ASTParserService:
                     try:
                         with open(file_path, "rb") as f:
                             code = f.read()
-                        nodes, edges = extract_nodes_from_code(file_path, code, ext)
+                        nodes, edges, imports = extract_nodes_from_code(file_path, code, ext)
                         all_nodes.extend(nodes)
                         all_edges.extend(edges)
+                        if imports:
+                            file_imports[f"file:{file_path}"] = imports
                     except Exception:
                         pass
+
+        # Resolve imports across files
+        file_paths = [n.file_path for n in all_nodes if n.label == NodeLabel.FILE]
+        for source_id, imports in file_imports.items():
+            for imp in imports:
+                normalized_imp = imp.replace(".", "/").lstrip("./@")
+                if not normalized_imp:
+                    continue
+                for fp in file_paths:
+                    base_fp = os.path.splitext(fp)[0]
+                    if base_fp.endswith(normalized_imp) or normalized_imp in fp:
+                        target_id = f"file:{fp}"
+                        if source_id != target_id:
+                            all_edges.append(GraphEdge(
+                                source_id=source_id,
+                                target_id=target_id,
+                                type=EdgeType.IMPORTS
+                            ))
+                        break
                         
         return all_nodes, all_edges
