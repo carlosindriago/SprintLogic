@@ -41,7 +41,7 @@ export default function GraphScene({ projectId, onNodeClick }: { projectId: numb
       color = "#22c55e"; // green
     } else if (node.label === "Function") {
       radius = 3;
-      color = "#a855f7"; // purple
+      color = "#a5b4fc"; // indigo-300 (light indigo)
     }
 
     // Flat filled circle — no gradient
@@ -70,11 +70,11 @@ export default function GraphScene({ projectId, onNodeClick }: { projectId: numb
 
     if (link.type === "IMPORTS") {
       ctx.lineWidth = 0.5 / globalScale; // Very thin
-      // Create a linear gradient along the line for Imports
+      // White gradient: fades at edges, bright in the center
       const grad = ctx.createLinearGradient(link.source.x, link.source.y, link.target.x, link.target.y);
-      grad.addColorStop(0, "rgba(244, 63, 94, 0.1)"); // Rose faded
-      grad.addColorStop(0.5, "rgba(244, 63, 94, 0.8)"); // Rose bright center
-      grad.addColorStop(1, "rgba(244, 63, 94, 0.1)"); // Rose faded
+      grad.addColorStop(0, "rgba(255, 255, 255, 0.05)");
+      grad.addColorStop(0.5, "rgba(255, 255, 255, 0.75)");
+      grad.addColorStop(1, "rgba(255, 255, 255, 0.05)");
       ctx.strokeStyle = grad;
     } else {
       ctx.lineWidth = 0.2 / globalScale; // Extremely thin for standard contains
