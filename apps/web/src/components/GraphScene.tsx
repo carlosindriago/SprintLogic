@@ -25,10 +25,26 @@ export default function GraphScene({ projectId, onNodeClick }: { projectId: numb
   }, [projectId]);
 
   const getNodeColor = (node: any) => {
-    if (node.label === "File") return "#3b82f6"; // blue
+    if (node.label === "File") {
+      const size = node.size || 0;
+      if (size > 15000) return "#ef4444"; // Red (Huge file)
+      if (size > 5000) return "#f97316";  // Orange (Large file)
+      if (size > 2000) return "#eab308";  // Yellow (Medium-Large file)
+      if (size > 500) return "#3b82f6";   // Vivid Blue (Standard file)
+      return "#64748b";                   // Slate/Dull (Tiny file)
+    }
     if (node.label === "Class") return "#22c55e"; // green
-    if (node.label === "Function") return "#f97316"; // orange
+    if (node.label === "Function") return "#a855f7"; // purple (changed from orange to differentiate from large files)
     return "#cbd5e1"; // default slate-300
+  };
+
+  const getNodeVal = (node: any) => {
+    if (node.label === "File") {
+      const size = node.size || 0;
+      return Math.min(Math.max(size / 1500, 1.5), 6); // Base size 1.5, max 6 based on code size
+    }
+    if (node.label === "Class") return 2;
+    return 1; // Function or other
   };
 
   return (
@@ -37,8 +53,9 @@ export default function GraphScene({ projectId, onNodeClick }: { projectId: numb
         graphData={graphData}
         backgroundColor="#020617" // tailwind slate-950
         nodeColor={getNodeColor}
-        linkColor={() => "#94a3b8"} // tailwind slate-400 for better visibility
-        linkWidth={1.5}
+        nodeVal={getNodeVal}
+        linkColor={(link: any) => link.type === "IMPORTS" ? "#f43f5e" : "#94a3b8"} // Rose for imports, slate for contains
+        linkWidth={(link: any) => link.type === "IMPORTS" ? 2 : 1.5}
         linkOpacity={0.8}
         linkDirectionalArrowLength={4}
         linkDirectionalArrowRelPos={1}

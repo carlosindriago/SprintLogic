@@ -41,15 +41,22 @@ async def get_project_graph(project_id: int, session: AsyncSession = Depends(get
     nodes = await graph_repo.get_all_nodes()
     edges = await graph_repo.get_all_edges()
     
-    nodes_dict = [
-        {
+    import os
+    nodes_dict = []
+    for n in nodes:
+        label_val = n.label.value if hasattr(n.label, 'value') else n.label
+        node_dict = {
             "id": n.id,
-            "label": n.label.value if hasattr(n.label, 'value') else n.label,
+            "label": label_val,
             "name": n.name,
             "file_path": n.file_path
         }
-        for n in nodes
-    ]
+        if label_val == "File":
+            try:
+                node_dict["size"] = os.path.getsize(n.file_path)
+            except Exception:
+                node_dict["size"] = 1000 # default fallback
+        nodes_dict.append(node_dict)
     
     links_dict = [
         {
