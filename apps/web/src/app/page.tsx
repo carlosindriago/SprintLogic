@@ -243,6 +243,8 @@ export default function Home() {
             </div>
           </ScrollArea>
         </ResizablePanel>
+          </>
+        )}
 
         {!isMaximized && (
           <>
