@@ -10,7 +10,7 @@ const ForceGraph2D = dynamic(() => import("react-force-graph-2d"), {
   ssr: false,
 }) as any;
 
-export default function GraphScene({ projectId, onNodeClick }: { projectId: number | null, onNodeClick?: (node: any) => void }) {
+export default function GraphScene({ projectId, onNodeClick }: { projectId: string | null, onNodeClick?: (node: any) => void }) {
   const [graphData, setGraphData] = useState<{ nodes: any[], links: any[] }>({ nodes: [], links: [] });
 
   useEffect(() => {
