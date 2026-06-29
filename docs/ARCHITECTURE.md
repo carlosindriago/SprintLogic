@@ -21,11 +21,14 @@ Se abandona el uso de PostgreSQL y Redis. Toda la persistencia es estrictamente 
 - **API Keys**: La integración con IA (Jarvis usando Gemini) requiere una API key que se guarda cifrada de forma segura **solo a nivel local**.
 - **Control local**: Los repositorios Git a gestionar se escanean directamente del sistema de archivos local, eliminando la necesidad de dar accesos OAuth a plataformas como GitHub o GitLab.
 
-## 4. Motor de IA (Jarvis) y SDD Pipeline
+## 4. Motor de IA (AI Gateway) y SDD Pipeline
 
-El backend expone rutas locales para interactuar con la IA de forma estructurada:
-- Generación asíncrona de archivos `proposal.md`, `specs/`, `design.md`, `tasks.md`.
-- Generación y exportación de archivos JSON estáticos con la estructura del proyecto en el disco local para respaldo o uso offline.
+El backend expone rutas locales para interactuar con la IA de forma estructurada.
+- **Arquitectura "Bring Your Own Key" (BYOK)**: Soporte para cualquier proveedor (Gemini, Anthropic, xAI, OpenRouter, OpenAI).
+- **LLMs Locales (Custom Endpoints)**: Capacidad para definir endpoints personalizados compatibles con la API de OpenAI (crucial para integrar Ollama, LM Studio o similares sin coste).
+- **Unificador de APIs**: Se recomienda utilizar `LiteLLM` (o similar) en el sidecar de Python para unificar y estandarizar las llamadas sin importar qué LLM configure el usuario.
+- **Pipeline SDD**: Generación asíncrona de archivos `proposal.md`, `specs/`, `design.md`, `tasks.md`.
+- **Exportación**: Generación y exportación de archivos JSON estáticos con la estructura del proyecto en el disco local para respaldo o uso offline.
 
 ## 5. Integración Git
 
