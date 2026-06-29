@@ -56,11 +56,11 @@ export default function Home() {
 
   return (
     <div className="h-screen w-full bg-slate-950 text-slate-200 overflow-hidden">
-      <ResizablePanelGroup direction="horizontal">
-        <ResizablePanel defaultSize={25} minSize={20} maxSize={40} className="bg-slate-900 border-r border-slate-800 flex flex-col">
+      <ResizablePanelGroup direction="horizontal" autoSaveId="sprintlogic-layout">
+        <ResizablePanel id="sidebar-left" order={1} defaultSize={20} minSize={15} maxSize={40} className="bg-slate-900 border-r border-slate-800 flex flex-col min-w-0 overflow-hidden">
           <ScrollArea className="flex-1">
             <div className="p-4 flex flex-col gap-4">
-              <h2 className="text-lg font-semibold text-slate-100">SprintLogic IDE</h2>
+              <h2 className="text-lg font-semibold text-slate-100 truncate">SprintLogic IDE</h2>
 
               <Card className="bg-slate-800 border-slate-700 text-slate-200">
                 <CardHeader className="p-4 pb-2">
@@ -73,7 +73,7 @@ export default function Home() {
                       value={path}
                       onChange={(e) => setPath(e.target.value)}
                       placeholder="/path/to/project"
-                      className="flex-1 bg-slate-900 border border-slate-700 rounded p-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
+                      className="flex-1 min-w-0 bg-slate-900 border border-slate-700 rounded p-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
                     />
                     <Button onClick={async () => {
                       try {
@@ -88,7 +88,7 @@ export default function Home() {
                       } catch (err) {
                         console.error("Failed to open dialog:", err);
                       }
-                    }} variant="outline" className="px-3 bg-slate-800 border-slate-700 hover:bg-slate-700">
+                    }} variant="outline" className="px-3 bg-slate-800 border-slate-700 hover:bg-slate-700 whitespace-nowrap">
                       Examinar...
                     </Button>
                   </div>
@@ -115,7 +115,7 @@ export default function Home() {
                   <ul className="list-disc pl-4 space-y-1">
                     <li>Initialize Tauri</li>
                     <li>Setup Shadcn layout</li>
-                    <li>Add 3D graph canvas</li>
+                    <li>Add 2D graph canvas</li>
                   </ul>
                 </CardContent>
               </Card>
@@ -125,8 +125,8 @@ export default function Home() {
 
         <ResizableHandle className="bg-slate-800 w-1 hover:bg-blue-500 transition-colors" />
 
-        <ResizablePanel defaultSize={75} minSize={40}>
-          <div className="h-full w-full relative min-w-0 overflow-hidden">
+        <ResizablePanel id="main-graph" order={2} defaultSize={selectedNode ? 50 : 80} minSize={30} className="min-w-0 overflow-hidden flex flex-col">
+          <div className="flex-1 relative min-w-0 overflow-hidden">
             {projectId === null ? (
               <div className="flex flex-col items-center justify-center h-full bg-slate-950 text-center px-4">
                 <div className="w-16 h-16 bg-blue-500/10 text-blue-400 rounded-full flex items-center justify-center mb-6">
@@ -134,7 +134,7 @@ export default function Home() {
                 </div>
                 <h3 className="text-3xl font-bold tracking-tight text-slate-100 mb-3">Bienvenido a SprintLogic</h3>
                 <p className="text-slate-400 max-w-md mb-8 leading-relaxed">
-                  Para comenzar, carga un proyecto local ingresando la ruta absoluta del repositorio. El motor AST escaneará y renderizará tu base de código en 3D.
+                  Para comenzar, carga un proyecto local ingresando la ruta absoluta del repositorio. El motor AST escaneará y renderizará tu base de código en 2D.
                 </p>
                 <div className="flex w-full max-w-lg items-center space-x-2">
                   <div className="flex flex-1 items-center space-x-2">
@@ -143,7 +143,7 @@ export default function Home() {
                       value={path}
                       onChange={(e) => setPath(e.target.value)}
                       placeholder="/ruta/absoluta/a/tu/proyecto"
-                      className="flex-1 bg-slate-900 border border-slate-700 rounded-md p-2.5 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                      className="flex-1 min-w-0 bg-slate-900 border border-slate-700 rounded-md p-2.5 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                     />
                     <Button onClick={async () => {
                       try {
@@ -158,11 +158,11 @@ export default function Home() {
                       } catch (err) {
                         console.error("Failed to open dialog:", err);
                       }
-                    }} variant="outline" className="px-3 bg-slate-800 border-slate-700 hover:bg-slate-700 h-10">
+                    }} variant="outline" className="px-3 bg-slate-800 border-slate-700 hover:bg-slate-700 h-10 whitespace-nowrap">
                       Examinar...
                     </Button>
                   </div>
-                  <Button onClick={handleScan} disabled={loading || !path} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md h-10">
+                  <Button onClick={handleScan} disabled={loading || !path} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md h-10 whitespace-nowrap">
                     {loading ? "Escaneando..." : "Cargar Proyecto"}
                   </Button>
                 </div>
@@ -176,7 +176,7 @@ export default function Home() {
         {selectedNode && (
           <>
             <ResizableHandle className="bg-slate-800 w-1 hover:bg-blue-500 transition-colors" />
-            <ResizablePanel defaultSize={30} minSize={20} className="bg-[#1e1e1e] flex flex-col border-l border-slate-800">
+            <ResizablePanel id="sidebar-right" order={3} defaultSize={30} minSize={20} className="bg-[#1e1e1e] flex flex-col border-l border-slate-800 min-w-0 overflow-hidden">
               <div className="flex items-center justify-between p-3 border-b border-slate-800 bg-slate-900">
                 <span className="text-sm font-mono text-slate-300 truncate" title={selectedNode.file_path}>
                   {selectedNode.name || "Archivo"}
