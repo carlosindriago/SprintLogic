@@ -104,8 +104,8 @@ export default function Home() {
 
         <ResizableHandle className="bg-slate-800 w-1 hover:bg-blue-500 transition-colors" />
 
-        <ResizablePanel defaultSize={80}>
-          <div className="h-full w-full relative">
+        <ResizablePanel defaultSize={75} minSize={40}>
+          <div className="h-full w-full relative min-w-0 overflow-hidden">
             {projectId === null ? (
               <div className="flex flex-col items-center justify-center h-full bg-slate-950 text-center px-4">
                 <div className="w-16 h-16 bg-blue-500/10 text-blue-400 rounded-full flex items-center justify-center mb-6">

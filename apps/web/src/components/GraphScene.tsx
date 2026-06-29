@@ -37,7 +37,11 @@ export default function GraphScene({ projectId }: { projectId: number | null }) 
         graphData={graphData}
         backgroundColor="#020617" // tailwind slate-950
         nodeColor={getNodeColor}
-        linkColor={() => "#475569"} // tailwind slate-600
+        linkColor={() => "#94a3b8"} // tailwind slate-400 for better visibility
+        linkWidth={1.5}
+        linkOpacity={0.8}
+        linkDirectionalArrowLength={4}
+        linkDirectionalArrowRelPos={1}
         nodeLabel="name"
       />
     </div>
