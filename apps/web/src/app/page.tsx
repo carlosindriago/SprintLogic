@@ -1,3 +1,5 @@
+"use client";
+
 import {
   ResizableHandle,
   ResizablePanel,
@@ -5,9 +7,32 @@ import {
 } from "@/components/ui/resizable";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import GraphScene from "@/components/GraphScene";
+import { Button } from "@/components/ui/button";
+import dynamic from "next/dynamic";
+import { useState } from "react";
+import { scanProject } from "@/lib/api";
+
+const GraphScene = dynamic(() => import("@/components/GraphScene"), { ssr: false });
 
 export default function Home() {
+  const [path, setPath] = useState("");
+  const [projectId, setProjectId] = useState<number | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const handleScan = async () => {
+    if (!path) return;
+    setLoading(true);
+    try {
+      const data = await scanProject(path);
+      setProjectId(data.project_id);
+    } catch (e) {
+      console.error(e);
+      alert("Error scanning project");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="h-screen w-full bg-slate-950 text-slate-200 overflow-hidden">
       <ResizablePanelGroup orientation="horizontal">
@@ -15,7 +40,25 @@ export default function Home() {
           <ScrollArea className="h-full">
             <div className="p-4 flex flex-col gap-4">
               <h2 className="text-lg font-semibold text-slate-100">SprintLogic IDE</h2>
-              
+
+              <Card className="bg-slate-800 border-slate-700 text-slate-200">
+                <CardHeader className="p-4 pb-2">
+                  <CardTitle className="text-sm font-medium">Load Project</CardTitle>
+                </CardHeader>
+                <CardContent className="p-4 flex flex-col gap-2">
+                  <input
+                    type="text"
+                    value={path}
+                    onChange={(e) => setPath(e.target.value)}
+                    placeholder="/path/to/project"
+                    className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
+                  />
+                  <Button onClick={handleScan} disabled={loading} className="w-full">
+                    {loading ? "Cargando..." : "Cargar Proyecto Local"}
+                  </Button>
+                </CardContent>
+              </Card>
+
               <Card className="bg-slate-800 border-slate-700 text-slate-200">
                 <CardHeader className="p-4 pb-2">
                   <CardTitle className="text-sm font-medium">Git Status</CardTitle>
@@ -45,7 +88,7 @@ export default function Home() {
 
         <ResizablePanel defaultSize={80}>
           <div className="h-full w-full relative">
-            <GraphScene />
+            <GraphScene projectId={projectId} />
           </div>
         </ResizablePanel>
       </ResizablePanelGroup>

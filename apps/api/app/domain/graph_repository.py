@@ -10,3 +10,9 @@ class GraphRepository(Protocol):
         
     async def clear_all(self) -> None:
         ...
+
+    async def get_all_nodes(self) -> List[GraphNode]:
+        ...
+
+    async def get_all_edges(self) -> List[GraphEdge]:
+        ...

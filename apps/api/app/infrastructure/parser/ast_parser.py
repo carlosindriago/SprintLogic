@@ -1,32 +1,53 @@
 import os
 import tree_sitter
-import tree_sitter_python
-import tree_sitter_typescript
-import tree_sitter_java
-import tree_sitter_php
-import tree_sitter_go
-import tree_sitter_html
-import tree_sitter_css
+try:
+    import tree_sitter_python
+except ImportError:
+    tree_sitter_python = None
+try:
+    import tree_sitter_typescript
+except ImportError:
+    tree_sitter_typescript = None
+try:
+    import tree_sitter_java
+except ImportError:
+    tree_sitter_java = None
+try:
+    import tree_sitter_php
+except ImportError:
+    tree_sitter_php = None
+try:
+    import tree_sitter_go
+except ImportError:
+    tree_sitter_go = None
+try:
+    import tree_sitter_html
+except ImportError:
+    tree_sitter_html = None
+try:
+    import tree_sitter_css
+except ImportError:
+    tree_sitter_css = None
 
 from app.domain.graph_models import GraphNode, NodeLabel, GraphEdge, EdgeType
 
 def get_language(ext):
-    if ext == ".py":
+    if ext == ".py" and tree_sitter_python:
         return tree_sitter.Language(tree_sitter_python.language())
-    elif ext == ".ts":
+    elif ext == ".ts" and tree_sitter_typescript:
         return tree_sitter.Language(tree_sitter_typescript.language_typescript())
-    elif ext == ".tsx":
+    elif ext == ".tsx" and tree_sitter_typescript:
         return tree_sitter.Language(tree_sitter_typescript.language_tsx())
-    elif ext == ".java":
+    elif ext == ".java" and tree_sitter_java:
         return tree_sitter.Language(tree_sitter_java.language())
-    elif ext == ".php":
+    elif ext == ".php" and tree_sitter_php:
         # Note: tree_sitter_php has multiple languages, usually language_php()
         return tree_sitter.Language(tree_sitter_php.language_php())
-    elif ext == ".go":
+    elif ext == ".go" and tree_sitter_go:
         return tree_sitter.Language(tree_sitter_go.language())
-    elif ext in (".html", ".htm"):
+    elif ext in (".html", ".htm") and tree_sitter_html:
         return tree_sitter.Language(tree_sitter_html.language())
-    elif ext == ".css":
+    elif ext == ".css" and tree_sitter_css:
         return tree_sitter.Language(tree_sitter_css.language())
     return None
 
