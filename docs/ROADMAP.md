@@ -20,7 +20,13 @@
 - Interfaz gráfica para ramas, diffs y pre-visualización de commits.
 - Jarvis Assistant: sugerencia automática de nombres de rama y mensajes de commits atómicos basados en la tarea del board activa.
 
-## Fase 4 — Focus Timer Integrado
+## Fase 4 — Codebase Memory Graph (Visualización 3D & AST)
+- Análisis del código fuente mediante `tree-sitter` (Python) para extraer el AST.
+- Guardado del mapa estructural en SQLite.
+- Renderizado 3D en el frontend (Next.js) utilizando `react-force-graph-3d`.
+- Vinculación SDD-AST: Jarvis relacionará las tareas del `TaskBreakdown` directamente con los nodos AST (`affectedNodes`) que el desarrollador debe tocar.
+
+## Fase 5 — Focus Timer Integrado
 - Implementación del timer de foco (Pomodoro) por tarea.
 - Vinculación del tiempo de trabajo al log local de la máquina y a la base de datos de SQLite.
 - Resumen básico de sesión.

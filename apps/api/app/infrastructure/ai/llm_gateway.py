@@ -8,21 +8,23 @@ class LiteLLMGateway:
     def __init__(self) -> None:
         pass
 
-    def generate_completion(self, prompt: str, model: str) -> str:
+    def generate_completion(self, prompt: str, model: str, **kwargs) -> str:
         """
         Sends a prompt to the specified model.
         Retrieves the API key securely from the credential manager.
+        Accepts additional kwargs like response_format.
         """
         api_key = CredentialManager.get_api_key()
         if not api_key:
             raise ValueError("AI API Key not found in the secure keyring.")
-            
+
         messages = [{"role": "user", "content": prompt}]
-        
+
         response = litellm.completion(
             model=model,
             messages=messages,
             api_key=api_key,
+            **kwargs
         )
-        
+
         return str(response.choices[0].message.content)
