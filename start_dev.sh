@@ -1,18 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "Starting SprintLogic Backend (FastAPI)..."
-cd apps/api
-.venv/bin/uvicorn main:app --reload --port 8000 &
-BACKEND_PID=$!
-cd ../..
-
-# Capturamos la señal de salida para limpiar los procesos en segundo plano
-trap "echo 'Shutting down SprintLogic Backend (PID: $BACKEND_PID)...'; kill $BACKEND_PID" EXIT
-
-cd apps/web
-
-# Check Dependencies
+# 1. Check Dependencies First (so background logs don't interrupt the prompt)
 if ! command -v cargo &> /dev/null
 then
     echo -e "\n[!] Rust/Cargo no está instalado (Requerido para la App de Escritorio Tauri)."
@@ -21,11 +10,9 @@ then
     then
         echo "Instalando Rust..."
         curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-        # Intentar cargar las variables de entorno de Rust
         source "$HOME/.cargo/env" || true
         echo "Rust instalado exitosamente."
         
-        # Opcional: Instalar dependencias de sistema para Linux (Ubuntu/Debian)
         if command -v apt-get &> /dev/null
         then
             echo -e "\n[!] Tauri requiere algunas dependencias del sistema en Linux (Webkit2GTK, build-essential, etc)."
@@ -37,18 +24,26 @@ then
             fi
         fi
     else
-        echo "[WARNING] Iniciando SprintLogic en modo Web (Fallback)..."
-        npm run dev
-        # Matamos el backend si cerramos el modo web
-        exit 0
+        echo "[WARNING] Rust no instalado. Solo se iniciará en modo Web (Fallback)..."
     fi
 fi
 
-# Volvemos a comprobar si Cargo existe tras la instalación
+# 2. Start Backend
+echo -e "\nStarting SprintLogic Backend (FastAPI)..."
+cd apps/api
+.venv/bin/uvicorn main:app --reload --port 8000 &
+BACKEND_PID=$!
+cd ../..
+
+trap "echo 'Shutting down SprintLogic Backend (PID: $BACKEND_PID)...'; kill $BACKEND_PID" EXIT
+
+# 3. Start Frontend
+cd apps/web
 if command -v cargo &> /dev/null
 then
     echo "Starting SprintLogic Frontend (Tauri Desktop)..."
     npx @tauri-apps/cli dev
 else
-    echo "[ERROR] No se pudo encontrar Cargo. Por favor reinicia tu terminal."
+    echo "Starting SprintLogic Frontend (Web Fallback)..."
+    npm run dev
 fi
