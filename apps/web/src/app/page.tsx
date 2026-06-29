@@ -14,7 +14,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -97,12 +96,10 @@ export default function Home() {
             <div className="p-4 flex flex-col gap-4">
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-slate-100 truncate">SprintLogic IDE</h2>
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-white" onClick={() => setSettingsOpen(true)}>
+                  <Settings className="h-4 w-4" />
+                </Button>
                 <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-                  <DialogTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-white">
-                      <Settings className="h-4 w-4" />
-                    </Button>
-                  </DialogTrigger>
                   <DialogContent className="sm:max-w-[425px] bg-slate-900 text-slate-200 border-slate-800">
                     <DialogHeader>
                       <DialogTitle>Configuración de Modelos (LLMs)</DialogTitle>
