@@ -33,3 +33,18 @@ class SQLAlchemyOrganizationRepository(OrganizationRepository):
             name=model.name,
             created_at=model.created_at,
         )
+
+    def save_member(self, member) -> None:
+        pass
+
+    def get_member(self, organization_id, user_id):
+        return None
+
+    def get_member_by_id(self, member_id):
+        return None
+
+    def get_members(self, organization_id):
+        return []
+
+    def remove_member(self, member_id):
+        pass

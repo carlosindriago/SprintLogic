@@ -13,6 +13,8 @@ from app.infrastructure.repositories.sqlalchemy_organization_repository import (
     SQLAlchemyOrganizationRepository,
 )
 from app.interfaces.organization_repository import OrganizationRepository
+from app.domain.user import User
+from app.interfaces.api.dependencies import get_current_user
 
 router = APIRouter(prefix="/organizations", tags=["organizations"])
 
@@ -39,8 +41,9 @@ async def get_organization_repository(
 async def create_organization(
     request: OrganizationCreateRequest,
     repository: OrganizationRepository = Depends(get_organization_repository),
+    current_user: User = Depends(get_current_user),
 ) -> OrganizationResponse:
     use_case = CreateOrganization(repository)
-    organization = use_case(name=request.name)
+    organization = use_case(name=request.name, creator_id=current_user.id)
 
     return OrganizationResponse.model_validate(organization)
