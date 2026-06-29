@@ -13,6 +13,9 @@
 - Pipeline SDD: De descripción abstracta a `proposal.md`, `specs/`, `design.md`, `tasks.md`.
 - Exportación estructurada a formato JSON y guardado en disco del plan.
 - Volcado automático del JSON al Kanban (Backlog local).
+- **Fase 2.4**: Codebase Memory Graph (Conexión SDD -> AST Nodos).
+- **Fase 2.5**: Engram Persistent Memory (Tabla de decisiones y resúmenes).
+- **Fase 2.6**: Context7 Dependency RAG (Parseo de dependencias y sqlite-vec).
 
 ## Fase 3 — Control de Git local y Commits Atómicos
 - Integrar lectura de repositorios Git locales desde el sistema de archivos.
@@ -20,10 +23,10 @@
 - Interfaz gráfica para ramas, diffs y pre-visualización de commits.
 - Jarvis Assistant: sugerencia automática de nombres de rama y mensajes de commits atómicos basados en la tarea del board activa.
 
-## Fase 4 — Codebase Memory Graph (Visualización 3D & AST)
+## Fase 4 — Codebase Memory Graph (Visualización 2D & AST)
 - Análisis del código fuente mediante `tree-sitter` (Python) para extraer el AST.
 - Guardado del mapa estructural en SQLite.
-- Renderizado 3D en el frontend (Next.js) utilizando `react-force-graph-3d`.
+- Renderizado 2D de alta performance en el frontend (Next.js) utilizando `react-force-graph-2d`.
 - Vinculación SDD-AST: Jarvis relacionará las tareas del `TaskBreakdown` directamente con los nodos AST (`affectedNodes`) que el desarrollador debe tocar.
 
 ## Fase 5 — Focus Timer Integrado
