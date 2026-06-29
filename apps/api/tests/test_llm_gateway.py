@@ -28,5 +28,5 @@ def test_generate_completion_missing_key(mock_get_api_key):
     mock_get_api_key.return_value = None
 
     gateway = LiteLLMGateway()
-    with pytest.raises(ValueError, match="AI API Key not found in the secure keyring."):
-        gateway.generate_completion("Hello AI", "gpt-4o")
+    with pytest.raises(ValueError, match="AI API Key for openai not found in the secure keyring."):
+        gateway.generate_completion(prompt="Hello", model="openai/gpt-4")
