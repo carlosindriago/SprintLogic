@@ -24,37 +24,33 @@ export default function GraphScene({ projectId, onNodeClick }: { projectId: numb
   }, [projectId]);
 
   const paintNode = (node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
-    let radius = 2; // Default size
-    let color1 = "#cbd5e1";
-    let color2 = "#64748b";
+    let radius = 2;
+    let color = "#64748b"; // default: tiny/unknown
 
     if (node.label === "File") {
       const size = node.size || 0;
-      radius = Math.min(Math.max(size / 1500, 3), 8); // Slightly larger for 2D
-      
-      if (size > 15000) { color1 = "#fca5a5"; color2 = "#ef4444"; }      // Huge
-      else if (size > 5000) { color1 = "#fdba74"; color2 = "#f97316"; } // Large
-      else if (size > 2000) { color1 = "#fde047"; color2 = "#eab308"; } // Medium
-      else if (size > 500) { color1 = "#93c5fd"; color2 = "#3b82f6"; }  // Standard
-      else { color1 = "#94a3b8"; color2 = "#475569"; }                  // Tiny
+      radius = Math.min(Math.max(size / 1500, 3), 8);
+
+      if (size > 15000)      color = "#ef4444"; // Huge  → red
+      else if (size > 5000)  color = "#f97316"; // Large → orange
+      else if (size > 2000)  color = "#eab308"; // Medium → yellow
+      else if (size > 500)   color = "#22c55e"; // Standard → green (was blue)
+      else                   color = "#475569"; // Tiny  → slate
     } else if (node.label === "Class") {
       radius = 4;
-      color1 = "#86efac"; color2 = "#22c55e"; // Green
+      color = "#22c55e"; // green
     } else if (node.label === "Function") {
       radius = 3;
-      color1 = "#d8b4fe"; color2 = "#a855f7"; // Purple
+      color = "#a855f7"; // purple
     }
 
-    // Draw gradient circle
+    // Flat filled circle — no gradient
     ctx.beginPath();
     ctx.arc(node.x, node.y, radius, 0, 2 * Math.PI, false);
-    const gradient = ctx.createRadialGradient(node.x - radius/3, node.y - radius/3, radius/5, node.x, node.y, radius);
-    gradient.addColorStop(0, color1);
-    gradient.addColorStop(1, color2);
-    ctx.fillStyle = gradient;
+    ctx.fillStyle = color;
     ctx.fill();
-    
-    // Optional: Draw text label if zoomed in
+
+    // Label appears when zoomed in
     if (globalScale > 2) {
       const fontSize = 12 / globalScale;
       ctx.font = `${fontSize}px Inter, sans-serif`;
