@@ -8,9 +8,20 @@ import {
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Settings, FolderOpen, Plus } from "lucide-react";
 import dynamic from "next/dynamic";
-import { useState } from "react";
-import { scanProject, getFileContent } from "@/lib/api";
+import { useState, useEffect } from "react";
+import { scanProject, getFileContent, getProjects } from "@/lib/api";
 import Editor from "@monaco-editor/react";
 
 const GraphScene = dynamic(() => import("@/components/GraphScene"), { ssr: false });
@@ -18,8 +29,27 @@ const JarvisChat = dynamic(() => import("@/components/JarvisChat"), { ssr: false
 
 export default function Home() {
   const [path, setPath] = useState("");
-  const [projectId, setProjectId] = useState<number | null>(null);
+  const [projects, setProjects] = useState<any[]>([]);
+  const [projectId, setProjectId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const [geminiKey, setGeminiKey] = useState("");
+  const [openAiKey, setOpenAiKey] = useState("");
+  const [anthropicKey, setAnthropicKey] = useState("");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  useEffect(() => {
+    fetchProjects();
+  }, []);
+
+  const fetchProjects = async () => {
+    try {
+      const data = await getProjects();
+      setProjects(data.projects || []);
+    } catch (e) {
+      console.error("Failed to load projects", e);
+    }
+  };
 
   const [selectedNode, setSelectedNode] = useState<any | null>(null);
   const [fileContent, setFileContent] = useState<string>("");
@@ -32,6 +62,7 @@ export default function Home() {
       const data = await scanProject(path);
       setProjectId(data.project_id);
       setSelectedNode(null); // Reset selection on new scan
+      fetchProjects(); // Refresh the list
     } catch (e) {
       console.error(e);
       alert("Error scanning project");
@@ -61,83 +92,149 @@ export default function Home() {
         <ResizablePanel id="sidebar-left" defaultSize="260px" minSize="220px" maxSize="40%" className="bg-slate-900 border-r border-slate-800 flex flex-col min-w-0 overflow-hidden">
           <ScrollArea className="flex-1">
             <div className="p-4 flex flex-col gap-4">
-              <h2 className="text-lg font-semibold text-slate-100 truncate">SprintLogic IDE</h2>
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-slate-100 truncate">SprintLogic IDE</h2>
+                <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-white">
+                      <Settings className="h-4 w-4" />
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-[425px] bg-slate-900 text-slate-200 border-slate-800">
+                    <DialogHeader>
+                      <DialogTitle>Configuración de Modelos (LLMs)</DialogTitle>
+                      <DialogDescription className="text-slate-400">
+                        Ingresa las API Keys para los diferentes proveedores que desees usar con Jarvis.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="gemini" className="text-right text-xs">Gemini Key</Label>
+                        <Input
+                          id="gemini"
+                          type="password"
+                          value={geminiKey}
+                          onChange={(e) => setGeminiKey(e.target.value)}
+                          className="col-span-3 bg-slate-800 border-slate-700"
+                        />
+                      </div>
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="openai" className="text-right text-xs">OpenAI Key</Label>
+                        <Input
+                          id="openai"
+                          type="password"
+                          value={openAiKey}
+                          onChange={(e) => setOpenAiKey(e.target.value)}
+                          className="col-span-3 bg-slate-800 border-slate-700"
+                        />
+                      </div>
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="anthropic" className="text-right text-xs">Anthropic Key</Label>
+                        <Input
+                          id="anthropic"
+                          type="password"
+                          value={anthropicKey}
+                          onChange={(e) => setAnthropicKey(e.target.value)}
+                          className="col-span-3 bg-slate-800 border-slate-700"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex justify-end">
+                      <Button onClick={() => {
+                        // TODO: Save to backend
+                        setSettingsOpen(false);
+                      }}>Guardar Configuración</Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              </div>
 
               <Card className="bg-slate-800 border-slate-700 text-slate-200">
                 <CardHeader className="p-4 pb-2">
-                  <CardTitle className="text-sm font-medium">Load Project</CardTitle>
+                  <CardTitle className="text-sm font-medium">Proyectos</CardTitle>
                 </CardHeader>
                 <CardContent className="p-4 flex flex-col gap-2">
-                  <div className="flex w-full items-center space-x-2">
-                    <input
-                      type="text"
-                      value={path}
-                      onChange={(e) => setPath(e.target.value)}
-                      placeholder="/path/to/project"
-                      className="flex-1 min-w-0 bg-slate-900 border border-slate-700 rounded p-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
-                    />
-                    <Button onClick={async () => {
-                      try {
-                        const { open } = await import("@tauri-apps/plugin-dialog");
-                        const selected = await open({
-                          directory: true,
-                          multiple: false,
-                        });
-                        if (selected && typeof selected === "string") {
-                          setPath(selected);
-                        }
-                      } catch (err) {
-                        console.error("Failed to open dialog:", err);
-                      }
-                    }} variant="outline" className="px-3 bg-slate-800 border-slate-700 hover:bg-slate-700 whitespace-nowrap">
-                      Examinar...
-                    </Button>
-                  </div>
-                  <Button onClick={handleScan} disabled={loading || !path} className="w-full">
-                    {loading ? "Cargando..." : "Cargar Proyecto Local"}
-                  </Button>
+                  {projects.length > 0 ? (
+                    <ul className="space-y-1 mb-2">
+                      {projects.map((p) => (
+                        <li key={p.id}>
+                          <button
+                            onClick={() => setProjectId(p.id)}
+                            className={`w-full text-left px-2 py-1.5 rounded text-sm truncate transition-colors flex items-center gap-2 ${projectId === p.id ? 'bg-blue-600/20 text-blue-400' : 'hover:bg-slate-700/50 text-slate-300'}`}
+                          >
+                            <FolderOpen className="w-4 h-4 shrink-0" />
+                            {p.name}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="text-xs text-slate-400 mb-2">No hay proyectos guardados.</div>
+                  )}
+
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button variant="outline" className="w-full bg-slate-900 border-slate-700 hover:bg-slate-800 text-xs">
+                        <Plus className="w-3 h-3 mr-2" /> Añadir Proyecto Local
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-[425px] bg-slate-900 text-slate-200 border-slate-800">
+                      <DialogHeader>
+                        <DialogTitle>Añadir Proyecto Local</DialogTitle>
+                        <DialogDescription className="text-slate-400">
+                          Ingresa la ruta absoluta del repositorio Git local que deseas analizar.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="flex flex-col gap-4 py-4">
+                        <div className="flex w-full items-center space-x-2">
+                          <input
+                            type="text"
+                            value={path}
+                            onChange={(e) => setPath(e.target.value)}
+                            placeholder="/ruta/al/proyecto"
+                            className="flex-1 min-w-0 bg-slate-800 border border-slate-700 rounded p-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
+                          />
+                          <Button onClick={async () => {
+                            try {
+                              const { open } = await import("@tauri-apps/plugin-dialog");
+                              const selected = await open({
+                                directory: true,
+                                multiple: false,
+                              });
+                              if (selected && typeof selected === "string") {
+                                setPath(selected);
+                              }
+                            } catch (err) {
+                              console.error("Failed to open dialog:", err);
+                            }
+                          }} variant="outline" className="px-3 bg-slate-800 border-slate-700 hover:bg-slate-700 whitespace-nowrap">
+                            Examinar...
+                          </Button>
+                        </div>
+                        <Button onClick={handleScan} disabled={loading || !path} className="w-full">
+                          {loading ? "Cargando..." : "Registrar y Analizar"}
+                        </Button>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
                 </CardContent>
               </Card>
 
               <Card className="bg-slate-800 border-slate-700 text-slate-200">
                 <CardHeader className="p-4 pb-2">
-                  <CardTitle className="text-sm font-medium">Configuración</CardTitle>
-                </CardHeader>
-                <CardContent className="p-4 pt-0">
-                  <Button variant="outline" className="w-full bg-slate-900 border-slate-700 hover:bg-slate-800 text-xs mt-2" onClick={() => {
-                    const key = prompt("Ingresa tu API Key de Gemini:");
-                    if (key) {
-                      fetch("http://localhost:8000/api/v1/settings/api-key", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ api_key: key })
-                      }).then(() => alert("API Key guardada!"));
-                    }
-                  }}>
-                    🔑 Configurar Gemini API Key
-                  </Button>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-slate-800 border-slate-700 text-slate-200">
-                <CardHeader className="p-4 pb-2">
-                  <CardTitle className="text-sm font-medium">Git Status</CardTitle>
+                  <CardTitle className="text-sm font-medium">Git Status / Branches</CardTitle>
                 </CardHeader>
                 <CardContent className="p-4 pt-0 text-xs text-slate-400">
-                  No changes detected.
+                  Pronto...
                 </CardContent>
               </Card>
 
               <Card className="bg-slate-800 border-slate-700 text-slate-200">
                 <CardHeader className="p-4 pb-2">
-                  <CardTitle className="text-sm font-medium">Active Tasks</CardTitle>
+                  <CardTitle className="text-sm font-medium">Sprints & KPIs</CardTitle>
                 </CardHeader>
                 <CardContent className="p-4 pt-0 text-xs text-slate-400">
-                  <ul className="list-disc pl-4 space-y-1">
-                    <li>Initialize Tauri</li>
-                    <li>Setup Shadcn layout</li>
-                    <li>Add 2D graph canvas</li>
-                  </ul>
+                  Pronto...
                 </CardContent>
               </Card>
             </div>

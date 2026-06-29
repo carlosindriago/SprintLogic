@@ -2,10 +2,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Dict, Any
+from uuid import UUID
 
 from app.infrastructure.db.database import get_db_session
 from app.infrastructure.git.git_gateway import LocalGitGateway
-from app.infrastructure.db.git_repository import SQLAlchemyGitRepoRepository
+from app.infrastructure.db.project_repository import SQLAlchemyProjectRepository
 from app.infrastructure.repositories.graph_repository import SQLAlchemyGraphRepository
 from app.infrastructure.parser.ast_parser import ASTParserService
 from app.application.scan_repo import ScanLocalRepository
@@ -16,14 +17,20 @@ router = APIRouter()
 class ScanRequest(BaseModel):
     path: str
 
+@router.get("/projects")
+async def get_projects(session: AsyncSession = Depends(get_db_session)):
+    repo = SQLAlchemyProjectRepository(session)
+    projects = await repo.get_all_projects()
+    return {"projects": projects}
+
 @router.post("/projects/scan")
 async def scan_project(request: ScanRequest, session: AsyncSession = Depends(get_db_session)):
     git_gateway = LocalGitGateway()
-    git_repo = SQLAlchemyGitRepoRepository(session)
-    scan_repo_usecase = ScanLocalRepository(git_gateway, git_repo)
+    project_repo = SQLAlchemyProjectRepository(session)
+    scan_repo_usecase = ScanLocalRepository(git_gateway, project_repo)
     
     try:
-        saved_repo = await scan_repo_usecase.execute(request.path)
+        saved_project = await scan_repo_usecase.execute(request.path)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
         
@@ -33,10 +40,18 @@ async def scan_project(request: ScanRequest, session: AsyncSession = Depends(get
     
     await scan_codebase_usecase.execute(request.path)
     
-    return {"project_id": saved_repo.id}
+    return {"project_id": str(saved_project.id)}
 
 @router.get("/projects/{project_id}/graph")
-async def get_project_graph(project_id: int, session: AsyncSession = Depends(get_db_session)):
+async def get_project_graph(project_id: str, session: AsyncSession = Depends(get_db_session)):
+    # Update last opened time since we are fetching the graph
+    try:
+        project_uuid = UUID(project_id)
+        repo = SQLAlchemyProjectRepository(session)
+        await repo.update_last_opened(project_uuid)
+    except ValueError:
+        pass
+
     graph_repo = SQLAlchemyGraphRepository(session)
     nodes = await graph_repo.get_all_nodes()
     edges = await graph_repo.get_all_edges()

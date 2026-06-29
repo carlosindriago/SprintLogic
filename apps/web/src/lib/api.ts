@@ -1,6 +1,6 @@
 export const API_BASE_URL = 'http://localhost:8000/api/v1';
 
-export async function scanProject(path: string): Promise<{ project_id: number }> {
+export async function scanProject(path: string): Promise<{ project_id: string }> {
   const response = await fetch(`${API_BASE_URL}/projects/scan`, {
     method: 'POST',
     headers: {
@@ -17,7 +17,18 @@ export async function scanProject(path: string): Promise<{ project_id: number }>
   return response.json();
 }
 
-export async function getProjectGraph(projectId: number): Promise<{ nodes: any[], links: any[] }> {
+export async function getProjects(): Promise<{ projects: any[] }> {
+  const response = await fetch(`${API_BASE_URL}/projects`);
+  
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Failed to fetch projects: ${error}`);
+  }
+  
+  return response.json();
+}
+
+export async function getProjectGraph(projectId: string): Promise<{ nodes: any[], links: any[] }> {
   const response = await fetch(`${API_BASE_URL}/projects/${projectId}/graph`);
   
   if (!response.ok) {
