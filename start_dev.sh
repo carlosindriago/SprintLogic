@@ -2,6 +2,12 @@
 set -e
 
 # 1. Check Dependencies First (so background logs don't interrupt the prompt)
+
+# Ensure Rust environment is loaded if it was already installed but not in PATH
+if [ -f "$HOME/.cargo/env" ]; then
+    source "$HOME/.cargo/env"
+fi
+
 if ! command -v cargo &> /dev/null
 then
     echo -e "\n[!] Rust/Cargo no está instalado (Requerido para la App de Escritorio Tauri)."
