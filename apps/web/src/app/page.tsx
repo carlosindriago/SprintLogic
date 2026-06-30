@@ -67,6 +67,7 @@ export default function Home() {
   };
 
   const [isMaximized, setIsMaximized] = useState(false); // Controls Jarvis panel collapse
+  const [leftSidebarOpen, setLeftSidebarOpen] = useState(true); // Controls left sidebar collapse
 
   const handleScan = async () => {
     if (!path) return;
@@ -149,16 +150,35 @@ export default function Home() {
     <div className="h-screen w-full bg-slate-950 text-slate-200 overflow-hidden">
       <ResizablePanelGroup
         direction="horizontal"
-        className="h-full w-full"
+        className="h-full w-full relative"
       >
-        <ResizablePanel defaultSize="20%" minSize="15%" maxSize="40%" className="bg-slate-900 border-r border-slate-800 flex flex-col overflow-hidden">
+        {!leftSidebarOpen ? (
+          <div className="absolute left-4 top-4 z-50">
+            <Button 
+              variant="default" 
+              className="h-10 w-10 p-0 bg-slate-800 hover:bg-slate-700 text-white flex items-center justify-center border border-slate-700"
+              onClick={() => setLeftSidebarOpen(true)}
+              title="Mostrar Proyectos"
+            >
+              <FolderOpen className="h-4 w-4" />
+            </Button>
+          </div>
+        ) : null}
+
+        {leftSidebarOpen ? (
+        <ResizablePanel defaultSize="20%" minSize="15%" maxSize="40%" className="bg-slate-900 border-r border-slate-800 flex flex-col overflow-hidden relative">
           <ScrollArea className="flex-1">
             <div className="p-4 flex flex-col gap-4">
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-slate-100 truncate">SprintLogic IDE</h2>
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-white" onClick={() => setSettingsOpen(true)}>
-                  <Settings className="h-4 w-4" />
-                </Button>
+                <div className="flex items-center gap-1">
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-white" onClick={() => setLeftSidebarOpen(false)} title="Ocultar barra lateral">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-white" onClick={() => setSettingsOpen(true)}>
+                    <Settings className="h-4 w-4" />
+                  </Button>
+                </div>
                 <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
                   <DialogContent className="sm:max-w-[425px] bg-slate-900 text-slate-200 border-slate-800">
                     <DialogHeader>
@@ -313,8 +333,11 @@ export default function Home() {
             </div>
           </ScrollArea>
         </ResizablePanel>
+        ) : null}
 
-        <ResizableHandle className="bg-slate-800 w-1 hover:bg-blue-500 transition-colors" />
+        {leftSidebarOpen ? (
+          <ResizableHandle className="bg-slate-800 w-1 hover:bg-blue-500 transition-colors" />
+        ) : null}
 
         <ResizablePanel defaultSize="50%" minSize="30%" className="min-w-0 overflow-hidden flex flex-col bg-[#1e1e1e]">
           {projectId === null ? (

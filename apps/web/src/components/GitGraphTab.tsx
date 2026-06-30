@@ -153,9 +153,9 @@ export default function GitGraphTab({ projectId }: { projectId: string }) {
       <div className="flex-1 overflow-hidden animate-slide-up-fade">
         <ResizablePanelGroup direction="horizontal">
           <ResizablePanel defaultSize={60} minSize={30}>
-            <div className="h-full overflow-auto p-8 flex justify-center bg-slate-950 gitgraph-container">
+            <div className="h-full overflow-auto p-8 flex justify-start bg-slate-950 gitgraph-container">
               {!loading && commits.length > 0 && (
-                <div className="bg-slate-900/80 backdrop-blur-sm p-8 rounded-xl border border-slate-800 w-full max-w-4xl shadow-2xl min-h-full">
+                <div className="bg-slate-900/80 backdrop-blur-sm p-8 rounded-xl border border-slate-800 w-fit min-w-full shadow-2xl min-h-full">
                   <Gitgraph key={commits.length > 0 ? commits[0].hash : "empty"}
                     options={{
                       template: templateExtend(TemplateName.Metro, {
