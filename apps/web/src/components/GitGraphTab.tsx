@@ -29,7 +29,7 @@ export default function GitGraphTab({ projectId }: { projectId: string }) {
     fetchCommits();
   }, [projectId]);
 
-  const executeAction = async (action: str, message: str = "") => {
+  const executeAction = async (action: string, message: string = "") => {
     try {
       setActionLoading(true);
       const res = await fetch(`http://localhost:8000/api/v1/projects/${projectId}/git/action`, {
