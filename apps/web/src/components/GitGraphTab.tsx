@@ -196,8 +196,8 @@ export default function GitGraphTab({ projectId }: { projectId: string }) {
                           onClick: () => handleCommitClick(c.hash),
                           renderMessage: (commit: any) => {
                             return (
-                              <foreignObject x={20} y={-20} width={800} height={40}>
-                                <div className="flex items-center gap-4 w-full h-full text-sm font-sans" onClick={() => handleCommitClick(c.hash)} style={{ cursor: 'pointer' }}>
+                              <foreignObject x={20} y={-20} width="100%" height={40}>
+                                <div className="flex items-center gap-4 w-full h-full text-sm font-sans min-w-0 pr-4" onClick={() => handleCommitClick(c.hash)} style={{ cursor: 'pointer' }}>
                                   <div className="bg-zinc-800 text-blue-400 px-2 py-0.5 rounded-md font-mono text-xs border border-zinc-700/50 flex-shrink-0">
                                     {c.hash.substring(0, 7)}
                                   </div>
