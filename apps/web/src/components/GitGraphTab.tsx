@@ -155,7 +155,7 @@ export default function GitGraphTab({ projectId }: { projectId: string }) {
           <ResizablePanel defaultSize={60} minSize={30}>
             <div className="h-full overflow-auto p-8 flex justify-start bg-slate-950 gitgraph-container">
               {!loading && commits.length > 0 && (
-                <div className="bg-slate-900/80 backdrop-blur-sm p-8 rounded-xl border border-slate-800 w-fit min-w-full shadow-2xl min-h-full">
+                <div className="bg-slate-900/80 backdrop-blur-sm p-8 rounded-xl border border-slate-800 w-full shadow-2xl min-h-full">
                   <Gitgraph key={commits.length > 0 ? commits[0].hash : "empty"}
                     options={{
                       template: templateExtend(TemplateName.Metro, {
@@ -185,11 +185,14 @@ export default function GitGraphTab({ projectId }: { projectId: string }) {
                       const master = gitgraph.branch("main");
                       const reversed = [...commits].reverse();
                       
+                      const truncate = (str: string, max: number) => 
+                        str.length > max ? str.substring(0, max) + '...' : str;
+
                       reversed.forEach(c => {
                         master.commit({
                           hash: c.hash.substring(0, 7),
-                          subject: c.subject,
-                          author: `${c.author}`,
+                          subject: truncate(c.subject, 65),
+                          author: truncate(c.author, 20),
                           onClick: () => handleCommitClick(c.hash)
                         });
                       });
