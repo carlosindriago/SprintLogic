@@ -73,7 +73,7 @@ export default function Home() {
     }
   };
 
-  const [isMaximized, setIsMaximized] = useState(false); // Controls AI panel collapse
+  const [rightSidebarOpen, setRightSidebarOpen] = useState(false); // Controls AI panel collapse
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(true); // Controls left sidebar collapse
 
   const handleScan = async () => {
@@ -176,7 +176,7 @@ export default function Home() {
         ) : null}
 
         {leftSidebarOpen ? (
-        <ResizablePanel defaultSize={20} minSize={15} maxSize={40} className="bg-[#0a0a0a] border-r border-zinc-800/50 flex flex-col overflow-hidden relative">
+        <ResizablePanel defaultSize={20} minSize={15} maxSize={40} className="bg-[#0a0a0a] border-r border-zinc-800/50 flex flex-col overflow-hidden relative shrink-0">
           <ScrollArea className="flex-1">
             <div className="p-4 flex flex-col gap-4">
               <div className="flex items-center justify-between">
@@ -430,12 +430,12 @@ export default function Home() {
           )}
         </ResizablePanel>
 
-        {!isMaximized ? (
+        {!rightSidebarOpen ? (
           <ResizableHandle className="bg-zinc-800 w-1 hover:bg-blue-500 transition-colors" />
         ) : null}
         
-        {!isMaximized ? (
-            <ResizablePanel defaultSize={30} minSize={20} className="bg-[#151515] flex flex-col border-l border-zinc-800/50 min-w-0 overflow-hidden">
+        {rightSidebarOpen ? (
+            <ResizablePanel defaultSize={30} minSize={20} maxSize={40} className="bg-[#151515] flex flex-col border-l border-zinc-800/50 min-w-0 overflow-hidden shrink-0">
               <div className="flex items-center gap-2 px-4 py-2 border-b border-zinc-800/50 bg-[#0a0a0a]">
                 <span className="text-sm font-medium text-zinc-300">SprintLogic AI</span>
                 <div className="ml-auto flex items-center gap-1">
@@ -443,7 +443,7 @@ export default function Home() {
                     variant="ghost" 
                     size="icon" 
                     className="h-6 w-6 p-0 text-zinc-400 hover:text-white"
-                    onClick={() => setIsMaximized(true)}
+                    onClick={() => setRightSidebarOpen(false)}
                   >
                     <ChevronRight className="h-4 w-4" />
                   </Button>
@@ -455,12 +455,12 @@ export default function Home() {
             </ResizablePanel>
         ) : null}
 
-        {isMaximized ? (
+        {!rightSidebarOpen ? (
           <div className="absolute right-4 bottom-4 z-50">
             <Button 
               variant="default" 
               className="rounded-full shadow-lg shadow-blue-500/20 h-12 w-12 p-0 bg-blue-600 hover:bg-blue-500 text-white flex items-center justify-center border-none"
-              onClick={() => setIsMaximized(false)}
+              onClick={() => setRightSidebarOpen(true)}
               title="Abrir AI"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 21 1.9-5.7a8.5 8.5 0 1 1 3.8 3.8z"/></svg>
