@@ -18,7 +18,7 @@ Se abandona el uso de PostgreSQL y Redis. Toda la persistencia es estrictamente 
 ## 3. Seguridad y Privacidad
 
 - **Zero Cloud Data**: Los datos nunca salen de la máquina del desarrollador. No existen tenants, no existe SaaS, no hay base de datos compartida.
-- **API Keys**: La integración con IA (Jarvis usando Gemini) requiere una API key que se guarda cifrada de forma segura **solo a nivel local**.
+- **API Keys**: La integración con IA (SprintLogic AI usando Gemini) requiere una API key que se guarda cifrada de forma segura **solo a nivel local**.
 - **Control local**: Los repositorios Git a gestionar se escanean directamente del sistema de archivos local, eliminando la necesidad de dar accesos OAuth a plataformas como GitHub o GitLab.
 
 ## 4. Motor de IA (AI Gateway) y SDD Pipeline

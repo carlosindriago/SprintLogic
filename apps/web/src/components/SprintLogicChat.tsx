@@ -16,9 +16,9 @@ const MODELS = [
   { value: "openrouter/ollama/llama3", label: "Ollama (Llama 3)" }
 ];
 
-export default function JarvisChat({ projectId }: { projectId: string | null }) {
+export default function SprintLogicChat({ projectId }: { projectId: string | null }) {
   const [messages, setMessages] = useState<Message[]>([
-    { role: "assistant", content: "Hola, soy Jarvis. ¿En qué te ayudo hoy?" }
+    { role: "assistant", content: "Hola, soy SprintLogic AI. ¿En qué te ayudo hoy?" }
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -61,7 +61,7 @@ export default function JarvisChat({ projectId }: { projectId: string | null }) 
   return (
     <div className="flex flex-col h-full bg-[#1e1e1e] text-slate-200">
       <div className="flex justify-between items-center p-2 border-b border-slate-800 bg-slate-900 text-xs">
-        <span className="font-semibold px-2 text-slate-400">Jarvis AI</span>
+        <span className="font-semibold px-2 text-slate-400">SprintLogic AI</span>
         <Select value={selectedModel} onValueChange={(value) => setSelectedModel(value ?? selectedModel)}>
           <SelectTrigger className="w-[180px] h-7 text-xs bg-slate-800 border-slate-700">
             <SelectValue placeholder="Selecciona un modelo" />
@@ -95,7 +95,7 @@ export default function JarvisChat({ projectId }: { projectId: string | null }) 
           {loading && (
             <div className="flex flex-col items-start">
               <div className="max-w-[85%] rounded-lg p-3 text-sm bg-slate-800 text-slate-400 border border-slate-700 animate-pulse">
-                Jarvis está pensando...
+                SprintLogic AI está pensando...
               </div>
             </div>
           )}
@@ -108,7 +108,7 @@ export default function JarvisChat({ projectId }: { projectId: string | null }) 
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-            placeholder="Escribe un comando a Jarvis..."
+            placeholder="Escribe un comando..."
             className="flex-1 bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
           />
           <Button onClick={sendMessage} disabled={loading || !input.trim()} className="bg-blue-600 hover:bg-blue-700 px-4">

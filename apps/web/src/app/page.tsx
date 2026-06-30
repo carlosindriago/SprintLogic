@@ -22,7 +22,7 @@ import dynamic from "next/dynamic";
 import { useState, useEffect } from "react";
 import { scanProject, getProjects, saveApiKey } from "@/lib/api";
 import { Switch } from "@/components/ui/switch";
-import JarvisChat from "@/components/JarvisChat";
+import SprintLogicChat from "@/components/SprintLogicChat";
 import KanbanBoard from "@/components/KanbanBoard";
 import FileTree from "@/components/FileTree";
 import { useTabsStore } from '@/store/tabsStore';
@@ -66,7 +66,7 @@ export default function Home() {
     }
   };
 
-  const [isMaximized, setIsMaximized] = useState(false); // Controls Jarvis panel collapse
+  const [isMaximized, setIsMaximized] = useState(false); // Controls AI panel collapse
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(true); // Controls left sidebar collapse
 
   const handleScan = async () => {
@@ -184,7 +184,7 @@ export default function Home() {
                     <DialogHeader>
                       <DialogTitle>Configuración de Modelos (LLMs)</DialogTitle>
                       <DialogDescription className="text-slate-400">
-                        Ingresa las API Keys para los diferentes proveedores que desees usar con Jarvis.
+                        Ingresa las API Keys para los diferentes proveedores que desees usar con la IA.
                       </DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
@@ -369,7 +369,7 @@ export default function Home() {
         {!isMaximized ? (
             <ResizablePanel defaultSize="30%" minSize="20%" className="bg-[#1e1e1e] flex flex-col border-l border-slate-800 min-w-0 overflow-hidden">
               <div className="flex items-center gap-2 px-4 py-2 border-b border-slate-800 bg-slate-900">
-                <span className="text-sm font-medium text-slate-300">Jarvis AI</span>
+                <span className="text-sm font-medium text-slate-300">SprintLogic AI</span>
                 <div className="ml-auto flex items-center gap-1">
                   <Button 
                     variant="ghost" 
@@ -382,7 +382,7 @@ export default function Home() {
                 </div>
               </div>
               <div className="flex-1 relative overflow-hidden">
-                <JarvisChat projectId={projectId} />
+                <SprintLogicChat projectId={projectId} />
               </div>
             </ResizablePanel>
         ) : null}
@@ -393,7 +393,7 @@ export default function Home() {
               variant="default" 
               className="rounded-full shadow-lg h-12 w-12 p-0 bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center"
               onClick={() => setIsMaximized(false)}
-              title="Abrir Jarvis"
+              title="Abrir AI"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 21 1.9-5.7a8.5 8.5 0 1 1 3.8 3.8z"/></svg>
             </Button>

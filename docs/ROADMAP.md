@@ -7,9 +7,9 @@
 - Eliminar la lógica de autenticación y multi-tenancy.
 - Diseño inicial del shell de la aplicación (Sidebar, Layout base).
 
-## Fase 2 — Planificador de Proyectos asistido por Jarvis (IA)
+## Fase 2 — Planificador de Proyectos asistido por SprintLogic AI
 - Configurar input para API Key de Gemini y guardado seguro local.
-- Creación de interfaz de chat/asistente para Jarvis.
+- Creación de interfaz de chat/asistente para SprintLogic AI.
 - Pipeline SDD: De descripción abstracta a `proposal.md`, `specs/`, `design.md`, `tasks.md`.
 - Exportación estructurada a formato JSON y guardado en disco del plan.
 - Volcado automático del JSON al Kanban (Backlog local).
@@ -21,13 +21,13 @@
 - Integrar lectura de repositorios Git locales desde el sistema de archivos.
 - Vinculación del repositorio con el proyecto en SQLite.
 - Interfaz gráfica para ramas, diffs y pre-visualización de commits.
-- Jarvis Assistant: sugerencia automática de nombres de rama y mensajes de commits atómicos basados en la tarea del board activa.
+- SprintLogic AI Assistant: sugerencia automática de nombres de rama y mensajes de commits atómicos basados en la tarea del board activa.
 
 ## Fase 4 — Codebase Memory Graph (Visualización 2D & AST)
 - Análisis del código fuente mediante `tree-sitter` (Python) para extraer el AST.
 - Guardado del mapa estructural en SQLite.
 - Renderizado 2D de alta performance en el frontend (Next.js) utilizando `react-force-graph-2d`.
-- Vinculación SDD-AST: Jarvis relacionará las tareas del `TaskBreakdown` directamente con los nodos AST (`affectedNodes`) que el desarrollador debe tocar.
+- Vinculación SDD-AST: SprintLogic AI relacionará las tareas del `TaskBreakdown` directamente con los nodos AST (`affectedNodes`) que el desarrollador debe tocar.
 
 ## Fase 5 — Focus Timer Integrado
 - Implementación del timer de foco (Pomodoro) por tarea.

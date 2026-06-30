@@ -4,9 +4,9 @@ from typing import List, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.infrastructure.security.credential_manager import CredentialManager
-from app.infrastructure.db.models import JarvisMemoryModel, ContextSnippetModel
+from app.infrastructure.db.models import AIMemoryModel, ContextSnippetModel
 
-class JarvisAgent:
+class AIAgent:
     def __init__(self, session: AsyncSession, project_id: int | None = None):
         self.session = session
         self.project_id = project_id
@@ -65,7 +65,7 @@ class JarvisAgent:
         args = json.loads(tool_call.function.arguments)
 
         if name == "mem_save":
-            memory = JarvisMemoryModel(
+            memory = AIMemoryModel(
                 project_id=self.project_id,
                 memory_type=args["memory_type"],
                 topic=args["topic"],
@@ -77,9 +77,9 @@ class JarvisAgent:
 
         elif name == "mem_search":
             query = args["query"]
-            stmt = select(JarvisMemoryModel).where(JarvisMemoryModel.content.icontains(query))
+            stmt = select(AIMemoryModel).where(AIMemoryModel.content.icontains(query))
             if self.project_id:
-                stmt = stmt.where(JarvisMemoryModel.project_id == self.project_id)
+                stmt = stmt.where(AIMemoryModel.project_id == self.project_id)
             result = await self.session.execute(stmt)
             memories = result.scalars().all()
             if not memories:
@@ -114,7 +114,7 @@ class JarvisAgent:
 
     async def chat(self, messages: List[Dict[str, str]], model: str = "gemini/gemini-1.5-pro-latest") -> str:
         """
-        Processes a chat conversation and allows Jarvis to call tools before returning a final response.
+        Processes a chat conversation and allows the AI to call tools before returning a final response.
         """
         provider = self._get_provider(model)
         api_key = CredentialManager.get_api_key(provider)

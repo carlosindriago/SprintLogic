@@ -1,22 +1,22 @@
 # SprintLogic — Project Blueprint
 
 ## 1. Visión del producto
-SprintLogic es una **Aplicación de Escritorio Local (Linux First)** de código abierto, diseñada exclusivamente para el desarrollador individual. Actúa como un centro de comando integral que optimiza el flujo de desarrollo mediante la integración profunda con repositorios locales, automatización guiada por IA (asistente Jarvis) basándose en el ciclo SDD/TDD, y un control riguroso de Git.
+SprintLogic es una **Aplicación de Escritorio Local (Linux First)** de código abierto, diseñada exclusivamente para el desarrollador individual. Actúa como un centro de comando integral que optimiza el flujo de desarrollo mediante la integración profunda con repositorios locales, automatización guiada por IA (asistente SprintLogic AI) basándose en el ciclo SDD/TDD, y un control riguroso de Git.
 
 ## 2. Propuesta de valor
-- **SDD & TDD Nativos**: El asistente Jarvis ayuda a estructurar el diseño (Proposal, Specs, Design, Tasks) antes de escribir código, y acompaña en la escritura de los tests.
+- **SDD & TDD Nativos**: El asistente SprintLogic AI ayuda a estructurar el diseño (Proposal, Specs, Design, Tasks) antes de escribir código, y acompaña en la escritura de los tests.
 - **Git Perfection**: Control y sugerencia de nombres de ramas y commits atómicos sin fricción. Todo vinculado directamente a las tareas del board Kanban.
 - **Privacidad Local Absoluta**: Sin multi-tenancy. Sin bases de datos en la nube. Toda la información del proyecto y del trabajo reside en un archivo SQLite local, y la clave API de IA (Gemini) se guarda exclusivamente en tu máquina.
 - **Codebase Memory Graph (Pilar 1)**: SprintLogic mapeará el código local usando tree-sitter (soportando Python, TS, Java, Go, PHP, etc.), almacenará los nodos/aristas en SQLite y los renderizará en 2D. Las tareas SDD se vincularán directamente a los affectedNodes.
-- **Memoria Persistente y Autónoma (Pilar 2)**: Jarvis tendrá memoria a largo plazo. Se añadirá una tabla `jarvis_memories` en SQLite. Jarvis tendrá herramientas (`mem_save`, `mem_search`) para guardar de forma autónoma decisiones arquitectónicas y resúmenes de sesión (Session Summaries) al terminar un Pomodoro.
-- **RAG de Dependencias y Contexto (Pilar 3 - Inspirado en Context7)**: Implementación de 'Dependency-Aware Context'. El AST Parser leerá `package.json`/`pyproject.toml` para identificar librerías. Antes de generar código, Jarvis recuperará snippets actualizados para evitar alucinaciones. Se usará `sqlite-vec` para búsquedas semánticas ligeras locales y se permitirá el BYOD (Bring Your Own Docs) para que el usuario añada PDFs o Markdown de su empresa.
+- **Memoria Persistente y Autónoma (Pilar 2)**: SprintLogic AI tendrá memoria a largo plazo. Se añadirá una tabla `ai_memories` en SQLite. SprintLogic AI tendrá herramientas (`mem_save`, `mem_search`) para guardar de forma autónoma decisiones arquitectónicas y resúmenes de sesión (Session Summaries) al terminar un Pomodoro.
+- **RAG de Dependencias y Contexto (Pilar 3 - Inspirado en Context7)**: Implementación de 'Dependency-Aware Context'. El AST Parser leerá `package.json`/`pyproject.toml` para identificar librerías. Antes de generar código, SprintLogic AI recuperará snippets actualizados para evitar alucinaciones. Se usará `sqlite-vec` para búsquedas semánticas ligeras locales y se permitirá el BYOD (Bring Your Own Docs) para que el usuario añada PDFs o Markdown de su empresa.
 - **Fricción Cero**: Al ser una app local, interactúa de inmediato con tus repositorios locales sin integraciones engorrosas por API.
 
 ## 3. Alcance MVP
 El foco es el desarrollador solitario.
 - Entorno de escritorio local (Tauri).
 - Base de datos SQLite (incluyendo `sqlite-vec` para semántica).
-- Asistente IA (Jarvis) con Gemini local para la planificación de proyectos y asistencia en commits.
+- Asistente IA (SprintLogic AI) con Gemini local para la planificación de proyectos y asistencia en commits.
 - Control visual del historial de Git local.
 - **Visualización 2D del código**: Renderización del Codebase Memory Graph usando AST.
 - Memoria Persistente (Engram) y RAG de dependencias integrado.
@@ -26,5 +26,5 @@ El foco es el desarrollador solitario.
 
 ## 4. Filosofía de diseño y uso
 - **Local First**: Toda la data vive contigo.
-- **Control Humano**: La IA (Jarvis) asiste y sugiere, nunca ejecuta destructivamente sin confirmación.
+- **Control Humano**: La IA (SprintLogic AI) asiste y sugiere, nunca ejecuta destructivamente sin confirmación.
 - **Clean Code & Architecture**: Predicar con el ejemplo aplicando los mismos estándares al propio desarrollo de SprintLogic.
