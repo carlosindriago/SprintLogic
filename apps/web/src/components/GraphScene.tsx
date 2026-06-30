@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { getProjectGraph } from "@/lib/api";
 
 // Dynamically import react-force-graph-2d to avoid SSR issues
@@ -12,6 +12,25 @@ const ForceGraph2D = dynamic(() => import("react-force-graph-2d"), {
 
 export default function GraphScene({ projectId, onNodeClick }: { projectId: string | null, onNodeClick?: (node: any) => void }) {
   const [graphData, setGraphData] = useState<{ nodes: any[], links: any[] }>({ nodes: [], links: [] });
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
+
+  useEffect(() => {
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setDimensions({
+          width: entry.contentRect.width,
+          height: entry.contentRect.height,
+        });
+      }
+    });
+
+    if (containerRef.current) {
+      observer.observe(containerRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     if (projectId !== null) {
@@ -85,8 +104,10 @@ export default function GraphScene({ projectId, onNodeClick }: { projectId: stri
   };
 
   return (
-    <div className="w-full h-full bg-[#0d0d0d] flex flex-col items-center justify-center text-zinc-200">
+    <div ref={containerRef} className="w-full h-full bg-[#0d0d0d] flex flex-col items-center justify-center text-zinc-200">
       <ForceGraph2D
+        width={dimensions.width}
+        height={dimensions.height}
         graphData={graphData}
         backgroundColor="#020617"
         nodeCanvasObject={paintNode}
