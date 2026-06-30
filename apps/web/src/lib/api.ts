@@ -77,6 +77,18 @@ export const getFileContent = async (projectId: string, path: string) => {
   return data.content;
 };
 
+export const getCommitDetails = async (projectId: string, hash: string) => {
+  const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/git/commits/${hash}`);
+  if (!res.ok) throw new Error("Failed to fetch commit details");
+  return res.json();
+};
+
+export const getCommitFileDiff = async (projectId: string, hash: string, path: string) => {
+  const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/git/commits/${hash}/diff?path=${encodeURIComponent(path)}`);
+  if (!res.ok) throw new Error("Failed to fetch file diff");
+  return res.json();
+};
+
 export const saveApiKey = async (provider: string, apiKey: string) => {
   const response = await fetchWithRetry(`${API_BASE_URL}/api-key/${provider}`, {
     method: 'POST',

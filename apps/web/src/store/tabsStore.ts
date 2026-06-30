@@ -1,12 +1,12 @@
 import { create } from 'zustand';
 
-export type TabType = 'dashboard' | 'editor' | 'git-graph';
+export type TabType = 'dashboard' | 'editor' | 'git-graph' | 'diff';
 
 export interface TabData {
   id: string;
   title: string;
   type: TabType;
-  data?: any; // e.g. { filePath: string } for editors
+  data?: any; // e.g. { filePath: string } for editors, { hash: string, filePath: string } for diffs
 }
 
 interface TabsState {

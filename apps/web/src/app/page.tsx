@@ -30,6 +30,7 @@ import TabBar from '@/components/TabBar';
 import EditorTab from '@/components/EditorTab';
 import GitStatusWidget from '@/components/GitStatusWidget';
 import GitGraphTab from '@/components/GitGraphTab';
+import DiffTab from '@/components/DiffTab';
 
 const GraphScene = dynamic(() => import("@/components/GraphScene"), { ssr: false });
 
@@ -136,6 +137,9 @@ export default function Home() {
       case 'git-graph':
         if (!projectId) return null;
         return <GitGraphTab projectId={projectId} />;
+      case 'diff':
+        if (!projectId) return null;
+        return <DiffTab projectId={projectId} hash={activeTab.data.hash} filePath={activeTab.data.filePath} />;
       default:
         return <div className="p-4">Tipo de pestaña desconocido.</div>;
     }
