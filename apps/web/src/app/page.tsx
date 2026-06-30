@@ -17,7 +17,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Settings, FolderOpen, Plus, GitBranch, GitCommit } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Settings, FolderOpen, Plus, GitBranch, GitCommit, ChevronRight } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useState, useEffect } from "react";
 import { scanProject, getProjects, saveApiKey } from "@/lib/api";
@@ -99,7 +100,7 @@ export default function Home() {
   const handleKanbanNodeClick = async (nodeId: string) => {
     if (!projectId) return;
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/projects/${projectId}/nodes/${encodeURIComponent(nodeId)}`);
+      const res = await fetch(`http://127.0.0.1:8000/api/v1/projects/${projectId}/nodes/${encodeURIComponent(nodeId)}`);
       if (res.ok) {
         const node = await res.json();
         handleNodeClick(node);
@@ -251,85 +252,94 @@ export default function Home() {
                 </Dialog>
               </div>
 
-              <Card className="bg-slate-800 border-slate-700 text-slate-200">
-                <CardHeader className="p-4 pb-2">
-                  <CardTitle className="text-sm font-medium">Proyectos</CardTitle>
-                </CardHeader>
-                <CardContent className="p-4 flex flex-col gap-2">
-                  {projects.length > 0 ? (
-                    <ul className="space-y-1 mb-2">
-                      {projects.map((p) => (
-                        <li key={p.id}>
-                          <button
-                            onClick={() => setProjectId(p.id)}
-                            className={`w-full text-left px-2 py-1.5 rounded text-sm truncate transition-colors flex items-center gap-2 ${projectId === p.id ? 'bg-blue-600/20 text-blue-400' : 'hover:bg-slate-700/50 text-slate-300'}`}
-                          >
-                            <FolderOpen className="w-4 h-4 shrink-0" />
-                            {p.name}
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <div className="text-xs text-slate-400 mb-2">No hay proyectos guardados.</div>
-                  )}
+              {/* 1. Selector de Proyectos */}
+              <div className="flex items-center gap-2">
+                <Select value={projectId || ""} onValueChange={setProjectId}>
+                  <SelectTrigger className="flex-1 bg-slate-800 border-slate-700 text-slate-200">
+                    <SelectValue placeholder="Selecciona un proyecto..." />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-800 border-slate-700 text-slate-200">
+                    {projects.length > 0 ? (
+                      projects.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.name}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <div className="p-2 text-xs text-slate-500">No hay proyectos</div>
+                    )}
+                  </SelectContent>
+                </Select>
+                <Button 
+                  variant="outline" 
+                  size="icon" 
+                  className="shrink-0 bg-slate-800 border-slate-700 text-slate-300 hover:text-white"
+                  onClick={() => setAddProjectOpen(true)}
+                  title="Gestionar Proyectos"
+                >
+                  <Settings className="h-4 w-4" />
+                </Button>
+              </div>
 
-                  <Button variant="outline" className="w-full bg-slate-900 border-slate-700 hover:bg-slate-800 text-xs" onClick={() => setAddProjectOpen(true)}>
-                    <Plus className="w-3 h-3 mr-2" /> Añadir Proyecto Local
-                  </Button>
-                  <Dialog open={addProjectOpen} onOpenChange={setAddProjectOpen}>
-                    <DialogContent className="sm:max-w-[425px] bg-slate-900 text-slate-200 border-slate-800">
-                      <DialogHeader>
-                        <DialogTitle>Añadir Proyecto Local</DialogTitle>
-                        <DialogDescription className="text-slate-400">
-                          Ingresa la ruta absoluta del repositorio Git local que deseas analizar.
-                        </DialogDescription>
-                      </DialogHeader>
-                      <div className="flex flex-col gap-4 py-4">
-                        <div className="flex w-full items-center space-x-2">
-                          <input
-                            type="text"
-                            value={path}
-                            onChange={(e) => setPath(e.target.value)}
-                            placeholder="/ruta/al/proyecto"
-                            className="flex-1 min-w-0 bg-slate-800 border border-slate-700 rounded p-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
-                          />
-                          <Button onClick={async () => {
-                            try {
-                              const { open } = await import("@tauri-apps/plugin-dialog");
-                              const selected = await open({
-                                directory: true,
-                                multiple: false,
-                              });
-                              if (selected && typeof selected === "string") {
-                                setPath(selected);
-                              }
-                            } catch (err) {
-                              console.error("Failed to open dialog:", err);
-                            }
-                          }} variant="outline" className="px-3 bg-slate-800 border-slate-700 hover:bg-slate-700 whitespace-nowrap">
-                            Examinar...
-                          </Button>
-                        </div>
-                        <Button onClick={handleScan} disabled={loading || !path} className="w-full">
-                          {loading ? "Cargando..." : "Registrar y Analizar"}
-                        </Button>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
-                </CardContent>
-              </Card>
+              <Dialog open={addProjectOpen} onOpenChange={setAddProjectOpen}>
+                <DialogContent className="sm:max-w-[425px] bg-slate-900 text-slate-200 border-slate-800">
+                  <DialogHeader>
+                    <DialogTitle>Añadir Proyecto Local</DialogTitle>
+                    <DialogDescription className="text-slate-400">
+                      Ingresa la ruta absoluta del repositorio Git local que deseas analizar.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="flex flex-col gap-4 py-4">
+                    <div className="flex w-full items-center space-x-2">
+                      <input
+                        type="text"
+                        value={path}
+                        onChange={(e) => setPath(e.target.value)}
+                        placeholder="/ruta/al/proyecto"
+                        className="flex-1 min-w-0 bg-slate-800 border border-slate-700 rounded p-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
+                      />
+                      <Button onClick={async () => {
+                        try {
+                          const { open } = await import("@tauri-apps/plugin-dialog");
+                          const selected = await open({
+                            directory: true,
+                            multiple: false,
+                          });
+                          if (selected && typeof selected === "string") {
+                            setPath(selected);
+                          }
+                        } catch (err) {
+                          console.error("Failed to open dialog:", err);
+                        }
+                      }} variant="outline" className="px-3 bg-slate-800 border-slate-700 hover:bg-slate-700 whitespace-nowrap">
+                        Examinar...
+                      </Button>
+                    </div>
+                    <Button onClick={handleScan} disabled={loading || !path} className="w-full bg-blue-600 hover:bg-blue-700">
+                      {loading ? "Cargando..." : "Registrar y Analizar"}
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
 
-              <Card className="bg-slate-800 border-slate-700 text-slate-200">
-                <CardHeader className="p-4 pb-2">
-                  <CardTitle className="text-sm font-medium">Explorador de Archivos</CardTitle>
-                </CardHeader>
-                <CardContent className="p-0 text-xs text-slate-400">
-                  {projectId ? <FileTree projectId={projectId} onFileSelect={(path) => handleNodeClick({ file_path: path })} /> : <div className="p-4">Selecciona un proyecto...</div>}
-                </CardContent>
-              </Card>
-
+              {/* 2. Widget de Git Status */}
               {projectId && <GitStatusWidget projectId={projectId} />}
+
+              {/* 3. Explorador de Archivos */}
+              <Card className="bg-slate-800 border-slate-700 text-slate-200 mt-2 flex-1 flex flex-col min-h-0">
+                <CardHeader className="p-3 pb-2 shrink-0 border-b border-slate-700/50">
+                  <CardTitle className="text-xs font-semibold text-slate-300 uppercase tracking-wider">Explorador</CardTitle>
+                </CardHeader>
+                <CardContent className="p-0 text-xs text-slate-400 flex-1 overflow-hidden">
+                  {projectId ? (
+                    <div className="h-full overflow-y-auto">
+                      <FileTree projectId={projectId} onFileSelect={(path) => handleNodeClick({ file_path: path })} />
+                    </div>
+                  ) : (
+                    <div className="p-4 text-center">Selecciona un proyecto...</div>
+                  )}
+                </CardContent>
+              </Card>
             </div>
           </ScrollArea>
         </ResizablePanel>
@@ -373,11 +383,11 @@ export default function Home() {
                 <div className="ml-auto flex items-center gap-1">
                   <Button 
                     variant="ghost" 
-                    size="sm" 
-                    className="h-6 px-2 py-0 text-xs text-slate-400 hover:text-white"
+                    size="icon" 
+                    className="h-6 w-6 p-0 text-slate-400 hover:text-white"
                     onClick={() => setIsMaximized(true)}
                   >
-                    Ocultar
+                    <ChevronRight className="h-4 w-4" />
                   </Button>
                 </div>
               </div>
