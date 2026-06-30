@@ -100,6 +100,23 @@ export default function Home() {
     }
   };
 
+  const handleKanbanNodeClick = async (nodeId: string) => {
+    if (!projectId) return;
+    try {
+      // Decode node ID (e.g., file:app.py) if necessary, but backend path variable handles it mostly.
+      // Wait, we need to URI encode the node ID because it contains slashes
+      const res = await fetch(`http://localhost:8000/api/v1/projects/${projectId}/nodes/${encodeURIComponent(nodeId)}`);
+      if (res.ok) {
+        const node = await res.json();
+        handleNodeClick(node);
+      } else {
+        console.error("Node not found", nodeId);
+      }
+    } catch (e) {
+      console.error("Error fetching node", e);
+    }
+  };
+
   return (
     <div className="h-screen w-full bg-slate-950 text-slate-200 overflow-hidden">
       <ResizablePanelGroup direction="horizontal">
@@ -333,7 +350,7 @@ export default function Home() {
                       {centerTab === 'graph' ? (
                         <GraphScene projectId={projectId} onNodeClick={handleNodeClick} />
                       ) : (
-                        <KanbanBoard projectId={projectId} />
+                        <KanbanBoard projectId={projectId} onNodeClick={handleKanbanNodeClick} />
                       )}
                     </div>
                   </div>

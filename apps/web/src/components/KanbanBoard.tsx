@@ -13,11 +13,13 @@ interface Task {
   content: string;
   status: "todo" | "in-progress" | "done";
   category: string;
+  affected_nodes?: string[];
   raw_line: number;
 }
 
 interface KanbanBoardProps {
   projectId: string | null;
+  onNodeClick?: (nodeId: string) => void;
 }
 
 const COLUMNS = [
@@ -26,7 +28,7 @@ const COLUMNS = [
   { id: "done", title: "Done", color: "border-green-500" }
 ];
 
-function SortableTask({ task }: { task: Task }) {
+function SortableTask({ task, onNodeClick }: { task: Task, onNodeClick?: (nodeId: string) => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id });
 
   const style = {
@@ -43,13 +45,29 @@ function SortableTask({ task }: { task: Task }) {
           <div className="prose prose-invert prose-sm max-w-none prose-p:my-0">
             <ReactMarkdown>{task.content}</ReactMarkdown>
           </div>
+          {task.affected_nodes && task.affected_nodes.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1">
+              {task.affected_nodes.map((node) => (
+                <span
+                  key={node}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (onNodeClick) onNodeClick(node);
+                  }}
+                  className="px-1.5 py-0.5 bg-blue-900/50 text-blue-300 rounded border border-blue-800 text-[9px] cursor-pointer hover:bg-blue-800 transition-colors"
+                >
+                  {node}
+                </span>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
   );
 }
 
-export default function KanbanBoard({ projectId }: KanbanBoardProps) {
+export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
 
@@ -160,7 +178,7 @@ export default function KanbanBoard({ projectId }: KanbanBoardProps) {
               <SortableContext items={getTasksByStatus(col.id).map(t => t.id)} strategy={verticalListSortingStrategy}>
                 <div id={col.id} className="min-h-[200px]">
                   {getTasksByStatus(col.id).map(task => (
-                    <SortableTask key={task.id} task={task} />
+                    <SortableTask key={task.id} task={task} onNodeClick={onNodeClick} />
                   ))}
                 </div>
               </SortableContext>
@@ -176,6 +194,15 @@ export default function KanbanBoard({ projectId }: KanbanBoardProps) {
                 <div className="prose prose-invert prose-sm max-w-none prose-p:my-0">
                   <ReactMarkdown>{activeTask.content}</ReactMarkdown>
                 </div>
+                {activeTask.affected_nodes && activeTask.affected_nodes.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {activeTask.affected_nodes.map((node) => (
+                      <span key={node} className="px-1.5 py-0.5 bg-blue-900/50 text-blue-300 rounded border border-blue-800 text-[9px]">
+                        {node}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           ) : null}

@@ -84,6 +84,30 @@ async def get_project_graph(project_id: str, session: AsyncSession = Depends(get
     
     return {"nodes": nodes_dict, "links": links_dict}
 
+@router.get("/projects/{project_id}/nodes/{node_id:path}")
+def get_node_details(project_id: str, node_id: str, db: Session = Depends(get_db)):
+    # Check if project exists
+    try:
+        proj_uuid = UUID(project_id)
+    except:
+        raise HTTPException(status_code=400, detail="Invalid project ID")
+    
+    project = db.query(ProjectModel).filter(ProjectModel.id == proj_uuid).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    node = db.query(GraphNodeModel).filter(GraphNodeModel.id == node_id).first()
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found")
+        
+    return {
+        "id": node.id,
+        "label": node.label,
+        "name": node.name,
+        "file_path": node.file_path,
+        "metadata": node.meta_data
+    }
+
 @router.get("/projects/{project_id}/files")
 async def get_project_files(project_id: str, session: AsyncSession = Depends(get_db_session)):
     try:
