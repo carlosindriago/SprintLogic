@@ -5,7 +5,7 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
-import { ImperativePanelHandle } from "react-resizable-panels";
+
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
@@ -76,8 +76,8 @@ export default function Home() {
 
   const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
-  const leftPanelRef = useRef<ImperativePanelHandle>(null);
-  const rightPanelRef = useRef<ImperativePanelHandle>(null);
+  const leftPanelRef = useRef<any>(null);
+  const rightPanelRef = useRef<any>(null);
 
   const toggleLeftSidebar = () => {
     if (leftSidebarOpen) {
@@ -187,7 +187,7 @@ export default function Home() {
       >
         {/* LEFT SIDEBAR — always in DOM, collapsible */}
         <ResizablePanel
-          ref={leftPanelRef}
+          panelRef={leftPanelRef}
           defaultSize={20}
           minSize={15}
           maxSize={40}
@@ -466,7 +466,7 @@ export default function Home() {
 
         {/* RIGHT AI SIDEBAR — always in DOM, collapsible */}
         <ResizablePanel
-          ref={rightPanelRef}
+          panelRef={rightPanelRef}
           defaultSize={0}
           minSize={20}
           maxSize={40}
