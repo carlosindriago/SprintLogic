@@ -48,9 +48,12 @@ async def get_project_graph(project_id: str, session: AsyncSession = Depends(get
     try:
         project_uuid = UUID(project_id)
         repo = SQLAlchemyProjectRepository(session)
+        project = await repo.get_project(project_uuid)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
         await repo.update_last_opened(project_uuid)
     except ValueError:
-        pass
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
 
     graph_repo = SQLAlchemyGraphRepository(session)
     nodes = await graph_repo.get_all_nodes()
