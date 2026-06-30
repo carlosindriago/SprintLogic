@@ -168,13 +168,13 @@ export default function Home() {
           </div>
         );
       case 'editor':
-        if (!projectId) return null;
+        if (!projectId || !activeTab.data?.node) return null;
         return <EditorTab projectId={projectId} node={activeTab.data.node} vimMode={vimMode} />;
       case 'git-graph':
         if (!projectId) return null;
         return <GitGraphTab projectId={projectId} />;
       case 'diff':
-        if (!projectId) return null;
+        if (!projectId || !activeTab.data?.hash || !activeTab.data?.filePath) return null;
         return <DiffTab projectId={projectId} hash={activeTab.data.hash} filePath={activeTab.data.filePath} />;
       default:
         return <div className="p-4">Tipo de pestaña desconocido.</div>;

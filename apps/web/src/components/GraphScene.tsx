@@ -160,8 +160,8 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
         linkCanvasObjectMode={() => "replace"}
         linkCanvasObject={paintLink}
         onNodeClick={handleNodeClick}
-        enableNodeDrag={false}
-        enableZoomPanInteraction={true}
+        enableZoomInteraction={true}
+        enablePanInteraction={true}
       />
     </div>
   );
