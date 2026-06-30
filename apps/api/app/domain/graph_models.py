@@ -17,6 +17,7 @@ class GraphNode:
     label: NodeLabel
     name: str
     file_path: str
+    meta_data: str = "{}"
 
 @dataclass
 class GraphEdge:

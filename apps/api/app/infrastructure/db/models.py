@@ -26,6 +26,7 @@ class GraphNodeModel(Base):
     label: Mapped[NodeLabel] = mapped_column(SQLAlchemyEnum(NodeLabel), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     file_path: Mapped[str] = mapped_column(String(1024), nullable=False)
+    meta_data: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
 class GraphEdgeModel(Base):

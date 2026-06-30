@@ -63,12 +63,18 @@ def extract_nodes_from_code(file_path: str, code: bytes, ext: str):
     edges = []
     imports = set()
     
+    import json
+
     file_node_id = f"file:{file_path}"
     file_node = GraphNode(
         id=file_node_id,
         label=NodeLabel.FILE,
         name=os.path.basename(file_path),
-        file_path=file_path
+        file_path=file_path,
+        meta_data=json.dumps({
+            "start_line": tree.root_node.start_point[0] + 1,
+            "end_line": tree.root_node.end_point[0] + 1
+        })
     )
     nodes.append(file_node)
     
@@ -97,7 +103,11 @@ def extract_nodes_from_code(file_path: str, code: bytes, ext: str):
                     id=class_id,
                     label=NodeLabel.CLASS,
                     name=class_name,
-                    file_path=file_path
+                    file_path=file_path,
+                    meta_data=json.dumps({
+                        "start_line": node.start_point[0] + 1,
+                        "end_line": node.end_point[0] + 1
+                    })
                 ))
                 edges.append(GraphEdge(
                     source_id=file_node_id,
@@ -118,7 +128,11 @@ def extract_nodes_from_code(file_path: str, code: bytes, ext: str):
                     id=func_id,
                     label=NodeLabel.FUNCTION,
                     name=func_name,
-                    file_path=file_path
+                    file_path=file_path,
+                    meta_data=json.dumps({
+                        "start_line": node.start_point[0] + 1,
+                        "end_line": node.end_point[0] + 1
+                    })
                 ))
                 edges.append(GraphEdge(
                     source_id=file_node_id,
