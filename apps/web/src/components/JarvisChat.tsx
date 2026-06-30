@@ -62,7 +62,7 @@ export default function JarvisChat({ projectId }: { projectId: string | null }) 
     <div className="flex flex-col h-full bg-[#1e1e1e] text-slate-200">
       <div className="flex justify-between items-center p-2 border-b border-slate-800 bg-slate-900 text-xs">
         <span className="font-semibold px-2 text-slate-400">Jarvis AI</span>
-        <Select value={selectedModel} onValueChange={setSelectedModel}>
+        <Select value={selectedModel} onValueChange={(value) => setSelectedModel(value ?? selectedModel)}>
           <SelectTrigger className="w-[180px] h-7 text-xs bg-slate-800 border-slate-700">
             <SelectValue placeholder="Selecciona un modelo" />
           </SelectTrigger>
