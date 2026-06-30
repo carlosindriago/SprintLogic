@@ -5,6 +5,7 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
+import { ImperativePanelHandle } from "react-resizable-panels";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
@@ -20,7 +21,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Settings, FolderOpen, Plus, GitBranch, GitCommit, ChevronRight } from "lucide-react";
 import dynamic from "next/dynamic";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { scanProject, getProjects, saveApiKey } from "@/lib/api";
 import { Switch } from "@/components/ui/switch";
 import SprintLogicChat from "@/components/SprintLogicChat";
@@ -73,8 +74,30 @@ export default function Home() {
     }
   };
 
-  const [rightSidebarOpen, setRightSidebarOpen] = useState(false); // Controls AI panel collapse
-  const [leftSidebarOpen, setLeftSidebarOpen] = useState(true); // Controls left sidebar collapse
+  const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
+  const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
+  const leftPanelRef = useRef<ImperativePanelHandle>(null);
+  const rightPanelRef = useRef<ImperativePanelHandle>(null);
+
+  const toggleLeftSidebar = () => {
+    if (leftSidebarOpen) {
+      leftPanelRef.current?.collapse();
+      setLeftSidebarOpen(false);
+    } else {
+      leftPanelRef.current?.expand();
+      setLeftSidebarOpen(true);
+    }
+  };
+
+  const toggleRightSidebar = () => {
+    if (rightSidebarOpen) {
+      rightPanelRef.current?.collapse();
+      setRightSidebarOpen(false);
+    } else {
+      rightPanelRef.current?.expand();
+      setRightSidebarOpen(true);
+    }
+  };
 
   const handleScan = async () => {
     if (!path) return;
@@ -162,27 +185,24 @@ export default function Home() {
         direction="horizontal"
         className="h-full w-full relative"
       >
-        {!leftSidebarOpen ? (
-          <div className="absolute left-4 top-4 z-50">
-            <Button 
-              variant="default" 
-              className="h-10 w-10 p-0 bg-zinc-800 hover:bg-zinc-700 text-white flex items-center justify-center border border-zinc-700/50"
-              onClick={() => setLeftSidebarOpen(true)}
-              title="Mostrar Proyectos"
-            >
-              <FolderOpen className="h-4 w-4" />
-            </Button>
-          </div>
-        ) : null}
-
-        {leftSidebarOpen ? (
-        <ResizablePanel defaultSize={20} minSize={15} maxSize={40} className="bg-[#0a0a0a] border-r border-zinc-800/50 flex flex-col overflow-hidden relative shrink-0">
+        {/* LEFT SIDEBAR — always in DOM, collapsible */}
+        <ResizablePanel
+          ref={leftPanelRef}
+          defaultSize={20}
+          minSize={15}
+          maxSize={40}
+          collapsible={true}
+          collapsedSize={0}
+          onCollapse={() => setLeftSidebarOpen(false)}
+          onExpand={() => setLeftSidebarOpen(true)}
+          className="bg-[#0a0a0a] border-r border-zinc-800/50 flex flex-col overflow-hidden relative"
+        >
           <ScrollArea className="flex-1">
             <div className="p-4 flex flex-col gap-4">
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-zinc-100 truncate">SprintLogic IDE</h2>
                 <div className="flex items-center gap-1">
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-zinc-400 hover:text-white" onClick={() => setLeftSidebarOpen(false)} title="Ocultar barra lateral">
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-zinc-400 hover:text-white" onClick={toggleLeftSidebar} title="Ocultar barra lateral">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
                   </Button>
                   <Button variant="ghost" size="icon" className="h-8 w-8 text-zinc-400 hover:text-white" onClick={() => setSettingsOpen(true)}>
@@ -401,13 +421,25 @@ export default function Home() {
             </div>
           </ScrollArea>
         </ResizablePanel>
-        ) : null}
 
-        {leftSidebarOpen ? (
-          <ResizableHandle className="bg-zinc-800 w-1 hover:bg-blue-500 transition-colors" />
-        ) : null}
+        {/* Toggle button visible only when left sidebar is collapsed */}
+        {!leftSidebarOpen && (
+          <div className="absolute left-2 top-4 z-50">
+            <Button 
+              variant="default" 
+              className="h-8 w-8 p-0 bg-zinc-800 hover:bg-zinc-700 text-white flex items-center justify-center border border-zinc-700/50 rounded"
+              onClick={toggleLeftSidebar}
+              title="Mostrar Proyectos"
+            >
+              <FolderOpen className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
 
-        <ResizablePanel defaultSize={50} minSize={30} className="min-w-0 overflow-hidden flex flex-col bg-[#151515]">
+        <ResizableHandle className="bg-zinc-800 w-1 hover:bg-blue-500 transition-colors" />
+
+        {/* MAIN CONTENT */}
+        <ResizablePanel defaultSize={rightSidebarOpen ? 50 : 80} minSize={30} className="min-w-0 overflow-hidden flex flex-col bg-[#151515]">
           {projectId === null ? (
             <div className="flex-1 relative min-w-0 overflow-hidden">
               <div className="flex flex-col items-center justify-center h-full bg-[#151515] text-center px-4">
@@ -430,43 +462,51 @@ export default function Home() {
           )}
         </ResizablePanel>
 
-        {!rightSidebarOpen ? (
-          <ResizableHandle className="bg-zinc-800 w-1 hover:bg-blue-500 transition-colors" />
-        ) : null}
-        
-        {rightSidebarOpen ? (
-            <ResizablePanel defaultSize={30} minSize={20} maxSize={40} className="bg-[#151515] flex flex-col border-l border-zinc-800/50 min-w-0 overflow-hidden shrink-0">
-              <div className="flex items-center gap-2 px-4 py-2 border-b border-zinc-800/50 bg-[#0a0a0a]">
-                <span className="text-sm font-medium text-zinc-300">SprintLogic AI</span>
-                <div className="ml-auto flex items-center gap-1">
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-6 w-6 p-0 text-zinc-400 hover:text-white"
-                    onClick={() => setRightSidebarOpen(false)}
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-              <div className="flex-1 relative overflow-hidden">
-                <SprintLogicChat projectId={projectId} />
-              </div>
-            </ResizablePanel>
-        ) : null}
+        <ResizableHandle className="bg-zinc-800 w-1 hover:bg-blue-500 transition-colors" />
 
-        {!rightSidebarOpen ? (
+        {/* RIGHT AI SIDEBAR — always in DOM, collapsible */}
+        <ResizablePanel
+          ref={rightPanelRef}
+          defaultSize={0}
+          minSize={20}
+          maxSize={40}
+          collapsible={true}
+          collapsedSize={0}
+          onCollapse={() => setRightSidebarOpen(false)}
+          onExpand={() => setRightSidebarOpen(true)}
+          className="bg-[#151515] flex flex-col border-l border-zinc-800/50 min-w-0 overflow-hidden"
+        >
+          <div className="flex items-center gap-2 px-4 py-2 border-b border-zinc-800/50 bg-[#0a0a0a]">
+            <span className="text-sm font-medium text-zinc-300">SprintLogic AI</span>
+            <div className="ml-auto flex items-center gap-1">
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-6 w-6 p-0 text-zinc-400 hover:text-white"
+                onClick={toggleRightSidebar}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+          <div className="flex-1 relative overflow-hidden">
+            <SprintLogicChat projectId={projectId} />
+          </div>
+        </ResizablePanel>
+
+        {/* FAB to open AI sidebar when collapsed */}
+        {!rightSidebarOpen && (
           <div className="absolute right-4 bottom-4 z-50">
             <Button 
               variant="default" 
               className="rounded-full shadow-lg shadow-blue-500/20 h-12 w-12 p-0 bg-blue-600 hover:bg-blue-500 text-white flex items-center justify-center border-none"
-              onClick={() => setRightSidebarOpen(true)}
+              onClick={toggleRightSidebar}
               title="Abrir AI"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 21 1.9-5.7a8.5 8.5 0 1 1 3.8 3.8z"/></svg>
             </Button>
           </div>
-        ) : null}
+        )}
       </ResizablePanelGroup>
     </div>
   );
