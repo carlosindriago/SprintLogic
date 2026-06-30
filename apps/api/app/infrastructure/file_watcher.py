@@ -54,6 +54,12 @@ class FileWatcherService:
                             print(f"Error in watcher callback: {e}")
         except asyncio.CancelledError:
             pass
+        except Exception as e:
+            # Catch internal watchfiles UnboundLocalError during cancellation
+            if isinstance(e, UnboundLocalError) and "raw_changes" in str(e):
+                pass
+            else:
+                print(f"File watcher error: {e}")
 
     async def start_watching(self, project_id: str, path: str):
         """Starts watching a project path. Stops the previous watcher if project changed."""
