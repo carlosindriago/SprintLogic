@@ -38,7 +38,7 @@ async def scan_project(request: ScanRequest, session: AsyncSession = Depends(get
     graph_repo = SQLAlchemyGraphRepository(session)
     scan_codebase_usecase = ScanCodebaseUseCase(parser, graph_repo)
     
-    await scan_codebase_usecase.execute(request.path)
+    await scan_codebase_usecase.execute(saved_project.id, request.path)
     
     return {"project_id": str(saved_project.id)}
 
@@ -56,8 +56,8 @@ async def get_project_graph(project_id: str, session: AsyncSession = Depends(get
         raise HTTPException(status_code=400, detail="Invalid project ID format")
 
     graph_repo = SQLAlchemyGraphRepository(session)
-    nodes = await graph_repo.get_all_nodes()
-    edges = await graph_repo.get_all_edges()
+    nodes = await graph_repo.get_nodes_by_project(project_uuid)
+    edges = await graph_repo.get_edges_by_project(project_uuid)
     
     import os
     project_path = os.path.abspath(project.path)
@@ -280,3 +280,63 @@ async def save_project_tasks(project_id: str, request: SaveTasksRequest, session
 
     kanban_sync.write_tasks(project.path, request.tasks)
     return {"status": "success"}
+
+@router.get("/projects/{project_id}/insights")
+async def get_project_insights(project_id: str, session: AsyncSession = Depends(get_db_session)):
+    try:
+        project_uuid = UUID(project_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+
+    repo = SQLAlchemyProjectRepository(session)
+    project = await repo.get_project(project_uuid)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # 1. Tareas por estado
+    tasks = kanban_sync.read_tasks(project.path)
+    tasks_by_state = {"todo": 0, "in-progress": 0, "done": 0}
+    for t in tasks:
+        if t["status"] in tasks_by_state:
+            tasks_by_state[t["status"]] += 1
+
+    # 2. Distribución de archivos/lenguajes (Query GraphNodeModel)
+    from sqlalchemy import select
+    from app.infrastructure.db.models import GraphNodeModel
+    import os
+
+    nodes_result = await session.execute(
+        select(GraphNodeModel.file_path).where(GraphNodeModel.project_id == project_uuid)
+    )
+    extensions = {}
+    for (file_path,) in nodes_result:
+        ext = os.path.splitext(file_path)[1]
+        if ext:
+            ext = ext[1:].lower()
+            extensions[ext] = extensions.get(ext, 0) + 1
+
+    # Sort extensions by count descending
+    sorted_exts = sorted([{"name": k, "value": v} for k, v in extensions.items()], key=lambda x: x["value"], reverse=True)
+
+    # 3. Total de Commits, Ramas activas y Logs recientes
+    git_gateway = LocalGitGateway()
+    total_commits = 0
+    active_branches = 0
+    recent_commits = []
+    try:
+        out_commits = await git_gateway._run_command(project.path, 'rev-list', '--all', '--count')
+        total_commits = int(out_commits)
+        out_branches = await git_gateway._run_command(project.path, 'branch')
+        active_branches = len([b for b in out_branches.split('\n') if b.strip()])
+        recent_commits = await git_gateway.get_recent_commits(project.path, limit=5)
+    except Exception:
+        pass
+
+    return {
+        "tasks_by_state": tasks_by_state,
+        "language_distribution": sorted_exts[:5],
+        "total_commits": total_commits,
+        "active_branches": active_branches,
+        "velocity": int(tasks_by_state.get("done", 0) * 1.5),
+        "recent_commits": recent_commits
+    }
