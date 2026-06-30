@@ -15,6 +15,7 @@ export default function GitGraphTab({ projectId }: { projectId: string }) {
   const [selectedCommit, setSelectedCommit] = useState<any | null>(null);
   const [commitDetails, setCommitDetails] = useState<any | null>(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
+  const [showDetails, setShowDetails] = useState(true);
   
   const addTab = useTabsStore((state) => state.addTab);
 
@@ -62,6 +63,7 @@ export default function GitGraphTab({ projectId }: { projectId: string }) {
 
   const handleCommitClick = async (hash: string) => {
     setSelectedCommit(hash);
+    setShowDetails(true);
     setDetailsLoading(true);
     setCommitDetails(null);
     try {
@@ -152,10 +154,10 @@ export default function GitGraphTab({ projectId }: { projectId: string }) {
 
       <div className="flex-1 overflow-hidden animate-slide-up-fade">
         <ResizablePanelGroup direction="horizontal">
-          <ResizablePanel defaultSize={60} minSize={30}>
+          <ResizablePanel defaultSize={showDetails ? 60 : 100} minSize={30}>
             <div className="h-full overflow-auto p-8 flex justify-start bg-slate-950 gitgraph-container">
               {!loading && commits.length > 0 && (
-                <div className="bg-slate-900/80 backdrop-blur-sm p-8 rounded-xl border border-slate-800 w-full shadow-2xl min-h-full">
+                <div className="bg-slate-900/80 backdrop-blur-sm p-8 rounded-xl border border-slate-800 min-w-full w-fit shadow-2xl min-h-full">
                   <Gitgraph key={commits.length > 0 ? commits[0].hash : "empty"}
                     options={{
                       template: templateExtend(TemplateName.Metro, {
@@ -209,11 +211,21 @@ export default function GitGraphTab({ projectId }: { projectId: string }) {
             </div>
           </ResizablePanel>
           
-          <ResizableHandle className="bg-slate-800" />
-          
-          <ResizablePanel defaultSize={40} minSize={20}>
-            <div className="h-full flex flex-col bg-slate-900 border-l border-slate-800">
-              {detailsLoading ? (
+          {showDetails && (
+            <>
+              <ResizableHandle className="bg-slate-800" />
+              <ResizablePanel defaultSize={40} minSize={20}>
+                <div className="h-full flex flex-col bg-slate-900 border-l border-slate-800 relative">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="absolute right-4 top-4 h-8 w-8 p-0 text-slate-400 hover:text-white rounded-full bg-slate-800"
+                    onClick={() => setShowDetails(false)}
+                    title="Cerrar Detalles"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                  </Button>
+                  {detailsLoading ? (
                 <div className="p-8 text-center text-slate-400">
                   <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
                   Cargando detalles...
@@ -231,7 +243,7 @@ export default function GitGraphTab({ projectId }: { projectId: string }) {
                       </div>
                     </div>
                     <div className="bg-slate-950 p-4 rounded-lg border border-slate-800">
-                      <p className="text-slate-300 text-sm whitespace-pre-wrap">{commitDetails.message}</p>
+                      <p className="text-slate-300 text-sm whitespace-pre-wrap break-words">{commitDetails.message}</p>
                     </div>
                     <div className="mt-4 flex gap-2">
                       <span className="px-2 py-1 bg-slate-800 text-slate-400 rounded text-xs font-mono border border-slate-700">
@@ -272,6 +284,8 @@ export default function GitGraphTab({ projectId }: { projectId: string }) {
               )}
             </div>
           </ResizablePanel>
+          </>
+          )}
         </ResizablePanelGroup>
       </div>
     </div>
