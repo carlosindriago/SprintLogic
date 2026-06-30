@@ -57,8 +57,17 @@ async def get_project_graph(project_id: str, session: AsyncSession = Depends(get
     edges = await graph_repo.get_all_edges()
     
     import os
+    project_path = os.path.abspath(project.path)
+    
+    # Filter nodes by project path to ensure we don't mix projects
+    filtered_nodes = [n for n in nodes if os.path.abspath(n.file_path).startswith(project_path)]
+    valid_node_ids = {n.id for n in filtered_nodes}
+    
+    # Filter edges to only include those between valid nodes
+    filtered_edges = [e for e in edges if e.source_id in valid_node_ids and e.target_id in valid_node_ids]
+    
     nodes_dict = []
-    for n in nodes:
+    for n in filtered_nodes:
         label_val = n.label.value if hasattr(n.label, 'value') else n.label
         node_dict = {
             "id": n.id,
@@ -79,7 +88,7 @@ async def get_project_graph(project_id: str, session: AsyncSession = Depends(get
             "target": e.target_id,
             "type": e.type.value if hasattr(e.type, 'value') else e.type
         }
-        for e in edges
+        for e in filtered_edges
     ]
     
     return {"nodes": nodes_dict, "links": links_dict}

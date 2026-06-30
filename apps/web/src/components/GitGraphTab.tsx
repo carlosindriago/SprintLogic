@@ -86,7 +86,7 @@ export default function GitGraphTab({ projectId }: { projectId: string }) {
       <div className="flex-1 overflow-auto p-8 flex justify-center">
         {!loading && commits.length > 0 && (
           <div className="bg-slate-900 p-8 rounded-xl border border-slate-800 min-w-[600px] w-full max-w-4xl shadow-xl">
-            <Gitgraph
+            <Gitgraph key={commits.length > 0 ? commits[0].hash : "empty"}
               options={{
                 template: templateExtend(TemplateName.Metro, {
                   colors: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'],
