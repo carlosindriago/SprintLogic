@@ -47,10 +47,9 @@ export default function Home() {
   const [addProjectOpen, setAddProjectOpen] = useState(false);
   const [vimMode, setVimMode] = useState(false);
   
-  // Dashboard Tabs (Graph vs Kanban)
   const [dashboardTab, setDashboardTab] = useState<'graph' | 'kanban'>('graph');
   
-  // Global Tabs State
+  // Dashboard Tabs (Graph vs Kanban)
   const { tabs, activeTabId, addTab } = useTabsStore();
 
   useEffect(() => {
@@ -144,8 +143,11 @@ export default function Home() {
 
   return (
     <div className="h-screen w-full bg-slate-950 text-slate-200 overflow-hidden">
-      <ResizablePanelGroup direction="horizontal" className="h-full w-full" id="main-layout" autoSaveId="sprintlogic-layout-v3">
-        <ResizablePanel id="sidebar-left" defaultSize={20} minSize={15} maxSize={40} className="bg-slate-900 border-r border-slate-800 flex flex-col overflow-hidden">
+      <ResizablePanelGroup
+        direction="horizontal"
+        className="h-full w-full"
+      >
+        <ResizablePanel defaultSize={20} minSize={15} maxSize={40} className="bg-slate-900 border-r border-slate-800 flex flex-col overflow-hidden">
           <ScrollArea className="flex-1">
             <div className="p-4 flex flex-col gap-4">
               <div className="flex items-center justify-between">
@@ -310,7 +312,7 @@ export default function Home() {
 
         <ResizableHandle className="bg-slate-800 w-1 hover:bg-blue-500 transition-colors" />
 
-        <ResizablePanel id="main-content" defaultSize={50} minSize={30} className="min-w-0 overflow-hidden flex flex-col bg-[#1e1e1e]">
+        <ResizablePanel defaultSize={50} minSize={30} className="min-w-0 overflow-hidden flex flex-col bg-[#1e1e1e]">
           {projectId === null ? (
             <div className="flex-1 relative min-w-0 overflow-hidden">
               <div className="flex flex-col items-center justify-center h-full bg-slate-950 text-center px-4">
@@ -338,7 +340,7 @@ export default function Home() {
         ) : null}
         
         {!isMaximized ? (
-            <ResizablePanel id="sidebar-right" defaultSize={30} minSize={20} className="bg-[#1e1e1e] flex flex-col border-l border-slate-800 min-w-0 overflow-hidden">
+            <ResizablePanel defaultSize={30} minSize={20} className="bg-[#1e1e1e] flex flex-col border-l border-slate-800 min-w-0 overflow-hidden">
               <div className="flex items-center gap-2 px-4 py-2 border-b border-slate-800 bg-slate-900">
                 <span className="text-sm font-medium text-slate-300">Jarvis AI</span>
                 <div className="ml-auto flex items-center gap-1">
