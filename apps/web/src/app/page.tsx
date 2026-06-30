@@ -21,7 +21,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Settings, FolderOpen, Plus, GitBranch, GitCommit, ChevronRight } from "lucide-react";
+import { Settings, FolderOpen, ChevronRight } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useState, useEffect, useRef } from "react";
 import { scanProject, getProjects, saveApiKey } from "@/lib/api";
@@ -63,18 +63,25 @@ export default function Home() {
   
   const [settingsTab, setSettingsTab] = useState<'llms' | 'appearance'>('llms');
 
-  useEffect(() => {
-    fetchProjects();
-  }, []);
-
-  const fetchProjects = async () => {
+  const fetchProjects = useCallback(async () => {
     try {
       const data = await getProjects();
       setProjects(data.projects || []);
     } catch (e) {
       console.error("Failed to load projects", e);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      if (active) await fetchProjects();
+    };
+    load();
+    return () => {
+      active = false;
+    };
+  }, [fetchProjects]);
 
   const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
@@ -286,7 +293,7 @@ export default function Home() {
                         <>
                           <div className="grid grid-cols-4 items-center gap-4">
                             <Label className="text-right text-xs">Color de Acento</Label>
-                            <Select value={accentColor} onValueChange={(val: any) => setAccentColor(val)}>
+                            <Select value={accentColor} onValueChange={(val: 'blue' | 'purple' | 'emerald') => setAccentColor(val)}>
                               <SelectTrigger className="col-span-3 bg-zinc-800 border-zinc-700/50 text-zinc-200">
                                 <SelectValue />
                               </SelectTrigger>
@@ -299,7 +306,7 @@ export default function Home() {
                           </div>
                           <div className="grid grid-cols-4 items-center gap-4 mt-2">
                             <Label className="text-right text-xs">Tamaño de UI</Label>
-                            <Select value={uiScale} onValueChange={(val: any) => setUiScale(val)}>
+                            <Select value={uiScale} onValueChange={(val: 'compact' | 'normal' | 'large') => setUiScale(val)}>
                               <SelectTrigger className="col-span-3 bg-zinc-800 border-zinc-700/50 text-zinc-200">
                                 <SelectValue />
                               </SelectTrigger>
@@ -322,7 +329,7 @@ export default function Home() {
                           if (openRouterKey) await saveApiKey("openrouter", openRouterKey);
                           setSettingsOpen(false);
                           alert("Configuración guardada correctamente");
-                        } catch (e) {
+                        } catch {
                           alert("Error al guardar la configuración");
                         }
                       }}>Guardar Configuración</Button>

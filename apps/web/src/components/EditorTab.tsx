@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Editor from '@monaco-editor/react';
 import { getFileContent } from '@/lib/api';
+import { GraphNode } from '@/types';
 
 export default function EditorTab({ 
   projectId, 
@@ -8,42 +9,46 @@ export default function EditorTab({
   vimMode 
 }: { 
   projectId: string; 
-  node: any; 
+  node: GraphNode; 
   vimMode: boolean; 
 }) {
   const [content, setContent] = useState<string>('');
   const [loading, setLoading] = useState(true);
-  const [vimInstance, setVimInstance] = useState<any>(null);
+  const vimInstanceRef = useRef<{ dispose(): void } | null>(null);
 
   useEffect(() => {
     let isMounted = true;
-    setLoading(true);
 
-    if (!node.file_path) {
-      setContent('// No file path provided');
-      setLoading(false);
-      return;
-    }
+    const loadContent = async () => {
+      if (isMounted) setLoading(true);
+      
+      if (!node.file_path) {
+        setContent('// No file path provided');
+        if (isMounted) setLoading(false);
+        return;
+      }
 
-    getFileContent(projectId, node.file_path)
-      .then((data) => {
+      try {
+        const data = await getFileContent(projectId, node.file_path);
         if (isMounted) {
           setContent(data);
           setLoading(false);
         }
-      })
-      .catch((e) => {
+      } catch (e) {
         if (isMounted) {
           console.error(e);
           setContent('// Error loading file');
           setLoading(false);
         }
-      });
+      }
+    };
+
+    loadContent();
 
     return () => {
       isMounted = false;
-      if (vimInstance) {
-        vimInstance.dispose();
+      if (vimInstanceRef.current) {
+        vimInstanceRef.current.dispose();
       }
     };
   }, [projectId, node.file_path]);
@@ -62,7 +67,7 @@ export default function EditorTab({
       theme="vs-dark"
       path={node.file_path}
       value={content}
-      onMount={(editor, monaco) => {
+      onMount={(editor) => {
         if (vimMode) {
           import("monaco-vim").then(({ initVimMode }) => {
             const statusNode = document.createElement('div');
@@ -74,19 +79,22 @@ export default function EditorTab({
             editor.getContainerDomNode().parentElement?.appendChild(statusNode);
             
             const vim = initVimMode(editor, statusNode);
-            setVimInstance(vim);
+            vimInstanceRef.current = vim;
+          }).catch((err) => {
+            console.error("Vim initialization failed:", err);
           });
         }
         
         // Auto-scroll logic if AST metadata exists
         if (node.metadata) {
           try {
-            const meta = JSON.parse(node.metadata);
+            const metadataStr = typeof node.metadata === "string" ? node.metadata : JSON.stringify(node.metadata);
+            const meta = JSON.parse(metadataStr);
             if (meta.start_line) {
               editor.revealLineInCenter(meta.start_line);
               editor.setPosition({ lineNumber: meta.start_line, column: 1 });
             }
-          } catch (e) {}
+          } catch {}
         }
       }}
       options={{
