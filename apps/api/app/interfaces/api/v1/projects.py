@@ -84,19 +84,24 @@ async def get_project_graph(project_id: str, session: AsyncSession = Depends(get
     
     return {"nodes": nodes_dict, "links": links_dict}
 
+from sqlalchemy import select
+from app.infrastructure.db.models import ProjectModel, GraphNodeModel
+
 @router.get("/projects/{project_id}/nodes/{node_id:path}")
-def get_node_details(project_id: str, node_id: str, db: Session = Depends(get_db)):
+async def get_node_details(project_id: str, node_id: str, session: AsyncSession = Depends(get_db_session)):
     # Check if project exists
     try:
         proj_uuid = UUID(project_id)
     except:
         raise HTTPException(status_code=400, detail="Invalid project ID")
     
-    project = db.query(ProjectModel).filter(ProjectModel.id == proj_uuid).first()
+    project_result = await session.execute(select(ProjectModel).where(ProjectModel.id == proj_uuid))
+    project = project_result.scalar_one_or_none()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    node = db.query(GraphNodeModel).filter(GraphNodeModel.id == node_id).first()
+    node_result = await session.execute(select(GraphNodeModel).where(GraphNodeModel.id == node_id))
+    node = node_result.scalar_one_or_none()
     if not node:
         raise HTTPException(status_code=404, detail="Node not found")
         

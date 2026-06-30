@@ -1,0 +1,101 @@
+import { useState, useEffect } from 'react';
+import Editor from '@monaco-editor/react';
+import { getFileContent } from '@/lib/api';
+
+export default function EditorTab({ 
+  projectId, 
+  node, 
+  vimMode 
+}: { 
+  projectId: string; 
+  node: any; 
+  vimMode: boolean; 
+}) {
+  const [content, setContent] = useState<string>('');
+  const [loading, setLoading] = useState(true);
+  const [vimInstance, setVimInstance] = useState<any>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    setLoading(true);
+
+    if (!node.file_path) {
+      setContent('// No file path provided');
+      setLoading(false);
+      return;
+    }
+
+    getFileContent(projectId, node.file_path)
+      .then((data) => {
+        if (isMounted) {
+          setContent(data);
+          setLoading(false);
+        }
+      })
+      .catch((e) => {
+        if (isMounted) {
+          console.error(e);
+          setContent('// Error loading file');
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+      if (vimInstance) {
+        vimInstance.dispose();
+      }
+    };
+  }, [projectId, node.file_path]);
+
+  if (loading) {
+    return (
+      <div className="absolute inset-0 flex items-center justify-center text-slate-500">
+        Cargando código...
+      </div>
+    );
+  }
+
+  return (
+    <Editor
+      height="100%"
+      theme="vs-dark"
+      path={node.file_path}
+      value={content}
+      onMount={(editor, monaco) => {
+        if (vimMode) {
+          import("monaco-vim").then(({ initVimMode }) => {
+            const statusNode = document.createElement('div');
+            statusNode.style.padding = '2px 8px';
+            statusNode.style.fontSize = '12px';
+            statusNode.style.backgroundColor = '#1e1e1e';
+            statusNode.style.borderTop = '1px solid #333';
+            statusNode.style.color = '#fff';
+            editor.getContainerDomNode().parentElement?.appendChild(statusNode);
+            
+            const vim = initVimMode(editor, statusNode);
+            setVimInstance(vim);
+          });
+        }
+        
+        // Auto-scroll logic if AST metadata exists
+        if (node.metadata) {
+          try {
+            const meta = JSON.parse(node.metadata);
+            if (meta.start_line) {
+              editor.revealLineInCenter(meta.start_line);
+              editor.setPosition({ lineNumber: meta.start_line, column: 1 });
+            }
+          } catch (e) {}
+        }
+      }}
+      options={{
+        readOnly: true,
+        minimap: { enabled: false },
+        fontSize: 13,
+        wordWrap: "on",
+        padding: { top: 16 }
+      }}
+    />
+  );
+}

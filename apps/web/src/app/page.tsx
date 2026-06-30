@@ -17,15 +17,19 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Settings, FolderOpen, Plus } from "lucide-react";
+import { Settings, FolderOpen, Plus, GitBranch, GitCommit } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useState, useEffect } from "react";
-import { scanProject, getFileContent, getProjects } from "@/lib/api";
+import { scanProject, getProjects } from "@/lib/api";
 import { Switch } from "@/components/ui/switch";
 import JarvisChat from "@/components/JarvisChat";
 import KanbanBoard from "@/components/KanbanBoard";
-import Editor, { useMonaco } from "@monaco-editor/react";
 import FileTree from "@/components/FileTree";
+import { useTabsStore } from '@/store/tabsStore';
+import TabBar from '@/components/TabBar';
+import EditorTab from '@/components/EditorTab';
+import GitStatusWidget from '@/components/GitStatusWidget';
+import GitGraphTab from '@/components/GitGraphTab';
 
 const GraphScene = dynamic(() => import("@/components/GraphScene"), { ssr: false });
 
@@ -42,11 +46,12 @@ export default function Home() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [addProjectOpen, setAddProjectOpen] = useState(false);
   const [vimMode, setVimMode] = useState(false);
-  const [centerTab, setCenterTab] = useState<'graph' | 'kanban'>('graph');
-  const [activeRightTab, setActiveRightTab] = useState<'inspector' | 'jarvis'>('jarvis');
-  const [vimInstance, setVimInstance] = useState<any>(null);
   
-  const monaco = useMonaco();
+  // Dashboard Tabs (Graph vs Kanban)
+  const [dashboardTab, setDashboardTab] = useState<'graph' | 'kanban'>('graph');
+  
+  // Global Tabs State
+  const { tabs, activeTabId, addTab } = useTabsStore();
 
   useEffect(() => {
     fetchProjects();
@@ -61,10 +66,7 @@ export default function Home() {
     }
   };
 
-  const [selectedNode, setSelectedNode] = useState<any | null>(null);
-  const [fileContent, setFileContent] = useState<string>("");
-  const [loadingFile, setLoadingFile] = useState(false);
-  const [isMaximized, setIsMaximized] = useState(false);
+  const [isMaximized, setIsMaximized] = useState(false); // Controls Jarvis panel collapse
 
   const handleScan = async () => {
     if (!path) return;
@@ -73,7 +75,6 @@ export default function Home() {
     try {
       const data = await scanProject(path);
       setProjectId(data.project_id);
-      setSelectedNode(null); // Reset selection on new scan
       fetchProjects(); // Refresh the list
     } catch (e) {
       console.error(e);
@@ -84,27 +85,19 @@ export default function Home() {
   };
 
   const handleNodeClick = async (node: any) => {
-    setSelectedNode(node);
-    setActiveRightTab('inspector');
     if (!node.file_path) return;
     
-    setLoadingFile(true);
-    try {
-      const content = await getFileContent(projectId!, node.file_path);
-      setFileContent(content);
-    } catch (e) {
-      console.error(e);
-      setFileContent("// Error loading file");
-    } finally {
-      setLoadingFile(false);
-    }
+    addTab({
+      id: node.file_path,
+      title: node.file_path.split('/').pop() || node.file_path,
+      type: 'editor',
+      data: { node }
+    });
   };
 
   const handleKanbanNodeClick = async (nodeId: string) => {
     if (!projectId) return;
     try {
-      // Decode node ID (e.g., file:app.py) if necessary, but backend path variable handles it mostly.
-      // Wait, we need to URI encode the node ID because it contains slashes
       const res = await fetch(`http://localhost:8000/api/v1/projects/${projectId}/nodes/${encodeURIComponent(nodeId)}`);
       if (res.ok) {
         const node = await res.json();
@@ -117,12 +110,42 @@ export default function Home() {
     }
   };
 
+  const renderActiveTabContent = () => {
+    const activeTab = tabs.find(t => t.id === activeTabId);
+    if (!activeTab) return null;
+
+    switch (activeTab.type) {
+      case 'dashboard':
+        return (
+          <div className="flex flex-col h-full">
+            <div className="flex items-center gap-2 px-4 pt-2 border-b border-slate-800 bg-slate-900">
+              <button onClick={() => setDashboardTab('graph')} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${dashboardTab === 'graph' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-slate-300'}`}>Grafo 2D</button>
+              <button onClick={() => setDashboardTab('kanban')} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${dashboardTab === 'kanban' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-slate-300'}`}>Kanban (Sprints)</button>
+            </div>
+            <div className="flex-1 relative overflow-hidden bg-slate-950">
+              {dashboardTab === 'graph' ? (
+                <GraphScene projectId={projectId} onNodeClick={handleNodeClick} />
+              ) : (
+                <KanbanBoard projectId={projectId} onNodeClick={handleKanbanNodeClick} />
+              )}
+            </div>
+          </div>
+        );
+      case 'editor':
+        if (!projectId) return null;
+        return <EditorTab projectId={projectId} node={activeTab.data.node} vimMode={vimMode} />;
+      case 'git-graph':
+        if (!projectId) return null;
+        return <GitGraphTab projectId={projectId} />;
+      default:
+        return <div className="p-4">Tipo de pestaña desconocido.</div>;
+    }
+  };
+
   return (
-    <div className="h-screen w-full bg-slate-950 text-slate-200 overflow-hidden">
-      <ResizablePanelGroup direction="horizontal">
-        {!isMaximized && (
-          <>
-            <ResizablePanel id="sidebar-left" defaultSize="260px" minSize="220px" maxSize="40%" className="bg-slate-900 border-r border-slate-800 flex flex-col min-w-0 overflow-hidden">
+    <div className="h-screen w-full bg-slate-950 text-slate-200 overflow-hidden flex flex-col">
+      <ResizablePanelGroup direction="horizontal" className="h-full w-full">
+        <ResizablePanel id="sidebar-left" order={1} defaultSize={20} minSize={15} maxSize={40} className="bg-slate-900 border-r border-slate-800 flex flex-col min-w-0 overflow-hidden">
           <ScrollArea className="flex-1">
             <div className="p-4 flex flex-col gap-4">
               <div className="flex items-center justify-between">
@@ -280,177 +303,73 @@ export default function Home() {
                 </CardContent>
               </Card>
 
-              <Card className="bg-slate-800 border-slate-700 text-slate-200">
-                <CardHeader className="p-4 pb-2">
-                  <CardTitle className="text-sm font-medium">Sprints & KPIs</CardTitle>
-                </CardHeader>
-                <CardContent className="p-4 pt-0 text-xs text-slate-400">
-                  Pronto...
-                </CardContent>
-              </Card>
+              {projectId && <GitStatusWidget projectId={projectId} />}
             </div>
           </ScrollArea>
         </ResizablePanel>
-          </>
-        )}
 
-        {!isMaximized && (
-          <>
-            <ResizableHandle className="bg-slate-800 w-1 hover:bg-blue-500 transition-colors" />
+        <ResizableHandle className="bg-slate-800 w-1 hover:bg-blue-500 transition-colors" />
 
-            <ResizablePanel id="main-graph" defaultSize="60%" minSize="300px" className="min-w-0 overflow-hidden flex flex-col">
-              <div className="flex-1 relative min-w-0 overflow-hidden">
-                {projectId === null ? (
-                  <div className="flex flex-col items-center justify-center h-full bg-slate-950 text-center px-4">
-                    <div className="w-16 h-16 bg-blue-500/10 text-blue-400 rounded-full flex items-center justify-center mb-6">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
-                    </div>
-                    <h3 className="text-3xl font-bold tracking-tight text-slate-100 mb-3">Bienvenido a SprintLogic</h3>
-                    <p className="text-slate-400 max-w-md mb-8 leading-relaxed">
-                      Para comenzar, carga un proyecto local ingresando la ruta absoluta del repositorio. El motor AST escaneará y renderizará tu base de código en 2D.
-                    </p>
-                    <div className="flex w-full max-w-lg items-center space-x-2">
-                      <div className="flex flex-1 items-center space-x-2">
-                        <input
-                          type="text"
-                          value={path}
-                          onChange={(e) => setPath(e.target.value)}
-                          placeholder="/ruta/absoluta/a/tu/proyecto"
-                          className="flex-1 min-w-0 bg-slate-900 border border-slate-700 rounded-md p-2.5 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-                        />
-                        <Button onClick={async () => {
-                          try {
-                            const { open } = await import("@tauri-apps/plugin-dialog");
-                            const selected = await open({
-                              directory: true,
-                              multiple: false,
-                            });
-                            if (selected && typeof selected === "string") {
-                              setPath(selected);
-                            }
-                          } catch (err) {
-                            console.error("Failed to open dialog:", err);
-                          }
-                        }} variant="outline" className="px-3 bg-slate-800 border-slate-700 hover:bg-slate-700 h-10 whitespace-nowrap">
-                          Examinar...
-                        </Button>
-                      </div>
-                      <Button onClick={handleScan} disabled={loading || !path} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md h-10 whitespace-nowrap">
-                        {loading ? "Escaneando..." : "Cargar Proyecto"}
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex flex-col h-full">
-                    <div className="flex items-center gap-2 px-4 pt-2 border-b border-slate-800 bg-slate-900">
-                      <button onClick={() => setCenterTab('graph')} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${centerTab === 'graph' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-slate-300'}`}>Grafo 2D</button>
-                      <button onClick={() => setCenterTab('kanban')} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${centerTab === 'kanban' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-slate-300'}`}>Kanban (Sprints)</button>
-                    </div>
-                    <div className="flex-1 relative overflow-hidden bg-slate-950">
-                      {centerTab === 'graph' ? (
-                        <GraphScene projectId={projectId} onNodeClick={handleNodeClick} />
-                      ) : (
-                        <KanbanBoard projectId={projectId} onNodeClick={handleKanbanNodeClick} />
-                      )}
-                    </div>
-                  </div>
-                )}
+        <ResizablePanel id="main-content" order={2} defaultSize={isMaximized ? 80 : 50} minSize={30} className="min-w-0 overflow-hidden flex flex-col bg-[#1e1e1e]">
+          {projectId === null ? (
+            <div className="flex-1 relative min-w-0 overflow-hidden">
+              <div className="flex flex-col items-center justify-center h-full bg-slate-950 text-center px-4">
+                <div className="w-16 h-16 bg-blue-500/10 text-blue-400 rounded-full flex items-center justify-center mb-6">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
+                </div>
+                <h3 className="text-3xl font-bold tracking-tight text-slate-100 mb-3">Bienvenido a SprintLogic</h3>
+                <p className="text-slate-400 max-w-md mb-8 leading-relaxed">
+                  Para comenzar, carga un proyecto local ingresando la ruta absoluta del repositorio.
+                </p>
               </div>
-            </ResizablePanel>
-          </>
-        )}
+            </div>
+          ) : (
+            <>
+              <TabBar />
+              <div className="flex-1 relative overflow-hidden bg-slate-950">
+                {renderActiveTabContent()}
+              </div>
+            </>
+          )}
+        </ResizablePanel>
 
-        {(selectedNode || true) && (
-          <>
-            {!isMaximized && <ResizableHandle className="bg-slate-800 w-1 hover:bg-blue-500 transition-colors" />}
-            <ResizablePanel id="sidebar-right" defaultSize={isMaximized ? 100 : 30} minSize={isMaximized ? 100 : 20} className="bg-[#1e1e1e] flex flex-col border-l border-slate-800 min-w-0 overflow-hidden">
-              <div className="flex items-center gap-2 px-2 pt-2 border-b border-slate-800 bg-slate-900">
-                <button onClick={() => setActiveRightTab('inspector')} className={`px-3 py-1.5 text-xs font-medium rounded-t border-b-2 ${activeRightTab === 'inspector' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-slate-300'}`}>Inspector</button>
-                <button onClick={() => setActiveRightTab('jarvis')} className={`px-3 py-1.5 text-xs font-medium rounded-t border-b-2 ${activeRightTab === 'jarvis' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-slate-300'}`}>Jarvis</button>
-                
+        {!isMaximized ? (
+          <ResizableHandle className="bg-slate-800 w-1 hover:bg-blue-500 transition-colors" />
+        ) : null}
+        
+        {!isMaximized ? (
+            <ResizablePanel id="sidebar-right" order={3} defaultSize={30} minSize={20} className="bg-[#1e1e1e] flex flex-col border-l border-slate-800 min-w-0 overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-2 border-b border-slate-800 bg-slate-900">
+                <span className="text-sm font-medium text-slate-300">Jarvis AI</span>
                 <div className="ml-auto flex items-center gap-1">
-                  {selectedNode && (
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="h-6 px-2 py-0 text-xs text-slate-400 hover:text-white mb-1"
-                      onClick={() => setIsMaximized(!isMaximized)}
-                    >
-                      {isMaximized ? "Contraer" : "Expandir"}
-                    </Button>
-                  )}
-                  {selectedNode && (
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="h-6 w-6 p-0 text-slate-400 hover:text-white mb-1"
-                      onClick={() => {
-                        setSelectedNode(null);
-                        setIsMaximized(false);
-                      }}
-                    >
-                      &times;
-                    </Button>
-                  )}
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-6 px-2 py-0 text-xs text-slate-400 hover:text-white"
+                    onClick={() => setIsMaximized(true)}
+                  >
+                    Ocultar
+                  </Button>
                 </div>
               </div>
               <div className="flex-1 relative overflow-hidden">
-                {activeRightTab === 'jarvis' ? (
-                  <JarvisChat projectId={projectId} />
-                ) : !selectedNode ? (
-                  <div className="absolute inset-0 flex items-center justify-center text-slate-500 text-sm">
-                    Selecciona un archivo en el explorador o el grafo.
-                  </div>
-                ) : loadingFile ? (
-                  <div className="absolute inset-0 flex items-center justify-center text-slate-500">
-                    Cargando código...
-                  </div>
-                ) : (
-                  <Editor
-                    height="100%"
-                    theme="vs-dark"
-                    path={selectedNode.file_path}
-                    value={fileContent}
-                    onMount={(editor, monaco) => {
-                      if (vimMode) {
-                        import("monaco-vim").then(({ initVimMode }) => {
-                          const statusNode = document.createElement('div');
-                          statusNode.style.padding = '2px 8px';
-                          statusNode.style.fontSize = '12px';
-                          statusNode.style.backgroundColor = '#1e1e1e';
-                          statusNode.style.borderTop = '1px solid #333';
-                          statusNode.style.color = '#fff';
-                          editor.getContainerDomNode().parentElement?.appendChild(statusNode);
-                          
-                          const vim = initVimMode(editor, statusNode);
-                          setVimInstance(vim);
-                        });
-                      }
-                      
-                      // Auto-scroll logic if AST metadata exists
-                      if (selectedNode.metadata) {
-                        try {
-                          const meta = JSON.parse(selectedNode.metadata);
-                          if (meta.start_line) {
-                            editor.revealLineInCenter(meta.start_line);
-                            editor.setPosition({ lineNumber: meta.start_line, column: 1 });
-                          }
-                        } catch (e) {}
-                      }
-                    }}
-                    options={{
-                      readOnly: true,
-                      minimap: { enabled: false },
-                      fontSize: 13,
-                      wordWrap: "on",
-                      padding: { top: 16 }
-                    }}
-                  />
-                )}
+                <JarvisChat projectId={projectId} />
               </div>
             </ResizablePanel>
-          </>
-        )}
+        ) : null}
+
+        {isMaximized ? (
+          <div className="absolute right-4 bottom-4 z-50">
+            <Button 
+              variant="default" 
+              className="rounded-full shadow-lg h-12 w-12 p-0 bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center"
+              onClick={() => setIsMaximized(false)}
+              title="Abrir Jarvis"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 21 1.9-5.7a8.5 8.5 0 1 1 3.8 3.8z"/></svg>
+            </Button>
+          </div>
+        ) : null}
       </ResizablePanelGroup>
     </div>
   );

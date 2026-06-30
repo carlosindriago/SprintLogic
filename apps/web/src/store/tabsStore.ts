@@ -1,0 +1,64 @@
+import { create } from 'zustand';
+
+export type TabType = 'dashboard' | 'editor' | 'git-graph';
+
+export interface TabData {
+  id: string;
+  title: string;
+  type: TabType;
+  data?: any; // e.g. { filePath: string } for editors
+}
+
+interface TabsState {
+  tabs: TabData[];
+  activeTabId: string | null;
+  addTab: (tab: TabData) => void;
+  removeTab: (id: string) => void;
+  setActiveTab: (id: string) => void;
+}
+
+export const useTabsStore = create<TabsState>((set, get) => ({
+  tabs: [
+    {
+      id: 'dashboard',
+      title: 'Dashboard',
+      type: 'dashboard'
+    }
+  ],
+  activeTabId: 'dashboard',
+
+  addTab: (tab) => {
+    const { tabs } = get();
+    const exists = tabs.find(t => t.id === tab.id);
+    
+    if (exists) {
+      set({ activeTabId: tab.id });
+      return;
+    }
+
+    set({ 
+      tabs: [...tabs, tab],
+      activeTabId: tab.id
+    });
+  },
+
+  removeTab: (id) => {
+    if (id === 'dashboard') return; // Cannot close dashboard
+
+    const { tabs, activeTabId } = get();
+    const newTabs = tabs.filter(t => t.id !== id);
+    
+    // If we are closing the active tab, switch to another tab
+    if (activeTabId === id) {
+      const closedIndex = tabs.findIndex(t => t.id === id);
+      const nextTab = newTabs[closedIndex] || newTabs[closedIndex - 1] || newTabs[0];
+      set({ tabs: newTabs, activeTabId: nextTab ? nextTab.id : null });
+    } else {
+      set({ tabs: newTabs });
+    }
+  },
+
+  setActiveTab: (id) => {
+    set({ activeTabId: id });
+  }
+}));
