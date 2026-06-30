@@ -30,6 +30,7 @@ import { useTabsStore } from '@/store/tabsStore';
 import { useProjectStore } from '@/store/projectStore';
 import TabBar from '@/components/TabBar';
 import EditorTab from '@/components/EditorTab';
+import { useThemeStore } from '@/store/themeStore';
 import GitStatusWidget from '@/components/GitStatusWidget';
 import GitGraphTab from '@/components/GitGraphTab';
 import DiffTab from '@/components/DiffTab';
@@ -55,6 +56,9 @@ export default function Home() {
   
   // Dashboard Tabs (Graph vs Kanban vs Insights)
   const { tabs, activeTabId, addTab } = useTabsStore();
+  const { accentColor, setAccentColor, uiScale, setUiScale } = useThemeStore();
+  
+  const [settingsTab, setSettingsTab] = useState<'llms' | 'appearance'>('llms');
 
   useEffect(() => {
     fetchProjects();
@@ -188,56 +192,105 @@ export default function Home() {
                 <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
                   <DialogContent className="sm:max-w-[425px] bg-slate-900 text-slate-200 border-slate-800">
                     <DialogHeader>
-                      <DialogTitle>Configuración de Modelos (LLMs)</DialogTitle>
+                      <DialogTitle>Configuración</DialogTitle>
                       <DialogDescription className="text-slate-400">
-                        Ingresa las API Keys para los diferentes proveedores que desees usar con la IA.
+                        Ajusta tus preferencias de IA y Apariencia.
                       </DialogDescription>
                     </DialogHeader>
-                    <div className="grid gap-4 py-4">
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="gemini" className="text-right text-xs">Gemini Key</Label>
-                        <Input
-                          id="gemini"
-                          type="password"
-                          value={geminiKey}
-                          onChange={(e) => setGeminiKey(e.target.value)}
-                          className="col-span-3 bg-slate-800 border-slate-700"
-                        />
-                      </div>
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="openai" className="text-right text-xs">OpenAI Key</Label>
-                        <Input
-                          id="openai"
-                          type="password"
-                          value={openAiKey}
-                          onChange={(e) => setOpenAiKey(e.target.value)}
-                          className="col-span-3 bg-slate-800 border-slate-700"
-                        />
-                      </div>
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="anthropic" className="text-right text-xs">Anthropic Key</Label>
-                        <Input
-                          id="anthropic"
-                          type="password"
-                          value={anthropicKey}
-                          onChange={(e) => setAnthropicKey(e.target.value)}
-                          className="col-span-3 bg-slate-800 border-slate-700"
-                        />
-                      </div>
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="openrouter" className="text-right text-xs">OpenRouter Key</Label>
-                        <Input
-                          id="openrouter"
-                          type="password"
-                          value={openRouterKey}
-                          onChange={(e) => setOpenRouterKey(e.target.value)}
-                          className="col-span-3 bg-slate-800 border-slate-700"
-                        />
-                      </div>
-                      <div className="flex items-center space-x-2 pt-2 border-t border-slate-800 mt-2">
-                        <Switch id="vim-mode" checked={vimMode} onCheckedChange={setVimMode} />
-                        <Label htmlFor="vim-mode">Habilitar Modo Vim</Label>
-                      </div>
+                    
+                    <div className="flex items-center gap-2 mb-2 border-b border-slate-800 pb-2">
+                      <button 
+                        className={`text-sm font-medium px-2 py-1 rounded transition-colors ${settingsTab === 'llms' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-slate-300'}`}
+                        onClick={() => setSettingsTab('llms')}
+                      >
+                        IA & Modelos
+                      </button>
+                      <button 
+                        className={`text-sm font-medium px-2 py-1 rounded transition-colors ${settingsTab === 'appearance' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-slate-300'}`}
+                        onClick={() => setSettingsTab('appearance')}
+                      >
+                        Apariencia
+                      </button>
+                    </div>
+
+                    <div className="grid gap-4 py-2">
+                      {settingsTab === 'llms' ? (
+                        <>
+                          <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="gemini" className="text-right text-xs">Gemini Key</Label>
+                            <Input
+                              id="gemini"
+                              type="password"
+                              value={geminiKey}
+                              onChange={(e) => setGeminiKey(e.target.value)}
+                              className="col-span-3 bg-slate-800 border-slate-700"
+                            />
+                          </div>
+                          <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="openai" className="text-right text-xs">OpenAI Key</Label>
+                            <Input
+                              id="openai"
+                              type="password"
+                              value={openAiKey}
+                              onChange={(e) => setOpenAiKey(e.target.value)}
+                              className="col-span-3 bg-slate-800 border-slate-700"
+                            />
+                          </div>
+                          <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="anthropic" className="text-right text-xs">Anthropic Key</Label>
+                            <Input
+                              id="anthropic"
+                              type="password"
+                              value={anthropicKey}
+                              onChange={(e) => setAnthropicKey(e.target.value)}
+                              className="col-span-3 bg-slate-800 border-slate-700"
+                            />
+                          </div>
+                          <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="openrouter" className="text-right text-xs">OpenRouter Key</Label>
+                            <Input
+                              id="openrouter"
+                              type="password"
+                              value={openRouterKey}
+                              onChange={(e) => setOpenRouterKey(e.target.value)}
+                              className="col-span-3 bg-slate-800 border-slate-700"
+                            />
+                          </div>
+                          <div className="flex items-center space-x-2 pt-2 border-t border-slate-800 mt-2">
+                            <Switch id="vim-mode" checked={vimMode} onCheckedChange={setVimMode} />
+                            <Label htmlFor="vim-mode">Habilitar Modo Vim</Label>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="grid grid-cols-4 items-center gap-4">
+                            <Label className="text-right text-xs">Color de Acento</Label>
+                            <Select value={accentColor} onValueChange={(val: any) => setAccentColor(val)}>
+                              <SelectTrigger className="col-span-3 bg-slate-800 border-slate-700 text-slate-200">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent className="bg-slate-800 border-slate-700 text-slate-200">
+                                <SelectItem value="blue">Azul</SelectItem>
+                                <SelectItem value="purple">Púrpura</SelectItem>
+                                <SelectItem value="emerald">Esmeralda</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="grid grid-cols-4 items-center gap-4 mt-2">
+                            <Label className="text-right text-xs">Tamaño de UI</Label>
+                            <Select value={uiScale} onValueChange={(val: any) => setUiScale(val)}>
+                              <SelectTrigger className="col-span-3 bg-slate-800 border-slate-700 text-slate-200">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent className="bg-slate-800 border-slate-700 text-slate-200">
+                                <SelectItem value="compact">Compacto</SelectItem>
+                                <SelectItem value="normal">Normal</SelectItem>
+                                <SelectItem value="large">Grande</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </>
+                      )}
                     </div>
                     <div className="flex justify-end">
                       <Button onClick={async () => {
