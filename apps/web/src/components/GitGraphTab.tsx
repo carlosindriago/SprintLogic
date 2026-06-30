@@ -161,23 +161,21 @@ export default function GitGraphTab({ projectId }: { projectId: string }) {
                   <Gitgraph key={commits.length > 0 ? commits[0].hash : "empty"}
                     options={{
                       template: templateExtend(TemplateName.Metro, {
-                        colors: ['#8b5cf6', '#3b82f6', '#ec4899', '#10b981', '#f59e0b'],
+                        colors: ['#3b82f6', '#8b5cf6', '#ec4899', '#10b981', '#f59e0b'],
                         branch: {
                           lineWidth: 5,
-                          spacing: 45,
+                          spacing: 50,
                         },
                         commit: {
-                          spacing: 55,
-                          message: {
-                            displayAuthor: true,
-                            displayHash: true,
-                            color: '#e2e8f0',
-                            font: 'normal 14px "Inter", sans-serif'
-                          },
+                          spacing: 60,
                           dot: {
                             size: 10,
-                            strokeWidth: 3,
-                            strokeColor: '#0f172a'
+                            strokeWidth: 4,
+                            strokeColor: '#0d0d0d'
+                          },
+                          message: {
+                            displayAuthor: false,
+                            displayHash: false
                           }
                         }
                       })
@@ -195,7 +193,30 @@ export default function GitGraphTab({ projectId }: { projectId: string }) {
                           hash: c.hash.substring(0, 7),
                           subject: truncate(c.subject, 65),
                           author: truncate(c.author, 20),
-                          onClick: () => handleCommitClick(c.hash)
+                          onClick: () => handleCommitClick(c.hash),
+                          renderMessage: (commit: any) => {
+                            return (
+                              <foreignObject x={20} y={-20} width={800} height={40}>
+                                <div className="flex items-center gap-4 w-full h-full text-sm font-sans" onClick={() => handleCommitClick(c.hash)} style={{ cursor: 'pointer' }}>
+                                  <div className="bg-zinc-800 text-blue-400 px-2 py-0.5 rounded-md font-mono text-xs border border-zinc-700/50 flex-shrink-0">
+                                    {c.hash.substring(0, 7)}
+                                  </div>
+                                  <div className="text-white truncate flex-1 min-w-0" title={c.subject}>
+                                    {c.subject}
+                                  </div>
+                                  <div className="text-zinc-500 text-xs flex-shrink-0 w-24">
+                                    {new Date(c.date).toLocaleDateString()}
+                                  </div>
+                                  <div className="flex items-center gap-2 flex-shrink-0 w-32">
+                                    <div className="w-5 h-5 rounded-full bg-blue-900/50 flex items-center justify-center text-blue-400 font-bold text-[10px] border border-blue-700/50">
+                                      {c.author.charAt(0).toUpperCase()}
+                                    </div>
+                                    <span className="text-zinc-400 truncate text-xs">{c.author}</span>
+                                  </div>
+                                </div>
+                              </foreignObject>
+                            );
+                          }
                         });
                       });
                     }}
