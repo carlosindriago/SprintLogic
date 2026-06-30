@@ -7,6 +7,8 @@ import { CSS } from "@dnd-kit/utilities";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import ReactMarkdown from "react-markdown";
+import { Plus, MoreVertical, FileText, CheckCircle2, Circle, Clock } from 'lucide-react';
+import { getProjectTasks, saveProjectTasks } from '@/lib/api';
 
 interface Task {
   id: string;
@@ -74,11 +76,8 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
   const fetchTasks = async () => {
     if (!projectId) return;
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/v1/projects/${projectId}/tasks`);
-      if (res.ok) {
-        const data = await res.json();
-        setTasks(data.tasks);
-      }
+      const data = await getProjectTasks(projectId);
+      setTasks(data.tasks);
     } catch (e) {
       console.error("Failed to fetch tasks", e);
     }
@@ -87,11 +86,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
   const saveTasks = async (newTasks: Task[]) => {
     if (!projectId) return;
     try {
-      await fetch(`http://127.0.0.1:8000/api/v1/projects/${projectId}/tasks`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tasks: newTasks })
-      });
+      await saveProjectTasks(projectId, newTasks);
     } catch (e) {
       console.error("Failed to save tasks", e);
     }

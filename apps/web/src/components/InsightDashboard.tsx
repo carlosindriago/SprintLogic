@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Activity, GitCommit, GitBranch, FolderGit2 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, DoughnutChart, PieChart, Pie, Cell } from 'recharts';
+import { getProjectInsights } from '@/lib/api';
 
 export default function InsightDashboard({ projectId }: { projectId: string }) {
   const [data, setData] = useState<any>(null);
@@ -11,11 +12,8 @@ export default function InsightDashboard({ projectId }: { projectId: string }) {
     const fetchInsights = async () => {
       try {
         setLoading(true);
-        const res = await fetch(`http://127.0.0.1:8000/api/v1/projects/${projectId}/insights`);
-        if (res.ok) {
-          const result = await res.json();
-          setData(result);
-        }
+        const result = await getProjectInsights(projectId);
+        setData(result);
       } catch (e) {
         console.error(e);
       } finally {

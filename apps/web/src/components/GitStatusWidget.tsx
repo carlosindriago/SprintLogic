@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { GitBranch, GitCommit } from 'lucide-react';
+import { GitBranch, GitCommit, AlertCircle } from 'lucide-react';
 import { useTabsStore } from '@/store/tabsStore';
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { getGitStatus } from '@/lib/api';
 
 export default function GitStatusWidget({ projectId }: { projectId: string }) {
   const [status, setStatus] = useState<any>(null);
@@ -11,11 +12,8 @@ export default function GitStatusWidget({ projectId }: { projectId: string }) {
 
   const fetchStatus = async () => {
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/v1/projects/${projectId}/git/status`);
-      if (res.ok) {
-        const data = await res.json();
-        setStatus(data);
-      }
+      const data = await getGitStatus(projectId);
+      setStatus(data);
     } catch (e) {
       console.error("Failed to fetch git status", e);
     } finally {

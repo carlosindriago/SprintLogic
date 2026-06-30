@@ -105,3 +105,31 @@ export const saveApiKey = async (provider: string, apiKey: string) => {
   
   return response.json();
 };
+
+export const getProjectTasks = async (projectId: string) => {
+  const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/tasks`);
+  if (!res.ok) throw new Error("Failed to fetch project tasks");
+  return res.json();
+};
+
+export const saveProjectTasks = async (projectId: string, tasks: any[]) => {
+  const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/tasks`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tasks }),
+  });
+  if (!res.ok) throw new Error("Failed to save project tasks");
+  return res.json();
+};
+
+export const getProjectInsights = async (projectId: string) => {
+  const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/insights`);
+  if (!res.ok) throw new Error("Failed to fetch project insights");
+  return res.json();
+};
+
+export const getGitStatus = async (projectId: string) => {
+  const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/git/status`);
+  if (!res.ok) throw new Error("Failed to fetch git status");
+  return res.json();
+};
