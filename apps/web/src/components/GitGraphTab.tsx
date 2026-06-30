@@ -22,7 +22,7 @@ export default function GitGraphTab({ projectId }: { projectId: string }) {
   const fetchCommits = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`http://localhost:8000/api/v1/projects/${projectId}/git/log`);
+      const res = await fetch(`http://127.0.0.1:8000/api/v1/projects/${projectId}/git/log`);
       if (res.ok) {
         const data = await res.json();
         setCommits(data.commits || []);
@@ -41,7 +41,7 @@ export default function GitGraphTab({ projectId }: { projectId: string }) {
   const executeAction = async (action: string, message: string = "") => {
     try {
       setActionLoading(true);
-      const res = await fetch(`http://localhost:8000/api/v1/projects/${projectId}/git/action`, {
+      const res = await fetch(`http://127.0.0.1:8000/api/v1/projects/${projectId}/git/action`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action, message })
@@ -155,9 +155,9 @@ export default function GitGraphTab({ projectId }: { projectId: string }) {
       <div className="flex-1 overflow-hidden animate-slide-up-fade">
         <ResizablePanelGroup direction="horizontal">
           <ResizablePanel defaultSize={showDetails ? 60 : 100} minSize={30}>
-            <div className="h-full overflow-auto p-8 flex justify-start bg-slate-950 gitgraph-container">
+            <div className="h-full overflow-auto flex justify-start bg-slate-950 gitgraph-container">
               {!loading && commits.length > 0 && (
-                <div className="bg-slate-900/80 backdrop-blur-sm p-8 rounded-xl border border-slate-800 min-w-full w-fit shadow-2xl min-h-full">
+                <div className="min-w-full min-h-full w-max bg-slate-900/80 p-8 shadow-2xl">
                   <Gitgraph key={commits.length > 0 ? commits[0].hash : "empty"}
                     options={{
                       template: templateExtend(TemplateName.Metro, {
