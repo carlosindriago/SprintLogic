@@ -193,8 +193,7 @@ export default function Home() {
           maxSize={40}
           collapsible={true}
           collapsedSize={0}
-          onCollapse={() => setLeftSidebarOpen(false)}
-          onExpand={() => setLeftSidebarOpen(true)}
+          onResize={(size) => setLeftSidebarOpen(size.asPercentage > 0)}
           className="bg-[#0a0a0a] border-r border-zinc-800/50 flex flex-col overflow-hidden relative"
         >
           <ScrollArea className="flex-1">
@@ -472,8 +471,7 @@ export default function Home() {
           maxSize={40}
           collapsible={true}
           collapsedSize={0}
-          onCollapse={() => setRightSidebarOpen(false)}
-          onExpand={() => setRightSidebarOpen(true)}
+          onResize={(size) => setRightSidebarOpen(size.asPercentage > 0)}
           className="bg-[#151515] flex flex-col border-l border-zinc-800/50 min-w-0 overflow-hidden"
         >
           <div className="flex items-center gap-2 px-4 py-2 border-b border-zinc-800/50 bg-[#0a0a0a]">
