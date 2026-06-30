@@ -33,6 +33,7 @@ import EditorTab from '@/components/EditorTab';
 import GitStatusWidget from '@/components/GitStatusWidget';
 import GitGraphTab from '@/components/GitGraphTab';
 import DiffTab from '@/components/DiffTab';
+import InsightDashboard from '@/components/InsightDashboard';
 
 const GraphScene = dynamic(() => import("@/components/GraphScene"), { ssr: false });
 
@@ -50,9 +51,9 @@ export default function Home() {
   const [addProjectOpen, setAddProjectOpen] = useState(false);
   const [vimMode, setVimMode] = useState(false);
   
-  const [dashboardTab, setDashboardTab] = useState<'graph' | 'kanban'>('graph');
+  const [dashboardTab, setDashboardTab] = useState<'graph' | 'kanban' | 'insights'>('insights');
   
-  // Dashboard Tabs (Graph vs Kanban)
+  // Dashboard Tabs (Graph vs Kanban vs Insights)
   const { tabs, activeTabId, addTab } = useTabsStore();
 
   useEffect(() => {
@@ -122,11 +123,14 @@ export default function Home() {
         return (
           <div className="flex flex-col h-full">
             <div className="flex items-center gap-2 px-4 pt-2 border-b border-slate-800 bg-slate-900">
+              <button onClick={() => setDashboardTab('insights')} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${dashboardTab === 'insights' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-slate-300'}`}>Insights</button>
               <button onClick={() => setDashboardTab('graph')} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${dashboardTab === 'graph' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-slate-300'}`}>Grafo 2D</button>
               <button onClick={() => setDashboardTab('kanban')} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${dashboardTab === 'kanban' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-slate-300'}`}>Kanban (Sprints)</button>
             </div>
             <div className="flex-1 relative overflow-hidden bg-slate-950">
-              {dashboardTab === 'graph' ? (
+              {dashboardTab === 'insights' ? (
+                projectId ? <InsightDashboard projectId={projectId} /> : <div className="p-4 text-slate-400">Selecciona un proyecto...</div>
+              ) : dashboardTab === 'graph' ? (
                 <GraphScene projectId={projectId} onNodeClick={handleNodeClick} />
               ) : (
                 <KanbanBoard projectId={projectId} onNodeClick={handleKanbanNodeClick} />
