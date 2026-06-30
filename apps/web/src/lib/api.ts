@@ -1,3 +1,13 @@
+import {
+  Project,
+  GraphData,
+  FileTreeNode,
+  CommitDetails,
+  Task,
+  ProjectInsights,
+  GitStatus
+} from '../types';
+
 export const API_BASE_URL = 'http://127.0.0.1:8000/api/v1';
 
 /**
@@ -42,7 +52,7 @@ export async function scanProject(path: string): Promise<{ project_id: string }>
   return response.json();
 }
 
-export async function getProjects(): Promise<{ projects: any[] }> {
+export async function getProjects(): Promise<{ projects: Project[] }> {
   const response = await fetchWithRetry(`${API_BASE_URL}/projects`);
   
   if (!response.ok) {
@@ -53,7 +63,7 @@ export async function getProjects(): Promise<{ projects: any[] }> {
   return response.json();
 }
 
-export async function getProjectGraph(projectId: string): Promise<{ nodes: any[], links: any[] }> {
+export async function getProjectGraph(projectId: string): Promise<GraphData> {
   const response = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/graph`);
   
   if (!response.ok) {
@@ -64,32 +74,36 @@ export async function getProjectGraph(projectId: string): Promise<{ nodes: any[]
   return response.json();
 }
 
-export const getProjectFiles = async (projectId: string) => {
+export const getProjectFiles = async (projectId: string): Promise<FileTreeNode> => {
   const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/files`);
   if (!res.ok) throw new Error("Failed to fetch project files");
   return res.json();
 };
 
-export const getFileContent = async (projectId: string, path: string) => {
+export const getFileContent = async (projectId: string, path: string): Promise<string> => {
   const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/file/content?path=${encodeURIComponent(path)}`);
   if (!res.ok) throw new Error("Failed to fetch file content");
   const data = await res.json();
   return data.content;
 };
 
-export const getCommitDetails = async (projectId: string, hash: string) => {
+export const getCommitDetails = async (projectId: string, hash: string): Promise<CommitDetails> => {
   const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/git/commits/${hash}`);
   if (!res.ok) throw new Error("Failed to fetch commit details");
   return res.json();
 };
 
-export const getCommitFileDiff = async (projectId: string, hash: string, path: string) => {
+export const getCommitFileDiff = async (
+  projectId: string,
+  hash: string,
+  path: string
+): Promise<{ original: string; modified: string }> => {
   const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/git/commits/${hash}/diff?path=${encodeURIComponent(path)}`);
   if (!res.ok) throw new Error("Failed to fetch file diff");
   return res.json();
 };
 
-export const saveApiKey = async (provider: string, apiKey: string) => {
+export const saveApiKey = async (provider: string, apiKey: string): Promise<{ status: string }> => {
   const response = await fetchWithRetry(`${API_BASE_URL}/api-key/${provider}`, {
     method: 'POST',
     headers: {
@@ -106,13 +120,13 @@ export const saveApiKey = async (provider: string, apiKey: string) => {
   return response.json();
 };
 
-export const getProjectTasks = async (projectId: string) => {
+export const getProjectTasks = async (projectId: string): Promise<{ tasks: Task[] }> => {
   const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/tasks`);
   if (!res.ok) throw new Error("Failed to fetch project tasks");
   return res.json();
 };
 
-export const saveProjectTasks = async (projectId: string, tasks: any[]) => {
+export const saveProjectTasks = async (projectId: string, tasks: Task[]): Promise<{ status: string }> => {
   const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/tasks`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -122,13 +136,13 @@ export const saveProjectTasks = async (projectId: string, tasks: any[]) => {
   return res.json();
 };
 
-export const getProjectInsights = async (projectId: string) => {
+export const getProjectInsights = async (projectId: string): Promise<ProjectInsights> => {
   const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/insights`);
   if (!res.ok) throw new Error("Failed to fetch project insights");
   return res.json();
 };
 
-export const getGitStatus = async (projectId: string) => {
+export const getGitStatus = async (projectId: string): Promise<GitStatus> => {
   const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/git/status`);
   if (!res.ok) throw new Error("Failed to fetch git status");
   return res.json();

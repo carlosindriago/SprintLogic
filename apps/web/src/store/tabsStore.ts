@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { GraphNode } from '../types';
 
 export type TabType = 'dashboard' | 'editor' | 'git-graph' | 'diff';
 
@@ -7,7 +8,11 @@ export interface TabData {
   id: string;
   title: string;
   type: TabType;
-  data?: any; // e.g. { filePath: string } for editors, { hash: string, filePath: string } for diffs
+  data?: {
+    node?: GraphNode;
+    hash?: string;
+    filePath?: string;
+  };
 }
 
 interface TabsState {
