@@ -1,23 +1,14 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { DndContext, closestCenter, DragEndEvent, DragOverlay, DragStartEvent } from "@dnd-kit/core";
 import { arrayMove, SortableContext, verticalListSortingStrategy, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import ReactMarkdown from "react-markdown";
-import { Plus, MoreVertical, FileText, CheckCircle2, Circle, Clock } from 'lucide-react';
 import { getProjectTasks, saveProjectTasks } from '@/lib/api';
-
-interface Task {
-  id: string;
-  content: string;
-  status: "todo" | "in-progress" | "done";
-  category: string;
-  affected_nodes?: string[];
-  raw_line: number;
-}
+import { Task } from "@/types";
 
 interface KanbanBoardProps {
   projectId: string | null;
@@ -73,7 +64,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
   const [tasks, setTasks] = useState<Task[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
 
-  const fetchTasks = async () => {
+  const fetchTasks = useCallback(async () => {
     if (!projectId) return;
     try {
       const data = await getProjectTasks(projectId);
@@ -81,35 +72,42 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
     } catch (e) {
       console.error("Failed to fetch tasks", e);
     }
-  };
+  }, [projectId]);
 
-  const saveTasks = async (newTasks: Task[]) => {
+  const saveTasks = useCallback(async (newTasks: Task[]) => {
     if (!projectId) return;
     try {
       await saveProjectTasks(projectId, newTasks);
     } catch (e) {
       console.error("Failed to save tasks", e);
     }
-  };
+  }, [projectId]);
 
   useEffect(() => {
-    fetchTasks();
-    
+    let active = true;
+
+    const loadData = async () => {
+      await fetchTasks();
+    };
+
+    loadData();
+
     if (!projectId) return;
-    
+
     // SSE setup for real-time updates
     const evtSource = new EventSource(`http://127.0.0.1:8000/api/v1/projects/${projectId}/events`);
     evtSource.onmessage = (event) => {
       const data = JSON.parse(event.data);
-      if (data.type === "kanban_update") {
+      if (data.type === "kanban_update" && active) {
         fetchTasks();
       }
     };
-    
+
     return () => {
+      active = false;
       evtSource.close();
     };
-  }, [projectId]);
+  }, [projectId, fetchTasks]);
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
@@ -118,27 +116,29 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
   const handleDragEnd = (event: DragEndEvent) => {
     setActiveId(null);
     const { active, over } = event;
-    
+
     if (!over) return;
-    
+
     const activeIdStr = active.id as string;
     const overIdStr = over.id as string;
-    
+
     if (activeIdStr === overIdStr) return;
-    
+
     // Check if dragging over a column container
     const isOverColumn = COLUMNS.some(c => c.id === overIdStr);
-    
+
     setTasks(prevTasks => {
       const activeIndex = prevTasks.findIndex(t => t.id === activeIdStr);
-      let overIndex = prevTasks.findIndex(t => t.id === overIdStr);
-      
+      const overIndex = prevTasks.findIndex(t => t.id === overIdStr);
+
       const newTasks = [...prevTasks];
       const activeTask = { ...newTasks[activeIndex] };
-      
+
       if (isOverColumn) {
-        activeTask.status = overIdStr as any;
-        newTasks[activeIndex] = activeTask;
+        if (overIdStr === "todo" || overIdStr === "in-progress" || overIdStr === "done") {
+          activeTask.status = overIdStr;
+          newTasks[activeIndex] = activeTask;
+        }
       } else {
         const overTask = prevTasks[overIndex];
         if (activeTask.status !== overTask.status) {
@@ -147,7 +147,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
         }
         return arrayMove(newTasks, activeIndex, overIndex);
       }
-      
+
       // Update backend in background
       saveTasks(newTasks);
       return newTasks;
@@ -180,7 +180,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
             </ScrollArea>
           </div>
         ))}
-        
+
         <DragOverlay>
           {activeTask ? (
             <Card className="bg-zinc-700 border-zinc-600 shadow-xl opacity-90">

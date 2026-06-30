@@ -1,16 +1,17 @@
-import { useState, useEffect } from 'react';
-import { GitBranch, GitCommit, AlertCircle } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { GitBranch, GitCommit } from 'lucide-react';
 import { useTabsStore } from '@/store/tabsStore';
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { getGitStatus } from '@/lib/api';
+import { GitStatus } from '@/types';
 
 export default function GitStatusWidget({ projectId }: { projectId: string }) {
-  const [status, setStatus] = useState<any>(null);
+  const [status, setStatus] = useState<GitStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const { addTab } = useTabsStore();
 
-  const fetchStatus = async () => {
+  const fetchStatus = useCallback(async () => {
     try {
       const data = await getGitStatus(projectId);
       setStatus(data);
@@ -19,16 +20,24 @@ export default function GitStatusWidget({ projectId }: { projectId: string }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [projectId]);
 
   useEffect(() => {
-    if (projectId) {
-      setLoading(true);
-      fetchStatus();
-      const interval = setInterval(fetchStatus, 5000); // Poll every 5s
-      return () => clearInterval(interval);
-    }
-  }, [projectId]);
+    let active = true;
+    
+    const loadData = async () => {
+      if (active) setLoading(true);
+      await fetchStatus();
+    };
+
+    loadData();
+    const interval = setInterval(fetchStatus, 5000); // Poll every 5s
+    
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [projectId, fetchStatus]);
 
   const openGitGraph = () => {
     addTab({
@@ -45,7 +54,7 @@ export default function GitStatusWidget({ projectId }: { projectId: string }) {
       <CardHeader className="p-3 pb-0">
         <CardTitle className="text-xs font-medium flex items-center justify-between">
           <span className="flex items-center gap-1.5"><GitBranch className="w-3.5 h-3.5" /> Git Status</span>
-          {status && (status.modified > 0 || status.untracked > 0) && (
+          {status && status.modified !== undefined && status.untracked !== undefined && (status.modified > 0 || status.untracked > 0) && (
              <span className="bg-amber-500/20 text-amber-500 text-[10px] px-1.5 py-0.5 rounded-full font-bold">
                {status.modified + status.untracked}
              </span>
@@ -53,7 +62,7 @@ export default function GitStatusWidget({ projectId }: { projectId: string }) {
         </CardTitle>
       </CardHeader>
       <CardContent className="p-3 flex flex-col gap-2">
-        {status ? (
+        {status && !status.error ? (
           <>
             <div className="flex items-center gap-2 text-xs">
               <span className="text-zinc-400">Rama:</span>

@@ -1,17 +1,26 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, ComponentType } from "react";
 import { getProjectGraph } from "@/lib/api";
+import { GraphData, GraphNode } from "@/types";
+import { ForceGraphProps, NodeObject, LinkObject } from "react-force-graph-2d";
 
 // Dynamically import react-force-graph-2d to avoid SSR issues
-// @ts-ignore
-const ForceGraph2D = dynamic(() => import("react-force-graph-2d"), {
-  ssr: false,
-}) as any;
+const ForceGraph2D = dynamic<ForceGraphProps>(
+  () => import("react-force-graph-2d").then((mod) => mod.default as ComponentType<ForceGraphProps>),
+  {
+    ssr: false,
+  }
+);
 
-export default function GraphScene({ projectId, onNodeClick }: { projectId: string | null, onNodeClick?: (node: any) => void }) {
-  const [graphData, setGraphData] = useState<{ nodes: any[], links: any[] }>({ nodes: [], links: [] });
+interface GraphSceneProps {
+  projectId: string | null;
+  onNodeClick?: (node: GraphNode) => void;
+}
+
+export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) {
+  const [graphData, setGraphData] = useState<GraphData>({ nodes: [], links: [] });
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
 
@@ -33,27 +42,44 @@ export default function GraphScene({ projectId, onNodeClick }: { projectId: stri
   }, []);
 
   useEffect(() => {
-    if (projectId !== null) {
-      getProjectGraph(projectId).then((data) => {
-        setGraphData(data);
-      }).catch(err => console.error("Failed to load graph:", err));
-    } else {
-      setGraphData({ nodes: [], links: [] });
-    }
+    let active = true;
+
+    const loadData = async () => {
+      if (projectId !== null) {
+        try {
+          const data = await getProjectGraph(projectId);
+          if (active) setGraphData(data);
+        } catch (err) {
+          console.error("Failed to load graph:", err);
+        }
+      } else {
+        if (active) setGraphData({ nodes: [], links: [] });
+      }
+    };
+
+    loadData();
+
+    return () => {
+      active = false;
+    };
   }, [projectId]);
 
-  const paintNode = (node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
+  const paintNode = (
+    node: NodeObject,
+    ctx: CanvasRenderingContext2D,
+    globalScale: number
+  ) => {
     let radius = 2;
     let color = "#64748b"; // default: tiny/unknown
 
     if (node.label === "File") {
-      const size = node.size || 0;
+      const size = (node.size as number) || 0;
       radius = Math.min(Math.max(size / 1500, 3), 8);
 
       if (size > 15000)      color = "#ef4444"; // Huge  → red
       else if (size > 5000)  color = "#f97316"; // Large → orange
       else if (size > 2000)  color = "#eab308"; // Medium → yellow
-      else if (size > 500)   color = "#22c55e"; // Standard → green (was blue)
+      else if (size > 500)   color = "#22c55e"; // Standard → green
       else                   color = "#475569"; // Tiny  → slate
     } else if (node.label === "Class") {
       radius = 4;
@@ -65,7 +91,7 @@ export default function GraphScene({ projectId, onNodeClick }: { projectId: stri
 
     // Flat filled circle — no gradient
     ctx.beginPath();
-    ctx.arc(node.x, node.y, radius, 0, 2 * Math.PI, false);
+    ctx.arc(node.x || 0, node.y || 0, radius, 0, 2 * Math.PI, false);
     ctx.fillStyle = color;
     ctx.fill();
 
@@ -75,19 +101,26 @@ export default function GraphScene({ projectId, onNodeClick }: { projectId: stri
       ctx.font = `${fontSize}px Inter, sans-serif`;
       ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
       ctx.textAlign = "center";
-      ctx.fillText(node.name, node.x, node.y + radius + fontSize + 2);
+      ctx.fillText((node.name as string) || "", node.x || 0, (node.y || 0) + radius + fontSize + 2);
     }
   };
 
-  const paintLink = (link: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
+  const paintLink = (
+    link: LinkObject,
+    ctx: CanvasRenderingContext2D,
+    globalScale: number
+  ) => {
+    const sourceNode = link.source as NodeObject;
+    const targetNode = link.target as NodeObject;
+
     // Only draw if we have source and target coordinates
-    if (!link.source.x || !link.target.x) return;
+    if (!sourceNode || !targetNode || sourceNode.x === undefined || targetNode.x === undefined || sourceNode.y === undefined || targetNode.y === undefined) return;
 
     ctx.beginPath();
-    ctx.moveTo(link.source.x, link.source.y);
-    ctx.lineTo(link.target.x, link.target.y);
+    ctx.moveTo(sourceNode.x, sourceNode.y);
+    ctx.lineTo(targetNode.x, targetNode.y);
 
-    const grad = ctx.createLinearGradient(link.source.x, link.source.y, link.target.x, link.target.y);
+    const grad = ctx.createLinearGradient(sourceNode.x, sourceNode.y, targetNode.x, targetNode.y);
     if (link.type === "IMPORTS") {
       ctx.lineWidth = 0.6 / globalScale;
       grad.addColorStop(0, "rgba(203, 213, 225, 0.0)");   // zinc-300 transparent
@@ -103,6 +136,19 @@ export default function GraphScene({ projectId, onNodeClick }: { projectId: stri
     ctx.stroke();
   };
 
+  const handleNodeClick = (node: NodeObject) => {
+    if (onNodeClick) {
+      onNodeClick({
+        id: (node.id as string) || "",
+        label: (node.label as any) || "File",
+        name: (node.name as string) || "",
+        file_path: (node.file_path as string) || "",
+        size: node.size as number | undefined,
+        metadata: node.metadata as Record<string, any> | undefined
+      });
+    }
+  };
+
   return (
     <div ref={containerRef} className="w-full h-full bg-[#0d0d0d] flex flex-col items-center justify-center text-zinc-200">
       <ForceGraph2D
@@ -113,7 +159,7 @@ export default function GraphScene({ projectId, onNodeClick }: { projectId: stri
         nodeCanvasObject={paintNode}
         linkCanvasObjectMode={() => "replace"}
         linkCanvasObject={paintLink}
-        onNodeClick={onNodeClick}
+        onNodeClick={handleNodeClick}
         enableNodeDrag={false}
         enableZoomPanInteraction={true}
       />

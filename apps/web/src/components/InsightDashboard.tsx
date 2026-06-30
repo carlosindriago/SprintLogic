@@ -1,28 +1,36 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Activity, GitCommit, GitBranch, FolderGit2 } from 'lucide-react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { getProjectInsights } from '@/lib/api';
+import { ProjectInsights, LanguageDistributionItem, Commit } from '@/types';
 
 export default function InsightDashboard({ projectId }: { projectId: string }) {
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<ProjectInsights | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let active = true;
+
     const fetchInsights = async () => {
       try {
-        setLoading(true);
+        if (active) setLoading(true);
         const result = await getProjectInsights(projectId);
-        setData(result);
+        if (active) setData(result);
       } catch (e) {
         console.error(e);
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     };
+
     if (projectId) {
       fetchInsights();
     }
+
+    return () => {
+      active = false;
+    };
   }, [projectId]);
 
   if (loading) {
@@ -171,7 +179,7 @@ export default function InsightDashboard({ projectId }: { projectId: string }) {
                       paddingAngle={5}
                       dataKey="value"
                     >
-                      {langData.map((entry: any, index: number) => (
+                      {langData.map((entry: LanguageDistributionItem, index: number) => (
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
                     </Pie>
@@ -206,7 +214,7 @@ export default function InsightDashboard({ projectId }: { projectId: string }) {
                   </thead>
                   <tbody>
                     {data.recent_commits && data.recent_commits.length > 0 ? (
-                      data.recent_commits.map((commit: any, index: number) => (
+                      data.recent_commits.map((commit: Commit, index: number) => (
                         <tr key={commit.hash} className={`border-b border-zinc-800/50 ${index % 2 === 0 ? 'bg-zinc-900' : 'bg-zinc-800/20'} hover:bg-zinc-800/50 transition-colors`}>
                           <td className="px-6 py-4 font-mono text-xs text-blue-400">{commit.hash.substring(0, 7)}</td>
                           <td className="px-6 py-4 max-w-[200px] md:max-w-[400px]">
