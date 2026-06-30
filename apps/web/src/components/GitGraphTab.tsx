@@ -120,25 +120,62 @@ export default function GitGraphTab({ projectId }: { projectId: string }) {
         </div>
       </div>
 
-      <div className="flex-1 overflow-hidden">
+      <style dangerouslySetInnerHTML={{__html: `
+        @keyframes slideUpFade {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-slide-up-fade {
+          animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        /* Custom hover effects for GitGraph SVG elements */
+        .gitgraph-container svg circle {
+          transition: transform 0.2s ease, stroke-width 0.2s ease, filter 0.2s ease;
+          transform-origin: center;
+          cursor: pointer;
+        }
+        .gitgraph-container svg circle:hover {
+          transform: scale(1.35);
+          stroke-width: 4px !important;
+          filter: drop-shadow(0 0 8px rgba(139, 92, 246, 0.6));
+        }
+        .gitgraph-container svg path {
+          stroke-linecap: round;
+        }
+        .gitgraph-container text {
+          transition: opacity 0.2s;
+        }
+        .gitgraph-container g:hover > text {
+          opacity: 1 !important;
+        }
+      `}} />
+
+      <div className="flex-1 overflow-hidden animate-slide-up-fade">
         <ResizablePanelGroup direction="horizontal">
           <ResizablePanel defaultSize={60} minSize={30}>
-            <div className="h-full overflow-auto p-8 flex justify-center bg-slate-950">
+            <div className="h-full overflow-auto p-8 flex justify-center bg-slate-950 gitgraph-container">
               {!loading && commits.length > 0 && (
-                <div className="bg-slate-900 p-8 rounded-xl border border-slate-800 w-full max-w-4xl shadow-xl min-h-full">
+                <div className="bg-slate-900/80 backdrop-blur-sm p-8 rounded-xl border border-slate-800 w-full max-w-4xl shadow-2xl min-h-full">
                   <Gitgraph key={commits.length > 0 ? commits[0].hash : "empty"}
                     options={{
                       template: templateExtend(TemplateName.Metro, {
-                        colors: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'],
+                        colors: ['#8b5cf6', '#3b82f6', '#ec4899', '#10b981', '#f59e0b'],
+                        branch: {
+                          lineWidth: 5,
+                          spacing: 45,
+                        },
                         commit: {
+                          spacing: 55,
                           message: {
                             displayAuthor: true,
                             displayHash: true,
-                            color: '#cbd5e1',
-                            font: 'normal 12pt Inter'
+                            color: '#e2e8f0',
+                            font: 'normal 14px "Inter", sans-serif'
                           },
                           dot: {
-                            size: 6
+                            size: 10,
+                            strokeWidth: 3,
+                            strokeColor: '#0f172a'
                           }
                         }
                       })
@@ -152,7 +189,7 @@ export default function GitGraphTab({ projectId }: { projectId: string }) {
                         master.commit({
                           hash: c.hash.substring(0, 7),
                           subject: c.subject,
-                          author: c.author,
+                          author: `${c.author}`,
                           onClick: () => handleCommitClick(c.hash)
                         });
                       });
