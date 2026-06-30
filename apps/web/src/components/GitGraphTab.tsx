@@ -92,29 +92,29 @@ export default function GitGraphTab({ projectId }: { projectId: string }) {
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-950 text-slate-200">
-      <div className="flex items-center gap-4 p-4 border-b border-slate-800 bg-slate-900 shrink-0">
+    <div className="flex flex-col h-full bg-[#0d0d0d] text-zinc-200">
+      <div className="flex items-center gap-4 p-4 border-b border-zinc-800/50 bg-zinc-900 shrink-0">
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => executeAction('pull')} disabled={actionLoading} className="bg-slate-800 border-slate-700 hover:bg-slate-700">
+          <Button variant="outline" size="sm" onClick={() => executeAction('pull')} disabled={actionLoading} className="bg-zinc-800 border-zinc-700/50 hover:bg-zinc-700">
             <Download className="w-4 h-4 mr-2" /> Pull
           </Button>
-          <Button variant="outline" size="sm" onClick={() => executeAction('push')} disabled={actionLoading} className="bg-slate-800 border-slate-700 hover:bg-slate-700">
+          <Button variant="outline" size="sm" onClick={() => executeAction('push')} disabled={actionLoading} className="bg-zinc-800 border-zinc-700/50 hover:bg-zinc-700">
             <Upload className="w-4 h-4 mr-2" /> Push
           </Button>
-          <Button variant="outline" size="sm" onClick={() => executeAction('stash')} disabled={actionLoading} className="bg-slate-800 border-slate-700 hover:bg-slate-700">
+          <Button variant="outline" size="sm" onClick={() => executeAction('stash')} disabled={actionLoading} className="bg-zinc-800 border-zinc-700/50 hover:bg-zinc-700">
             <Archive className="w-4 h-4 mr-2" /> Stash
           </Button>
-          <Button variant="ghost" size="icon" onClick={fetchCommits} disabled={loading} className="text-slate-400 hover:text-white">
+          <Button variant="ghost" size="icon" onClick={fetchCommits} disabled={loading} className="text-zinc-400 hover:text-white">
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </Button>
         </div>
-        <div className="w-px h-6 bg-slate-700 mx-2" />
+        <div className="w-px h-6 bg-zinc-700 mx-2" />
         <div className="flex gap-2 flex-1 max-w-md">
           <Input 
             value={commitMessage}
             onChange={(e) => setCommitMessage(e.target.value)}
             placeholder="Mensaje de commit..." 
-            className="h-8 bg-slate-800 border-slate-700 text-sm"
+            className="h-8 bg-zinc-800 border-zinc-700/50 text-sm"
           />
           <Button size="sm" onClick={() => executeAction('commit', commitMessage)} disabled={actionLoading || !commitMessage.trim()} className="bg-blue-600 hover:bg-blue-700 h-8">
             <Check className="w-4 h-4 mr-2" /> Commit
@@ -155,9 +155,9 @@ export default function GitGraphTab({ projectId }: { projectId: string }) {
       <div className="flex-1 overflow-hidden animate-slide-up-fade">
         <ResizablePanelGroup direction="horizontal">
           <ResizablePanel defaultSize={showDetails ? 60 : 100} minSize={30}>
-            <div className="h-full overflow-auto flex justify-start bg-slate-950 gitgraph-container">
+            <div className="h-full overflow-auto flex justify-start bg-[#0d0d0d] gitgraph-container">
               {!loading && commits.length > 0 && (
-                <div className="min-w-full min-h-full w-max bg-slate-900/80 p-8 shadow-2xl">
+                <div className="min-w-full min-h-full w-max bg-zinc-900/80 p-8 shadow-2xl">
                   <Gitgraph key={commits.length > 0 ? commits[0].hash : "empty"}
                     options={{
                       template: templateExtend(TemplateName.Metro, {
@@ -204,7 +204,7 @@ export default function GitGraphTab({ projectId }: { projectId: string }) {
               )}
               
               {!loading && commits.length === 0 && (
-                <div className="text-slate-500 mt-20 text-center">
+                <div className="text-zinc-500 mt-20 text-center">
                   No se encontraron commits o error al cargar historial de Git.
                 </div>
               )}
@@ -213,60 +213,60 @@ export default function GitGraphTab({ projectId }: { projectId: string }) {
           
           {showDetails && (
             <>
-              <ResizableHandle className="bg-slate-800" />
+              <ResizableHandle className="bg-zinc-800" />
               <ResizablePanel defaultSize={40} minSize={20}>
-                <div className="h-full flex flex-col bg-slate-900 border-l border-slate-800 relative">
+                <div className="h-full flex flex-col bg-zinc-900 border-l border-zinc-800/50 relative">
                   <Button 
                     variant="ghost" 
                     size="sm" 
-                    className="absolute right-4 top-4 h-8 w-8 p-0 text-slate-400 hover:text-white rounded-full bg-slate-800"
+                    className="absolute right-4 top-4 h-8 w-8 p-0 text-zinc-400 hover:text-white rounded-full bg-zinc-800"
                     onClick={() => setShowDetails(false)}
                     title="Cerrar Detalles"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                   </Button>
                   {detailsLoading ? (
-                <div className="p-8 text-center text-slate-400">
+                <div className="p-8 text-center text-zinc-400">
                   <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
                   Cargando detalles...
                 </div>
               ) : commitDetails ? (
                 <div className="flex flex-col h-full">
-                  <div className="p-6 border-b border-slate-800">
+                  <div className="p-6 border-b border-zinc-800/50">
                     <div className="flex items-center gap-3 mb-4">
-                      <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-300 font-bold border border-slate-700">
+                      <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-300 font-bold border border-zinc-700/50">
                         {commitDetails.author.charAt(0).toUpperCase()}
                       </div>
                       <div>
-                        <h3 className="font-semibold text-slate-200">{commitDetails.author}</h3>
-                        <p className="text-xs text-slate-500">{new Date(commitDetails.date).toLocaleString()}</p>
+                        <h3 className="font-semibold text-zinc-200">{commitDetails.author}</h3>
+                        <p className="text-xs text-zinc-500">{new Date(commitDetails.date).toLocaleString()}</p>
                       </div>
                     </div>
-                    <div className="bg-slate-950 p-4 rounded-lg border border-slate-800">
-                      <p className="text-slate-300 text-sm whitespace-pre-wrap break-words">{commitDetails.message}</p>
+                    <div className="bg-[#0d0d0d] p-4 rounded-lg border border-zinc-800/50">
+                      <p className="text-zinc-300 text-sm whitespace-pre-wrap break-words">{commitDetails.message}</p>
                     </div>
                     <div className="mt-4 flex gap-2">
-                      <span className="px-2 py-1 bg-slate-800 text-slate-400 rounded text-xs font-mono border border-slate-700">
+                      <span className="px-2 py-1 bg-zinc-800 text-zinc-400 rounded text-xs font-mono border border-zinc-700/50">
                         {commitDetails.hash.substring(0, 7)}
                       </span>
                     </div>
                   </div>
                   
                   <div className="flex-1 overflow-auto p-0">
-                    <div className="px-6 py-4 bg-slate-900 sticky top-0 border-b border-slate-800 z-10">
-                      <h4 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">
+                    <div className="px-6 py-4 bg-zinc-900 sticky top-0 border-b border-zinc-800/50 z-10">
+                      <h4 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider">
                         Archivos Modificados ({commitDetails.files.length})
                       </h4>
                     </div>
-                    <ul className="divide-y divide-slate-800">
+                    <ul className="divide-y divide-zinc-800">
                       {commitDetails.files.map((file: any, i: number) => (
                         <li 
                           key={i} 
-                          className="px-6 py-3 hover:bg-slate-800/50 cursor-pointer flex items-center gap-3 transition-colors"
+                          className="px-6 py-3 hover:bg-zinc-800/50 cursor-pointer flex items-center gap-3 transition-colors"
                           onClick={() => openDiff(commitDetails.hash, file.path)}
                         >
                           {getFileIcon(file.status)}
-                          <span className="text-sm text-slate-300 truncate" title={file.path}>
+                          <span className="text-sm text-zinc-300 truncate" title={file.path}>
                             {file.path}
                           </span>
                         </li>
@@ -275,7 +275,7 @@ export default function GitGraphTab({ projectId }: { projectId: string }) {
                   </div>
                 </div>
               ) : (
-                <div className="flex-1 flex items-center justify-center text-slate-500 p-8 text-center">
+                <div className="flex-1 flex items-center justify-center text-zinc-500 p-8 text-center">
                   <div>
                     <GitCommit className="w-12 h-12 mx-auto mb-4 opacity-20" />
                     <p>Selecciona un commit en el grafo<br/>para ver sus detalles.</p>

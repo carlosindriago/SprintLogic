@@ -22,11 +22,11 @@ const TreeNode: React.FC<{ node: FileNode; onSelect: (path: string) => void; dep
     return (
       <div>
         <div 
-          className="flex items-center py-1 hover:bg-slate-800 cursor-pointer text-slate-300 transition-colors"
+          className="flex items-center py-1 hover:bg-zinc-800 cursor-pointer text-zinc-300 transition-colors"
           style={{ paddingLeft }}
           onClick={() => setIsOpen(!isOpen)}
         >
-          {isOpen ? <ChevronDown className="w-4 h-4 mr-1 text-slate-500" /> : <ChevronRight className="w-4 h-4 mr-1 text-slate-500" />}
+          {isOpen ? <ChevronDown className="w-4 h-4 mr-1 text-zinc-500" /> : <ChevronRight className="w-4 h-4 mr-1 text-zinc-500" />}
           <Folder className="w-4 h-4 mr-2 text-blue-400" />
           <span className="text-sm truncate">{node.name}</span>
         </div>
@@ -43,11 +43,11 @@ const TreeNode: React.FC<{ node: FileNode; onSelect: (path: string) => void; dep
 
   return (
     <div 
-      className="flex items-center py-1 hover:bg-slate-800 cursor-pointer text-slate-300 transition-colors group"
+      className="flex items-center py-1 hover:bg-zinc-800 cursor-pointer text-zinc-300 transition-colors group"
       style={{ paddingLeft: `${depth * 12 + 28}px` }}
       onClick={() => onSelect(node.path)}
     >
-      <File className="w-4 h-4 mr-2 text-slate-500 group-hover:text-slate-400" />
+      <File className="w-4 h-4 mr-2 text-zinc-500 group-hover:text-zinc-400" />
       <span className="text-sm truncate">{node.name}</span>
     </div>
   );
@@ -81,7 +81,7 @@ export default function FileTree({ projectId, onFileSelect }: FileTreeProps) {
     return () => { isMounted = false; };
   }, [projectId]);
 
-  if (loading) return <div className="p-4 text-xs text-slate-500">Cargando explorador...</div>;
+  if (loading) return <div className="p-4 text-xs text-zinc-500">Cargando explorador...</div>;
   if (error) return <div className="p-4 text-xs text-red-400">Error: {error}</div>;
   if (!tree) return null;
 

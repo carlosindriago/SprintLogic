@@ -62,7 +62,7 @@ export default function DiffTab({ projectId, hash, filePath }: DiffTabProps) {
 
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-[#1e1e1e] text-slate-400">
+      <div className="flex-1 flex items-center justify-center bg-[#1e1e1e] text-zinc-400">
         <RefreshCw className="w-6 h-6 animate-spin mr-2" />
         Loading diff...
       </div>
@@ -79,8 +79,8 @@ export default function DiffTab({ projectId, hash, filePath }: DiffTabProps) {
 
   return (
     <div className="flex flex-col h-full bg-[#1e1e1e]">
-      <div className="flex items-center gap-2 px-4 py-2 bg-slate-900 border-b border-slate-800 text-xs text-slate-400 shrink-0">
-        <span className="font-mono bg-slate-800 px-2 py-1 rounded border border-slate-700">{hash.substring(0, 7)}</span>
+      <div className="flex items-center gap-2 px-4 py-2 bg-zinc-900 border-b border-zinc-800/50 text-xs text-zinc-400 shrink-0">
+        <span className="font-mono bg-zinc-800 px-2 py-1 rounded border border-zinc-700/50">{hash.substring(0, 7)}</span>
         <span>{filePath}</span>
       </div>
       <div className="flex-1">

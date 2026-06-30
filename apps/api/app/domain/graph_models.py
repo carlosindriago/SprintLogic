@@ -11,9 +11,12 @@ class EdgeType(str, Enum):
     CALLS = "CALLS"
     CONTAINS = "CONTAINS"
 
+from uuid import UUID
+
 @dataclass
 class GraphNode:
     id: str
+    project_id: UUID
     label: NodeLabel
     name: str
     file_path: str
@@ -21,6 +24,7 @@ class GraphNode:
 
 @dataclass
 class GraphEdge:
+    project_id: UUID
     source_id: str
     target_id: str
     type: EdgeType

@@ -23,7 +23,7 @@ interface KanbanBoardProps {
 }
 
 const COLUMNS = [
-  { id: "todo", title: "To Do", color: "border-slate-500" },
+  { id: "todo", title: "To Do", color: "border-zinc-500" },
   { id: "in-progress", title: "In Progress", color: "border-blue-500" },
   { id: "done", title: "Done", color: "border-green-500" }
 ];
@@ -39,9 +39,9 @@ function SortableTask({ task, onNodeClick }: { task: Task, onNodeClick?: (nodeId
 
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="mb-2 cursor-grab active:cursor-grabbing">
-      <Card className="bg-slate-800 border-slate-700 hover:border-slate-600 transition-colors">
-        <CardContent className="p-3 text-xs text-slate-200">
-          <div className="text-[10px] text-slate-400 mb-1 font-semibold">{task.category}</div>
+      <Card className="bg-zinc-800 border-zinc-700/50 hover:border-zinc-600 transition-colors">
+        <CardContent className="p-3 text-xs text-zinc-200">
+          <div className="text-[10px] text-zinc-400 mb-1 font-semibold">{task.category}</div>
           <div className="prose prose-invert prose-sm max-w-none prose-p:my-0">
             <ReactMarkdown>{task.content}</ReactMarkdown>
           </div>
@@ -74,7 +74,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
   const fetchTasks = async () => {
     if (!projectId) return;
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/projects/${projectId}/tasks`);
+      const res = await fetch(`http://127.0.0.1:8000/api/v1/projects/${projectId}/tasks`);
       if (res.ok) {
         const data = await res.json();
         setTasks(data.tasks);
@@ -87,7 +87,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
   const saveTasks = async (newTasks: Task[]) => {
     if (!projectId) return;
     try {
-      await fetch(`http://localhost:8000/api/v1/projects/${projectId}/tasks`, {
+      await fetch(`http://127.0.0.1:8000/api/v1/projects/${projectId}/tasks`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tasks: newTasks })
@@ -103,7 +103,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
     if (!projectId) return;
     
     // SSE setup for real-time updates
-    const evtSource = new EventSource(`http://localhost:8000/api/v1/projects/${projectId}/events`);
+    const evtSource = new EventSource(`http://127.0.0.1:8000/api/v1/projects/${projectId}/events`);
     evtSource.onmessage = (event) => {
       const data = JSON.parse(event.data);
       if (data.type === "kanban_update") {
@@ -160,7 +160,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
   };
 
   if (!projectId) {
-    return <div className="h-full flex items-center justify-center text-slate-500">Select a project to view tasks.</div>;
+    return <div className="h-full flex items-center justify-center text-zinc-500">Select a project to view tasks.</div>;
   }
 
   const getTasksByStatus = (status: string) => tasks.filter(t => t.status === status);
@@ -170,9 +170,9 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
     <div className="h-full bg-[#1e1e1e] flex p-4 gap-4 overflow-x-auto">
       <DndContext collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         {COLUMNS.map(col => (
-          <div key={col.id} className={`flex flex-col bg-slate-900 rounded-lg min-w-[280px] border-t-2 ${col.color}`}>
-            <div className="p-3 font-semibold text-slate-300 text-sm border-b border-slate-800">
-              {col.title} <span className="ml-2 text-xs bg-slate-800 px-2 py-0.5 rounded-full text-slate-500">{getTasksByStatus(col.id).length}</span>
+          <div key={col.id} className={`flex flex-col bg-zinc-900 rounded-lg min-w-[280px] border-t-2 ${col.color}`}>
+            <div className="p-3 font-semibold text-zinc-300 text-sm border-b border-zinc-800/50">
+              {col.title} <span className="ml-2 text-xs bg-zinc-800 px-2 py-0.5 rounded-full text-zinc-500">{getTasksByStatus(col.id).length}</span>
             </div>
             <ScrollArea className="flex-1 p-3">
               <SortableContext items={getTasksByStatus(col.id).map(t => t.id)} strategy={verticalListSortingStrategy}>
@@ -188,9 +188,9 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
         
         <DragOverlay>
           {activeTask ? (
-            <Card className="bg-slate-700 border-slate-600 shadow-xl opacity-90">
-              <CardContent className="p-3 text-xs text-slate-200">
-                <div className="text-[10px] text-slate-400 mb-1 font-semibold">{activeTask.category}</div>
+            <Card className="bg-zinc-700 border-zinc-600 shadow-xl opacity-90">
+              <CardContent className="p-3 text-xs text-zinc-200">
+                <div className="text-[10px] text-zinc-400 mb-1 font-semibold">{activeTask.category}</div>
                 <div className="prose prose-invert prose-sm max-w-none prose-p:my-0">
                   <ReactMarkdown>{activeTask.content}</ReactMarkdown>
                 </div>

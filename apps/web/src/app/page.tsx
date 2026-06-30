@@ -126,14 +126,14 @@ export default function Home() {
       case 'dashboard':
         return (
           <div className="flex flex-col h-full">
-            <div className="flex items-center gap-2 px-4 pt-2 border-b border-slate-800 bg-slate-900">
-              <button onClick={() => setDashboardTab('insights')} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${dashboardTab === 'insights' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-slate-300'}`}>Insights</button>
-              <button onClick={() => setDashboardTab('graph')} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${dashboardTab === 'graph' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-slate-300'}`}>Grafo 2D</button>
-              <button onClick={() => setDashboardTab('kanban')} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${dashboardTab === 'kanban' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-slate-300'}`}>Kanban (Sprints)</button>
+            <div className="flex items-center gap-2 px-4 pt-2 border-b border-zinc-800/50 bg-zinc-900">
+              <button onClick={() => setDashboardTab('insights')} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${dashboardTab === 'insights' ? 'border-blue-500 text-blue-400' : 'border-transparent text-zinc-400 hover:text-zinc-300'}`}>Insights</button>
+              <button onClick={() => setDashboardTab('graph')} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${dashboardTab === 'graph' ? 'border-blue-500 text-blue-400' : 'border-transparent text-zinc-400 hover:text-zinc-300'}`}>Grafo 2D</button>
+              <button onClick={() => setDashboardTab('kanban')} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${dashboardTab === 'kanban' ? 'border-blue-500 text-blue-400' : 'border-transparent text-zinc-400 hover:text-zinc-300'}`}>Kanban (Sprints)</button>
             </div>
-            <div className="flex-1 relative overflow-hidden bg-slate-950">
+            <div className="flex-1 relative overflow-hidden bg-[#0d0d0d]">
               {dashboardTab === 'insights' ? (
-                projectId ? <InsightDashboard projectId={projectId} /> : <div className="p-4 text-slate-400">Selecciona un proyecto...</div>
+                projectId ? <InsightDashboard projectId={projectId} /> : <div className="p-4 text-zinc-400">Selecciona un proyecto...</div>
               ) : dashboardTab === 'graph' ? (
                 <GraphScene projectId={projectId} onNodeClick={handleNodeClick} />
               ) : (
@@ -157,7 +157,7 @@ export default function Home() {
   };
 
   return (
-    <div className="h-screen w-full bg-slate-950 text-slate-200 overflow-hidden">
+    <div className="h-screen w-full bg-[#0d0d0d] text-zinc-200 overflow-hidden">
       <ResizablePanelGroup
         direction="horizontal"
         className="h-full w-full relative"
@@ -166,7 +166,7 @@ export default function Home() {
           <div className="absolute left-4 top-4 z-50">
             <Button 
               variant="default" 
-              className="h-10 w-10 p-0 bg-slate-800 hover:bg-slate-700 text-white flex items-center justify-center border border-slate-700"
+              className="h-10 w-10 p-0 bg-zinc-800 hover:bg-zinc-700 text-white flex items-center justify-center border border-zinc-700/50"
               onClick={() => setLeftSidebarOpen(true)}
               title="Mostrar Proyectos"
             >
@@ -176,37 +176,37 @@ export default function Home() {
         ) : null}
 
         {leftSidebarOpen ? (
-        <ResizablePanel defaultSize="20%" minSize="15%" maxSize="40%" className="bg-slate-900 border-r border-slate-800 flex flex-col overflow-hidden relative">
+        <ResizablePanel defaultSize="20%" minSize="15%" maxSize="40%" className="bg-zinc-900 border-r border-zinc-800/50 flex flex-col overflow-hidden relative">
           <ScrollArea className="flex-1">
             <div className="p-4 flex flex-col gap-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-slate-100 truncate">SprintLogic IDE</h2>
+                <h2 className="text-lg font-semibold text-zinc-100 truncate">SprintLogic IDE</h2>
                 <div className="flex items-center gap-1">
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-white" onClick={() => setLeftSidebarOpen(false)} title="Ocultar barra lateral">
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-zinc-400 hover:text-white" onClick={() => setLeftSidebarOpen(false)} title="Ocultar barra lateral">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
                   </Button>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-white" onClick={() => setSettingsOpen(true)}>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-zinc-400 hover:text-white" onClick={() => setSettingsOpen(true)}>
                     <Settings className="h-4 w-4" />
                   </Button>
                 </div>
                 <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-                  <DialogContent className="sm:max-w-[425px] bg-slate-900 text-slate-200 border-slate-800">
+                  <DialogContent className="sm:max-w-[425px] bg-zinc-900 text-zinc-200 border-zinc-800/50">
                     <DialogHeader>
                       <DialogTitle>Configuración</DialogTitle>
-                      <DialogDescription className="text-slate-400">
+                      <DialogDescription className="text-zinc-400">
                         Ajusta tus preferencias de IA y Apariencia.
                       </DialogDescription>
                     </DialogHeader>
                     
-                    <div className="flex items-center gap-2 mb-2 border-b border-slate-800 pb-2">
+                    <div className="flex items-center gap-2 mb-2 border-b border-zinc-800/50 pb-2">
                       <button 
-                        className={`text-sm font-medium px-2 py-1 rounded transition-colors ${settingsTab === 'llms' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-slate-300'}`}
+                        className={`text-sm font-medium px-2 py-1 rounded transition-colors ${settingsTab === 'llms' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-zinc-300'}`}
                         onClick={() => setSettingsTab('llms')}
                       >
                         IA & Modelos
                       </button>
                       <button 
-                        className={`text-sm font-medium px-2 py-1 rounded transition-colors ${settingsTab === 'appearance' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-slate-300'}`}
+                        className={`text-sm font-medium px-2 py-1 rounded transition-colors ${settingsTab === 'appearance' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-zinc-300'}`}
                         onClick={() => setSettingsTab('appearance')}
                       >
                         Apariencia
@@ -223,7 +223,7 @@ export default function Home() {
                               type="password"
                               value={geminiKey}
                               onChange={(e) => setGeminiKey(e.target.value)}
-                              className="col-span-3 bg-slate-800 border-slate-700"
+                              className="col-span-3 bg-zinc-800 border-zinc-700/50"
                             />
                           </div>
                           <div className="grid grid-cols-4 items-center gap-4">
@@ -233,7 +233,7 @@ export default function Home() {
                               type="password"
                               value={openAiKey}
                               onChange={(e) => setOpenAiKey(e.target.value)}
-                              className="col-span-3 bg-slate-800 border-slate-700"
+                              className="col-span-3 bg-zinc-800 border-zinc-700/50"
                             />
                           </div>
                           <div className="grid grid-cols-4 items-center gap-4">
@@ -243,7 +243,7 @@ export default function Home() {
                               type="password"
                               value={anthropicKey}
                               onChange={(e) => setAnthropicKey(e.target.value)}
-                              className="col-span-3 bg-slate-800 border-slate-700"
+                              className="col-span-3 bg-zinc-800 border-zinc-700/50"
                             />
                           </div>
                           <div className="grid grid-cols-4 items-center gap-4">
@@ -253,10 +253,10 @@ export default function Home() {
                               type="password"
                               value={openRouterKey}
                               onChange={(e) => setOpenRouterKey(e.target.value)}
-                              className="col-span-3 bg-slate-800 border-slate-700"
+                              className="col-span-3 bg-zinc-800 border-zinc-700/50"
                             />
                           </div>
-                          <div className="flex items-center space-x-2 pt-2 border-t border-slate-800 mt-2">
+                          <div className="flex items-center space-x-2 pt-2 border-t border-zinc-800/50 mt-2">
                             <Switch id="vim-mode" checked={vimMode} onCheckedChange={setVimMode} />
                             <Label htmlFor="vim-mode">Habilitar Modo Vim</Label>
                           </div>
@@ -266,10 +266,10 @@ export default function Home() {
                           <div className="grid grid-cols-4 items-center gap-4">
                             <Label className="text-right text-xs">Color de Acento</Label>
                             <Select value={accentColor} onValueChange={(val: any) => setAccentColor(val)}>
-                              <SelectTrigger className="col-span-3 bg-slate-800 border-slate-700 text-slate-200">
+                              <SelectTrigger className="col-span-3 bg-zinc-800 border-zinc-700/50 text-zinc-200">
                                 <SelectValue />
                               </SelectTrigger>
-                              <SelectContent className="bg-slate-800 border-slate-700 text-slate-200">
+                              <SelectContent className="bg-zinc-800 border-zinc-700/50 text-zinc-200">
                                 <SelectItem value="blue">Azul</SelectItem>
                                 <SelectItem value="purple">Púrpura</SelectItem>
                                 <SelectItem value="emerald">Esmeralda</SelectItem>
@@ -279,10 +279,10 @@ export default function Home() {
                           <div className="grid grid-cols-4 items-center gap-4 mt-2">
                             <Label className="text-right text-xs">Tamaño de UI</Label>
                             <Select value={uiScale} onValueChange={(val: any) => setUiScale(val)}>
-                              <SelectTrigger className="col-span-3 bg-slate-800 border-slate-700 text-slate-200">
+                              <SelectTrigger className="col-span-3 bg-zinc-800 border-zinc-700/50 text-zinc-200">
                                 <SelectValue />
                               </SelectTrigger>
-                              <SelectContent className="bg-slate-800 border-slate-700 text-slate-200">
+                              <SelectContent className="bg-zinc-800 border-zinc-700/50 text-zinc-200">
                                 <SelectItem value="compact">Compacto</SelectItem>
                                 <SelectItem value="normal">Normal</SelectItem>
                                 <SelectItem value="large">Grande</SelectItem>
@@ -313,10 +313,10 @@ export default function Home() {
               {/* 1. Selector de Proyectos */}
               <div className="flex items-center gap-2">
                 <Select value={projectId || ""} onValueChange={setProjectId}>
-                  <SelectTrigger className="flex-1 bg-slate-800 border-slate-700 text-slate-200">
+                  <SelectTrigger className="flex-1 bg-zinc-800 border-zinc-700/50 text-zinc-200">
                     <SelectValue placeholder="Selecciona un proyecto..." />
                   </SelectTrigger>
-                  <SelectContent className="bg-slate-800 border-slate-700 text-slate-200">
+                  <SelectContent className="bg-zinc-800 border-zinc-700/50 text-zinc-200">
                     {projects.length > 0 ? (
                       projects.map((p) => (
                         <SelectItem key={p.id} value={p.id}>
@@ -324,14 +324,14 @@ export default function Home() {
                         </SelectItem>
                       ))
                     ) : (
-                      <div className="p-2 text-xs text-slate-500">No hay proyectos</div>
+                      <div className="p-2 text-xs text-zinc-500">No hay proyectos</div>
                     )}
                   </SelectContent>
                 </Select>
                 <Button 
                   variant="outline" 
                   size="icon" 
-                  className="shrink-0 bg-slate-800 border-slate-700 text-slate-300 hover:text-white"
+                  className="shrink-0 bg-zinc-800 border-zinc-700/50 text-zinc-300 hover:text-white"
                   onClick={() => setAddProjectOpen(true)}
                   title="Gestionar Proyectos"
                 >
@@ -340,10 +340,10 @@ export default function Home() {
               </div>
 
               <Dialog open={addProjectOpen} onOpenChange={setAddProjectOpen}>
-                <DialogContent className="sm:max-w-[425px] bg-slate-900 text-slate-200 border-slate-800">
+                <DialogContent className="sm:max-w-[425px] bg-zinc-900 text-zinc-200 border-zinc-800/50">
                   <DialogHeader>
                     <DialogTitle>Añadir Proyecto Local</DialogTitle>
-                    <DialogDescription className="text-slate-400">
+                    <DialogDescription className="text-zinc-400">
                       Ingresa la ruta absoluta del repositorio Git local que deseas analizar.
                     </DialogDescription>
                   </DialogHeader>
@@ -354,7 +354,7 @@ export default function Home() {
                         value={path}
                         onChange={(e) => setPath(e.target.value)}
                         placeholder="/ruta/al/proyecto"
-                        className="flex-1 min-w-0 bg-slate-800 border border-slate-700 rounded p-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
+                        className="flex-1 min-w-0 bg-zinc-800 border border-zinc-700/50 rounded p-2 text-sm text-zinc-200 focus:outline-none focus:border-blue-500"
                       />
                       <Button onClick={async () => {
                         try {
@@ -369,7 +369,7 @@ export default function Home() {
                         } catch (err) {
                           console.error("Failed to open dialog:", err);
                         }
-                      }} variant="outline" className="px-3 bg-slate-800 border-slate-700 hover:bg-slate-700 whitespace-nowrap">
+                      }} variant="outline" className="px-3 bg-zinc-800 border-zinc-700/50 hover:bg-zinc-700 whitespace-nowrap">
                         Examinar...
                       </Button>
                     </div>
@@ -384,11 +384,11 @@ export default function Home() {
               {projectId && <GitStatusWidget projectId={projectId} />}
 
               {/* 3. Explorador de Archivos */}
-              <Card className="bg-slate-800 border-slate-700 text-slate-200 mt-2 flex-1 flex flex-col min-h-0">
-                <CardHeader className="p-3 pb-2 shrink-0 border-b border-slate-700/50">
-                  <CardTitle className="text-xs font-semibold text-slate-300 uppercase tracking-wider">Explorador</CardTitle>
+              <Card className="bg-zinc-800 border-zinc-700/50 text-zinc-200 mt-2 flex-1 flex flex-col min-h-0">
+                <CardHeader className="p-3 pb-2 shrink-0 border-b border-zinc-700/50/50">
+                  <CardTitle className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">Explorador</CardTitle>
                 </CardHeader>
-                <CardContent className="p-0 text-xs text-slate-400 flex-1 overflow-hidden">
+                <CardContent className="p-0 text-xs text-zinc-400 flex-1 overflow-hidden">
                   {projectId ? (
                     <div className="h-full overflow-y-auto">
                       <FileTree projectId={projectId} onFileSelect={(path) => handleNodeClick({ file_path: path })} />
@@ -404,18 +404,18 @@ export default function Home() {
         ) : null}
 
         {leftSidebarOpen ? (
-          <ResizableHandle className="bg-slate-800 w-1 hover:bg-blue-500 transition-colors" />
+          <ResizableHandle className="bg-zinc-800 w-1 hover:bg-blue-500 transition-colors" />
         ) : null}
 
         <ResizablePanel defaultSize="50%" minSize="30%" className="min-w-0 overflow-hidden flex flex-col bg-[#1e1e1e]">
           {projectId === null ? (
             <div className="flex-1 relative min-w-0 overflow-hidden">
-              <div className="flex flex-col items-center justify-center h-full bg-slate-950 text-center px-4">
+              <div className="flex flex-col items-center justify-center h-full bg-[#0d0d0d] text-center px-4">
                 <div className="w-16 h-16 bg-blue-500/10 text-blue-400 rounded-full flex items-center justify-center mb-6">
                   <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
                 </div>
-                <h3 className="text-3xl font-bold tracking-tight text-slate-100 mb-3">Bienvenido a SprintLogic</h3>
-                <p className="text-slate-400 max-w-md mb-8 leading-relaxed">
+                <h3 className="text-3xl font-bold tracking-tight text-zinc-100 mb-3">Bienvenido a SprintLogic</h3>
+                <p className="text-zinc-400 max-w-md mb-8 leading-relaxed">
                   Para comenzar, carga un proyecto local ingresando la ruta absoluta del repositorio.
                 </p>
               </div>
@@ -423,7 +423,7 @@ export default function Home() {
           ) : (
             <>
               <TabBar />
-              <div className="flex-1 relative overflow-hidden bg-slate-950">
+              <div className="flex-1 relative overflow-hidden bg-[#0d0d0d]">
                 {renderActiveTabContent()}
               </div>
             </>
@@ -431,18 +431,18 @@ export default function Home() {
         </ResizablePanel>
 
         {!isMaximized ? (
-          <ResizableHandle className="bg-slate-800 w-1 hover:bg-blue-500 transition-colors" />
+          <ResizableHandle className="bg-zinc-800 w-1 hover:bg-blue-500 transition-colors" />
         ) : null}
         
         {!isMaximized ? (
-            <ResizablePanel defaultSize="30%" minSize="20%" className="bg-[#1e1e1e] flex flex-col border-l border-slate-800 min-w-0 overflow-hidden">
-              <div className="flex items-center gap-2 px-4 py-2 border-b border-slate-800 bg-slate-900">
-                <span className="text-sm font-medium text-slate-300">SprintLogic AI</span>
+            <ResizablePanel defaultSize="30%" minSize="20%" className="bg-[#1e1e1e] flex flex-col border-l border-zinc-800/50 min-w-0 overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-2 border-b border-zinc-800/50 bg-zinc-900">
+                <span className="text-sm font-medium text-zinc-300">SprintLogic AI</span>
                 <div className="ml-auto flex items-center gap-1">
                   <Button 
                     variant="ghost" 
                     size="icon" 
-                    className="h-6 w-6 p-0 text-slate-400 hover:text-white"
+                    className="h-6 w-6 p-0 text-zinc-400 hover:text-white"
                     onClick={() => setIsMaximized(true)}
                   >
                     <ChevronRight className="h-4 w-4" />

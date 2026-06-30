@@ -51,7 +51,9 @@ def get_language(ext):
         return tree_sitter.Language(tree_sitter_css.language())
     return None
 
-def extract_nodes_from_code(file_path: str, code: bytes, ext: str):
+from uuid import UUID
+
+def extract_nodes_from_code(project_id: UUID, file_path: str, code: bytes, ext: str):
     lang = get_language(ext)
     if not lang:
         return [], []
@@ -68,6 +70,7 @@ def extract_nodes_from_code(file_path: str, code: bytes, ext: str):
     file_node_id = f"file:{file_path}"
     file_node = GraphNode(
         id=file_node_id,
+        project_id=project_id,
         label=NodeLabel.FILE,
         name=os.path.basename(file_path),
         file_path=file_path,
@@ -101,6 +104,7 @@ def extract_nodes_from_code(file_path: str, code: bytes, ext: str):
                 class_id = f"class:{file_path}:{class_name}"
                 nodes.append(GraphNode(
                     id=class_id,
+                    project_id=project_id,
                     label=NodeLabel.CLASS,
                     name=class_name,
                     file_path=file_path,
@@ -110,6 +114,7 @@ def extract_nodes_from_code(file_path: str, code: bytes, ext: str):
                     })
                 ))
                 edges.append(GraphEdge(
+                    project_id=project_id,
                     source_id=file_node_id,
                     target_id=class_id,
                     type=EdgeType.CONTAINS
@@ -126,6 +131,7 @@ def extract_nodes_from_code(file_path: str, code: bytes, ext: str):
                 func_id = f"function:{file_path}:{func_name}"
                 nodes.append(GraphNode(
                     id=func_id,
+                    project_id=project_id,
                     label=NodeLabel.FUNCTION,
                     name=func_name,
                     file_path=file_path,
@@ -135,6 +141,7 @@ def extract_nodes_from_code(file_path: str, code: bytes, ext: str):
                     })
                 ))
                 edges.append(GraphEdge(
+                    project_id=project_id,
                     source_id=file_node_id,
                     target_id=func_id,
                     type=EdgeType.CONTAINS
@@ -153,7 +160,7 @@ class ASTParserService:
         else:
             self.ignore_dirs = set(ignore_dirs)
             
-    def parse_directory(self, dir_path: str):
+    def parse_directory(self, project_id: UUID, dir_path: str):
         all_nodes = []
         all_edges = []
         file_imports = {}
@@ -168,7 +175,7 @@ class ASTParserService:
                     try:
                         with open(file_path, "rb") as f:
                             code = f.read()
-                        nodes, edges, imports = extract_nodes_from_code(file_path, code, ext)
+                        nodes, edges, imports = extract_nodes_from_code(project_id, file_path, code, ext)
                         all_nodes.extend(nodes)
                         all_edges.extend(edges)
                         if imports:
@@ -189,6 +196,7 @@ class ASTParserService:
                         target_id = f"file:{fp}"
                         if source_id != target_id:
                             all_edges.append(GraphEdge(
+                                project_id=project_id,
                                 source_id=source_id,
                                 target_id=target_id,
                                 type=EdgeType.IMPORTS

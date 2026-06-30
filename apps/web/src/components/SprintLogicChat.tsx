@@ -33,7 +33,7 @@ export default function SprintLogicChat({ projectId }: { projectId: string | nul
     setLoading(true);
 
     try {
-      const response = await fetch("http://localhost:8000/api/v1/chat/", {
+      const response = await fetch("http://127.0.0.1:8000/api/v1/chat/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -59,14 +59,14 @@ export default function SprintLogicChat({ projectId }: { projectId: string | nul
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#1e1e1e] text-slate-200">
-      <div className="flex justify-between items-center p-2 border-b border-slate-800 bg-slate-900 text-xs">
-        <span className="font-semibold px-2 text-slate-400">SprintLogic AI</span>
+    <div className="flex flex-col h-full bg-[#1e1e1e] text-zinc-200">
+      <div className="flex justify-between items-center p-2 border-b border-zinc-800/50 bg-zinc-900 text-xs">
+        <span className="font-semibold px-2 text-zinc-400">SprintLogic AI</span>
         <Select value={selectedModel} onValueChange={(value) => setSelectedModel(value ?? selectedModel)}>
-          <SelectTrigger className="w-[180px] h-7 text-xs bg-slate-800 border-slate-700">
+          <SelectTrigger className="w-[180px] h-7 text-xs bg-zinc-800 border-zinc-700/50">
             <SelectValue placeholder="Selecciona un modelo" />
           </SelectTrigger>
-          <SelectContent className="bg-slate-800 border-slate-700 text-slate-200">
+          <SelectContent className="bg-zinc-800 border-zinc-700/50 text-zinc-200">
             {MODELS.map(m => (
               <SelectItem key={m.value} value={m.value} className="text-xs">{m.label}</SelectItem>
             ))}
@@ -80,7 +80,7 @@ export default function SprintLogicChat({ projectId }: { projectId: string | nul
               <div className={`max-w-[85%] rounded-lg p-3 text-sm ${
                 m.role === "user" ? "bg-blue-600 text-white" : 
                 m.role === "system" ? "bg-red-900/50 text-red-200 border border-red-800" :
-                "bg-slate-800 text-slate-200 border border-slate-700"
+                "bg-zinc-800 text-zinc-200 border border-zinc-700/50"
               }`}>
                 {m.role === "assistant" ? (
                   <div className="prose prose-invert prose-sm max-w-none">
@@ -94,14 +94,14 @@ export default function SprintLogicChat({ projectId }: { projectId: string | nul
           ))}
           {loading && (
             <div className="flex flex-col items-start">
-              <div className="max-w-[85%] rounded-lg p-3 text-sm bg-slate-800 text-slate-400 border border-slate-700 animate-pulse">
+              <div className="max-w-[85%] rounded-lg p-3 text-sm bg-zinc-800 text-zinc-400 border border-zinc-700/50 animate-pulse">
                 SprintLogic AI está pensando...
               </div>
             </div>
           )}
         </div>
       </ScrollArea>
-      <div className="p-3 bg-slate-900 border-t border-slate-800">
+      <div className="p-3 bg-zinc-900 border-t border-zinc-800/50">
         <div className="flex gap-2">
           <input
             type="text"
@@ -109,7 +109,7 @@ export default function SprintLogicChat({ projectId }: { projectId: string | nul
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && sendMessage()}
             placeholder="Escribe un comando..."
-            className="flex-1 bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+            className="flex-1 bg-zinc-800 border border-zinc-700/50 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
           />
           <Button onClick={sendMessage} disabled={loading || !input.trim()} className="bg-blue-600 hover:bg-blue-700 px-4">
             Enviar

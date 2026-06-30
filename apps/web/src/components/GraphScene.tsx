@@ -71,21 +71,21 @@ export default function GraphScene({ projectId, onNodeClick }: { projectId: stri
     const grad = ctx.createLinearGradient(link.source.x, link.source.y, link.target.x, link.target.y);
     if (link.type === "IMPORTS") {
       ctx.lineWidth = 0.6 / globalScale;
-      grad.addColorStop(0, "rgba(203, 213, 225, 0.0)");   // slate-300 transparent
-      grad.addColorStop(0.5, "rgba(203, 213, 225, 0.6)"); // slate-300 semi-bright center
-      grad.addColorStop(1, "rgba(203, 213, 225, 0.0)");   // slate-300 transparent
+      grad.addColorStop(0, "rgba(203, 213, 225, 0.0)");   // zinc-300 transparent
+      grad.addColorStop(0.5, "rgba(203, 213, 225, 0.6)"); // zinc-300 semi-bright center
+      grad.addColorStop(1, "rgba(203, 213, 225, 0.0)");   // zinc-300 transparent
     } else {
       ctx.lineWidth = 0.25 / globalScale;
-      grad.addColorStop(0, "rgba(148, 163, 184, 0.0)");   // slate-400 transparent
-      grad.addColorStop(0.5, "rgba(148, 163, 184, 0.25)"); // slate-400 faint center
-      grad.addColorStop(1, "rgba(148, 163, 184, 0.0)");   // slate-400 transparent
+      grad.addColorStop(0, "rgba(148, 163, 184, 0.0)");   // zinc-400 transparent
+      grad.addColorStop(0.5, "rgba(148, 163, 184, 0.25)"); // zinc-400 faint center
+      grad.addColorStop(1, "rgba(148, 163, 184, 0.0)");   // zinc-400 transparent
     }
     ctx.strokeStyle = grad;
     ctx.stroke();
   };
 
   return (
-    <div className="w-full h-full bg-slate-950 flex flex-col items-center justify-center text-slate-200">
+    <div className="w-full h-full bg-[#0d0d0d] flex flex-col items-center justify-center text-zinc-200">
       <ForceGraph2D
         graphData={graphData}
         backgroundColor="#020617"

@@ -10,7 +10,12 @@ app = FastAPI(title="sprintLogic API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "tauri://localhost"],
+    allow_origins=[
+        "http://localhost:3000",
+        "tauri://localhost",
+        "http://tauri.localhost",
+        "https://tauri.localhost"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

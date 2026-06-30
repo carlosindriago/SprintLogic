@@ -6,15 +6,15 @@ export default function TabBar() {
   const { tabs, activeTabId, setActiveTab, removeTab } = useTabsStore();
 
   return (
-    <div className="flex bg-slate-900 border-b border-slate-800 overflow-x-auto overflow-y-hidden shrink-0">
+    <div className="flex bg-zinc-900 border-b border-zinc-800/50 overflow-x-auto overflow-y-hidden shrink-0">
       {tabs.map((tab) => (
         <div
           key={tab.id}
           className={cn(
-            "group flex items-center gap-2 px-4 py-2 border-r border-slate-800 min-w-32 max-w-48 text-sm cursor-pointer select-none transition-colors",
+            "group flex items-center gap-2 px-4 py-2 border-r border-zinc-800/50 min-w-32 max-w-48 text-sm cursor-pointer select-none transition-colors",
             activeTabId === tab.id 
-              ? "bg-slate-800 text-blue-400 border-t-2 border-t-blue-500" 
-              : "bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-slate-300 border-t-2 border-t-transparent"
+              ? "bg-zinc-800 text-blue-400 border-t-2 border-t-blue-500" 
+              : "bg-zinc-900 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-300 border-t-2 border-t-transparent"
           )}
           onClick={() => setActiveTab(tab.id)}
         >
@@ -23,7 +23,7 @@ export default function TabBar() {
           {tab.id !== 'dashboard' && (
             <div 
               className={cn(
-                "rounded-sm hover:bg-slate-700 p-0.5",
+                "rounded-sm hover:bg-zinc-700 p-0.5",
                 activeTabId === tab.id ? "opacity-100" : "opacity-0 group-hover:opacity-100"
               )}
               onClick={(e) => {

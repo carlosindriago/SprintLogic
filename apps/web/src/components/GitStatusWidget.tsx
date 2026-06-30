@@ -11,7 +11,7 @@ export default function GitStatusWidget({ projectId }: { projectId: string }) {
 
   const fetchStatus = async () => {
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/projects/${projectId}/git/status`);
+      const res = await fetch(`http://127.0.0.1:8000/api/v1/projects/${projectId}/git/status`);
       if (res.ok) {
         const data = await res.json();
         setStatus(data);
@@ -43,7 +43,7 @@ export default function GitStatusWidget({ projectId }: { projectId: string }) {
   if (!projectId || loading) return null;
 
   return (
-    <Card className="bg-slate-800 border-slate-700 text-slate-200 mt-auto shrink-0">
+    <Card className="bg-zinc-800 border-zinc-700/50 text-zinc-200 mt-auto shrink-0">
       <CardHeader className="p-3 pb-0">
         <CardTitle className="text-xs font-medium flex items-center justify-between">
           <span className="flex items-center gap-1.5"><GitBranch className="w-3.5 h-3.5" /> Git Status</span>
@@ -58,21 +58,21 @@ export default function GitStatusWidget({ projectId }: { projectId: string }) {
         {status ? (
           <>
             <div className="flex items-center gap-2 text-xs">
-              <span className="text-slate-400">Rama:</span>
-              <span className="font-mono bg-slate-900 px-1.5 py-0.5 rounded text-blue-400 truncate flex-1">{status.branch}</span>
+              <span className="text-zinc-400">Rama:</span>
+              <span className="font-mono bg-zinc-900 px-1.5 py-0.5 rounded text-blue-400 truncate flex-1">{status.branch}</span>
             </div>
             
             <Button 
               variant="default" 
               size="sm" 
-              className="w-full bg-slate-700 hover:bg-slate-600 h-7 text-xs flex gap-1.5"
+              className="w-full bg-zinc-700 hover:bg-zinc-600 h-7 text-xs flex gap-1.5"
               onClick={openGitGraph}
             >
               <GitCommit className="w-3.5 h-3.5" /> Abrir Sala de Control
             </Button>
           </>
         ) : (
-          <div className="text-xs text-slate-400">Error al leer repositorio Git.</div>
+          <div className="text-xs text-zinc-400">Error al leer repositorio Git.</div>
         )}
       </CardContent>
     </Card>
