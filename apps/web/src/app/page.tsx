@@ -27,6 +27,7 @@ import SprintLogicChat from "@/components/SprintLogicChat";
 import KanbanBoard from "@/components/KanbanBoard";
 import FileTree from "@/components/FileTree";
 import { useTabsStore } from '@/store/tabsStore';
+import { useProjectStore } from '@/store/projectStore';
 import TabBar from '@/components/TabBar';
 import EditorTab from '@/components/EditorTab';
 import GitStatusWidget from '@/components/GitStatusWidget';
@@ -38,7 +39,7 @@ const GraphScene = dynamic(() => import("@/components/GraphScene"), { ssr: false
 export default function Home() {
   const [path, setPath] = useState("");
   const [projects, setProjects] = useState<any[]>([]);
-  const [projectId, setProjectId] = useState<string | null>(null);
+  const { projectId, setProjectId } = useProjectStore();
   const [loading, setLoading] = useState(false);
 
   const [geminiKey, setGeminiKey] = useState("");
