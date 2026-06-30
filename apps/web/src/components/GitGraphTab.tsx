@@ -2,13 +2,21 @@ import { useState, useEffect } from 'react';
 import { Gitgraph, templateExtend, TemplateName } from '@gitgraph/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Download, Upload, Check, Archive, RefreshCw } from 'lucide-react';
+import { Download, Upload, Check, Archive, RefreshCw, FileText, FilePlus, FileMinus, GitCommit } from 'lucide-react';
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
+import { getCommitDetails } from '@/lib/api';
+import { useTabsStore } from '@/store/tabsStore';
 
 export default function GitGraphTab({ projectId }: { projectId: string }) {
   const [commits, setCommits] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [commitMessage, setCommitMessage] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
+  const [selectedCommit, setSelectedCommit] = useState<any | null>(null);
+  const [commitDetails, setCommitDetails] = useState<any | null>(null);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  
+  const addTab = useTabsStore((state) => state.addTab);
 
   const fetchCommits = async () => {
     try {
@@ -52,6 +60,35 @@ export default function GitGraphTab({ projectId }: { projectId: string }) {
     }
   };
 
+  const handleCommitClick = async (hash: string) => {
+    setSelectedCommit(hash);
+    setDetailsLoading(true);
+    setCommitDetails(null);
+    try {
+      const details = await getCommitDetails(projectId, hash);
+      setCommitDetails(details);
+    } catch (error) {
+      console.error("Failed to fetch commit details:", error);
+    } finally {
+      setDetailsLoading(false);
+    }
+  };
+
+  const openDiff = (hash: string, filePath: string) => {
+    addTab({
+      id: `diff-${hash}-${filePath}`,
+      title: `${filePath.split('/').pop()} (Diff)`,
+      type: 'diff',
+      data: { hash, filePath }
+    });
+  };
+
+  const getFileIcon = (status: string) => {
+    if (status.startsWith('A')) return <FilePlus className="w-4 h-4 text-green-500" />;
+    if (status.startsWith('D')) return <FileMinus className="w-4 h-4 text-red-500" />;
+    return <FileText className="w-4 h-4 text-yellow-500" />; // Modified (M) or others
+  };
+
   return (
     <div className="flex flex-col h-full bg-slate-950 text-slate-200">
       <div className="flex items-center gap-4 p-4 border-b border-slate-800 bg-slate-900 shrink-0">
@@ -83,59 +120,119 @@ export default function GitGraphTab({ projectId }: { projectId: string }) {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto p-8 flex justify-center">
-        {!loading && commits.length > 0 && (
-          <div className="bg-slate-900 p-8 rounded-xl border border-slate-800 min-w-[600px] w-full max-w-4xl shadow-xl">
-            <Gitgraph key={commits.length > 0 ? commits[0].hash : "empty"}
-              options={{
-                template: templateExtend(TemplateName.Metro, {
-                  colors: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'],
-                  commit: {
-                    message: {
-                      displayAuthor: true,
-                      displayHash: true,
-                      color: '#cbd5e1',
-                      font: 'normal 12pt Inter'
-                    },
-                    dot: {
-                      size: 6
-                    }
-                  }
-                })
-              }}
-            >
-              {(gitgraph) => {
-                // VERY simplified version for rendering linear history
-                // In a real scenario, we'd reconstruct the graph with parents
-                // but @gitgraph/react expects us to script the graph building.
-                
-                // For this MVP, let's just create a main branch and add all commits sequentially
-                // (GitGraph is better for drawing from scratch, not importing existing histories,
-                // but we can fake it by drawing the commits in reverse order)
-                
-                const master = gitgraph.branch("main");
-                
-                // Commits come from backend sorted newest first
-                // So we reverse to draw oldest first
-                const reversed = [...commits].reverse();
-                
-                reversed.forEach(c => {
-                  master.commit({
-                    hash: c.hash.substring(0, 7),
-                    subject: c.subject,
-                    author: c.author,
-                  });
-                });
-              }}
-            </Gitgraph>
-          </div>
-        )}
-        
-        {!loading && commits.length === 0 && (
-          <div className="text-slate-500 mt-20 text-center">
-            No se encontraron commits o error al cargar historial de Git.
-          </div>
-        )}
+      <div className="flex-1 overflow-hidden">
+        <ResizablePanelGroup direction="horizontal">
+          <ResizablePanel defaultSize={60} minSize={30}>
+            <div className="h-full overflow-auto p-8 flex justify-center bg-slate-950">
+              {!loading && commits.length > 0 && (
+                <div className="bg-slate-900 p-8 rounded-xl border border-slate-800 w-full max-w-4xl shadow-xl min-h-full">
+                  <Gitgraph key={commits.length > 0 ? commits[0].hash : "empty"}
+                    options={{
+                      template: templateExtend(TemplateName.Metro, {
+                        colors: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'],
+                        commit: {
+                          message: {
+                            displayAuthor: true,
+                            displayHash: true,
+                            color: '#cbd5e1',
+                            font: 'normal 12pt Inter'
+                          },
+                          dot: {
+                            size: 6
+                          }
+                        }
+                      })
+                    }}
+                  >
+                    {(gitgraph) => {
+                      const master = gitgraph.branch("main");
+                      const reversed = [...commits].reverse();
+                      
+                      reversed.forEach(c => {
+                        master.commit({
+                          hash: c.hash.substring(0, 7),
+                          subject: c.subject,
+                          author: c.author,
+                          onClick: () => handleCommitClick(c.hash)
+                        });
+                      });
+                    }}
+                  </Gitgraph>
+                </div>
+              )}
+              
+              {!loading && commits.length === 0 && (
+                <div className="text-slate-500 mt-20 text-center">
+                  No se encontraron commits o error al cargar historial de Git.
+                </div>
+              )}
+            </div>
+          </ResizablePanel>
+          
+          <ResizableHandle className="bg-slate-800" />
+          
+          <ResizablePanel defaultSize={40} minSize={20}>
+            <div className="h-full flex flex-col bg-slate-900 border-l border-slate-800">
+              {detailsLoading ? (
+                <div className="p-8 text-center text-slate-400">
+                  <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
+                  Cargando detalles...
+                </div>
+              ) : commitDetails ? (
+                <div className="flex flex-col h-full">
+                  <div className="p-6 border-b border-slate-800">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-300 font-bold border border-slate-700">
+                        {commitDetails.author.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-slate-200">{commitDetails.author}</h3>
+                        <p className="text-xs text-slate-500">{new Date(commitDetails.date).toLocaleString()}</p>
+                      </div>
+                    </div>
+                    <div className="bg-slate-950 p-4 rounded-lg border border-slate-800">
+                      <p className="text-slate-300 text-sm whitespace-pre-wrap">{commitDetails.message}</p>
+                    </div>
+                    <div className="mt-4 flex gap-2">
+                      <span className="px-2 py-1 bg-slate-800 text-slate-400 rounded text-xs font-mono border border-slate-700">
+                        {commitDetails.hash.substring(0, 7)}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  <div className="flex-1 overflow-auto p-0">
+                    <div className="px-6 py-4 bg-slate-900 sticky top-0 border-b border-slate-800 z-10">
+                      <h4 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">
+                        Archivos Modificados ({commitDetails.files.length})
+                      </h4>
+                    </div>
+                    <ul className="divide-y divide-slate-800">
+                      {commitDetails.files.map((file: any, i: number) => (
+                        <li 
+                          key={i} 
+                          className="px-6 py-3 hover:bg-slate-800/50 cursor-pointer flex items-center gap-3 transition-colors"
+                          onClick={() => openDiff(commitDetails.hash, file.path)}
+                        >
+                          {getFileIcon(file.status)}
+                          <span className="text-sm text-slate-300 truncate" title={file.path}>
+                            {file.path}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex-1 flex items-center justify-center text-slate-500 p-8 text-center">
+                  <div>
+                    <GitCommit className="w-12 h-12 mx-auto mb-4 opacity-20" />
+                    <p>Selecciona un commit en el grafo<br/>para ver sus detalles.</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </ResizablePanel>
+        </ResizablePanelGroup>
       </div>
     </div>
   );
