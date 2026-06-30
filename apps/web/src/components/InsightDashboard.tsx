@@ -133,20 +133,26 @@ export default function InsightDashboard({ projectId }: { projectId: string }) {
               <CardTitle className="text-base md:text-lg text-zinc-300">Burndown de Tareas</CardTitle>
             </CardHeader>
             <CardContent className="flex-1 min-h-0 min-w-0 pb-6 pl-0">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={burndownData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="colorTasks" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#d946ef" stopOpacity={0.8}/>
-                      <stop offset="95%" stopColor="#d946ef" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <XAxis dataKey="name" stroke="#475569" fontSize={12} tickMargin={10} />
-                  <YAxis stroke="#475569" fontSize={12} tickMargin={10} />
-                  <RechartsTooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b' }} />
-                  <Area type="monotone" dataKey="tasks" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorTasks)" />
-                </AreaChart>
-              </ResponsiveContainer>
+              {data.total_commits > 0 || (data.tasks_by_state?.todo > 0) ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={burndownData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorTasks" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#d946ef" stopOpacity={0.8}/>
+                        <stop offset="95%" stopColor="#d946ef" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <XAxis dataKey="name" stroke="#475569" fontSize={12} tickMargin={10} />
+                    <YAxis stroke="#475569" fontSize={12} tickMargin={10} />
+                    <RechartsTooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b' }} />
+                    <Area type="monotone" dataKey="tasks" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorTasks)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-zinc-500 text-sm">
+                  No hay suficientes datos aún
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -155,24 +161,30 @@ export default function InsightDashboard({ projectId }: { projectId: string }) {
               <CardTitle className="text-base md:text-lg text-zinc-300">Lenguajes de Archivos</CardTitle>
             </CardHeader>
             <CardContent className="flex-1 min-h-0 min-w-0 flex items-center justify-center">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={langData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={80}
-                    paddingAngle={5}
-                    dataKey="value"
-                  >
-                    {langData.map((entry: any, index: number) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <RechartsTooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b' }} />
-                </PieChart>
-              </ResponsiveContainer>
+              {data.language_distribution && data.language_distribution.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={langData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={80}
+                      paddingAngle={5}
+                      dataKey="value"
+                    >
+                      {langData.map((entry: any, index: number) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <RechartsTooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b' }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-zinc-500 text-sm">
+                  No hay suficientes datos aún
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -195,16 +207,24 @@ export default function InsightDashboard({ projectId }: { projectId: string }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {(data.recent_commits || []).map((commit: any, index: number) => (
-                      <tr key={commit.hash} className={`border-b border-zinc-800/50 ${index % 2 === 0 ? 'bg-zinc-900' : 'bg-zinc-800/20'} hover:bg-zinc-800/50 transition-colors`}>
-                        <td className="px-6 py-4 font-mono text-xs text-blue-400">{commit.hash.substring(0, 7)}</td>
-                        <td className="px-6 py-4 max-w-[200px] md:max-w-[400px]">
-                          <div className="truncate text-zinc-300" title={commit.subject}>{commit.subject}</div>
+                    {data.recent_commits && data.recent_commits.length > 0 ? (
+                      data.recent_commits.map((commit: any, index: number) => (
+                        <tr key={commit.hash} className={`border-b border-zinc-800/50 ${index % 2 === 0 ? 'bg-zinc-900' : 'bg-zinc-800/20'} hover:bg-zinc-800/50 transition-colors`}>
+                          <td className="px-6 py-4 font-mono text-xs text-blue-400">{commit.hash.substring(0, 7)}</td>
+                          <td className="px-6 py-4 max-w-[200px] md:max-w-[400px]">
+                            <div className="truncate text-zinc-300" title={commit.subject}>{commit.subject}</div>
+                          </td>
+                          <td className="px-6 py-4 text-zinc-400">{commit.author}</td>
+                          <td className="px-6 py-4 text-zinc-500 whitespace-nowrap">{new Date(commit.date).toLocaleDateString()}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={4} className="px-6 py-8 text-center text-zinc-500 text-sm">
+                          No hay commits recientes en este proyecto.
                         </td>
-                        <td className="px-6 py-4 text-zinc-400">{commit.author}</td>
-                        <td className="px-6 py-4 text-zinc-500 whitespace-nowrap">{new Date(commit.date).toLocaleDateString()}</td>
                       </tr>
-                    ))}
+                    )}
                   </tbody>
                 </table>
               </div>

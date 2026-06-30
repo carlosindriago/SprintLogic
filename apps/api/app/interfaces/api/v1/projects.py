@@ -294,11 +294,14 @@ async def get_project_insights(project_id: str, session: AsyncSession = Depends(
         raise HTTPException(status_code=404, detail="Project not found")
 
     # 1. Tareas por estado
-    tasks = kanban_sync.read_tasks(project.path)
     tasks_by_state = {"todo": 0, "in-progress": 0, "done": 0}
-    for t in tasks:
-        if t["status"] in tasks_by_state:
-            tasks_by_state[t["status"]] += 1
+    try:
+        tasks = kanban_sync.read_tasks(project.path)
+        for t in tasks:
+            if t["status"] in tasks_by_state:
+                tasks_by_state[t["status"]] += 1
+    except Exception:
+        pass
 
     # 2. Distribución de archivos/lenguajes (Query GraphNodeModel)
     from sqlalchemy import select
@@ -326,8 +329,16 @@ async def get_project_insights(project_id: str, session: AsyncSession = Depends(
     try:
         out_commits = await git_gateway._run_command(project.path, 'rev-list', '--all', '--count')
         total_commits = int(out_commits)
+    except Exception:
+        pass
+        
+    try:
         out_branches = await git_gateway._run_command(project.path, 'branch')
         active_branches = len([b for b in out_branches.split('\n') if b.strip()])
+    except Exception:
+        pass
+        
+    try:
         recent_commits = await git_gateway.get_recent_commits(project.path, limit=5)
     except Exception:
         pass
