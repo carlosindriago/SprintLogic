@@ -131,7 +131,7 @@ export default function Home() {
               <button onClick={() => setDashboardTab('graph')} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${dashboardTab === 'graph' ? 'border-blue-500 text-blue-400' : 'border-transparent text-zinc-400 hover:text-zinc-300'}`}>Grafo 2D</button>
               <button onClick={() => setDashboardTab('kanban')} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${dashboardTab === 'kanban' ? 'border-blue-500 text-blue-400' : 'border-transparent text-zinc-400 hover:text-zinc-300'}`}>Kanban (Sprints)</button>
             </div>
-            <div className="flex-1 relative overflow-hidden bg-[#0d0d0d]">
+            <div className="flex-1 relative overflow-hidden bg-[#151515]">
               {dashboardTab === 'insights' ? (
                 projectId ? <InsightDashboard projectId={projectId} /> : <div className="p-4 text-zinc-400">Selecciona un proyecto...</div>
               ) : dashboardTab === 'graph' ? (
@@ -176,7 +176,7 @@ export default function Home() {
         ) : null}
 
         {leftSidebarOpen ? (
-        <ResizablePanel defaultSize="20%" minSize="15%" maxSize="40%" className="bg-zinc-900 border-r border-zinc-800/50 flex flex-col overflow-hidden relative">
+        <ResizablePanel defaultSize={20} minSize={15} maxSize={40} className="bg-[#0a0a0a] border-r border-zinc-800/50 flex flex-col overflow-hidden relative">
           <ScrollArea className="flex-1">
             <div className="p-4 flex flex-col gap-4">
               <div className="flex items-center justify-between">
@@ -373,7 +373,7 @@ export default function Home() {
                         Examinar...
                       </Button>
                     </div>
-                    <Button onClick={handleScan} disabled={loading || !path} className="w-full bg-blue-600 hover:bg-blue-700">
+                    <Button onClick={handleScan} disabled={loading || !path} className="w-full bg-blue-600 hover:bg-blue-500 shadow-lg shadow-blue-500/20 text-white border-none">
                       {loading ? "Cargando..." : "Registrar y Analizar"}
                     </Button>
                   </div>
@@ -407,10 +407,10 @@ export default function Home() {
           <ResizableHandle className="bg-zinc-800 w-1 hover:bg-blue-500 transition-colors" />
         ) : null}
 
-        <ResizablePanel defaultSize="50%" minSize="30%" className="min-w-0 overflow-hidden flex flex-col bg-[#1e1e1e]">
+        <ResizablePanel defaultSize={50} minSize={30} className="min-w-0 overflow-hidden flex flex-col bg-[#151515]">
           {projectId === null ? (
             <div className="flex-1 relative min-w-0 overflow-hidden">
-              <div className="flex flex-col items-center justify-center h-full bg-[#0d0d0d] text-center px-4">
+              <div className="flex flex-col items-center justify-center h-full bg-[#151515] text-center px-4">
                 <div className="w-16 h-16 bg-blue-500/10 text-blue-400 rounded-full flex items-center justify-center mb-6">
                   <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
                 </div>
@@ -423,7 +423,7 @@ export default function Home() {
           ) : (
             <>
               <TabBar />
-              <div className="flex-1 relative overflow-hidden bg-[#0d0d0d]">
+              <div className="flex-1 relative overflow-hidden bg-[#151515]">
                 {renderActiveTabContent()}
               </div>
             </>
@@ -435,8 +435,8 @@ export default function Home() {
         ) : null}
         
         {!isMaximized ? (
-            <ResizablePanel defaultSize="30%" minSize="20%" className="bg-[#1e1e1e] flex flex-col border-l border-zinc-800/50 min-w-0 overflow-hidden">
-              <div className="flex items-center gap-2 px-4 py-2 border-b border-zinc-800/50 bg-zinc-900">
+            <ResizablePanel defaultSize={30} minSize={20} className="bg-[#151515] flex flex-col border-l border-zinc-800/50 min-w-0 overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-2 border-b border-zinc-800/50 bg-[#0a0a0a]">
                 <span className="text-sm font-medium text-zinc-300">SprintLogic AI</span>
                 <div className="ml-auto flex items-center gap-1">
                   <Button 
@@ -459,7 +459,7 @@ export default function Home() {
           <div className="absolute right-4 bottom-4 z-50">
             <Button 
               variant="default" 
-              className="rounded-full shadow-lg h-12 w-12 p-0 bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center"
+              className="rounded-full shadow-lg shadow-blue-500/20 h-12 w-12 p-0 bg-blue-600 hover:bg-blue-500 text-white flex items-center justify-center border-none"
               onClick={() => setIsMaximized(false)}
               title="Abrir AI"
             >
