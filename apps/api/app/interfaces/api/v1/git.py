@@ -66,3 +66,39 @@ async def execute_git_action(
         raise HTTPException(status_code=500, detail=result.get("message"))
 
     return result
+
+
+@router.get("/{project_id}/git/commits/{hash}")
+async def get_commit_details(project_id: str, hash: str, session: AsyncSession = Depends(get_db_session)):
+    try:
+        project = await SQLAlchemyProjectRepository(session).get_project(UUID(project_id))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID")
+
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    details = await git_gateway.get_commit_details(project.path, hash)
+    if "error" in details:
+        raise HTTPException(status_code=500, detail=details["error"])
+
+    return details
+
+
+@router.get("/{project_id}/git/commits/{hash}/diff")
+async def get_commit_diff(project_id: str, hash: str, path: str, session: AsyncSession = Depends(get_db_session)):
+    try:
+        project = await SQLAlchemyProjectRepository(session).get_project(UUID(project_id))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID")
+
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    modified = await git_gateway.get_file_at_commit(project.path, hash, path)
+    original = await git_gateway.get_file_at_commit(project.path, f"{hash}^", path)
+
+    return {
+        "original": original,
+        "modified": modified
+    }

@@ -89,5 +89,40 @@ class LocalGitGateway:
         except RuntimeError as e:
             return {"status": "error", "message": str(e)}
 
-    async def get_commit_diff(self, repo_path: str, commit_hash: str) -> str:
-        return await self._run_command(repo_path, 'show', commit_hash)
+    async def get_commit_details(self, repo_path: str, commit_hash: str) -> Dict[str, Any]:
+        try:
+            # Format: %H|%an|%cI|%s
+            output = await self._run_command(repo_path, 'show', '--name-status', '--format=%H|%an|%cI|%s', commit_hash)
+            lines = output.split('\n')
+            if not lines:
+                raise RuntimeError("Empty output")
+            
+            # First line is the metadata
+            meta_parts = lines[0].split('|', 3)
+            
+            files = []
+            # Skip the first line and any empty lines, then parse file statuses
+            for line in lines[1:]:
+                if not line.strip():
+                    continue
+                parts = line.split('\t', 1)
+                if len(parts) == 2:
+                    status = parts[0].strip()
+                    file_path = parts[1].strip()
+                    files.append({"status": status, "path": file_path})
+                    
+            return {
+                "hash": meta_parts[0] if len(meta_parts) > 0 else commit_hash,
+                "author": meta_parts[1] if len(meta_parts) > 1 else "",
+                "date": meta_parts[2] if len(meta_parts) > 2 else "",
+                "message": meta_parts[3] if len(meta_parts) > 3 else "",
+                "files": files
+            }
+        except RuntimeError as e:
+            return {"error": str(e)}
+
+    async def get_file_at_commit(self, repo_path: str, commit_hash: str, file_path: str) -> str:
+        try:
+            return await self._run_command(repo_path, 'show', f'{commit_hash}:{file_path}')
+        except RuntimeError:
+            return ""
