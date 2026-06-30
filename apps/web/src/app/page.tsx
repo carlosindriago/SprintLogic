@@ -5,6 +5,8 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
+import { PanelImperativeHandle } from "react-resizable-panels";
+import { Project, GraphNode } from "@/types";
 
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -41,7 +43,7 @@ const GraphScene = dynamic(() => import("@/components/GraphScene"), { ssr: false
 
 export default function Home() {
   const [path, setPath] = useState("");
-  const [projects, setProjects] = useState<any[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const { projectId, setProjectId } = useProjectStore();
   const [loading, setLoading] = useState(false);
 
@@ -76,8 +78,8 @@ export default function Home() {
 
   const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
-  const leftPanelRef = useRef<any>(null);
-  const rightPanelRef = useRef<any>(null);
+  const leftPanelRef = useRef<PanelImperativeHandle | null>(null);
+  const rightPanelRef = useRef<PanelImperativeHandle | null>(null);
 
   const toggleLeftSidebar = () => {
     if (leftSidebarOpen) {
@@ -115,7 +117,7 @@ export default function Home() {
     }
   };
 
-  const handleNodeClick = async (node: any) => {
+  const handleNodeClick = async (node: GraphNode) => {
     if (!node.file_path) return;
     
     addTab({
@@ -156,11 +158,11 @@ export default function Home() {
             </div>
             <div className="flex-1 relative overflow-hidden bg-[#151515]">
               {dashboardTab === 'insights' ? (
-                projectId ? <InsightDashboard projectId={projectId} /> : <div className="p-4 text-zinc-400">Selecciona un proyecto...</div>
+                projectId ? <InsightDashboard projectId={projectId} key={projectId} /> : <div className="p-4 text-zinc-400">Selecciona un proyecto...</div>
               ) : dashboardTab === 'graph' ? (
-                <GraphScene projectId={projectId} onNodeClick={handleNodeClick} />
+                <GraphScene projectId={projectId} key={projectId} onNodeClick={handleNodeClick} />
               ) : (
-                <KanbanBoard projectId={projectId} onNodeClick={handleKanbanNodeClick} />
+                <KanbanBoard projectId={projectId} key={projectId} onNodeClick={handleKanbanNodeClick} />
               )}
             </div>
           </div>
@@ -180,7 +182,7 @@ export default function Home() {
   };
 
   return (
-    <div className="h-screen w-full bg-[#0d0d0d] text-zinc-200 overflow-hidden">
+    <div className="h-[100dvh] w-full bg-[#0d0d0d] text-zinc-200 overflow-hidden relative">
       <ResizablePanelGroup
         direction="horizontal"
         className="h-full w-full relative"
@@ -194,7 +196,7 @@ export default function Home() {
           collapsible={true}
           collapsedSize={0}
           onResize={(size) => setLeftSidebarOpen(size.asPercentage > 0)}
-          className="bg-[#0a0a0a] border-r border-zinc-800/50 flex flex-col overflow-hidden relative"
+          className="bg-[#0a0a0a] border-r border-zinc-800/50 flex flex-col overflow-hidden relative min-w-0 min-h-0"
         >
           <ScrollArea className="flex-1">
             <div className="p-4 flex flex-col gap-4">
@@ -400,7 +402,7 @@ export default function Home() {
               </Dialog>
 
               {/* 2. Widget de Git Status */}
-              {projectId && <GitStatusWidget projectId={projectId} />}
+              {projectId && <GitStatusWidget projectId={projectId} key={projectId} />}
 
               {/* 3. Explorador de Archivos */}
               <Card className="bg-zinc-800 border-zinc-700/50 text-zinc-200 mt-2 flex-1 flex flex-col min-h-0">
@@ -410,7 +412,7 @@ export default function Home() {
                 <CardContent className="p-0 text-xs text-zinc-400 flex-1 overflow-hidden">
                   {projectId ? (
                     <div className="h-full overflow-y-auto">
-                      <FileTree projectId={projectId} onFileSelect={(path) => handleNodeClick({ file_path: path })} />
+                      <FileTree projectId={projectId} key={projectId} onFileSelect={(path) => handleNodeClick({ id: path, label: "File", name: path.split('/').pop() || path, file_path: path })} />
                     </div>
                   ) : (
                     <div className="p-4 text-center">Selecciona un proyecto...</div>
@@ -438,7 +440,7 @@ export default function Home() {
         <ResizableHandle className="bg-zinc-800 w-1 hover:bg-blue-500 transition-colors" />
 
         {/* MAIN CONTENT */}
-        <ResizablePanel defaultSize={rightSidebarOpen ? 50 : 80} minSize={30} className="min-w-0 overflow-hidden flex flex-col bg-[#151515]">
+        <ResizablePanel defaultSize={rightSidebarOpen ? 50 : 80} minSize={30} className="min-w-0 min-h-0 overflow-hidden flex flex-col bg-[#151515]">
           {projectId === null ? (
             <div className="flex-1 relative min-w-0 overflow-hidden">
               <div className="flex flex-col items-center justify-center h-full bg-[#151515] text-center px-4">
@@ -472,7 +474,7 @@ export default function Home() {
           collapsible={true}
           collapsedSize={0}
           onResize={(size) => setRightSidebarOpen(size.asPercentage > 0)}
-          className="bg-[#151515] flex flex-col border-l border-zinc-800/50 min-w-0 overflow-hidden"
+          className="bg-[#151515] flex flex-col border-l border-zinc-800/50 min-w-0 min-h-0 overflow-hidden"
         >
           <div className="flex items-center gap-2 px-4 py-2 border-b border-zinc-800/50 bg-[#0a0a0a]">
             <span className="text-sm font-medium text-zinc-300">SprintLogic AI</span>
