@@ -39,7 +39,14 @@ class KanbanSyncService:
             match = re.match(r"-\s*\[(x| |/|-)\]\s*(.*)", line, re.IGNORECASE)
             if match:
                 status_char = match.group(1).lower()
-                content = match.group(2).strip()
+                full_content = match.group(2).strip()
+                
+                affected_nodes = []
+                tag_matches = re.finditer(r"@([a-zA-Z0-9_]+):([a-zA-Z0-9_./-]+)", full_content)
+                for tag_match in tag_matches:
+                    affected_nodes.append(f"{tag_match.group(1)}:{tag_match.group(2)}")
+                
+                content = re.sub(r"@[a-zA-Z0-9_]+:[a-zA-Z0-9_./-]+", "", full_content).strip()
                 
                 status = "todo"
                 if status_char == "x":
@@ -52,6 +59,7 @@ class KanbanSyncService:
                     "content": content,
                     "status": status,
                     "category": current_category,
+                    "affected_nodes": affected_nodes,
                     "raw_line": idx
                 })
                 
@@ -80,7 +88,13 @@ class KanbanSyncService:
                 elif task["status"] == "in-progress":
                     status_char = "/"
                 
-                lines.append(f"- [{status_char}] {task['content']}")
+                content = task['content']
+                affected_nodes = task.get('affected_nodes', [])
+                if affected_nodes:
+                    tags = " ".join([f"@{node}" for node in affected_nodes])
+                    lines.append(f"- [{status_char}] {content} {tags}")
+                else:
+                    lines.append(f"- [{status_char}] {content}")
             lines.append("")
             
         content = "\n".join(lines)
