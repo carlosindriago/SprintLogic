@@ -7,7 +7,7 @@ export const API_BASE_URL = 'http://localhost:8000/api/v1';
 async function fetchWithRetry(
   input: RequestInfo,
   init?: RequestInit,
-  maxRetries = 5,
+  maxRetries = 15,
   delayMs = 1000
 ): Promise<Response> {
   let lastError: Error | null = null;
