@@ -8,7 +8,12 @@ import {
   GitStatus
 } from '../types';
 
-export const API_BASE_URL = 'http://127.0.0.1:8000/api/v1';
+export interface ModelResult {
+  id: string;
+  name: string;
+}
+
+export const API_BASE_URL = "http://localhost:8000/api/v1";
 
 /**
  * Retry wrapper: retries on network errors (e.g. backend not yet ready)
@@ -143,8 +148,17 @@ export const getCommitFileDiff = async (
   return res.json();
 };
 
-export const saveApiKey = async (provider: string, apiKey: string): Promise<{ status: string }> => {
-  const response = await fetchWithRetry(`${API_BASE_URL}/settings/api-key/${provider}`, {
+export const fetchProviderModels = async (provider: string): Promise<ModelResult[]> => {
+  const response = await fetchWithRetry(`${API_BASE_URL}/settings/providers/${provider}/models`);
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => null);
+    throw new Error(errorData?.detail || `Failed to fetch models for ${provider}`);
+  }
+  return response.json();
+};
+
+export const verifyAndSaveProviderKey = async (provider: string, apiKey: string): Promise<ModelResult[]> => {
+  const response = await fetchWithRetry(`${API_BASE_URL}/settings/providers/${provider}/keys`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -153,10 +167,16 @@ export const saveApiKey = async (provider: string, apiKey: string): Promise<{ st
   });
   
   if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Failed to save API key for ${provider}: ${error}`);
+    const errorData = await response.json().catch(() => null);
+    throw new Error(errorData?.detail || `Failed to verify API key for ${provider}`);
   }
   
+  return response.json();
+};
+
+export const checkApiKeyStatus = async (provider: string): Promise<{ is_configured: boolean }> => {
+  const response = await fetchWithRetry(`${API_BASE_URL}/settings/api-key/${provider}/status`);
+  if (!response.ok) throw new Error(`Failed to check API key status for ${provider}`);
   return response.json();
 };
 
