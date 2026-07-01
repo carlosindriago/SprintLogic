@@ -26,9 +26,9 @@ export default function DiffTab({ projectId, hash, filePath }: DiffTabProps) {
           setOriginal(diffData.original || "");
           setModified(diffData.modified || "");
         }
-      } catch (err: any) {
+      } catch (err) {
         if (mounted) {
-          setError(err.message || "Failed to load diff");
+          setError(err instanceof Error ? err.message : "Failed to load diff");
         }
       } finally {
         if (mounted) {
@@ -94,6 +94,7 @@ export default function DiffTab({ projectId, hash, filePath }: DiffTabProps) {
             renderSideBySide: true,
             minimap: { enabled: true },
             scrollBeyondLastLine: false,
+            wordWrap: 'on',
           }}
         />
       </div>

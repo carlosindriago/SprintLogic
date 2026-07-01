@@ -20,7 +20,7 @@ export interface GraphNode {
   name: string;
   file_path: string;
   size?: number;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export type GraphEdgeType = "IMPORTS" | "CALLS" | "CONTAINS";

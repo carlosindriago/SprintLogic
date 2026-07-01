@@ -140,11 +140,11 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     if (onNodeClick) {
       onNodeClick({
         id: (node.id as string) || "",
-        label: (node.label as any) || "File",
+        label: (node.label as "File" | "Class" | "Function") || "File",
         name: (node.name as string) || "",
         file_path: (node.file_path as string) || "",
         size: node.size as number | undefined,
-        metadata: node.metadata as Record<string, any> | undefined
+        metadata: node.metadata as Record<string, unknown> | undefined
       });
     }
   };

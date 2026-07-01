@@ -1,11 +1,6 @@
 "use client";
 
-import {
-  ResizableHandle,
-  ResizablePanel,
-  ResizablePanelGroup,
-} from "@/components/ui/resizable";
-import { PanelImperativeHandle } from "react-resizable-panels";
+// Removed react-resizable-panels imports
 import { Project, GraphNode } from "@/types";
 
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -21,10 +16,21 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Settings, FolderOpen, ChevronRight } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { Settings, FolderOpen, ChevronRight, Edit2, Trash2, PlusCircle, ChevronsUpDown } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { scanProject, getProjects, saveApiKey } from "@/lib/api";
+import { scanProject, getProjects, saveApiKey, updateProject, deleteProject } from "@/lib/api";
 import { Switch } from "@/components/ui/switch";
 import SprintLogicChat from "@/components/SprintLogicChat";
 import KanbanBoard from "@/components/KanbanBoard";
@@ -33,7 +39,7 @@ import { useTabsStore } from '@/store/tabsStore';
 import { useProjectStore } from '@/store/projectStore';
 import TabBar from '@/components/TabBar';
 import EditorTab from '@/components/EditorTab';
-import { useThemeStore } from '@/store/themeStore';
+import { useThemeStore, AccentColor, UiScale } from '@/store/themeStore';
 import GitStatusWidget from '@/components/GitStatusWidget';
 import GitGraphTab from '@/components/GitGraphTab';
 import DiffTab from '@/components/DiffTab';
@@ -85,28 +91,9 @@ export default function Home() {
 
   const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
-  const leftPanelRef = useRef<PanelImperativeHandle | null>(null);
-  const rightPanelRef = useRef<PanelImperativeHandle | null>(null);
 
-  const toggleLeftSidebar = () => {
-    if (leftSidebarOpen) {
-      leftPanelRef.current?.collapse();
-      setLeftSidebarOpen(false);
-    } else {
-      leftPanelRef.current?.expand();
-      setLeftSidebarOpen(true);
-    }
-  };
-
-  const toggleRightSidebar = () => {
-    if (rightSidebarOpen) {
-      rightPanelRef.current?.collapse();
-      setRightSidebarOpen(false);
-    } else {
-      rightPanelRef.current?.expand();
-      setRightSidebarOpen(true);
-    }
-  };
+  const toggleLeftSidebar = () => setLeftSidebarOpen(prev => !prev);
+  const toggleRightSidebar = () => setRightSidebarOpen(prev => !prev);
 
   const handleScan = async () => {
     if (!path) return;
@@ -121,6 +108,38 @@ export default function Home() {
       alert("Error scanning project");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const [editProjectOpen, setEditProjectOpen] = useState(false);
+  const [projectToEdit, setProjectToEdit] = useState<Project | null>(null);
+  const [editProjectName, setEditProjectName] = useState("");
+  const [editProjectPath, setEditProjectPath] = useState("");
+
+  const handleEditProject = async () => {
+    if (!projectToEdit) return;
+    try {
+      await updateProject(projectToEdit.id, { name: editProjectName, path: editProjectPath });
+      await fetchProjects();
+      setEditProjectOpen(false);
+    } catch (e) {
+      console.error(e);
+      alert("Error al editar el proyecto");
+    }
+  };
+
+  const handleDeleteProject = async (proj: Project) => {
+    if (confirm(`¿Estás seguro de que deseas borrar el proyecto "${proj.name}"?`)) {
+      try {
+        await deleteProject(proj.id);
+        if (projectId === proj.id) {
+          setProjectId(null);
+        }
+        await fetchProjects();
+      } catch (e) {
+        console.error(e);
+        alert("Error al borrar el proyecto");
+      }
     }
   };
 
@@ -189,22 +208,12 @@ export default function Home() {
   };
 
   return (
-    <div className="h-[100dvh] w-full bg-[#0d0d0d] text-zinc-200 overflow-hidden relative">
-      <ResizablePanelGroup
-        direction="horizontal"
-        className="h-full w-full relative"
+    <div className="h-[100dvh] w-full flex bg-[#0d0d0d] text-zinc-200 overflow-hidden relative">
+      {/* LEFT SIDEBAR — fixed width, css transitioned */}
+      <div 
+        className={`flex-shrink-0 flex flex-col transition-all duration-300 ease-in-out border-zinc-800/50 bg-[#0a0a0a] overflow-hidden ${leftSidebarOpen ? 'w-[280px] border-r' : 'w-0 border-r-0'}`}
       >
-        {/* LEFT SIDEBAR — always in DOM, collapsible */}
-        <ResizablePanel
-          panelRef={leftPanelRef}
-          defaultSize={20}
-          minSize={15}
-          maxSize={40}
-          collapsible={true}
-          collapsedSize={0}
-          onResize={(size) => setLeftSidebarOpen(size.asPercentage > 0)}
-          className="bg-[#0a0a0a] border-r border-zinc-800/50 flex flex-col overflow-hidden relative min-w-0 min-h-0"
-        >
+        <div className="w-[280px] flex-1 flex flex-col min-h-0 overflow-hidden">
           <ScrollArea className="flex-1">
             <div className="p-4 flex flex-col gap-4">
               <div className="flex items-center justify-between">
@@ -212,9 +221,6 @@ export default function Home() {
                 <div className="flex items-center gap-1">
                   <Button variant="ghost" size="icon" className="h-8 w-8 text-zinc-400 hover:text-white" onClick={toggleLeftSidebar} title="Ocultar barra lateral">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
-                  </Button>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-zinc-400 hover:text-white" onClick={() => setSettingsOpen(true)}>
-                    <Settings className="h-4 w-4" />
                   </Button>
                 </div>
                 <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
@@ -293,7 +299,7 @@ export default function Home() {
                         <>
                           <div className="grid grid-cols-4 items-center gap-4">
                             <Label className="text-right text-xs">Color de Acento</Label>
-                            <Select value={accentColor} onValueChange={(val: 'blue' | 'purple' | 'emerald') => setAccentColor(val)}>
+                            <Select value={accentColor} onValueChange={(val: AccentColor | null) => { if (val) setAccentColor(val); }}>
                               <SelectTrigger className="col-span-3 bg-zinc-800 border-zinc-700/50 text-zinc-200">
                                 <SelectValue />
                               </SelectTrigger>
@@ -306,7 +312,7 @@ export default function Home() {
                           </div>
                           <div className="grid grid-cols-4 items-center gap-4 mt-2">
                             <Label className="text-right text-xs">Tamaño de UI</Label>
-                            <Select value={uiScale} onValueChange={(val: 'compact' | 'normal' | 'large') => setUiScale(val)}>
+                            <Select value={uiScale} onValueChange={(val: UiScale | null) => { if (val) setUiScale(val); }}>
                               <SelectTrigger className="col-span-3 bg-zinc-800 border-zinc-700/50 text-zinc-200">
                                 <SelectValue />
                               </SelectTrigger>
@@ -338,33 +344,62 @@ export default function Home() {
                 </Dialog>
               </div>
 
-              {/* 1. Selector de Proyectos */}
-              <div className="flex items-center gap-2">
-                <Select value={projectId || ""} onValueChange={setProjectId}>
-                  <SelectTrigger className="flex-1 bg-zinc-800 border-zinc-700/50 text-zinc-200">
-                    <SelectValue placeholder="Selecciona un proyecto..." />
-                  </SelectTrigger>
-                  <SelectContent className="bg-zinc-800 border-zinc-700/50 text-zinc-200">
-                    {projects.length > 0 ? (
-                      projects.map((p) => (
-                        <SelectItem key={p.id} value={p.id}>
-                          {p.name}
-                        </SelectItem>
-                      ))
-                    ) : (
-                      <div className="p-2 text-xs text-zinc-500">No hay proyectos</div>
-                    )}
-                  </SelectContent>
-                </Select>
-                <Button 
-                  variant="outline" 
-                  size="icon" 
-                  className="shrink-0 bg-zinc-800 border-zinc-700/50 text-zinc-300 hover:text-white"
-                  onClick={() => setAddProjectOpen(true)}
-                  title="Gestionar Proyectos"
-                >
-                  <Settings className="h-4 w-4" />
-                </Button>
+              {/* 1. Selector de Proyectos (Mejorado) */}
+              <div className="flex w-full items-center gap-2">
+                <DropdownMenu>
+                  <DropdownMenuTrigger className={cn(buttonVariants({ variant: "outline" }), "flex-1 justify-between bg-zinc-800 border-zinc-700/50 text-zinc-200 hover:bg-zinc-700 hover:text-white truncate")}>
+                    <span className="truncate">
+                      {projects.find(p => p.id === projectId)?.name || "Selecciona un proyecto..."}
+                    </span>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="w-[248px] bg-zinc-800 border-zinc-700/50 text-zinc-200">
+                    <DropdownMenuGroup>
+                      <DropdownMenuLabel>Tus Proyectos</DropdownMenuLabel>
+                      {projects.map((p) => (
+                        <DropdownMenuItem 
+                          key={p.id} 
+                          onClick={() => setProjectId(p.id)}
+                          className={`cursor-pointer justify-between ${projectId === p.id ? 'bg-blue-500/10 text-blue-400' : ''}`}
+                        >
+                          <span className="truncate pr-2">{p.name}</span>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-6 w-6 text-zinc-400 hover:text-blue-400"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setProjectToEdit(p);
+                                setEditProjectName(p.name);
+                                setEditProjectPath(p.path);
+                                setEditProjectOpen(true);
+                              }}
+                            >
+                              <Edit2 className="h-3 w-3" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-6 w-6 text-zinc-400 hover:text-red-400"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteProject(p);
+                              }}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuGroup>
+                    <DropdownMenuSeparator className="bg-zinc-700/50" />
+                    <DropdownMenuItem onClick={() => setAddProjectOpen(true)} className="cursor-pointer focus:bg-zinc-700">
+                      <PlusCircle className="mr-2 h-4 w-4 text-zinc-400" />
+                      <span>Añadir Proyecto</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
 
               <Dialog open={addProjectOpen} onOpenChange={setAddProjectOpen}>
@@ -408,6 +443,60 @@ export default function Home() {
                 </DialogContent>
               </Dialog>
 
+              <Dialog open={editProjectOpen} onOpenChange={setEditProjectOpen}>
+                <DialogContent className="sm:max-w-[425px] bg-zinc-900 text-zinc-200 border-zinc-800/50">
+                  <DialogHeader>
+                    <DialogTitle>Editar Proyecto</DialogTitle>
+                    <DialogDescription className="text-zinc-400">
+                      Modifica el nombre o la ruta del proyecto.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="flex flex-col gap-4 py-4">
+                    <div className="flex flex-col space-y-2">
+                      <Label htmlFor="editName" className="text-xs text-zinc-400">Nombre del Proyecto</Label>
+                      <Input
+                        id="editName"
+                        type="text"
+                        value={editProjectName}
+                        onChange={(e) => setEditProjectName(e.target.value)}
+                        className="bg-zinc-800 border-zinc-700/50 focus-visible:ring-blue-500 text-zinc-200"
+                      />
+                    </div>
+                    <div className="flex flex-col space-y-2">
+                      <Label htmlFor="editPath" className="text-xs text-zinc-400">Ruta (Path)</Label>
+                      <div className="flex w-full items-center space-x-2">
+                        <Input
+                          id="editPath"
+                          type="text"
+                          value={editProjectPath}
+                          onChange={(e) => setEditProjectPath(e.target.value)}
+                          className="flex-1 bg-zinc-800 border-zinc-700/50 focus-visible:ring-blue-500 text-zinc-200"
+                        />
+                        <Button onClick={async () => {
+                          try {
+                            const { open } = await import("@tauri-apps/plugin-dialog");
+                            const selected = await open({
+                              directory: true,
+                              multiple: false,
+                            });
+                            if (selected && typeof selected === "string") {
+                              setEditProjectPath(selected);
+                            }
+                          } catch (err) {
+                            console.error("Failed to open dialog:", err);
+                          }
+                        }} variant="outline" className="px-3 bg-zinc-800 border-zinc-700/50 hover:bg-zinc-700 text-zinc-300">
+                          ...
+                        </Button>
+                      </div>
+                    </div>
+                    <Button onClick={handleEditProject} disabled={!editProjectName || !editProjectPath} className="w-full bg-blue-600 hover:bg-blue-500 shadow-lg shadow-blue-500/20 text-white border-none mt-2">
+                      Guardar Cambios
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+
               {/* 2. Widget de Git Status */}
               {projectId && <GitStatusWidget projectId={projectId} key={projectId} />}
 
@@ -427,10 +516,21 @@ export default function Home() {
                 </CardContent>
               </Card>
             </div>
-          </ScrollArea>
-        </ResizablePanel>
+            </ScrollArea>
+            <div className="p-4 border-t border-zinc-800/50 bg-[#0a0a0a]">
+              <Button
+                variant="ghost"
+                className="w-full justify-start text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
+                onClick={() => setSettingsOpen(true)}
+              >
+                <Settings className="mr-2 h-4 w-4" />
+                Configuración
+              </Button>
+            </div>
+          </div>
+      </div>
 
-        {/* Toggle button visible only when left sidebar is collapsed */}
+      {/* Toggle button visible only when left sidebar is collapsed */}
         {!leftSidebarOpen && (
           <div className="absolute left-2 top-4 z-50">
             <Button 
@@ -444,10 +544,8 @@ export default function Home() {
           </div>
         )}
 
-        <ResizableHandle className="bg-zinc-800 w-1 hover:bg-blue-500 transition-colors" />
-
-        {/* MAIN CONTENT */}
-        <ResizablePanel defaultSize={rightSidebarOpen ? 50 : 80} minSize={30} className="min-w-0 min-h-0 overflow-hidden flex flex-col bg-[#151515]">
+      {/* MAIN CONTENT */}
+      <div className="flex-1 min-w-0 flex flex-col relative bg-[#151515] overflow-hidden">
           {projectId === null ? (
             <div className="flex-1 relative min-w-0 overflow-hidden">
               <div className="flex flex-col items-center justify-center h-full bg-[#151515] text-center px-4">
@@ -468,21 +566,13 @@ export default function Home() {
               </div>
             </>
           )}
-        </ResizablePanel>
+      </div>
 
-        <ResizableHandle className="bg-zinc-800 w-1 hover:bg-blue-500 transition-colors" />
-
-        {/* RIGHT AI SIDEBAR — always in DOM, collapsible */}
-        <ResizablePanel
-          panelRef={rightPanelRef}
-          defaultSize={0}
-          minSize={20}
-          maxSize={40}
-          collapsible={true}
-          collapsedSize={0}
-          onResize={(size) => setRightSidebarOpen(size.asPercentage > 0)}
-          className="bg-[#151515] flex flex-col border-l border-zinc-800/50 min-w-0 min-h-0 overflow-hidden"
-        >
+      {/* RIGHT AI SIDEBAR — fixed width, css transitioned */}
+      <div 
+        className={`flex-shrink-0 flex flex-col transition-all duration-300 ease-in-out border-zinc-800/50 bg-[#151515] overflow-hidden ${rightSidebarOpen ? 'w-[400px] border-l' : 'w-0 border-l-0'}`}
+      >
+        <div className="w-[400px] flex-1 flex flex-col min-h-0 overflow-hidden">
           <div className="flex items-center gap-2 px-4 py-2 border-b border-zinc-800/50 bg-[#0a0a0a]">
             <span className="text-sm font-medium text-zinc-300">SprintLogic AI</span>
             <div className="ml-auto flex items-center gap-1">
@@ -499,9 +589,10 @@ export default function Home() {
           <div className="flex-1 relative overflow-hidden">
             <SprintLogicChat projectId={projectId} />
           </div>
-        </ResizablePanel>
+        </div>
+      </div>
 
-        {/* FAB to open AI sidebar when collapsed */}
+      {/* FAB to open AI sidebar when collapsed */}
         {!rightSidebarOpen && (
           <div className="absolute right-4 bottom-4 z-50">
             <Button 
@@ -514,7 +605,6 @@ export default function Home() {
             </Button>
           </div>
         )}
-      </ResizablePanelGroup>
     </div>
   );
 }

@@ -1,20 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronRight, ChevronDown, File, Folder } from 'lucide-react';
 import { getProjectFiles } from '@/lib/api';
-
-interface FileNode {
-  name: string;
-  path: string;
-  type: 'file' | 'directory';
-  children?: FileNode[];
-}
+import { FileTreeNode } from '@/types';
 
 interface FileTreeProps {
   projectId: string;
   onFileSelect: (path: string) => void;
 }
 
-const TreeNode: React.FC<{ node: FileNode; onSelect: (path: string) => void; depth: number }> = ({ node, onSelect, depth }) => {
+const TreeNode: React.FC<{ node: FileTreeNode; onSelect: (path: string) => void; depth: number }> = ({ node, onSelect, depth }) => {
   const [isOpen, setIsOpen] = useState(false);
   const paddingLeft = `${depth * 12 + 8}px`;
 
@@ -54,7 +48,7 @@ const TreeNode: React.FC<{ node: FileNode; onSelect: (path: string) => void; dep
 };
 
 export default function FileTree({ projectId, onFileSelect }: FileTreeProps) {
-  const [tree, setTree] = useState<FileNode | null>(null);
+  const [tree, setTree] = useState<FileTreeNode | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -62,21 +56,27 @@ export default function FileTree({ projectId, onFileSelect }: FileTreeProps) {
     if (!projectId) return;
     
     let isMounted = true;
-    setLoading(true);
     
-    getProjectFiles(projectId)
-      .then(data => {
+    const loadFiles = async () => {
+      if (isMounted) setLoading(true);
+      try {
+        const data = await getProjectFiles(projectId);
         if (isMounted) {
           setTree(data);
           setError(null);
         }
-      })
-      .catch(err => {
-        if (isMounted) setError(err.message);
-      })
-      .finally(() => {
-        if (isMounted) setLoading(false);
-      });
+      } catch (err) {
+        if (isMounted) {
+          setError(err instanceof Error ? err.message : String(err));
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadFiles();
       
     return () => { isMounted = false; };
   }, [projectId]);

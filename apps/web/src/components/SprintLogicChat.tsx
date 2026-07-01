@@ -50,9 +50,10 @@ export default function SprintLogicChat({ projectId }: { projectId: string | nul
 
       const data = await response.json();
       setMessages([...newMessages, { role: "assistant", content: data.response }]);
-    } catch (e: any) {
+    } catch (e) {
       console.error(e);
-      setMessages([...newMessages, { role: "system", content: `Error: ${e.message}` }]);
+      const errMsg = e instanceof Error ? e.message : String(e);
+      setMessages([...newMessages, { role: "system", content: `Error: ${errMsg}` }]);
     } finally {
       setLoading(false);
     }

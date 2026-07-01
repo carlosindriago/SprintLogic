@@ -14,7 +14,7 @@ export const API_BASE_URL = 'http://127.0.0.1:8000/api/v1';
  * Retry wrapper: retries on network errors (e.g. backend not yet ready)
  * Does NOT retry on HTTP 4xx/5xx — those are real errors.
  */
-async function fetchWithRetry(
+export async function fetchWithRetry(
   input: RequestInfo,
   init?: RequestInit,
   maxRetries = 15,
@@ -63,6 +63,36 @@ export async function getProjects(): Promise<{ projects: Project[] }> {
   return response.json();
 }
 
+export async function updateProject(id: string, data: { name?: string, path?: string }): Promise<{ status: string }> {
+  const response = await fetchWithRetry(`${API_BASE_URL}/projects/${id}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+  });
+  
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Update failed: ${error}`);
+  }
+  
+  return response.json();
+}
+
+export async function deleteProject(id: string): Promise<{ status: string }> {
+  const response = await fetchWithRetry(`${API_BASE_URL}/projects/${id}`, {
+    method: 'DELETE',
+  });
+  
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Delete failed: ${error}`);
+  }
+  
+  return response.json();
+}
+
 export async function getProjectGraph(projectId: string): Promise<GraphData> {
   const response = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/graph`);
   
@@ -87,6 +117,16 @@ export const getFileContent = async (projectId: string, path: string): Promise<s
   return data.content;
 };
 
+export const saveFileContent = async (projectId: string, path: string, content: string): Promise<{ status: string }> => {
+  const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/file/content?path=${encodeURIComponent(path)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content }),
+  });
+  if (!res.ok) throw new Error("Failed to save file content");
+  return res.json();
+};
+
 export const getCommitDetails = async (projectId: string, hash: string): Promise<CommitDetails> => {
   const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/git/commits/${hash}`);
   if (!res.ok) throw new Error("Failed to fetch commit details");
@@ -104,7 +144,7 @@ export const getCommitFileDiff = async (
 };
 
 export const saveApiKey = async (provider: string, apiKey: string): Promise<{ status: string }> => {
-  const response = await fetchWithRetry(`${API_BASE_URL}/api-key/${provider}`, {
+  const response = await fetchWithRetry(`${API_BASE_URL}/settings/api-key/${provider}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

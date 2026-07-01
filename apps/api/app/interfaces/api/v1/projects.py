@@ -17,6 +17,9 @@ router = APIRouter()
 class ScanRequest(BaseModel):
     path: str
 
+class FileContentUpdate(BaseModel):
+    content: str
+
 @router.get("/projects")
 async def get_projects(session: AsyncSession = Depends(get_db_session)):
     repo = SQLAlchemyProjectRepository(session)
@@ -41,6 +44,38 @@ async def scan_project(request: ScanRequest, session: AsyncSession = Depends(get
     await scan_codebase_usecase.execute(saved_project.id, request.path)
     
     return {"project_id": str(saved_project.id)}
+
+class UpdateProjectRequest(BaseModel):
+    name: str | None = None
+    path: str | None = None
+
+@router.put("/projects/{project_id}")
+async def update_project(project_id: str, request: UpdateProjectRequest, session: AsyncSession = Depends(get_db_session)):
+    try:
+        project_uuid = UUID(project_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+        
+    repo = SQLAlchemyProjectRepository(session)
+    project = await repo.update_project(project_uuid, name=request.name, path=request.path)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+        
+    return {"status": "success", "project": {"id": str(project.id), "name": project.name, "path": project.path}}
+
+@router.delete("/projects/{project_id}")
+async def delete_project(project_id: str, session: AsyncSession = Depends(get_db_session)):
+    try:
+        project_uuid = UUID(project_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+        
+    repo = SQLAlchemyProjectRepository(session)
+    success = await repo.delete_project(project_uuid)
+    if not success:
+        raise HTTPException(status_code=404, detail="Project not found")
+        
+    return {"status": "success"}
 
 @router.get("/projects/{project_id}/graph")
 async def get_project_graph(project_id: str, session: AsyncSession = Depends(get_db_session)):
@@ -175,19 +210,53 @@ async def get_project_file_content(project_id: str, path: str, session: AsyncSes
         raise HTTPException(status_code=404, detail="Project not found")
 
     import os
-    if not os.path.exists(path) or not os.path.isfile(path):
+    if os.path.isabs(path):
+        abs_path = os.path.abspath(path)
+    else:
+        abs_path = os.path.abspath(os.path.join(project.path, path))
+
+    if not os.path.exists(abs_path) or not os.path.isfile(abs_path):
         raise HTTPException(status_code=404, detail="File not found")
         
     # Basic security check: ensure path is inside project.path
-    if not os.path.abspath(path).startswith(os.path.abspath(project.path)):
+    if not abs_path.startswith(os.path.abspath(project.path)):
         raise HTTPException(status_code=403, detail="Path is outside project directory")
 
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(abs_path, "r", encoding="utf-8") as f:
             content = f.read()
         return {"content": content}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to read file: {str(e)}")
+
+@router.put("/projects/{project_id}/file/content")
+async def update_project_file_content(project_id: str, path: str, payload: FileContentUpdate, session: AsyncSession = Depends(get_db_session)):
+    try:
+        project_uuid = UUID(project_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+
+    repo = SQLAlchemyProjectRepository(session)
+    project = await repo.get_project(project_uuid)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    import os
+    if os.path.isabs(path):
+        abs_path = os.path.abspath(path)
+    else:
+        abs_path = os.path.abspath(os.path.join(project.path, path))
+    
+    # Basic security check: ensure path is inside project.path
+    if not abs_path.startswith(os.path.abspath(project.path)):
+        raise HTTPException(status_code=403, detail="Path is outside project directory")
+
+    try:
+        with open(abs_path, "w", encoding="utf-8") as f:
+            f.write(payload.content)
+        return {"status": "success"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to write file: {str(e)}")
 
 from sse_starlette.sse import EventSourceResponse
 import asyncio

@@ -40,6 +40,36 @@ class SQLAlchemyProjectRepository:
             )
         return None
         
+    async def update_project(self, project_id: UUID, name: str | None = None, path: str | None = None) -> Project | None:
+        model = await self.session.get(ProjectModel, project_id)
+        if model:
+            if name is not None:
+                model.name = name
+            if path is not None:
+                model.path = path
+            await self.session.flush()
+            return Project(
+                id=model.id, 
+                path=model.path, 
+                name=model.name,
+                last_opened=model.last_opened,
+                created_at=model.created_at
+            )
+        return None
+
+    async def delete_project(self, project_id: UUID) -> bool:
+        model = await self.session.get(ProjectModel, project_id)
+        if model:
+            # We must delete associated graph nodes first to avoid foreign key constraints
+            from app.infrastructure.db.models import GraphNodeModel
+            from sqlalchemy import delete
+            await self.session.execute(delete(GraphNodeModel).where(GraphNodeModel.project_id == project_id))
+            
+            await self.session.delete(model)
+            await self.session.flush()
+            return True
+        return False
+        
     async def get_all_projects(self) -> list[Project]:
         result = await self.session.execute(select(ProjectModel).order_by(ProjectModel.last_opened.desc().nullslast()))
         models = result.scalars().all()
