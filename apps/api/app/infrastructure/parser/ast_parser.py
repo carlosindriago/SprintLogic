@@ -58,7 +58,8 @@ def extract_nodes_from_code(project_id: UUID, file_path: str, code: bytes, ext: 
     if not lang:
         return [], []
         
-    parser = tree_sitter.Parser(lang)
+    parser = tree_sitter.Parser()
+    parser.language = lang
     tree = parser.parse(code)
     
     nodes = []
