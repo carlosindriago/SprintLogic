@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Dict, Any
 from uuid import UUID
+from pathlib import Path
 
 from app.infrastructure.db.database import get_db_session
 from app.infrastructure.git.git_gateway import LocalGitGateway
@@ -104,30 +105,100 @@ async def get_project_graph(project_id: str, session: AsyncSession = Depends(get
     # Filter edges to only include those between valid nodes
     filtered_edges = [e for e in edges if e.source_id in valid_node_ids and e.target_id in valid_node_ids]
     
+    # Calculate degrees
+    in_degree = {n_id: 0 for n_id in valid_node_ids}
+    out_degree = {n_id: 0 for n_id in valid_node_ids}
+    adj = {n_id: [] for n_id in valid_node_ids}
+    
+    for e in filtered_edges:
+        in_degree[e.target_id] += 1
+        out_degree[e.source_id] += 1
+        adj[e.source_id].append(e.target_id)
+        
+    # Tarjan's SCC to find cycles
+    index_counter = [0]
+    index = {}
+    lowlink = {}
+    stack = []
+    on_stack = set()
+    sccs = []
+    
+    def strongconnect(v):
+        index[v] = index_counter[0]
+        lowlink[v] = index_counter[0]
+        index_counter[0] += 1
+        stack.append(v)
+        on_stack.add(v)
+        
+        for w in adj[v]:
+            if w not in index:
+                strongconnect(w)
+                lowlink[v] = min(lowlink[v], lowlink[w])
+            elif w in on_stack:
+                lowlink[v] = min(lowlink[v], index[w])
+                
+        if lowlink[v] == index[v]:
+            scc = set()
+            while True:
+                w = stack.pop()
+                on_stack.remove(w)
+                scc.add(w)
+                if w == v:
+                    break
+            sccs.append(scc)
+            
+    for v in adj:
+        if v not in index:
+            strongconnect(v)
+            
+    node_to_scc = {}
+    for i, scc in enumerate(sccs):
+        if len(scc) > 1:
+            for v in scc:
+                node_to_scc[v] = i
+    
     nodes_dict = []
     for n in filtered_nodes:
         label_val = n.label.value if hasattr(n.label, 'value') else n.label
+        
+        try:
+            rel_path = os.path.relpath(n.file_path, project_path)
+            folder = os.path.dirname(rel_path) or "/"
+        except Exception:
+            folder = "/"
+            
         node_dict = {
             "id": n.id,
             "label": label_val,
             "name": n.name,
-            "file_path": n.file_path
+            "file_path": n.file_path,
+            "folder": folder,
+            "in_degree": in_degree.get(n.id, 0),
+            "out_degree": out_degree.get(n.id, 0)
         }
         if label_val == "File":
             try:
                 node_dict["size"] = os.path.getsize(n.file_path)
+                with open(n.file_path, 'r', encoding='utf-8') as f:
+                    node_dict["loc"] = sum(1 for _ in f)
             except Exception:
                 node_dict["size"] = 1000 # default fallback
+                node_dict["loc"] = 0
         nodes_dict.append(node_dict)
     
-    links_dict = [
-        {
+    links_dict = []
+    for e in filtered_edges:
+        is_cycle = False
+        if e.source_id in node_to_scc and e.target_id in node_to_scc:
+            if node_to_scc[e.source_id] == node_to_scc[e.target_id]:
+                is_cycle = True
+                
+        links_dict.append({
             "source": e.source_id,
             "target": e.target_id,
-            "type": e.type.value if hasattr(e.type, 'value') else e.type
-        }
-        for e in filtered_edges
-    ]
+            "type": e.type.value if hasattr(e.type, 'value') else e.type,
+            "is_cycle": is_cycle
+        })
     
     return {"nodes": nodes_dict, "links": links_dict}
 
@@ -210,20 +281,19 @@ async def get_project_file_content(project_id: str, path: str, session: AsyncSes
         raise HTTPException(status_code=404, detail="Project not found")
 
     import os
-    if os.path.isabs(path):
-        abs_path = os.path.abspath(path)
-    else:
-        abs_path = os.path.abspath(os.path.join(project.path, path))
+    project_root = Path(project.path).resolve()
+    target = Path(path)
+    candidate = (target if target.is_absolute() else project_root / target).resolve()
 
-    if not os.path.exists(abs_path) or not os.path.isfile(abs_path):
-        raise HTTPException(status_code=404, detail="File not found")
-        
-    # Basic security check: ensure path is inside project.path
-    if not abs_path.startswith(os.path.abspath(project.path)):
+    # Security check FIRST: must be strictly inside the project root.
+    if not candidate.is_relative_to(project_root):
         raise HTTPException(status_code=403, detail="Path is outside project directory")
 
+    if not candidate.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+
     try:
-        with open(abs_path, "r", encoding="utf-8") as f:
+        with open(candidate, "r", encoding="utf-8") as f:
             content = f.read()
         return {"content": content}
     except Exception as e:
@@ -242,17 +312,19 @@ async def update_project_file_content(project_id: str, path: str, payload: FileC
         raise HTTPException(status_code=404, detail="Project not found")
 
     import os
-    if os.path.isabs(path):
-        abs_path = os.path.abspath(path)
-    else:
-        abs_path = os.path.abspath(os.path.join(project.path, path))
-    
-    # Basic security check: ensure path is inside project.path
-    if not abs_path.startswith(os.path.abspath(project.path)):
+    project_root = Path(project.path).resolve()
+    target = Path(path)
+    candidate = (target if target.is_absolute() else project_root / target).resolve()
+
+    # Security check FIRST: must be strictly inside the project root.
+    if not candidate.is_relative_to(project_root):
         raise HTTPException(status_code=403, detail="Path is outside project directory")
 
+    if not candidate.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+
     try:
-        with open(abs_path, "w", encoding="utf-8") as f:
+        with open(candidate, "w", encoding="utf-8") as f:
             f.write(payload.content)
         return {"status": "success"}
     except Exception as e:
