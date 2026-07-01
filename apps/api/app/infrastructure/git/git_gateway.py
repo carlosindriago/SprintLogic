@@ -83,12 +83,13 @@ class LocalGitGateway:
 
     async def get_diff(self, repo_path: str) -> str:
         """
-        Stages all changes and returns the cached diff.
-        Useful for generating AI commit messages.
+        Returns a diff of current working tree changes without modifying it.
+        Uses `git diff HEAD` so the AI sees the cumulative delta against the
+        last commit (staged + unstaged) but NEVER stages anything on behalf
+        of the user. Useful for generating AI commit message suggestions.
         """
         try:
-            await self._run_command(repo_path, 'add', '-A')
-            diff = await self._run_command(repo_path, 'diff', '--cached')
+            diff = await self._run_command(repo_path, 'diff', 'HEAD')
             return diff
         except RuntimeError as e:
             raise RuntimeError(f"Error getting diff: {e}")
