@@ -324,12 +324,13 @@ export default function GitGraphTab({ projectId }: { projectId: string }) {
         setActionLoading(false);
         
         if (res.ok) {
-          if (res.data && res.data.status === 'success') {
-            toast.success(res.data.message);
+          const resData = (res as any).data;
+          if (resData && resData.status === 'success') {
+            toast.success(resData.message);
             setIsRemoteDialogOpen(false);
             setConfirmDialog(null);
           } else {
-            toast.error('Error al vincular', { description: res.data?.message || 'No se pudo conectar.' });
+            toast.error('Error al vincular', { description: resData?.message || 'No se pudo conectar.' });
             setConfirmDialog(null);
           }
         } else {
@@ -420,18 +421,20 @@ export default function GitGraphTab({ projectId }: { projectId: string }) {
 
   const handleGenerateCommitMessage = async () => {
     setIsGeneratingMessage(true);
-    const res = await generateCommitMessage(projectId);
+    const defaultModel = localStorage.getItem("default_ai_model") || "gemini/gemini-2.5-flash";
+    const res = await generateCommitMessage(projectId, defaultModel);
     setIsGeneratingMessage(false);
     
-    if (res.ok && res.data?.status === 'success') {
-      if (res.data.message === "No hay cambios para hacer commit.") {
-        toast.info(res.data.message);
+    if (res.ok && (res as any).data?.status === 'success') {
+      const resData = (res as any).data;
+      if (resData.message === "No hay cambios para hacer commit.") {
+        toast.info(resData.message);
       } else {
-        setCommitMessage(res.data.message);
+        setCommitMessage(resData.message);
         toast.success('Mensaje generado');
       }
     } else {
-      toast.error('Error al generar', { description: res.data?.message || res.error || 'Fallo inesperado.' });
+      toast.error('Error al generar', { description: (res as any).data?.message || res.error || 'Fallo inesperado.' });
     }
   };
 

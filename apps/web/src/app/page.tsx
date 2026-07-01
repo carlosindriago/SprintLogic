@@ -30,10 +30,11 @@ import { cn } from "@/lib/utils";
 import { Settings, FolderOpen, ChevronRight, Edit2, Trash2, PlusCircle, ChevronsUpDown } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { scanProject, getProjects, saveApiKey, updateProject, deleteProject } from "@/lib/api";
+import { scanProject, getProjects, updateProject, deleteProject } from "@/lib/api";
 import { Switch } from "@/components/ui/switch";
 import SprintLogicChat from "@/components/SprintLogicChat";
 import KanbanBoard from "@/components/KanbanBoard";
+import LLMSettingsPanel from "@/components/LLMSettingsPanel";
 import FileTree from "@/components/FileTree";
 import { useTabsStore } from '@/store/tabsStore';
 import { useProjectStore } from '@/store/projectStore';
@@ -52,11 +53,6 @@ export default function Home() {
   const [projects, setProjects] = useState<Project[]>([]);
   const { projectId, setProjectId } = useProjectStore();
   const [loading, setLoading] = useState(false);
-
-  const [geminiKey, setGeminiKey] = useState("");
-  const [openAiKey, setOpenAiKey] = useState("");
-  const [anthropicKey, setAnthropicKey] = useState("");
-  const [openRouterKey, setOpenRouterKey] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [addProjectOpen, setAddProjectOpen] = useState(false);
   const [vimMode, setVimMode] = useState(false);
@@ -68,6 +64,7 @@ export default function Home() {
   const { accentColor, setAccentColor, uiScale, setUiScale } = useThemeStore();
   
   const [settingsTab, setSettingsTab] = useState<'llms' | 'appearance'>('llms');
+  const [defaultAiModel, setDefaultAiModel] = useState("gemini/gemini-2.5-flash");
 
   const fetchProjects = useCallback(async () => {
     try {
@@ -81,6 +78,8 @@ export default function Home() {
   useEffect(() => {
     let active = true;
     const load = async () => {
+      const savedModel = localStorage.getItem("default_ai_model");
+      if (savedModel) setDefaultAiModel(savedModel);
       if (active) await fetchProjects();
     };
     load();
@@ -250,46 +249,10 @@ export default function Home() {
                     <div className="grid gap-4 py-2">
                       {settingsTab === 'llms' ? (
                         <>
-                          <div className="grid grid-cols-4 items-center gap-4">
-                            <Label htmlFor="gemini" className="text-right text-xs">Gemini Key</Label>
-                            <Input
-                              id="gemini"
-                              type="password"
-                              value={geminiKey}
-                              onChange={(e) => setGeminiKey(e.target.value)}
-                              className="col-span-3 bg-zinc-800 border-zinc-700/50"
-                            />
-                          </div>
-                          <div className="grid grid-cols-4 items-center gap-4">
-                            <Label htmlFor="openai" className="text-right text-xs">OpenAI Key</Label>
-                            <Input
-                              id="openai"
-                              type="password"
-                              value={openAiKey}
-                              onChange={(e) => setOpenAiKey(e.target.value)}
-                              className="col-span-3 bg-zinc-800 border-zinc-700/50"
-                            />
-                          </div>
-                          <div className="grid grid-cols-4 items-center gap-4">
-                            <Label htmlFor="anthropic" className="text-right text-xs">Anthropic Key</Label>
-                            <Input
-                              id="anthropic"
-                              type="password"
-                              value={anthropicKey}
-                              onChange={(e) => setAnthropicKey(e.target.value)}
-                              className="col-span-3 bg-zinc-800 border-zinc-700/50"
-                            />
-                          </div>
-                          <div className="grid grid-cols-4 items-center gap-4">
-                            <Label htmlFor="openrouter" className="text-right text-xs">OpenRouter Key</Label>
-                            <Input
-                              id="openrouter"
-                              type="password"
-                              value={openRouterKey}
-                              onChange={(e) => setOpenRouterKey(e.target.value)}
-                              className="col-span-3 bg-zinc-800 border-zinc-700/50"
-                            />
-                          </div>
+                          <LLMSettingsPanel 
+                            defaultAiModel={defaultAiModel} 
+                            setDefaultAiModel={setDefaultAiModel} 
+                          />
                           <div className="flex items-center space-x-2 pt-2 border-t border-zinc-800/50 mt-2">
                             <Switch id="vim-mode" checked={vimMode} onCheckedChange={setVimMode} />
                             <Label htmlFor="vim-mode">Habilitar Modo Vim</Label>
@@ -326,19 +289,8 @@ export default function Home() {
                         </>
                       )}
                     </div>
-                    <div className="flex justify-end">
-                      <Button onClick={async () => {
-                        try {
-                          if (geminiKey) await saveApiKey("gemini", geminiKey);
-                          if (openAiKey) await saveApiKey("openai", openAiKey);
-                          if (anthropicKey) await saveApiKey("anthropic", anthropicKey);
-                          if (openRouterKey) await saveApiKey("openrouter", openRouterKey);
-                          setSettingsOpen(false);
-                          alert("Configuración guardada correctamente");
-                        } catch {
-                          alert("Error al guardar la configuración");
-                        }
-                      }}>Guardar Configuración</Button>
+                    <div className="flex justify-end mt-4">
+                      <Button onClick={() => setSettingsOpen(false)}>Cerrar Configuración</Button>
                     </div>
                   </DialogContent>
                 </Dialog>

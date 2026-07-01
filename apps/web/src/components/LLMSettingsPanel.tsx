@@ -77,7 +77,8 @@ export default function LLMSettingsPanel({
     }
   };
 
-  const handleModelSelect = (modelId: string) => {
+  const handleModelSelect = (modelId: string | null) => {
+    if (!modelId) return;
     const fullModelString = `${activeProvider}/${modelId}`;
     setDefaultAiModel(fullModelString);
     localStorage.setItem("default_ai_model", fullModelString);
