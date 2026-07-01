@@ -52,7 +52,7 @@
 
 ## 6. Reglas de datos
 
-- PostgreSQL es la verdad del sistema;
+- SQLite local es la fuente de verdad del sistema;
 - no borrar datos operativos sin política definida;
 - todo cálculo KPI debe tener fórmula documentada;
 - no confiar en tiempo enviado por el cliente sin validación;
