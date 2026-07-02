@@ -27,7 +27,7 @@ export default function PomodoroTimer({ projectId }: PomodoroTimerProps) {
   
   // Post-Session Prompt Modal
   const [showCompletionPrompt, setShowCompletionPrompt] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -254,7 +254,7 @@ export default function PomodoroTimer({ projectId }: PomodoroTimerProps) {
 
   // SVG Progress calculation
   const percentage = duration > 0 ? (timeLeft / duration) * 100 : 0;
-  const strokeDashoffset = 283 - (283 * percentage) / 100;
+  const strokeDashoffset = 264 - (264 * percentage) / 100;
 
   if (!projectId) return null;
 
@@ -263,14 +263,14 @@ export default function PomodoroTimer({ projectId }: PomodoroTimerProps) {
       <div 
         className={cn(
           "fixed bottom-6 right-6 z-40 transition-all duration-300 rounded-xl border border-zinc-700 bg-zinc-900/90 backdrop-blur-md shadow-2xl flex flex-col overflow-hidden text-xs text-zinc-300",
-          isExpanded ? "w-[300px]" : "w-[60px] h-[60px] rounded-full justify-center items-center cursor-pointer border-blue-500/50"
+          isExpanded ? "w-[200px]" : "w-[44px] h-[44px] rounded-full justify-center items-center cursor-pointer border-blue-500/50"
         )}
         onClick={() => !isExpanded && setIsExpanded(true)}
       >
         {/* Collapsed State */}
         {!isExpanded && (
           <div className="relative flex items-center justify-center w-full h-full">
-            <span className="text-[10px] font-mono font-bold text-blue-400">
+            <span className="text-[9px] font-mono font-bold text-blue-400">
               {Math.floor(timeLeft / 60)}m
             </span>
             <div className="absolute inset-0.5 rounded-full border border-blue-500/20 animate-pulse" />
@@ -281,108 +281,108 @@ export default function PomodoroTimer({ projectId }: PomodoroTimerProps) {
         {isExpanded && (
           <>
             {/* Header */}
-            <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-800 bg-zinc-950/40">
-              <div className="flex items-center gap-1.5 font-semibold text-zinc-200">
-                <Clock className="w-3.5 h-3.5 text-orange-500" />
-                <span>Enfoque Pomodoro</span>
-                {isBreak && <span className="text-[9px] bg-green-950/40 border border-green-900/30 text-green-400 px-1.5 py-0.5 rounded font-mono font-bold animate-pulse">BREAK</span>}
+            <div className="flex items-center justify-between px-3 py-1.5 border-b border-zinc-800 bg-zinc-950/40">
+              <div className="flex items-center gap-1 font-semibold text-zinc-200">
+                <Clock className="w-3 h-3 text-orange-500" />
+                <span className="text-[11px]">Enfoque Pomodoro</span>
+                {isBreak && <span className="text-[8px] bg-green-950/40 border border-green-900/30 text-green-400 px-1 py-0.5 rounded font-mono font-bold animate-pulse">BREAK</span>}
               </div>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-0.5">
                 <button 
                   onClick={() => setIsExpanded(false)} 
-                  className="p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200"
+                  className="p-0.5 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200"
                 >
-                  <ChevronDown className="w-3.5 h-3.5" />
+                  <ChevronDown className="w-3 h-3" />
                 </button>
                 <button 
                   onClick={() => {
                     setActiveTask(null);
                     setIsRunning(false);
                   }} 
-                  className="p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200"
+                  className="p-0.5 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200"
                 >
-                  <X className="w-3.5 h-3.5" />
+                  <X className="w-3 h-3" />
                 </button>
               </div>
             </div>
 
             {/* Timer circle & control actions */}
-            <div className="p-4 flex flex-col items-center gap-4">
-              <div className="relative w-32 h-32 flex items-center justify-center">
+            <div className="p-2.5 flex flex-col items-center gap-3">
+              <div className="relative w-24 h-24 flex items-center justify-center">
                 <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-                  <circle cx="50" cy="50" r="45" fill="transparent" stroke="#27272a" strokeWidth="4" />
+                  <circle cx="50" cy="50" r="42" fill="transparent" stroke="#27272a" strokeWidth="3" />
                   <circle 
                     cx="50" 
                     cy="50" 
-                    r="45" 
+                    r="42" 
                     fill="transparent" 
                     stroke={isBreak ? "#10b981" : "#f97316"} 
-                    strokeWidth="4" 
-                    strokeDasharray="283"
+                    strokeWidth="3" 
+                    strokeDasharray="264"
                     strokeDashoffset={strokeDashoffset}
                     className="transition-all duration-300"
                   />
                 </svg>
                 <div className="absolute flex flex-col items-center font-mono">
-                  <span className="text-2xl font-bold text-zinc-100">{formatTimeLeft()}</span>
-                  <span className="text-[9px] text-zinc-500">Sesiones: {pomodorosCompleted}</span>
+                  <span className="text-lg font-bold text-zinc-100">{formatTimeLeft()}</span>
+                  <span className="text-[8px] text-zinc-500">Sesiones: {pomodorosCompleted}</span>
                 </div>
               </div>
 
               {/* Action Buttons */}
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-3">
                 <button 
                   onClick={handleReset}
-                  className="p-2 rounded-full bg-zinc-800 hover:bg-zinc-700 hover:text-zinc-100 transition-colors"
+                  className="p-1.5 rounded-full bg-zinc-800 hover:bg-zinc-700 hover:text-zinc-100 transition-colors"
                 >
-                  <RotateCcw className="w-4 h-4" />
+                  <RotateCcw className="w-3 h-3" />
                 </button>
                 <button 
                   onClick={handleTogglePlay}
                   className={cn(
-                    "p-3 rounded-full text-white shadow-lg transition-transform active:scale-95",
+                    "p-2 rounded-full text-white shadow-lg transition-transform active:scale-95",
                     isRunning ? "bg-zinc-700 hover:bg-zinc-600" : "bg-orange-600 hover:bg-orange-500"
                   )}
                 >
-                  {isRunning ? <Pause className="w-5 h-5 fill-white" /> : <Play className="w-5 h-5 fill-white ml-0.5" />}
+                  {isRunning ? <Pause className="w-4 h-4 fill-white" /> : <Play className="w-4 h-4 fill-white ml-0.5" />}
                 </button>
               </div>
 
               {/* Active Task Link */}
               {activeTask ? (
-                <div className="w-full flex flex-col gap-1.5 p-2.5 rounded-lg border border-zinc-800 bg-zinc-950/20">
+                <div className="w-full flex flex-col gap-1 p-2 rounded-lg border border-zinc-800 bg-zinc-950/20">
                   <div className="flex items-center justify-between">
-                    <span className="text-[9px] font-mono text-zinc-400">TAREA VINCULADA</span>
-                    <span className="text-[9px] font-semibold text-zinc-500 font-mono">{activeTask.id}</span>
+                    <span className="text-[8px] font-mono text-zinc-400">TAREA VINCULADA</span>
+                    <span className="text-[8px] font-semibold text-zinc-500 font-mono">{activeTask.id}</span>
                   </div>
-                  <p className="text-zinc-200 font-medium break-words text-[11px] line-clamp-2">
+                  <p className="text-zinc-200 font-medium break-words text-[10px] line-clamp-2">
                     {activeTask.content}
                   </p>
                   
                   {recommendedPreset && (
-                    <div className="flex items-start gap-1 text-[9px] text-blue-400 mt-1 border-t border-zinc-800/40 pt-1.5">
-                      <AlertCircle className="w-3.5 h-3.5 shrink-0 text-blue-500" />
+                    <div className="flex items-start gap-1 text-[8px] text-blue-400 mt-1 border-t border-zinc-800/40 pt-1.5">
+                      <AlertCircle className="w-3 h-3 shrink-0 text-blue-500" />
                       <span>{recommendedPreset.reason}</span>
                     </div>
                   )}
                 </div>
               ) : (
-                <div className="text-[10px] text-zinc-500 text-center py-2">
+                <div className="text-[9px] text-zinc-500 text-center py-1.5">
                   Arrastrá o iniciá un pomodoro desde una tarjeta en el Kanban.
                 </div>
               )}
 
               {/* Presets settings */}
-              <div className="w-full flex flex-col gap-2 border-t border-zinc-800 pt-3 mt-1">
-                <div className="flex justify-between items-center text-[10px] text-zinc-500">
+              <div className="w-full flex flex-col gap-1.5 border-t border-zinc-800 pt-2 mt-0.5">
+                <div className="flex justify-between items-center text-[9px] text-zinc-500">
                   <span>AJUSTES DE TIEMPO</span>
                   <span>{preset === 'custom' ? 'Personalizado' : preset === '25-5' ? '25m / 5m' : '50m / 10m'}</span>
                 </div>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-3 gap-1.5">
                   <button 
                     onClick={() => handleSelectPreset('25-5')}
                     className={cn(
-                      "py-1.5 rounded-md border text-[10px] font-medium transition-colors",
+                      "py-1 rounded-md border text-[9px] font-medium transition-colors",
                       preset === '25-5' ? "border-orange-500/40 bg-orange-950/10 text-orange-400" : "border-zinc-800 bg-zinc-950/20 text-zinc-400 hover:border-zinc-700"
                     )}
                   >
@@ -391,7 +391,7 @@ export default function PomodoroTimer({ projectId }: PomodoroTimerProps) {
                   <button 
                     onClick={() => handleSelectPreset('50-10')}
                     className={cn(
-                      "py-1.5 rounded-md border text-[10px] font-medium transition-colors",
+                      "py-1 rounded-md border text-[9px] font-medium transition-colors",
                       preset === '50-10' ? "border-orange-500/40 bg-orange-950/10 text-orange-400" : "border-zinc-800 bg-zinc-950/20 text-zinc-400 hover:border-zinc-700"
                     )}
                   >
@@ -400,23 +400,23 @@ export default function PomodoroTimer({ projectId }: PomodoroTimerProps) {
                   <button 
                     onClick={() => handleSelectPreset('custom', customWorkTime, customBreakTime)}
                     className={cn(
-                      "py-1.5 rounded-md border text-[10px] font-medium transition-colors",
+                      "py-1 rounded-md border text-[9px] font-medium transition-colors",
                       preset === 'custom' ? "border-orange-500/40 bg-orange-950/10 text-orange-400" : "border-zinc-800 bg-zinc-950/20 text-zinc-400 hover:border-zinc-700"
                     )}
                   >
-                    Personalizado
+                    Pers.
                   </button>
                 </div>
 
                 {preset === 'custom' && (
-                  <div className="grid grid-cols-2 gap-2 mt-1">
-                    <div className="flex flex-col gap-1">
-                      <span className="text-[9px] text-zinc-500">Trabajo (mins)</span>
+                  <div className="grid grid-cols-2 gap-1.5 mt-0.5">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-[8px] text-zinc-500">Trabajo (mins)</span>
                       <input 
                         type="number" 
                         min="1" 
                         max="180"
-                        className="bg-zinc-950/40 border border-zinc-800 px-2 py-1 rounded text-zinc-200 focus:outline-none"
+                        className="bg-zinc-950/40 border border-zinc-800 px-1.5 py-0.5 rounded text-[11px] text-zinc-200 focus:outline-none"
                         value={customWorkTime}
                         onChange={(e) => {
                           const val = Math.max(1, parseInt(e.target.value) || 25);
@@ -425,13 +425,13 @@ export default function PomodoroTimer({ projectId }: PomodoroTimerProps) {
                         }}
                       />
                     </div>
-                    <div className="flex flex-col gap-1">
-                      <span className="text-[9px] text-zinc-500">Recreo (mins)</span>
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-[8px] text-zinc-500">Recreo (mins)</span>
                       <input 
                         type="number" 
                         min="1" 
                         max="60"
-                        className="bg-zinc-950/40 border border-zinc-800 px-2 py-1 rounded text-zinc-200 focus:outline-none"
+                        className="bg-zinc-950/40 border border-zinc-800 px-1.5 py-0.5 rounded text-[11px] text-zinc-200 focus:outline-none"
                         value={customBreakTime}
                         onChange={(e) => {
                           const val = Math.max(1, parseInt(e.target.value) || 5);
