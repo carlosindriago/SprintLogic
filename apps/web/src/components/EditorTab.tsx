@@ -205,13 +205,13 @@ export default function EditorTab({
     monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
       noSemanticValidation: false,
       noSyntaxValidation: false,
-      diagnosticCodesToIgnore: [2307, 2792, 7026, 2875],
+      diagnosticCodesToIgnore: [2307, 2792, 7026, 2875, 2503],
     });
 
     monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
       noSemanticValidation: false,
       noSyntaxValidation: false,
-      diagnosticCodesToIgnore: [2307, 2792, 7026, 2875],
+      diagnosticCodesToIgnore: [2307, 2792, 7026, 2875, 2503],
     });
 
     // ── Global markers telemetry ──
