@@ -339,3 +339,17 @@ export const sendChatMessage = async (
   }
   return response.json() as Promise<ChatResponsePayload>;
 };
+
+export interface AnalyzeResult {
+  tech_stack: Record<string, number>;
+  total_files: number;
+  global_markers: Record<string, unknown>;
+}
+
+export const analyzeProject = async (projectId: string): Promise<AnalyzeResult> => {
+  const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/analyze`, {
+    method: 'POST',
+  });
+  if (!res.ok) throw new Error("Failed to analyze project");
+  return res.json();
+};

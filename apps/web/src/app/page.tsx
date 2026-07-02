@@ -26,10 +26,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Settings, FolderOpen, ChevronRight, Edit2, Trash2, PlusCircle, ChevronsUpDown, FilePlus, RefreshCw } from "lucide-react";
+import { Settings, FolderOpen, ChevronRight, Edit2, Trash2, PlusCircle, ChevronsUpDown, FilePlus, RefreshCw, Scan } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useState, useEffect, useCallback } from "react";
-import { scanProject, getProjects, updateProject, deleteProject } from "@/lib/api";
+import { scanProject, getProjects, updateProject, deleteProject, analyzeProject } from "@/lib/api";
 import { Switch } from "@/components/ui/switch";
 import SprintLogicChat from "@/components/SprintLogicChat";
 import KanbanBoard from "@/components/KanbanBoard";
@@ -44,6 +44,9 @@ import GitGraphTab from '@/components/GitGraphTab';
 import InsightDashboard from '@/components/InsightDashboard';
 import PomodoroTimer from "@/components/PomodoroTimer";
 import NewFileDialog from "@/components/NewFileDialog";
+import ProjectInsightsPanel from "@/components/ProjectInsightsPanel";
+import { useProjectInsightsStore } from "@/store/projectInsightsStore";
+import { toast } from "sonner";
 
 // Monaco bundles are large and depend on `window`/`document`. They MUST
 // never enter the server bundle — that is what was pegging the CPU on
@@ -178,6 +181,20 @@ export default function Home() {
       name: filePath.split('/').pop() || filePath,
       file_path: filePath,
     });
+  };
+
+  const handleAnalyzeProject = async () => {
+    if (!projectId) return;
+    const { setLoading, setData } = useProjectInsightsStore.getState();
+    setLoading(true);
+    try {
+      const result = await analyzeProject(projectId);
+      setData(result);
+      toast.success(`Análisis completado: ${result.total_files} archivos escaneados`);
+    } catch {
+      toast.error("Error al analizar el proyecto");
+      useProjectInsightsStore.getState().setLoading(false);
+    }
   };
 
   const handleFileTreeSelect = (path: string) => {
@@ -509,6 +526,15 @@ export default function Home() {
                       >
                         <RefreshCw className="h-3.5 w-3.5" />
                       </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 text-zinc-400 hover:text-white hover:bg-zinc-700"
+                        onClick={handleAnalyzeProject}
+                        title="Analizar Proyecto"
+                      >
+                        <Scan className="h-3.5 w-3.5" />
+                      </Button>
                     </div>
                   </div>
                 </CardHeader>
@@ -528,6 +554,8 @@ export default function Home() {
                   )}
                 </CardContent>
               </Card>
+
+              <ProjectInsightsPanel />
             </div>
           </div>
           <div className="p-4 border-t border-zinc-800/50 bg-[#0a0a0a]">
