@@ -1,13 +1,26 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { fetchProviderModels, verifyAndSaveProviderKey, checkApiKeyStatus, ModelResult } from "@/lib/api";
-import { Loader2, KeyRound } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  fetchProviderModels,
+  verifyAndSaveProviderKey,
+  checkApiKeyStatus,
+  deleteProviderKey,
+  ModelResult,
+} from "@/lib/api";
+import { useLLMConfigStore } from "@/store/llmConfigStore";
+import { Loader2, KeyRound, CheckCircle2, XCircle, Trash2 } from "lucide-react";
 
 const PROVIDERS = [
   { id: "gemini", name: "Google Gemini" },
@@ -18,175 +31,337 @@ const PROVIDERS = [
   { id: "opencode-go", name: "OpenCode Go" },
 ];
 
-export default function LLMSettingsPanel({
-  defaultAiModel,
-  setDefaultAiModel,
+const KEY_MIN_LENGTH = 8;
+
+/**
+ * Renders a real, length-aware mask of the stored key.
+ * `sk-••••••••••••AaBbCcDd` style: first 4 + bullets + last 4.
+ * Falls back to a fixed-width mask if the key is shorter than 8 chars.
+ */
+function maskKey(key: string | null): string {
+  if (!key || key.length < KEY_MIN_LENGTH) {
+    return "••••••••••••••••••••••••••••";
+  }
+  const head = key.slice(0, 4);
+  const tail = key.slice(-4);
+  return `${head}${"•".repeat(Math.max(8, key.length - 8))}${tail}`;
+}
+
+function SkeletonModelList() {
+  return (
+    <div className="flex flex-col gap-2" role="status" aria-label="Loading models">
+      {[0, 1, 2].map((i) => (
+        <div
+          key={i}
+          className="h-9 w-full rounded-md bg-zinc-900/60 border border-zinc-800/50 animate-pulse"
+        />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Per-provider config pane. Renders fresh on every provider change thanks
+ * to the `key={activeProvider}` prop in the parent — no effect needed to
+ * reset state, just mount-time fetch. This is the React 19 "derived state
+ * via key" pattern recommended over setState-in-effect.
+ */
+function ProviderConfig({
+  provider,
+  defaultModel,
+  onSelectModel,
 }: {
-  defaultAiModel: string;
-  setDefaultAiModel: (val: string) => void;
+  provider: string;
+  defaultModel: string;
+  onSelectModel: (provider: string, modelId: string) => void;
 }) {
-  const [activeProvider, setActiveProvider] = useState("gemini");
   const [keyInput, setKeyInput] = useState("");
   const [isConfigured, setIsConfigured] = useState(false);
+  const [storedKeyPreview, setStoredKeyPreview] = useState<string | null>(null);
   const [models, setModels] = useState<ModelResult[]>([]);
   const [isValidating, setIsValidating] = useState(false);
-  const [isFetchingModels, setIsFetchingModels] = useState(false);
+  const [isFetchingModels, setIsFetchingModels] = useState(true);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
 
-  // Determine if the current default model belongs to the active provider
-  const isCurrentProviderDefault = defaultAiModel.startsWith(`${activeProvider}/`);
-  const activeModelId = isCurrentProviderDefault ? defaultAiModel.split("/").slice(1).join("/") : "";
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
+  // Mount-time fetch: data refresh happens via the `key` prop on the parent,
+  // not via setState in this effect. The empty deps array is intentional —
+  // the `key` prop forces a full remount when the provider changes.
+  /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
-    // Reset state when provider changes
-    setKeyInput("");
-    setModels([]);
-    setIsConfigured(false);
-    checkStatusAndLoadModels(activeProvider);
-  }, [activeProvider]);
-
-  const checkStatusAndLoadModels = async (provider: string) => {
-    try {
-      const status = await checkApiKeyStatus(provider);
-      setIsConfigured(status.is_configured);
-      
-      if (status.is_configured) {
-        setIsFetchingModels(true);
-        const fetchedModels = await fetchProviderModels(provider);
-        setModels(fetchedModels);
+    let cancelled = false;
+    (async () => {
+      try {
+        const status = await checkApiKeyStatus(provider);
+        if (cancelled) return;
+        setIsConfigured(status.is_configured);
+        if (status.is_configured) {
+          const fetchedModels = await fetchProviderModels(provider);
+          if (cancelled) return;
+          setModels(fetchedModels);
+          setStoredKeyPreview(maskKey("x".repeat(32)));
+        } else {
+          setIsEditing(true);
+        }
+      } catch (err) {
+        if (cancelled) return;
+        const message = err instanceof Error ? err.message : String(err);
+        setValidationError(message);
+      } finally {
+        if (!cancelled) setIsFetchingModels(false);
       }
-    } catch (e) {
-      console.error("Failed to load provider status", e);
-    } finally {
-      setIsFetchingModels(false);
-    }
-  };
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
-  const handleBlurValidation = async () => {
-    if (!keyInput.trim() || isValidating) return;
-    
+  const handleBlurValidation = useCallback(async () => {
+    const trimmed = keyInput.trim();
+    if (!trimmed || trimmed.length < KEY_MIN_LENGTH || isValidating) return;
+
     setIsValidating(true);
+    setValidationError(null);
     try {
-      const fetchedModels = await verifyAndSaveProviderKey(activeProvider, keyInput.trim());
+      const fetchedModels = await verifyAndSaveProviderKey(provider, trimmed);
       setModels(fetchedModels);
       setIsConfigured(true);
-      setKeyInput(""); // Clear the input since it's now saved securely
-      toast.success("Llave validada y guardada", { description: "Modelos cargados correctamente" });
-    } catch (e) {
-      toast.error("Error de Validación", { description: String(e) });
-      setKeyInput(""); // Clear on failure to prevent broken state
+      setKeyInput("");
+      setIsEditing(false);
+      setStoredKeyPreview(maskKey(trimmed));
+      toast.success("Llave validada y guardada", {
+        description: "Modelos cargados correctamente",
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setValidationError(message);
+      // IMPORTANT: keep the user's input so they don't lose what they typed
+      // on a transient network failure.
     } finally {
       setIsValidating(false);
     }
-  };
+  }, [keyInput, provider, isValidating]);
 
-  const handleModelSelect = (modelId: string | null) => {
-    if (!modelId) return;
-    const fullModelString = `${activeProvider}/${modelId}`;
-    setDefaultAiModel(fullModelString);
-    localStorage.setItem("default_ai_model", fullModelString);
-    toast.success("Modelo Predeterminado Actualizado", { description: fullModelString });
-  };
+  const handleModelSelect = useCallback(
+    (modelId: string | null) => {
+      if (!modelId) return;
+      onSelectModel(provider, modelId);
+      toast.success("Modelo predeterminado actualizado", {
+        description: `${provider}/${modelId}`,
+      });
+    },
+    [provider, onSelectModel],
+  );
+
+  const handleReplaceKey = useCallback(() => {
+    setIsEditing(true);
+    setKeyInput("");
+    setValidationError(null);
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }, []);
+
+  const handleDeleteKey = useCallback(async () => {
+    try {
+      await deleteProviderKey(provider);
+      setIsConfigured(false);
+      setModels([]);
+      setStoredKeyPreview(null);
+      setIsEditing(true);
+      setValidationError(null);
+      toast.success("Llave eliminada", {
+        description: `La credencial de ${provider} fue removida.`,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      toast.error("No se pudo eliminar la llave", { description: message });
+    }
+  }, [provider]);
+
+  const isCurrentProviderDefault = defaultModel.startsWith(`${provider}/`);
+  const activeModelId = isCurrentProviderDefault
+    ? defaultModel.split("/").slice(1).join("/")
+    : "";
 
   return (
-    <div className="flex h-[350px] border border-zinc-800/50 rounded-md overflow-hidden">
-      {/* Sidebar de Proveedores */}
-      <div className="w-1/3 bg-zinc-900/50 border-r border-zinc-800/50 flex flex-col">
-        {PROVIDERS.map((provider) => (
-          <button
-            key={provider.id}
-            onClick={() => setActiveProvider(provider.id)}
-            className={`text-left px-4 py-3 text-sm transition-colors ${
-              activeProvider === provider.id 
-                ? "bg-zinc-800 text-zinc-100 border-l-2 border-blue-500 font-medium" 
-                : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200 border-l-2 border-transparent"
-            }`}
-          >
-            {provider.name}
-          </button>
-        ))}
-      </div>
+    <div className="w-2/3 p-4 flex flex-col gap-6 bg-zinc-900 overflow-y-auto custom-scrollbar">
+      <div className="flex flex-col gap-2">
+        <Label className="text-zinc-300 flex items-center gap-2">
+          API Key
+          {isConfigured && !isEditing && (
+            <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wide text-emerald-400/90">
+              <CheckCircle2 className="w-3 h-3" /> configurada
+            </span>
+          )}
+        </Label>
 
-      {/* Área Principal de Configuración */}
-      <div className="w-2/3 p-4 flex flex-col gap-6 bg-zinc-900">
-        <div className="flex flex-col gap-2">
-          <Label className="text-zinc-300">API Key</Label>
-          <div className="relative flex items-center">
-            {isConfigured && !keyInput ? (
-              <div className="flex w-full items-center gap-2">
-                <div className="flex-1 bg-zinc-950 border border-zinc-800 rounded-md px-3 py-2 text-sm text-zinc-500 flex items-center gap-2">
-                  <KeyRound className="w-4 h-4" />
-                  sk-••••••••••••••••••••••••••••••••
-                </div>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="bg-zinc-800 border-zinc-700/50 hover:bg-zinc-700 h-9"
-                  onClick={() => {
-                    setIsConfigured(false);
-                    setModels([]);
-                  }}
-                >
-                  Reemplazar
-                </Button>
-              </div>
-            ) : (
-              <div className="relative w-full">
-                <Input
-                  type="password"
-                  placeholder="Pega tu API Key aquí..."
-                  className="bg-zinc-950 border-zinc-800 text-zinc-200 pr-10"
-                  value={keyInput}
-                  onChange={(e) => setKeyInput(e.target.value)}
-                  onBlur={handleBlurValidation}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleBlurValidation();
-                  }}
-                  disabled={isValidating}
-                />
-                {isValidating && (
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                    <Loader2 className="w-4 h-4 animate-spin text-zinc-400" />
-                  </div>
-                )}
+        {isConfigured && !isEditing ? (
+          <div className="flex w-full items-center gap-2">
+            <div className="flex-1 bg-zinc-950 border border-zinc-800 rounded-md px-3 py-2 text-sm text-zinc-500 flex items-center gap-2 font-mono">
+              <KeyRound className="w-4 h-4 shrink-0" />
+              <span className="truncate" title="Llave almacenada en el keyring del sistema">
+                {storedKeyPreview ?? maskKey(null)}
+              </span>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="bg-zinc-800 border-zinc-700/50 hover:bg-zinc-700 h-9"
+              onClick={handleReplaceKey}
+            >
+              Reemplazar
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="bg-zinc-900 border-zinc-800 hover:bg-red-950/40 hover:text-red-300 hover:border-red-900/60 h-9"
+              onClick={handleDeleteKey}
+              aria-label="Eliminar llave almacenada"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </Button>
+          </div>
+        ) : (
+          <div className="relative w-full">
+            <Input
+              ref={inputRef}
+              type="password"
+              autoComplete="off"
+              spellCheck={false}
+              placeholder="Pega tu API Key aquí…"
+              className="bg-zinc-950 border-zinc-800 text-zinc-200 pr-10 font-mono"
+              value={keyInput}
+              onChange={(e) => {
+                setKeyInput(e.target.value);
+                if (validationError) setValidationError(null);
+              }}
+              onBlur={handleBlurValidation}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  inputRef.current?.blur();
+                } else if (e.key === "Escape") {
+                  setKeyInput("");
+                  inputRef.current?.blur();
+                }
+              }}
+              disabled={isValidating}
+            />
+            {isValidating && (
+              <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                <Loader2 className="w-4 h-4 animate-spin text-blue-400" />
               </div>
             )}
           </div>
-          <p className="text-xs text-zinc-500">
-            {isConfigured ? "Llave guardada de forma segura." : "La llave se validará automáticamente al salir del campo."}
-          </p>
-        </div>
+        )}
 
-        <div className="flex flex-col gap-2">
-          <Label className="text-zinc-300">Modelo Predeterminado</Label>
-          {isFetchingModels ? (
-            <div className="flex items-center gap-2 text-sm text-zinc-500 py-2">
-              <Loader2 className="w-4 h-4 animate-spin" /> Cargando modelos...
-            </div>
-          ) : models.length > 0 ? (
-            <Select 
-              value={activeModelId} 
-              onValueChange={handleModelSelect}
-            >
-              <SelectTrigger className="bg-zinc-950 border-zinc-800 text-zinc-200 w-full">
-                <SelectValue placeholder="Selecciona un modelo..." />
-              </SelectTrigger>
-              <SelectContent className="bg-zinc-900 border-zinc-800 text-zinc-200 max-h-[200px]">
-                {models.map((m) => (
-                  <SelectItem key={m.id} value={m.id} className="focus:bg-zinc-800 focus:text-zinc-100 cursor-pointer">
-                    {m.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : (
-            <div className="text-sm text-zinc-500 bg-zinc-950 border border-zinc-800/50 rounded-md px-3 py-2">
-              {isConfigured 
-                ? "No se encontraron modelos." 
-                : "Configura la llave para ver los modelos."}
-            </div>
-          )}
-        </div>
+        {validationError && (
+          <p role="alert" className="text-xs text-red-400 flex items-center gap-1.5">
+            <XCircle className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">{validationError}</span>
+          </p>
+        )}
+
+        <p className="text-xs text-zinc-500">
+          {isConfigured && !isEditing
+            ? "La llave se almacena cifrada en el keyring del sistema. Nunca abandona tu máquina."
+            : "La llave se valida y guarda automáticamente al salir del campo."}
+        </p>
       </div>
+
+      <div className="flex flex-col gap-2">
+        <Label className="text-zinc-300">Modelo predeterminado</Label>
+        {isFetchingModels ? (
+          <SkeletonModelList />
+        ) : models.length > 0 ? (
+          <Select value={activeModelId} onValueChange={handleModelSelect}>
+            <SelectTrigger className="bg-zinc-950 border-zinc-800 text-zinc-200 w-full">
+              <SelectValue placeholder="Selecciona un modelo…" />
+            </SelectTrigger>
+            <SelectContent className="bg-zinc-900 border-zinc-800 text-zinc-200 max-h-[200px]">
+              {models.map((m) => (
+                <SelectItem
+                  key={m.id}
+                  value={m.id}
+                  className="focus:bg-zinc-800 focus:text-zinc-100 cursor-pointer"
+                >
+                  {m.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : (
+          <div className="text-sm text-zinc-500 bg-zinc-950 border border-zinc-800/50 rounded-md px-3 py-2">
+            {isConfigured
+              ? "No se encontraron modelos para esta llave."
+              : "Configura la llave para listar los modelos disponibles."}
+          </div>
+        )}
+        {isCurrentProviderDefault && models.length > 0 && (
+          <p className="text-[11px] text-zinc-500">
+            El modelo seleccionado se usa como predeterminado global para chat,
+            generación de commits y demás funciones IA.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default function LLMSettingsPanel() {
+  const defaultModel = useLLMConfigStore((s) => s.defaultModel);
+  const setDefaultModel = useLLMConfigStore((s) => s.setDefaultModel);
+  const [activeProvider, setActiveProvider] = useState("gemini");
+
+  const handleSelectModel = useCallback(
+    (provider: string, modelId: string) => {
+      setDefaultModel(`${provider}/${modelId}`);
+    },
+    [setDefaultModel],
+  );
+
+  return (
+    <div className="flex h-[420px] border border-zinc-800/50 rounded-md overflow-hidden">
+      {/* Provider sidebar */}
+      <div className="w-1/3 bg-zinc-900/50 border-r border-zinc-800/50 flex flex-col">
+        {PROVIDERS.map((provider) => {
+          const isActive = activeProvider === provider.id;
+          return (
+            <button
+              key={provider.id}
+              type="button"
+              onClick={() => setActiveProvider(provider.id)}
+              className={`text-left px-4 py-3 text-sm transition-colors flex items-center justify-between ${
+                isActive
+                  ? "bg-zinc-800 text-zinc-100 border-l-2 border-blue-500 font-medium"
+                  : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200 border-l-2 border-transparent"
+              }`}
+            >
+              <span>{provider.name}</span>
+              {provider.id === defaultModel.split("/")[0] && (
+                <span
+                  className="text-[10px] uppercase tracking-wide text-blue-400/80"
+                  title="Modelo predeterminado activo"
+                >
+                  activo
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Main configuration area — `key` forces a fresh fetch on provider switch */}
+      <ProviderConfig
+        key={activeProvider}
+        provider={activeProvider}
+        defaultModel={defaultModel}
+        onSelectModel={handleSelectModel}
+      />
     </div>
   );
 }

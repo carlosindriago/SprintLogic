@@ -193,8 +193,16 @@ export const verifyAndSaveProviderKey = async (provider: string, apiKey: string)
 };
 
 export const checkApiKeyStatus = async (provider: string): Promise<{ is_configured: boolean }> => {
-  const response = await fetchWithRetry(`${API_BASE_URL}/settings/api-key/${provider}/status`);
+  const response = await fetchWithRetry(`${API_BASE_URL}/settings/api-key/${provider}`);
   if (!response.ok) throw new Error(`Failed to check API key status for ${provider}`);
+  return response.json();
+};
+
+export const deleteProviderKey = async (provider: string): Promise<{ status: string }> => {
+  const response = await fetchWithRetry(`${API_BASE_URL}/settings/api-key/${provider}`, {
+    method: 'DELETE',
+  });
+  if (!response.ok) throw new Error(`Failed to delete API key for ${provider}`);
   return response.json();
 };
 

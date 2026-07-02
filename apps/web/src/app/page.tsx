@@ -28,7 +28,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Settings, FolderOpen, ChevronRight, Edit2, Trash2, PlusCircle, ChevronsUpDown } from "lucide-react";
 import dynamic from "next/dynamic";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { scanProject, getProjects, updateProject, deleteProject } from "@/lib/api";
 import { Switch } from "@/components/ui/switch";
 import SprintLogicChat from "@/components/SprintLogicChat";
@@ -62,9 +62,8 @@ export default function Home() {
   // Dashboard Tabs (Graph vs Kanban vs Insights)
   const { tabs, activeTabId, addTab } = useTabsStore();
   const { accentColor, setAccentColor, uiScale, setUiScale } = useThemeStore();
-  
+
   const [settingsTab, setSettingsTab] = useState<'llms' | 'appearance'>('llms');
-  const [defaultAiModel, setDefaultAiModel] = useState("gemini/gemini-2.5-flash");
 
   const fetchProjects = useCallback(async () => {
     try {
@@ -78,8 +77,6 @@ export default function Home() {
   useEffect(() => {
     let active = true;
     const load = async () => {
-      const savedModel = localStorage.getItem("default_ai_model");
-      if (savedModel) setDefaultAiModel(savedModel);
       if (active) await fetchProjects();
     };
     load();
@@ -249,10 +246,7 @@ export default function Home() {
                     <div className="grid gap-4 py-2">
                       {settingsTab === 'llms' ? (
                         <>
-                          <LLMSettingsPanel 
-                            defaultAiModel={defaultAiModel} 
-                            setDefaultAiModel={setDefaultAiModel} 
-                          />
+                          <LLMSettingsPanel />
                           <div className="flex items-center space-x-2 pt-2 border-t border-zinc-800/50 mt-2">
                             <Switch id="vim-mode" checked={vimMode} onCheckedChange={setVimMode} />
                             <Label htmlFor="vim-mode">Habilitar Modo Vim</Label>
