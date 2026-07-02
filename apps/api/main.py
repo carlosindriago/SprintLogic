@@ -6,6 +6,7 @@ from app.interfaces.api.v1.settings import router as settings_router
 from app.interfaces.api.v1.chat import router as chat_router
 from app.interfaces.api.v1.git import router as git_router
 from app.interfaces.api.v1.lsp import router as lsp_router
+from app.interfaces.api.v1.editor import router as editor_router
 
 app = FastAPI(title="sprintLogic API")
 
@@ -22,6 +23,7 @@ app.include_router(settings_router, prefix="/api/v1/settings")
 app.include_router(chat_router, prefix="/api/v1/chat")
 app.include_router(git_router, prefix="/api/v1/projects")
 app.include_router(lsp_router, prefix="/api/v1/lsp")
+app.include_router(editor_router, prefix="/api/v1/editor")
 
 
 @app.get("/health")
