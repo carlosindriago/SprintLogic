@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useTabsStore } from '@/store/tabsStore';
 import { useMarkersStore } from '@/store/markersStore';
 import { X } from 'lucide-react';
@@ -44,6 +45,14 @@ export default function TabBar({ onToggleAi, aiOpen }: TabBarProps) {
     if (tab.type === 'diff') return tab.data?.filePath ?? null;
     return null;
   };
+
+  useEffect(() => {
+    const tabPaths = tabs.map(getTabPath).filter(Boolean);
+    const matched = tabPaths.filter(p => p && markersFiles[p!]);
+    if (matched.length > 0) {
+      console.log('[tabbar] tabs with markers:', matched.map(p => `${p}: errors=${markersFiles[p!]?.errors} warnings=${markersFiles[p!]?.warnings}`));
+    }
+  }, [tabs, markersFiles]);
 
   return (
     <div className="flex bg-zinc-900 border-b border-zinc-800/50 overflow-x-auto overflow-y-hidden shrink-0">
