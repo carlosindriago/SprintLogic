@@ -16,15 +16,7 @@ cd apps/web
 npm install
 cd ../..
 
-echo "🐳 Levantando contenedores de Docker (Postgres & Redis)..."
-cd infra/docker
-docker-compose up -d postgres redis
-cd ../..
-
-echo "⏳ Esperando a que PostgreSQL inicie..."
-sleep 3
-
-echo "🗄️ Ejecutando migraciones de base de datos..."
+echo "🗄️ Inicializando base de datos SQLite local..."
 cd apps/api
 source .venv/bin/activate
 alembic upgrade head
