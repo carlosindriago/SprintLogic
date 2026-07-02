@@ -191,6 +191,13 @@ export default function FileTree({ projectId, onFileSelect, onNewFile, refreshKe
   const allFiles = useMarkersStore((s) => s.files);
 
   useEffect(() => {
+    const keys = Object.keys(allFiles);
+    if (keys.length > 0) {
+      console.log('[filetree] markers store keys:', keys, allFiles);
+    }
+  }, [allFiles]);
+
+  useEffect(() => {
     if (!projectId) return;
     
     let isMounted = true;
