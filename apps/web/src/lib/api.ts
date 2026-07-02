@@ -17,24 +17,28 @@ export const API_BASE_URL: string =
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
 
 /**
- * Retry wrapper: retries on network errors (e.g. backend not yet ready)
- * Does NOT retry on HTTP 4xx/5xx — those are real errors.
+ * Retry wrapper with exponential backoff.
+ * Retries on network errors (e.g. backend not yet ready, connection refused).
+ * Does NOT retry on HTTP 4xx/5xx — those are real errors from a live backend.
+ *
+ * Backoff sequence: 500ms → 1s → 2s → 4s → 8s (max 5 attempts, ~15.5s total).
  */
 export async function fetchWithRetry(
   input: RequestInfo,
   init?: RequestInit,
-  maxRetries = 15,
-  delayMs = 1000
+  maxRetries = 5,
+  baseDelayMs = 500
 ): Promise<Response> {
   let lastError: Error | null = null;
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       const response = await fetch(input, init);
       return response;
     } catch (err) {
       lastError = err as Error;
-      if (attempt < maxRetries - 1) {
-        await new Promise(resolve => setTimeout(resolve, delayMs));
+      if (attempt < maxRetries) {
+        const delay = baseDelayMs * Math.pow(2, attempt);
+        await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
   }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { GitBranch, GitCommit } from 'lucide-react';
 import { useTabsStore } from '@/store/tabsStore';
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -11,33 +11,29 @@ export default function GitStatusWidget({ projectId }: { projectId: string }) {
   const [loading, setLoading] = useState(true);
   const { addTab } = useTabsStore();
 
-  const fetchStatus = useCallback(async () => {
-    try {
-      const data = await getGitStatus(projectId);
-      setStatus(data);
-    } catch (e) {
-      console.error("Failed to fetch git status", e);
-    } finally {
-      setLoading(false);
-    }
-  }, [projectId]);
-
   useEffect(() => {
     let active = true;
-    
-    const loadData = async () => {
-      if (active) setLoading(true);
-      await fetchStatus();
+
+    const fetchStatus = async () => {
+      try {
+        const data = await getGitStatus(projectId);
+        if (active) {
+          setStatus(data);
+          setLoading(false);
+        }
+      } catch {
+        if (active) setLoading(false);
+      }
     };
 
-    loadData();
-    const interval = setInterval(fetchStatus, 5000); // Poll every 5s
-    
+    fetchStatus();
+    const interval = setInterval(fetchStatus, 30000);
+
     return () => {
       active = false;
       clearInterval(interval);
     };
-  }, [projectId, fetchStatus]);
+  }, [projectId]);
 
   const openGitGraph = () => {
     addTab({
