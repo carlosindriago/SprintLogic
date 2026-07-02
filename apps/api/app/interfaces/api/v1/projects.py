@@ -452,6 +452,44 @@ async def create_project_file(project_id: str, path: str, payload: FileContentUp
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create file: {str(e)}")
 
+IGNORE_DIRS = {"node_modules", ".git", ".next", "dist", "__pycache__", ".venv", "target", "build", ".turbo", "coverage"}
+
+@router.post("/projects/{project_id}/analyze")
+async def analyze_project(project_id: str, session: AsyncSession = Depends(get_db_session)):
+    try:
+        project_uuid = UUID(project_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+
+    repo = SQLAlchemyProjectRepository(session)
+    project = await repo.get_project(project_uuid)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    project_root = Path(project.path).resolve()
+    if not project_root.exists():
+        raise HTTPException(status_code=404, detail="Project path not found on disk")
+
+    import os
+    from collections import Counter
+
+    tech_stack: dict[str, int] = {}
+    total_files = 0
+
+    for dirpath, dirnames, filenames in os.walk(project_root):
+        dirnames[:] = [d for d in dirnames if d not in IGNORE_DIRS and not d.startswith('.')]
+        for filename in filenames:
+            ext = Path(filename).suffix.lower()
+            if ext:
+                tech_stack[ext] = tech_stack.get(ext, 0) + 1
+            total_files += 1
+
+    return {
+        "tech_stack": dict(sorted(tech_stack.items(), key=lambda x: x[1], reverse=True)),
+        "total_files": total_files,
+        "global_markers": {},
+    }
+
 from sse_starlette.sse import EventSourceResponse
 import asyncio
 from app.infrastructure.kanban_sync import kanban_sync
