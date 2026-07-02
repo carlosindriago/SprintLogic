@@ -192,13 +192,13 @@ export default function EditorTab({
     monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
       noSemanticValidation: false,
       noSyntaxValidation: false,
-      diagnosticCodesToIgnore: [2307, 2792],
+      diagnosticCodesToIgnore: [2307, 2792, 7026],
     });
 
     monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
       noSemanticValidation: false,
       noSyntaxValidation: false,
-      diagnosticCodesToIgnore: [2307, 2792],
+      diagnosticCodesToIgnore: [2307, 2792, 7026],
     });
 
     // ── Global markers telemetry ──
