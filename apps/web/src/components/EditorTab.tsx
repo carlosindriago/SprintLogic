@@ -5,7 +5,7 @@ import { getFileContent, saveFileContent, API_BASE_URL } from '@/lib/api';
 import { useTabsStore } from '@/store/tabsStore';
 import { useMarkersStore } from '@/store/markersStore';
 import type { GraphNode } from '@/types';
-import { Code2 } from 'lucide-react';
+import { Code2, ChevronRight } from 'lucide-react';
 
 interface LintDiagnostic {
   line: number;
@@ -370,6 +370,25 @@ export default function EditorTab({
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         </button>
       </div>
+
+      {filePath && (
+        <div className="flex items-center justify-between text-xs text-zinc-400 bg-zinc-900 px-3 py-1 border-b border-zinc-800/50 shrink-0">
+          <div className="flex items-center gap-0.5 truncate min-w-0">
+            {filePath.split('/').map((seg, i, arr) => (
+              i < arr.length - 1 ? (
+                <span key={i} className="flex items-center gap-0.5 min-w-0">
+                  <span className="truncate text-zinc-500">{seg}</span>
+                  <ChevronRight className="w-3 h-3 text-zinc-600 shrink-0" />
+                </span>
+              ) : (
+                <span key={i} className="text-zinc-300 font-medium truncate">{seg}</span>
+              )
+            ))}
+          </div>
+          <div className="shrink-0 ml-2">
+          </div>
+        </div>
+      )}
 
       <div className="flex-1 relative overflow-hidden">
         <Editor
