@@ -204,18 +204,25 @@ export default function EditorTab({
     // ── Global markers telemetry ──
     if (!markersListenerRegistered) {
       markersListenerRegistered = true;
-      monaco.editor.onDidChangeMarkers((uris: readonly Uri[]) => {
+
+      const syncMarkersForUri = (monacoInstance: typeof monaco, uri: Uri) => {
         const { setMarkers } = useMarkersStore.getState();
+        const allMarkers = monacoInstance.editor.getModelMarkers({ resource: uri });
+        const errors = allMarkers.filter((m: monacoEditor.IMarker) => m.severity === monacoInstance.MarkerSeverity.Error).length;
+        const warnings = allMarkers.filter((m: monacoEditor.IMarker) => m.severity === monacoInstance.MarkerSeverity.Warning).length;
+        const path = uri.path.startsWith('/') ? uri.path.slice(1) : uri.path;
+        setMarkers(path, { errors, warnings });
+      };
+
+      monaco.editor.onDidChangeMarkers((uris: readonly Uri[]) => {
         for (const uri of uris) {
-          const allMarkers = monaco.editor.getModelMarkers({ resource: uri });
-          const severityError = monaco.MarkerSeverity.Error;
-          const severityWarning = monaco.MarkerSeverity.Warning;
-          const errors = allMarkers.filter((m: monacoEditor.IMarker) => m.severity === severityError).length;
-          const warnings = allMarkers.filter((m: monacoEditor.IMarker) => m.severity === severityWarning).length;
-          const path = uri.path.startsWith('/') ? uri.path.slice(1) : uri.path;
-          setMarkers(path, { errors, warnings });
+          syncMarkersForUri(monaco, uri);
         }
       });
+
+      for (const model of monaco.editor.getModels()) {
+        syncMarkersForUri(monaco, model.uri);
+      }
     }
 
     if (vimMode) {
