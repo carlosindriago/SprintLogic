@@ -23,6 +23,10 @@ set -m
 CHILD_PIDS=()
 
 cleanup() {
+    # Remove traps FIRST to prevent infinite recursion when kill -$$
+    # delivers a signal back to this script.
+    trap - INT TERM EXIT
+
     local signal_name="${1:-EXIT}"
     echo
     echo "[start_dev] Caught ${signal_name}. Shutting down process group..."
