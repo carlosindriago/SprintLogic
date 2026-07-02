@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Settings, FolderOpen, ChevronRight, Edit2, Trash2, PlusCircle, ChevronsUpDown } from "lucide-react";
+import { Settings, FolderOpen, ChevronRight, Edit2, Trash2, PlusCircle, ChevronsUpDown, FilePlus, RefreshCw } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useState, useEffect, useCallback } from "react";
 import { scanProject, getProjects, updateProject, deleteProject } from "@/lib/api";
@@ -43,6 +43,7 @@ import GitStatusWidget from '@/components/GitStatusWidget';
 import GitGraphTab from '@/components/GitGraphTab';
 import InsightDashboard from '@/components/InsightDashboard';
 import PomodoroTimer from "@/components/PomodoroTimer";
+import NewFileDialog from "@/components/NewFileDialog";
 
 // Monaco bundles are large and depend on `window`/`document`. They MUST
 // never enter the server bundle — that is what was pegging the CPU on
@@ -75,6 +76,9 @@ export default function Home() {
   const { accentColor, setAccentColor, uiScale, setUiScale } = useThemeStore();
 
   const [settingsTab, setSettingsTab] = useState<'llms' | 'appearance'>('llms');
+  const [newFileDialogOpen, setNewFileDialogOpen] = useState(false);
+  const [newFileDirectory, setNewFileDirectory] = useState('');
+  const [fileTreeRefreshKey, setFileTreeRefreshKey] = useState(0);
 
   const fetchProjects = useCallback(async () => {
     try {
@@ -158,6 +162,30 @@ export default function Home() {
       title: node.file_path.split('/').pop() || node.file_path,
       type: 'editor',
       data: { node }
+    });
+  };
+
+  const handleNewFile = (directory?: string) => {
+    setNewFileDirectory(directory || '');
+    setNewFileDialogOpen(true);
+  };
+
+  const handleFileCreated = (filePath: string) => {
+    setFileTreeRefreshKey(k => k + 1);
+    handleNodeClick({
+      id: filePath,
+      label: "File",
+      name: filePath.split('/').pop() || filePath,
+      file_path: filePath,
+    });
+  };
+
+  const handleFileTreeSelect = (path: string) => {
+    handleNodeClick({
+      id: path,
+      label: "File",
+      name: path.split('/').pop() || path,
+      file_path: path,
     });
   };
 
@@ -460,12 +488,40 @@ export default function Home() {
               {/* 3. Explorador de Archivos */}
               <Card className="bg-zinc-800 border-zinc-700/50 text-zinc-200 mt-2 flex-1 flex flex-col min-h-0">
                 <CardHeader className="p-3 pb-2 shrink-0 border-b border-zinc-700/50/50">
-                  <CardTitle className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">Explorador</CardTitle>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">Explorador</CardTitle>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 text-zinc-400 hover:text-white hover:bg-zinc-700"
+                        onClick={() => handleNewFile()}
+                        title="Nuevo Archivo"
+                      >
+                        <FilePlus className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 text-zinc-400 hover:text-white hover:bg-zinc-700"
+                        onClick={() => setFileTreeRefreshKey(k => k + 1)}
+                        title="Refrescar Explorador"
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
                 </CardHeader>
                 <CardContent className="p-0 text-xs text-zinc-400 flex-1 overflow-hidden">
                   {projectId ? (
                     <div className="h-full overflow-y-auto">
-                      <FileTree projectId={projectId} key={projectId} onFileSelect={(path) => handleNodeClick({ id: path, label: "File", name: path.split('/').pop() || path, file_path: path })} />
+                      <FileTree
+                        projectId={projectId}
+                        key={`${projectId}-${fileTreeRefreshKey}`}
+                        onFileSelect={handleFileTreeSelect}
+                        onNewFile={handleNewFile}
+                        refreshKey={fileTreeRefreshKey}
+                      />
                     </div>
                   ) : (
                     <div className="p-4 text-center">Selecciona un proyecto...</div>
@@ -572,6 +628,15 @@ export default function Home() {
           </div>
         )}
         <PomodoroTimer projectId={projectId} />
+        {projectId && (
+          <NewFileDialog
+            open={newFileDialogOpen}
+            onOpenChange={setNewFileDialogOpen}
+            projectId={projectId}
+            defaultDirectory={newFileDirectory}
+            onCreated={handleFileCreated}
+          />
+        )}
     </div>
   );
 }

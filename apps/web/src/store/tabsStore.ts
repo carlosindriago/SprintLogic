@@ -18,9 +18,13 @@ export interface TabData {
 interface TabsState {
   tabs: TabData[];
   activeTabId: string | null;
+  dirtyFiles: Record<string, boolean>;
   addTab: (tab: TabData) => void;
   removeTab: (id: string) => void;
   setActiveTab: (id: string) => void;
+  updateTab: (id: string, partial: Partial<TabData>) => void;
+  markDirty: (id: string, dirty: boolean) => void;
+  setAllClean: () => void;
 }
 
 export const useTabsStore = create<TabsState>()(
@@ -34,6 +38,7 @@ export const useTabsStore = create<TabsState>()(
         }
       ],
       activeTabId: 'dashboard',
+      dirtyFiles: {},
 
       addTab: (tab) => {
         const { tabs } = get();
@@ -53,25 +58,53 @@ export const useTabsStore = create<TabsState>()(
       removeTab: (id) => {
         if (id === 'dashboard') return; // Cannot close dashboard
 
-        const { tabs, activeTabId } = get();
+        const { tabs, activeTabId, dirtyFiles } = get();
         const newTabs = tabs.filter(t => t.id !== id);
+        const newDirty = { ...dirtyFiles };
+        delete newDirty[id];
         
         // If we are closing the active tab, switch to another tab
         if (activeTabId === id) {
           const closedIndex = tabs.findIndex(t => t.id === id);
           const nextTab = newTabs[closedIndex] || newTabs[closedIndex - 1] || newTabs[0];
-          set({ tabs: newTabs, activeTabId: nextTab ? nextTab.id : null });
+          set({ tabs: newTabs, activeTabId: nextTab ? nextTab.id : null, dirtyFiles: newDirty });
         } else {
-          set({ tabs: newTabs });
+          set({ tabs: newTabs, dirtyFiles: newDirty });
         }
       },
 
       setActiveTab: (id) => {
         set({ activeTabId: id });
+      },
+
+      updateTab: (id, partial) => {
+        const { tabs } = get();
+        set({
+          tabs: tabs.map(t => t.id === id ? { ...t, ...partial } : t)
+        });
+      },
+
+      markDirty: (id, dirty) => {
+        const { dirtyFiles } = get();
+        if (dirty) {
+          set({ dirtyFiles: { ...dirtyFiles, [id]: true } });
+        } else {
+          const newDirty = { ...dirtyFiles };
+          delete newDirty[id];
+          set({ dirtyFiles: newDirty });
+        }
+      },
+
+      setAllClean: () => {
+        set({ dirtyFiles: {} });
       }
     }),
     {
       name: 'sprintlogic-tabs-storage',
+      partialize: (state) => {
+        const { dirtyFiles, ...persisted } = state;
+        return persisted;
+      },
     }
   )
 );

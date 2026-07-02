@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Dict, Any
 from uuid import UUID
 from pathlib import Path
+import os
 
 from app.infrastructure.db.database import get_db_session
 from app.infrastructure.git.git_gateway import LocalGitGateway
@@ -420,6 +421,36 @@ async def update_project_file_content(project_id: str, path: str, payload: FileC
         return {"status": "success"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to write file: {str(e)}")
+
+@router.post("/projects/{project_id}/file/create")
+async def create_project_file(project_id: str, path: str, payload: FileContentUpdate, session: AsyncSession = Depends(get_db_session)):
+    try:
+        project_uuid = UUID(project_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+
+    repo = SQLAlchemyProjectRepository(session)
+    project = await repo.get_project(project_uuid)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    project_root = Path(project.path).resolve()
+    target = Path(path)
+    candidate = (target if target.is_absolute() else project_root / target).resolve()
+
+    if not candidate.is_relative_to(project_root):
+        raise HTTPException(status_code=403, detail="Path is outside project directory")
+
+    if candidate.exists():
+        raise HTTPException(status_code=409, detail="File already exists")
+
+    try:
+        candidate.parent.mkdir(parents=True, exist_ok=True)
+        with open(candidate, "w", encoding="utf-8") as f:
+            f.write(payload.content)
+        return {"status": "created", "path": str(candidate.relative_to(project_root))}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create file: {str(e)}")
 
 from sse_starlette.sse import EventSourceResponse
 import asyncio

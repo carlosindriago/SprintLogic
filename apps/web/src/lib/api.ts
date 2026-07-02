@@ -151,6 +151,16 @@ export const saveFileContent = async (projectId: string, path: string, content: 
   return res.json();
 };
 
+export const createFile = async (projectId: string, path: string, content: string): Promise<{ status: string; path: string }> => {
+  const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/file/create?path=${encodeURIComponent(path)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content }),
+  });
+  if (!res.ok) throw new Error("Failed to create file");
+  return res.json();
+};
+
 export const getCommitDetails = async (projectId: string, hash: string): Promise<CommitDetails> => {
   const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/git/commits/${hash}`);
   if (!res.ok) throw new Error("Failed to fetch commit details");
