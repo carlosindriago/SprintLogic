@@ -177,7 +177,7 @@ export default function EditorTab({
 
     // ── Monaco TypeScript compiler configuration ──
     monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
-      jsx: monaco.languages.typescript.JsxEmit.React,
+      jsx: monaco.languages.typescript.JsxEmit.ReactJSX,
       moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
       allowNonTsExtensions: true,
       target: monaco.languages.typescript.ScriptTarget.ESNext,
