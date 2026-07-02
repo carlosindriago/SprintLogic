@@ -19,6 +19,16 @@ const TOOLBAR_BUTTON =
 
 let markersListenerRegistered = false;
 
+function normalizeMonacoUri(uri: Uri): string {
+  let p = uri.path;
+  while (p.startsWith('/')) p = p.slice(1);
+  if (!p && uri.scheme === 'file') {
+    p = (uri as Uri & { fsPath?: string }).fsPath ?? '';
+    while (p.startsWith('/')) p = p.slice(1);
+  }
+  return p;
+}
+
 export default function EditorTab({
   projectId,
   node,
@@ -210,7 +220,10 @@ export default function EditorTab({
         const allMarkers = monacoInstance.editor.getModelMarkers({ resource: uri });
         const errors = allMarkers.filter((m: monacoEditor.IMarker) => m.severity === monacoInstance.MarkerSeverity.Error).length;
         const warnings = allMarkers.filter((m: monacoEditor.IMarker) => m.severity === monacoInstance.MarkerSeverity.Warning).length;
-        const path = uri.path.startsWith('/') ? uri.path.slice(1) : uri.path;
+        const path = normalizeMonacoUri(uri);
+        if (errors > 0 || warnings > 0) {
+          console.log('[markers]', path, { errors, warnings, totalMarkers: allMarkers.length });
+        }
         setMarkers(path, { errors, warnings });
       };
 
