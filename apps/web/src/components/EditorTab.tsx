@@ -168,6 +168,10 @@ export default function EditorTab({
     editorRef.current?.getAction('actions.find')?.run();
   }, []);
 
+  const filePath = node?.file_path ?? '';
+  const fileName = filePath.split('/').pop() ?? 'untitled';
+  const fileMarkers = useMarkersStore((s) => s.files[filePath]);
+
   const handleEditorDidMount: OnMount = useCallback((editor, monaco) => {
     editorRef.current = editor;
 
@@ -290,10 +294,6 @@ export default function EditorTab({
       </div>
     );
   }
-
-  const fileName = node.file_path?.split('/').pop() ?? 'untitled';
-  const filePath = node.file_path ?? '';
-  const fileMarkers = useMarkersStore((s) => s.files[filePath]);
 
   return (
     <div className="flex flex-col h-full">
