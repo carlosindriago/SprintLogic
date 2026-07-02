@@ -17,7 +17,8 @@ const TreeNode: React.FC<{
   onSelect: (path: string) => void;
   depth: number;
   onNewFile?: (directory?: string) => void;
-}> = ({ node, onSelect, depth, onNewFile }) => {
+  allFiles: Record<string, { errors: number; warnings: number }>;
+}> = ({ node, onSelect, depth, onNewFile, allFiles }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const paddingLeft = `${depth * 12 + 8}px`;
@@ -38,6 +39,8 @@ const TreeNode: React.FC<{
   }, [contextMenu]);
 
   if (node.type === 'directory') {
+    const dirMarkers = sumDescendantMarkers(node, allFiles);
+
     return (
       <div>
         <div 
@@ -49,11 +52,16 @@ const TreeNode: React.FC<{
           {isOpen ? <ChevronDown className="w-4 h-4 mr-1 text-zinc-500" /> : <ChevronRight className="w-4 h-4 mr-1 text-zinc-500" />}
           <Folder className="w-4 h-4 mr-2 text-blue-400" />
           <span className="text-sm truncate">{node.name}</span>
+          {dirMarkers.errors > 0 && (
+            <span className="ml-1.5 inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-red-500/20 text-[10px] font-semibold text-red-400 leading-none shrink-0">
+              {dirMarkers.errors}
+            </span>
+          )}
         </div>
         {isOpen && node.children && (
           <div>
             {node.children.map((child, idx) => (
-              <TreeNode key={idx} node={child} onSelect={onSelect} depth={depth + 1} onNewFile={onNewFile} />
+              <TreeNode key={idx} node={child} onSelect={onSelect} depth={depth + 1} onNewFile={onNewFile} allFiles={allFiles} />
             ))}
           </div>
         )}
@@ -139,6 +147,23 @@ const TreeNode: React.FC<{
   );
 };
 
+function sumDescendantMarkers(
+  node: FileTreeNode,
+  allFiles: Record<string, { errors: number; warnings: number }>
+): { errors: number; warnings: number } {
+  if (node.type === 'file') {
+    return allFiles[node.path] ?? { errors: 0, warnings: 0 };
+  }
+  let errors = 0;
+  let warnings = 0;
+  for (const child of node.children ?? []) {
+    const m = sumDescendantMarkers(child, allFiles);
+    errors += m.errors;
+    warnings += m.warnings;
+  }
+  return { errors, warnings };
+}
+
 function FileMarkerBadge({ filePath }: { filePath: string }) {
   const markers = useMarkersStore((s) => s.files[filePath]);
   if (!markers || (markers.errors === 0 && markers.warnings === 0)) return null;
@@ -163,6 +188,7 @@ export default function FileTree({ projectId, onFileSelect, onNewFile, refreshKe
   const [tree, setTree] = useState<FileTreeNode | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const allFiles = useMarkersStore((s) => s.files);
 
   useEffect(() => {
     if (!projectId) return;
@@ -200,7 +226,7 @@ export default function FileTree({ projectId, onFileSelect, onNewFile, refreshKe
   return (
     <div className="py-2 overflow-x-auto">
       {tree.children?.map((child, idx) => (
-        <TreeNode key={idx} node={child} onSelect={onFileSelect} depth={0} onNewFile={onNewFile} />
+        <TreeNode key={idx} node={child} onSelect={onFileSelect} depth={0} onNewFile={onNewFile} allFiles={allFiles} />
       ))}
     </div>
   );

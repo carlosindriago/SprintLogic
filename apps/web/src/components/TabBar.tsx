@@ -1,4 +1,5 @@
 import { useTabsStore } from '@/store/tabsStore';
+import { useMarkersStore } from '@/store/markersStore';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import FileIcon from './FileIcon';
@@ -8,8 +9,41 @@ interface TabBarProps {
   aiOpen?: boolean;
 }
 
+function TabMarkerBadge({
+  path,
+  markersFiles,
+}: {
+  path: string | null;
+  markersFiles: Record<string, { errors: number; warnings: number }>;
+}) {
+  if (!path) return null;
+  const markers = markersFiles[path];
+  if (!markers || (markers.errors === 0 && markers.warnings === 0)) return null;
+  return (
+    <span className="flex items-center gap-0.5 shrink-0">
+      {markers.errors > 0 && (
+        <span className="inline-flex items-center justify-center min-w-[14px] h-3.5 px-1 rounded-full bg-red-500/20 text-[9px] font-semibold text-red-400 leading-none">
+          {markers.errors}
+        </span>
+      )}
+      {markers.warnings > 0 && (
+        <span className="inline-flex items-center justify-center min-w-[14px] h-3.5 px-1 rounded-full bg-yellow-500/20 text-[9px] font-semibold text-yellow-400 leading-none">
+          {markers.warnings}
+        </span>
+      )}
+    </span>
+  );
+}
+
 export default function TabBar({ onToggleAi, aiOpen }: TabBarProps) {
   const { tabs, activeTabId, setActiveTab, removeTab } = useTabsStore();
+  const markersFiles = useMarkersStore((s) => s.files);
+
+  const getTabPath = (tab: (typeof tabs)[number]): string | null => {
+    if (tab.type === 'editor') return tab.id;
+    if (tab.type === 'diff') return tab.data?.filePath ?? null;
+    return null;
+  };
 
   return (
     <div className="flex bg-zinc-900 border-b border-zinc-800/50 overflow-x-auto overflow-y-hidden shrink-0">
@@ -26,6 +60,7 @@ export default function TabBar({ onToggleAi, aiOpen }: TabBarProps) {
         >
           {tab.type === 'editor' && <FileIcon fileName={tab.title} className="w-3.5 h-3.5 shrink-0" />}
           <span className="truncate flex-1" title={tab.title}>{tab.title}</span>
+          <TabMarkerBadge path={getTabPath(tab)} markersFiles={markersFiles} />
           
           {tab.id !== 'dashboard' && (
             <div 
