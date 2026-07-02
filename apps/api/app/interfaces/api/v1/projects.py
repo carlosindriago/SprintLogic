@@ -484,10 +484,22 @@ async def analyze_project(project_id: str, session: AsyncSession = Depends(get_d
                 tech_stack[ext] = tech_stack.get(ext, 0) + 1
             total_files += 1
 
+    # ── Run language scanners ──────────────────────────────────────────
+    from app.infrastructure.scanners.python_scanner import PythonScanner
+
+    global_markers: dict = {}
+
+    try:
+        py_scanner = PythonScanner()
+        py_markers = py_scanner.scan(str(project_root))
+        global_markers.update(py_markers)
+    except Exception:
+        pass  # scanner failures are non-fatal
+
     return {
         "tech_stack": dict(sorted(tech_stack.items(), key=lambda x: x[1], reverse=True)),
         "total_files": total_files,
-        "global_markers": {},
+        "global_markers": global_markers,
     }
 
 from sse_starlette.sse import EventSourceResponse
