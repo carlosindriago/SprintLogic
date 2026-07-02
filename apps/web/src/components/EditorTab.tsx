@@ -292,6 +292,8 @@ export default function EditorTab({
   }
 
   const fileName = node.file_path?.split('/').pop() ?? 'untitled';
+  const filePath = node.file_path ?? '';
+  const fileMarkers = useMarkersStore((s) => s.files[filePath]);
 
   return (
     <div className="flex flex-col h-full">
@@ -301,6 +303,17 @@ export default function EditorTab({
           {fileName}
           {isDirty && <span className="text-yellow-400 ml-0.5">&bull;</span>}
         </span>
+
+        {fileMarkers && (fileMarkers.errors > 0 || fileMarkers.warnings > 0) && (
+          <span className="flex items-center gap-1.5 ml-1">
+            {fileMarkers.errors > 0 && (
+              <span className="text-[11px] text-red-400 font-medium">{fileMarkers.errors}</span>
+            )}
+            {fileMarkers.warnings > 0 && (
+              <span className="text-[11px] text-yellow-400 font-medium">{fileMarkers.warnings}</span>
+            )}
+          </span>
+        )}
 
         <div className="flex-1" />
 

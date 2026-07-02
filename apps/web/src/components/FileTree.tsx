@@ -3,6 +3,7 @@ import { ChevronRight, ChevronDown, Folder, FilePlus, FolderPlus } from 'lucide-
 import { getProjectFiles } from '@/lib/api';
 import { FileTreeNode } from '@/types';
 import FileIcon from './FileIcon';
+import { useMarkersStore } from '@/store/markersStore';
 
 interface FileTreeProps {
   projectId: string;
@@ -100,6 +101,7 @@ const TreeNode: React.FC<{
       >
         <FileIcon fileName={node.name} className="w-4 h-4 mr-2 shrink-0" />
         <span className="text-sm truncate">{node.name}</span>
+        <FileMarkerBadge filePath={node.path} />
       </div>
 
       {contextMenu && (
@@ -136,6 +138,26 @@ const TreeNode: React.FC<{
     </>
   );
 };
+
+function FileMarkerBadge({ filePath }: { filePath: string }) {
+  const markers = useMarkersStore((s) => s.files[filePath]);
+  if (!markers || (markers.errors === 0 && markers.warnings === 0)) return null;
+
+  return (
+    <span className="ml-1.5 flex items-center gap-0.5 shrink-0">
+      {markers.errors > 0 && (
+        <span className="inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-red-500/20 text-[10px] font-semibold text-red-400 leading-none">
+          {markers.errors}
+        </span>
+      )}
+      {markers.warnings > 0 && (
+        <span className="inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-yellow-500/20 text-[10px] font-semibold text-yellow-400 leading-none">
+          {markers.warnings}
+        </span>
+      )}
+    </span>
+  );
+}
 
 export default function FileTree({ projectId, onFileSelect, onNewFile, refreshKey }: FileTreeProps) {
   const [tree, setTree] = useState<FileTreeNode | null>(null);
