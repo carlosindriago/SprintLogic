@@ -1,7 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
 import Editor from '@monaco-editor/react';
-import { getFileContent } from '@/lib/api';
+import { getFileContent, API_BASE_URL } from '@/lib/api';
 import type { GraphNode } from '@/types';
+
+interface LintDiagnostic {
+  line: number;
+  column: number;
+  message: string;
+  severity: string;
+}
 
 export default function EditorTab({
   projectId,
@@ -16,7 +23,6 @@ export default function EditorTab({
   const [loading, setLoading] = useState(true);
   const vimInstanceRef = useRef<{ dispose(): void } | null>(null);
 
-  // --- File content loading -----------------------------------------------
   useEffect(() => {
     let isMounted = true;
 
@@ -37,7 +43,6 @@ export default function EditorTab({
         }
       } catch (e) {
         if (isMounted) {
-          console.error(e);
           setContent('// Error loading file');
           setLoading(false);
         }
@@ -69,7 +74,7 @@ export default function EditorTab({
       theme="vs-dark"
       path={node.file_path}
       value={content}
-      onMount={(editor) => {
+      onMount={(editor, monaco) => {
         if (vimMode) {
           import("monaco-vim").then(({ initVimMode }) => {
             const statusNode = document.createElement('div');
@@ -87,7 +92,6 @@ export default function EditorTab({
           });
         }
 
-        // Auto-scroll logic if AST metadata exists
         if (node.metadata) {
           try {
             const metadataStr = typeof node.metadata === "string" ? node.metadata : JSON.stringify(node.metadata);
@@ -98,9 +102,42 @@ export default function EditorTab({
             }
           } catch {}
         }
+
+        let timer: ReturnType<typeof setTimeout> | null = null;
+
+        editor.onDidChangeModelContent(() => {
+          if (timer) clearTimeout(timer);
+          timer = setTimeout(async () => {
+            try {
+              const res = await fetch(`${API_BASE_URL}/editor/lint`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  code: editor.getValue(),
+                  language: 'python',
+                }),
+              });
+              if (!res.ok) return;
+              const diagnostics: LintDiagnostic[] = await res.json();
+              const model = editor.getModel();
+              if (!model) return;
+              const markers = diagnostics.map((d) => ({
+                severity: monaco.MarkerSeverity.Error,
+                message: d.message,
+                startLineNumber: d.line,
+                startColumn: d.column,
+                endLineNumber: d.line,
+                endColumn: d.column + 1,
+              }));
+              monaco.editor.setModelMarkers(model, 'lint', markers);
+            } catch {
+              // network errors silently ignored
+            }
+          }, 500);
+        });
       }}
       options={{
-        readOnly: true,
+        readOnly: false,
         minimap: { enabled: false },
         fontSize: 13,
         wordWrap: "on",
