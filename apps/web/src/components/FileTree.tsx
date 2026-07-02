@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronRight, ChevronDown, File, Folder } from 'lucide-react';
+import { ChevronRight, ChevronDown, Folder } from 'lucide-react';
 import { getProjectFiles } from '@/lib/api';
 import { FileTreeNode } from '@/types';
+import FileIcon from './FileIcon';
 
 interface FileTreeProps {
   projectId: string;
@@ -41,7 +42,7 @@ const TreeNode: React.FC<{ node: FileTreeNode; onSelect: (path: string) => void;
       style={{ paddingLeft: `${depth * 12 + 28}px` }}
       onClick={() => onSelect(node.path)}
     >
-      <File className="w-4 h-4 mr-2 text-zinc-500 group-hover:text-zinc-400" />
+      <FileIcon fileName={node.name} className="w-4 h-4 mr-2 shrink-0" />
       <span className="text-sm truncate">{node.name}</span>
     </div>
   );

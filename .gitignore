@@ -43,3 +43,6 @@ pnpm-debug.log*
 .cache/
 .tmp/
 tmp/
+
+# Orchestrator skill-registry cache (regenerated on demand)
+.atl/

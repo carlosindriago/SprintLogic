@@ -35,13 +35,20 @@ then
 fi
 
 # 2. Start Backend
+echo -e "\nChecking if port 8000 is free..."
+if lsof -Pi :8000 -sTCP:LISTEN -t >/dev/null ; then
+    echo "[!] Port 8000 is occupied. Cleaning it up..."
+    kill -9 $(lsof -t -i:8000) 2>/dev/null || true
+    sleep 1
+fi
+
 echo -e "\nStarting SprintLogic Backend (FastAPI)..."
 cd apps/api
 .venv/bin/uvicorn main:app --reload --port 8000 &
 BACKEND_PID=$!
 cd ../..
 
-trap "echo 'Shutting down SprintLogic Backend (PID: $BACKEND_PID)...'; kill $BACKEND_PID" EXIT
+trap "echo 'Shutting down SprintLogic Backend (PID: $BACKEND_PID)...'; kill $BACKEND_PID 2>/dev/null || true" EXIT
 
 # 3. Start Frontend
 cd apps/web

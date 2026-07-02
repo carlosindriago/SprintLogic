@@ -109,6 +109,24 @@ export async function getProjectGraph(projectId: string): Promise<GraphData> {
   return response.json();
 }
 
+export async function analyzeProjectGraph(projectId: string, model: string): Promise<string> {
+  const response = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/graph/analyze`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ model })
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Graph analysis failed: ${error}`);
+  }
+
+  const data = await response.json();
+  return data.analysis;
+}
+
 export const getProjectFiles = async (projectId: string): Promise<FileTreeNode> => {
   const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/files`);
   if (!res.ok) throw new Error("Failed to fetch project files");
@@ -205,5 +223,63 @@ export const getProjectInsights = async (projectId: string): Promise<ProjectInsi
 export const getGitStatus = async (projectId: string): Promise<GitStatus> => {
   const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/git/status`);
   if (!res.ok) throw new Error("Failed to fetch git status");
+  return res.json();
+};
+
+export interface KanbanColumn {
+  id: string;
+  title: string;
+  color: string;
+  rule?: 'manual' | 'pomodoro' | 'auto-on-test-fail' | 'auto-on-test-pass';
+}
+
+export interface KanbanConfig {
+  columns: KanbanColumn[];
+}
+
+export const getKanbanConfig = async (projectId: string): Promise<KanbanConfig> => {
+  const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/kanban/config`);
+  if (!res.ok) throw new Error("Failed to fetch kanban config");
+  return res.json();
+};
+
+export const saveKanbanConfig = async (projectId: string, columns: KanbanColumn[]): Promise<{ status: string }> => {
+  const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/kanban/config`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ columns }),
+  });
+  if (!res.ok) throw new Error("Failed to save kanban config");
+  return res.json();
+};
+
+export const syncKanbanCommits = async (projectId: string): Promise<{ status: string; tests_passing: boolean; updated_tasks: string[] }> => {
+  const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/tasks/sync-commits`, {
+    method: 'POST'
+  });
+  if (!res.ok) throw new Error("Failed to sync project commits with tasks");
+  return res.json();
+};
+
+export interface WBSTask {
+  title: string;
+  estimated_mins: number;
+  priority: 'Low' | 'Medium' | 'High';
+  type: string;
+  tags: string[];
+}
+
+export interface WBSResponse {
+  tasks: WBSTask[];
+  explanation: string;
+}
+
+export const generateWBS = async (projectId: string, requirements: string, model = "openai/gpt-4o"): Promise<WBSResponse> => {
+  const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/kanban/wbs`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ requirements, model })
+  });
+  if (!res.ok) throw new Error("Failed to generate WBS from IA");
   return res.json();
 };

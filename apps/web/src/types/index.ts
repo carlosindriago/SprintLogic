@@ -39,10 +39,16 @@ export interface GraphData {
 export interface Task {
   id: string;
   content: string;
-  status: "todo" | "in-progress" | "done";
+  status: string;
   category: string;
   affected_nodes?: string[];
   raw_line: number;
+  commit?: string;
+  pomodoros?: number;
+  time_spent?: number;
+  priority?: "Low" | "Medium" | "High";
+  tags?: string[];
+  has_id?: boolean;
 }
 
 export interface Commit {

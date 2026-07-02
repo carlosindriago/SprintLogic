@@ -123,8 +123,11 @@ async def execute_git_action(
     return result
 
 
+class GenerateCommitMessageRequest(BaseModel):
+    model: Optional[str] = "gemini/gemini-2.5-flash"
+
 @router.post("/{project_id}/git/generate-commit-message")
-async def generate_commit_message(project_id: str, session: AsyncSession = Depends(get_db_session)):
+async def generate_commit_message(project_id: str, request: GenerateCommitMessageRequest, session: AsyncSession = Depends(get_db_session)):
     try:
         project = await SQLAlchemyProjectRepository(session).get_project(UUID(project_id))
     except ValueError:
@@ -146,7 +149,7 @@ async def generate_commit_message(project_id: str, session: AsyncSession = Depen
             f"Diff:\n{diff}"
         )
 
-        message = llm_gateway.generate_completion(prompt=prompt, model="gemini/gemini-2.5-flash")
+        message = llm_gateway.generate_completion(prompt=prompt, model=request.model)
         
         # Clean up any potential markdown formatting the LLM might have returned
         message = message.strip()

@@ -1,6 +1,7 @@
 import { useTabsStore } from '@/store/tabsStore';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import FileIcon from './FileIcon';
 
 export default function TabBar() {
   const { tabs, activeTabId, setActiveTab, removeTab } = useTabsStore();
@@ -18,6 +19,7 @@ export default function TabBar() {
           )}
           onClick={() => setActiveTab(tab.id)}
         >
+          {tab.type === 'editor' && <FileIcon fileName={tab.title} className="w-3.5 h-3.5 shrink-0" />}
           <span className="truncate flex-1" title={tab.title}>{tab.title}</span>
           
           {tab.id !== 'dashboard' && (
