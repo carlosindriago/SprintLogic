@@ -28,7 +28,7 @@ async def lint_code(request: LintRequest):
         return [
             LintDiagnostic(
                 line=e.lineno or 1,
-                column=(e.offset or 1) - 1,
+                column=e.offset or 1,
                 message=e.msg,
                 severity="error",
             )
