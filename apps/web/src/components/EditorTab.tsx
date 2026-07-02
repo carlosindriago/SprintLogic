@@ -388,7 +388,7 @@ export default function EditorTab({
       {filePath && (
         <div className="flex items-center justify-between text-xs text-zinc-400 bg-zinc-900 px-3 py-1 border-b border-zinc-800/50 shrink-0">
           <div className="flex items-center gap-0.5 truncate min-w-0">
-            {filePath.split('/').map((seg, i, arr) => (
+            {filePath.split('/').filter(Boolean).map((seg, i, arr) => (
               i < arr.length - 1 ? (
                 <span key={i} className="flex items-center gap-0.5 min-w-0">
                   <span className="truncate text-zinc-500">{seg}</span>
