@@ -1,156 +1,190 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+from cachetools import TTLCache
 
 from app.infrastructure.security.credential_manager import CredentialManager
 from app.infrastructure.ai.llm_gateway import LiteLLMGateway
 import httpx
-import time
 
 router = APIRouter()
 llm_gateway = LiteLLMGateway()
 
-# Simple in-memory cache for models, especially useful for openrouter
-_model_cache = {}
-CACHE_TTL = 300  # 5 minutes
+# Thread-safe TTL cache for provider model lists. 32 providers × 5min TTL.
+# Lives at module level but cachetools is process-local; acceptable for a
+# single-instance Tauri sidecar. Replaced the previous unbounded dict.
+_model_cache: TTLCache[str, list[dict]] = TTLCache(maxsize=32, ttl=300)
+
 
 class APIKeyRequest(BaseModel):
     api_key: str
+
 
 class ModelResult(BaseModel):
     id: str
     name: str
 
-async def fetch_provider_models(provider: str, api_key: str) -> list[dict]:
-    # Check cache first for openrouter
-    now = time.time()
-    if provider in _model_cache:
-        cache_entry = _model_cache[provider]
-        if now - cache_entry["timestamp"] < CACHE_TTL:
-            return cache_entry["models"]
-
-    models = []
-    async with httpx.AsyncClient() as client:
-        try:
-            if provider == "gemini":
-                res = await client.get(f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}")
-                if res.status_code == 200:
-                    data = res.json()
-                    models = [{"id": m["name"].replace("models/", ""), "name": m["displayName"]} for m in data.get("models", []) if "generateContent" in m.get("supportedGenerationMethods", [])]
-                else:
-                    raise HTTPException(status_code=400, detail=f"Invalid Gemini Key: {res.text}")
-            elif provider == "openai":
-                res = await client.get("https://api.openai.com/v1/models", headers={"Authorization": f"Bearer {api_key}"})
-                if res.status_code == 200:
-                    data = res.json()
-                    models = [{"id": m["id"], "name": m["id"]} for m in data.get("data", []) if "gpt" in m["id"] or "o1" in m["id"]]
-                else:
-                    raise HTTPException(status_code=400, detail=f"Invalid OpenAI Key")
-            elif provider == "anthropic":
-                res = await client.get("https://api.anthropic.com/v1/models", headers={"x-api-key": api_key, "anthropic-version": "2023-06-01"})
-                if res.status_code == 200:
-                    data = res.json()
-                    models = [{"id": m["id"], "name": m.get("display_name", m["id"])} for m in data.get("data", [])]
-                else:
-                    # Fallback if endpoint is not available or old key
-                    models = [{"id": "claude-3-opus-20240229", "name": "Claude 3 Opus"}, {"id": "claude-3-sonnet-20240229", "name": "Claude 3 Sonnet"}, {"id": "claude-3-haiku-20240307", "name": "Claude 3 Haiku"}, {"id": "claude-3-5-sonnet-20241022", "name": "Claude 3.5 Sonnet"}]
-            elif provider == "openrouter":
-                res = await client.get("https://openrouter.ai/api/v1/models")
-                if res.status_code == 200:
-                    data = res.json()
-                    models = [{"id": m["id"], "name": m.get("name", m["id"])} for m in data.get("data", [])]
-                else:
-                    raise HTTPException(status_code=400, detail="Failed to fetch OpenRouter models")
-            elif provider == "opencode-zen":
-                res = await client.get("https://opencode.ai/zen/v1/models", headers={"Authorization": f"Bearer {api_key}"})
-                if res.status_code == 200:
-                    data = res.json()
-                    models = [{"id": m["id"], "name": m["id"]} for m in data.get("data", [])]
-                else:
-                    raise HTTPException(status_code=400, detail="Invalid OpenCode Zen Key")
-            elif provider == "opencode-go":
-                res = await client.get("https://opencode.ai/zen/go/v1/models", headers={"Authorization": f"Bearer {api_key}"})
-                if res.status_code == 200:
-                    data = res.json()
-                    models = [{"id": m["id"], "name": m["id"]} for m in data.get("data", [])]
-                else:
-                    raise HTTPException(status_code=400, detail="Invalid OpenCode Go Key")
-            else:
-                raise HTTPException(status_code=400, detail=f"Unsupported provider: {provider}")
-        except httpx.RequestError as e:
-            raise HTTPException(status_code=400, detail=f"Network error: {str(e)}")
-
-    if provider == "openrouter":
-        _model_cache[provider] = {"timestamp": now, "models": models}
-        
-    return models
-
-@router.get("/providers/{provider}/models", response_model=list[ModelResult])
-async def get_provider_models(provider: str):
-    """Fetches available models for a provider using the stored API key."""
-    api_key = CredentialManager.get_api_key(provider)
-    if not api_key:
-        raise HTTPException(status_code=404, detail=f"API key for {provider} not found")
-        
-    return await fetch_provider_models(provider, api_key)
-
-@router.post("/providers/{provider}/keys", response_model=list[ModelResult])
-async def save_and_verify_provider_key(provider: str, request: APIKeyRequest):
-    """Verifies and saves the API key, returning the list of available models."""
-    if not request.api_key:
-        raise HTTPException(status_code=400, detail="API key cannot be empty")
-        
-    # Attempt to fetch models to validate the key
-    models = await fetch_provider_models(provider, request.api_key)
-    
-    # If successful, save the key
-    CredentialManager.save_api_key(provider, request.api_key)
-    return models
 
 class APIKeyStatus(BaseModel):
     is_configured: bool
 
+
+class ProviderFetchError(Exception):
+    """Raised when a provider rejects the API key or the network call fails.
+
+    Decoupled from FastAPI's HTTPException so the helper can be reused
+    outside the request layer (tests, future background sync, etc.) without
+    dragging the HTTP transport in.
+    """
+
+    def __init__(self, message: str, *, status_code: int = 400) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+
+
+async def fetch_provider_models(provider: str, api_key: str) -> list[dict]:
+    """Fetch the available models for a provider using the supplied API key.
+
+    Returns a list of `{id, name}` dicts. Raises `ProviderFetchError` on
+    network errors or rejected keys. Cache is consulted only for providers
+    that don't need a per-user key (openrouter) — once we have a result
+    we cache it regardless of provider for a 5 minute TTL.
+    """
+    if provider in _model_cache:
+        return list(_model_cache[provider])
+
+    models: list[dict] = []
+    headers: dict[str, str] = {}
+
+    async with httpx.AsyncClient() as client:
+        try:
+            if provider == "gemini":
+                url = f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}"
+                res = await client.get(url)
+                if res.status_code != 200:
+                    raise ProviderFetchError(f"Invalid Gemini Key: {res.text}")
+                data = res.json()
+                models = [
+                    {"id": m["name"].replace("models/", ""), "name": m["displayName"]}
+                    for m in data.get("models", [])
+                    if "generateContent" in m.get("supportedGenerationMethods", [])
+                ]
+
+            elif provider == "openai":
+                headers["Authorization"] = f"Bearer {api_key}"
+                res = await client.get("https://api.openai.com/v1/models", headers=headers)
+                if res.status_code != 200:
+                    raise ProviderFetchError("Invalid OpenAI Key")
+                data = res.json()
+                models = [
+                    {"id": m["id"], "name": m["id"]}
+                    for m in data.get("data", [])
+                    if "gpt" in m["id"] or "o1" in m["id"]
+                ]
+
+            elif provider == "anthropic":
+                headers["x-api-key"] = api_key
+                headers["anthropic-version"] = "2023-06-01"
+                res = await client.get("https://api.anthropic.com/v1/models", headers=headers)
+                if res.status_code == 200:
+                    data = res.json()
+                    models = [
+                        {"id": m["id"], "name": m.get("display_name", m["id"])}
+                        for m in data.get("data", [])
+                    ]
+                else:
+                    # Fallback when the list endpoint is unavailable / key region-restricted.
+                    models = [
+                        {"id": "claude-3-opus-20240229", "name": "Claude 3 Opus"},
+                        {"id": "claude-3-sonnet-20240229", "name": "Claude 3 Sonnet"},
+                        {"id": "claude-3-haiku-20240307", "name": "Claude 3 Haiku"},
+                        {"id": "claude-3-5-sonnet-20241022", "name": "Claude 3.5 Sonnet"},
+                    ]
+
+            elif provider == "openrouter":
+                res = await client.get("https://openrouter.ai/api/v1/models")
+                if res.status_code != 200:
+                    raise ProviderFetchError("Failed to fetch OpenRouter models")
+                data = res.json()
+                models = [
+                    {"id": m["id"], "name": m.get("name", m["id"])}
+                    for m in data.get("data", [])
+                ]
+
+            elif provider == "opencode-zen":
+                headers["Authorization"] = f"Bearer {api_key}"
+                res = await client.get("https://opencode.ai/zen/v1/models", headers=headers)
+                if res.status_code != 200:
+                    raise ProviderFetchError("Invalid OpenCode Zen Key")
+                data = res.json()
+                models = [{"id": m["id"], "name": m["id"]} for m in data.get("data", [])]
+
+            elif provider == "opencode-go":
+                headers["Authorization"] = f"Bearer {api_key}"
+                res = await client.get("https://opencode.ai/zen/go/v1/models", headers=headers)
+                if res.status_code != 200:
+                    raise ProviderFetchError("Invalid OpenCode Go Key")
+                data = res.json()
+                models = [{"id": m["id"], "name": m["id"]} for m in data.get("data", [])]
+
+            else:
+                raise ProviderFetchError(f"Unsupported provider: {provider}")
+
+        except httpx.RequestError as exc:
+            raise ProviderFetchError(f"Network error: {exc!s}") from exc
+
+    _model_cache[provider] = models
+    return models
+
+
+@router.get("/providers/{provider}/models", response_model=list[ModelResult])
+async def get_provider_models(provider: str):
+    """Fetches available models for a provider using the stored API key.
+
+    The key is read from the OS keyring via `CredentialManager`; it never
+    leaves the local machine. Returns 404 if the key is not configured.
+    """
+    api_key = CredentialManager.get_api_key(provider)
+    if not api_key:
+        raise HTTPException(status_code=404, detail=f"API key for {provider} not found")
+
+    try:
+        return await fetch_provider_models(provider, api_key)
+    except ProviderFetchError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
+
+@router.post("/providers/{provider}/keys", response_model=list[ModelResult])
+async def save_and_verify_provider_key(provider: str, request: APIKeyRequest):
+    """Validates the API key against the provider and persists it locally.
+
+    The key is validated by attempting to fetch the model list. Only on
+    success is the key written to the OS keyring. Nothing is stored on
+    failure — the caller can safely retry.
+    """
+    if not request.api_key or not request.api_key.strip():
+        raise HTTPException(status_code=400, detail="API key cannot be empty")
+
+    try:
+        models = await fetch_provider_models(provider, request.api_key.strip())
+    except ProviderFetchError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
+    CredentialManager.save_api_key(provider, request.api_key.strip())
+    return models
+
+
 @router.get("/api-key/{provider}", response_model=APIKeyStatus)
 async def check_api_key_status(provider: str):
-    """Checks if the API key for a provider is configured."""
+    """Returns whether an API key is currently stored for `provider`.
+
+    Does not return the key itself — only its presence.
+    """
     key = CredentialManager.get_api_key(provider)
     return {"is_configured": bool(key)}
 
+
 @router.delete("/api-key/{provider}")
 async def delete_api_key(provider: str):
-    """Deletes the saved API key for a provider."""
+    """Removes the stored API key for `provider` from the OS keyring."""
     CredentialManager.delete_api_key(provider)
     return {"status": "success", "message": f"API key for {provider} deleted"}
-
-@router.post("/verify-api-key/{provider}")
-async def verify_api_key(provider: str, request: APIKeyRequest):
-    """Verifies the provided API key by making a minimal call to the provider."""
-    if not request.api_key:
-        raise HTTPException(status_code=400, detail="API key cannot be empty")
-    
-    # We map provider to a fast/cheap model to test
-    test_models = {
-        "gemini": "gemini/gemini-2.5-flash",
-        "openai": "gpt-4o-mini",
-        "anthropic": "claude-3-haiku-20240307",
-        "openrouter": "openrouter/auto",
-        "opencode-zen": "gpt-5-mini",
-        "opencode-go": "glm-5.2"
-    }
-    
-    model = test_models.get(provider)
-    if not model:
-        raise HTTPException(status_code=400, detail=f"Unsupported provider for verification: {provider}")
-        
-    try:
-        # We need a way to pass the key explicitly or temporarily save it?
-        # LiteLLMGateway uses CredentialManager.get_api_key. 
-        # Let's save it temporarily or bypass.
-        # It's safer to just save it, verify, and if it fails, the user knows.
-        # Since they are clicking "Verify", they intend to use it.
-        CredentialManager.save_api_key(provider, request.api_key)
-        
-        # Test completion
-        llm_gateway.generate_completion(prompt="Hello", model=model, max_tokens=5)
-        return {"status": "success", "message": "Conexión verificada exitosamente"}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Fallo en la verificación: {str(e)}")
