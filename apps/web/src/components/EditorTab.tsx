@@ -304,17 +304,6 @@ export default function EditorTab({
           {isDirty && <span className="text-yellow-400 ml-0.5">&bull;</span>}
         </span>
 
-        {fileMarkers && (fileMarkers.errors > 0 || fileMarkers.warnings > 0) && (
-          <span className="flex items-center gap-1.5 ml-1">
-            {fileMarkers.errors > 0 && (
-              <span className="text-[11px] text-red-400 font-medium">{fileMarkers.errors}</span>
-            )}
-            {fileMarkers.warnings > 0 && (
-              <span className="text-[11px] text-yellow-400 font-medium">{fileMarkers.warnings}</span>
-            )}
-          </span>
-        )}
-
         <div className="flex-1" />
 
         <div className="flex items-center gap-0.5">
@@ -385,7 +374,26 @@ export default function EditorTab({
               )
             ))}
           </div>
-          <div className="shrink-0 ml-2">
+          <div className="shrink-0 ml-2 flex items-center gap-2">
+            {fileMarkers && (
+              <>
+                {fileMarkers.errors > 0 && (
+                  <span className="inline-flex items-center gap-1 text-[11px] text-red-400 font-medium">
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-500" />
+                    {fileMarkers.errors}
+                  </span>
+                )}
+                {fileMarkers.warnings > 0 && (
+                  <span className="inline-flex items-center gap-1 text-[11px] text-yellow-400 font-medium">
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-yellow-500" />
+                    {fileMarkers.warnings}
+                  </span>
+                )}
+                {fileMarkers.errors === 0 && fileMarkers.warnings === 0 && (
+                  <span className="text-[11px] text-zinc-600">Sin errores</span>
+                )}
+              </>
+            )}
           </div>
         </div>
       )}
