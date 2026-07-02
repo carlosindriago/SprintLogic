@@ -533,7 +533,16 @@ export default function Home() {
             </div>
           </div>
           <div className="flex-1 relative overflow-hidden">
-            <SprintLogicChat projectId={projectId} />
+            <SprintLogicChat
+              projectId={projectId}
+              onOpenSettings={() => {
+                // The CTA in the chat always invites the user to configure
+                // their LLM provider, so land them on the 'llms' tab even
+                // if the dialog was last closed on 'appearance'.
+                setSettingsTab('llms');
+                setSettingsOpen(true);
+              }}
+            />
           </div>
         </div>
       </div>
