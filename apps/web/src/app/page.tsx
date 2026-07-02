@@ -45,6 +45,7 @@ import InsightDashboard from '@/components/InsightDashboard';
 import PomodoroTimer from "@/components/PomodoroTimer";
 import NewFileDialog from "@/components/NewFileDialog";
 import ProjectInsightsPanel from "@/components/ProjectInsightsPanel";
+import AnalysisReportDialog from "@/components/AnalysisReportDialog";
 import { useProjectInsightsStore } from "@/store/projectInsightsStore";
 import { toast } from "sonner";
 
@@ -82,6 +83,7 @@ export default function Home() {
   const [newFileDialogOpen, setNewFileDialogOpen] = useState(false);
   const [newFileDirectory, setNewFileDirectory] = useState('');
   const [fileTreeRefreshKey, setFileTreeRefreshKey] = useState(0);
+  const [analysisDialogOpen, setAnalysisDialogOpen] = useState(false);
 
   const fetchProjects = useCallback(async () => {
     try {
@@ -191,6 +193,7 @@ export default function Home() {
       const result = await analyzeProject(projectId);
       setData(result);
       toast.success(`Análisis completado: ${result.total_files} archivos escaneados`);
+      setAnalysisDialogOpen(true);
     } catch {
       toast.error("Error al analizar el proyecto");
       useProjectInsightsStore.getState().setLoading(false);
@@ -652,6 +655,7 @@ export default function Home() {
             onCreated={handleFileCreated}
           />
         )}
+        <AnalysisReportDialog open={analysisDialogOpen} onOpenChange={setAnalysisDialogOpen} />
     </div>
   );
 }
