@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Editor, { type OnMount } from '@monaco-editor/react';
-import type { editor as monacoEditor } from 'monaco-editor';
+import type { editor as monacoEditor, Uri } from 'monaco-editor';
 import { getFileContent, saveFileContent, API_BASE_URL } from '@/lib/api';
 import { useTabsStore } from '@/store/tabsStore';
+import { useMarkersStore } from '@/store/markersStore';
 import type { GraphNode } from '@/types';
 import { Code2 } from 'lucide-react';
 
@@ -15,6 +16,8 @@ interface LintDiagnostic {
 
 const TOOLBAR_BUTTON =
   "h-7 w-7 flex items-center justify-center rounded text-zinc-400 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed";
+
+let markersListenerRegistered = false;
 
 export default function EditorTab({
   projectId,
@@ -193,6 +196,21 @@ export default function EditorTab({
       noSyntaxValidation: false,
       diagnosticCodesToIgnore: [2307, 2792],
     });
+
+    // ── Global markers telemetry ──
+    if (!markersListenerRegistered) {
+      markersListenerRegistered = true;
+      const { setMarkers } = useMarkersStore.getState();
+      monaco.editor.onDidChangeMarkers((uris: readonly Uri[]) => {
+        for (const uri of uris) {
+          const allMarkers = monaco.editor.getModelMarkers({ resource: uri });
+          const errors = allMarkers.filter((m: monacoEditor.IMarker) => m.severity === monaco.MarkerSeverity.Error).length;
+          const warnings = allMarkers.filter((m: monacoEditor.IMarker) => m.severity === monaco.MarkerSeverity.Warning).length;
+          const path = uri.path.startsWith('/') ? uri.path.slice(1) : uri.path;
+          setMarkers(path, { errors, warnings });
+        }
+      });
+    }
 
     if (vimMode) {
       import("monaco-vim").then(({ initVimMode }) => {
