@@ -38,13 +38,24 @@ import FileTree from "@/components/FileTree";
 import { useTabsStore } from '@/store/tabsStore';
 import { useProjectStore } from '@/store/projectStore';
 import TabBar from '@/components/TabBar';
-import EditorTab from '@/components/EditorTab';
 import { useThemeStore, AccentColor, UiScale } from '@/store/themeStore';
 import GitStatusWidget from '@/components/GitStatusWidget';
 import GitGraphTab from '@/components/GitGraphTab';
-import DiffTab from '@/components/DiffTab';
 import InsightDashboard from '@/components/InsightDashboard';
 import PomodoroTimer from "@/components/PomodoroTimer";
+
+// Monaco bundles are large and depend on `window`/`document`. They MUST
+// never enter the server bundle — that is what was pegging the CPU on
+// every page render. Lazy-load them on the client only, identical to
+// the pattern already in use for `GraphScene` below.
+const EditorTab = dynamic(
+  () => import('@/components/EditorTab').then((m) => m.default),
+  { ssr: false },
+);
+const DiffTab = dynamic(
+  () => import('@/components/DiffTab').then((m) => m.default),
+  { ssr: false },
+);
 
 const GraphScene = dynamic(() => import("@/components/GraphScene"), { ssr: false });
 
