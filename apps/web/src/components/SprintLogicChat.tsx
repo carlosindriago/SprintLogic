@@ -4,11 +4,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import ReactMarkdown from "react-markdown";
 import { KeyRound, Sparkles } from "lucide-react";
 import { useLLMConfigStore } from "@/store/llmConfigStore";
-
-interface Message {
-  role: "user" | "assistant" | "system";
-  content: string;
-}
+import { sendChatMessage, ChatMessage } from "@/lib/api";
 
 interface SprintLogicChatProps {
   projectId: string | null;
@@ -30,7 +26,7 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
   const defaultModel = useLLMConfigStore((s) => s.defaultModel);
   const activeModel = useMemo(() => asValidModel(defaultModel), [defaultModel]);
 
-  const [messages, setMessages] = useState<Message[]>([
+  const [messages, setMessages] = useState<ChatMessage[]>([
     { role: "assistant", content: "Hola, soy SprintLogic AI. ¿En qué te ayudo hoy?" },
   ]);
   const [input, setInput] = useState("");
@@ -77,29 +73,20 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
     const trimmed = input.trim();
     if (!trimmed || !activeModel) return;
 
-    const newMessages = [...messages, { role: "user", content: trimmed } as Message];
+    const newMessages: ChatMessage[] = [
+      ...messages,
+      { role: "user", content: trimmed },
+    ];
     setMessages(newMessages);
     setInput("");
     setLoading(true);
 
     try {
-      // NOTE: hardcoded URL is fixed in the follow-up integration commit.
-      const response = await fetch("http://127.0.0.1:8000/api/v1/chat/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: newMessages.map((m) => ({ role: m.role, content: m.content })),
-          project_id: projectId,
-          model: activeModel,
-        }),
+      const data = await sendChatMessage({
+        messages: newMessages,
+        model: activeModel,
+        project_id: projectId,
       });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-        throw new Error(errorData?.detail || "Failed to fetch response");
-      }
-
-      const data = await response.json();
       setMessages([...newMessages, { role: "assistant", content: data.response }]);
     } catch (e) {
       console.error(e);

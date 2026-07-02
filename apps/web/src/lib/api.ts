@@ -13,7 +13,8 @@ export interface ModelResult {
   name: string;
 }
 
-export const API_BASE_URL = "http://localhost:8000/api/v1";
+export const API_BASE_URL: string =
+  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
 
 /**
  * Retry wrapper: retries on network errors (e.g. backend not yet ready)
@@ -290,4 +291,37 @@ export const generateWBS = async (projectId: string, requirements: string, model
   });
   if (!res.ok) throw new Error("Failed to generate WBS from IA");
   return res.json();
+};
+
+// --- Chat / AI Agent ------------------------------------------------------
+
+export interface ChatMessage {
+  role: "user" | "assistant" | "system";
+  content: string;
+}
+
+export interface ChatRequestPayload {
+  messages: ChatMessage[];
+  /** Fully-qualified model identifier, format: `provider/model_id`. */
+  model: string;
+  project_id: string | null;
+}
+
+export interface ChatResponsePayload {
+  response: string;
+}
+
+export const sendChatMessage = async (
+  payload: ChatRequestPayload,
+): Promise<ChatResponsePayload> => {
+  const response = await fetchWithRetry(`${API_BASE_URL}/chat/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => null);
+    throw new Error(errorData?.detail || "Failed to fetch chat response");
+  }
+  return response.json() as Promise<ChatResponsePayload>;
 };
