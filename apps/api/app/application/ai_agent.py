@@ -1,15 +1,16 @@
 import json
 import litellm
 from typing import List, Dict, Any
+from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.infrastructure.security.credential_manager import CredentialManager
 from app.infrastructure.db.models import AIMemoryModel, ContextSnippetModel
 
 class AIAgent:
-    def __init__(self, session: AsyncSession, project_id: int | None = None):
+    def __init__(self, session: AsyncSession, project_id: UUID | str | None = None):
         self.session = session
-        self.project_id = project_id
+        self.project_id: UUID | None = self._coerce_project_id(project_id)
         self.model = "gemini/gemini-2.5-flash"  # Default Gemini model via litellm
 
         self.tools = [
@@ -155,3 +156,26 @@ class AIAgent:
             return str(second_response.choices[0].message.content)
 
         return str(message.content)
+
+    @staticmethod
+    def _coerce_project_id(value: UUID | str | None) -> UUID | None:
+        """Coerce incoming project_id to a validated UUID or None.
+
+        Accepts UUID, str (parsed), or None. Raises ValueError on a malformed
+        string so callers fail fast with a clear 400 instead of an opaque
+        IntegrityError from the FK constraint.
+        """
+        if value is None:
+            return None
+        if isinstance(value, UUID):
+            return value
+        if isinstance(value, str):
+            try:
+                return UUID(value)
+            except (ValueError, TypeError) as exc:
+                raise ValueError(
+                    f"AIAgent.project_id must be a valid UUID string, got: {value!r}"
+                ) from exc
+        raise TypeError(
+            f"AIAgent.project_id must be UUID, str, or None; got {type(value).__name__}"
+        )
