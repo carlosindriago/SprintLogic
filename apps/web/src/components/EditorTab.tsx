@@ -20,13 +20,16 @@ const TOOLBAR_BUTTON =
 let markersListenerRegistered = false;
 
 function normalizeMonacoUri(uri: Uri): string {
-  let p = uri.path;
-  while (p.startsWith('/')) p = p.slice(1);
-  if (!p && uri.scheme === 'file') {
-    p = (uri as Uri & { fsPath?: string }).fsPath ?? '';
-    while (p.startsWith('/')) p = p.slice(1);
+  // Monaco creates URIs from onMount's path prop.
+  // For absolute paths (e.g. /home/carlos/.../file.ts), uri.path IS
+  // the exact file path — keep it as-is so it matches node.file_path.
+  // For file:// scheme URIs, path also holds the correct absolute path.
+  // For inmemory:// models, extract the path from the string form.
+  if (uri.scheme === 'file' || !uri.scheme) {
+    return uri.path;
   }
-  return p;
+  const str = uri.toString();
+  return str.replace(/^[a-z]+:\/\//, '');
 }
 
 export default function EditorTab({
