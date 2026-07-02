@@ -14,6 +14,8 @@ const PROVIDERS = [
   { id: "openai", name: "OpenAI" },
   { id: "anthropic", name: "Anthropic" },
   { id: "openrouter", name: "OpenRouter" },
+  { id: "opencode-zen", name: "OpenCode Zen" },
+  { id: "opencode-go", name: "OpenCode Go" },
 ];
 
 export default function LLMSettingsPanel({

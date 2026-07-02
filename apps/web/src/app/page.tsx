@@ -4,7 +4,6 @@
 import { Project, GraphNode } from "@/types";
 
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -45,6 +44,7 @@ import GitStatusWidget from '@/components/GitStatusWidget';
 import GitGraphTab from '@/components/GitGraphTab';
 import DiffTab from '@/components/DiffTab';
 import InsightDashboard from '@/components/InsightDashboard';
+import PomodoroTimer from "@/components/PomodoroTimer";
 
 const GraphScene = dynamic(() => import("@/components/GraphScene"), { ssr: false });
 
@@ -213,7 +213,7 @@ export default function Home() {
         className={`flex-shrink-0 flex flex-col transition-all duration-300 ease-in-out border-zinc-800/50 bg-[#0a0a0a] overflow-hidden ${leftSidebarOpen ? 'w-[280px] border-r' : 'w-0 border-r-0'}`}
       >
         <div className="w-[280px] flex-1 flex flex-col min-h-0 overflow-hidden">
-          <ScrollArea className="flex-1">
+          <div className="flex-1 overflow-y-auto custom-scrollbar">
             <div className="p-4 flex flex-col gap-4">
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-zinc-100 truncate">SprintLogic IDE</h2>
@@ -468,8 +468,8 @@ export default function Home() {
                 </CardContent>
               </Card>
             </div>
-            </ScrollArea>
-            <div className="p-4 border-t border-zinc-800/50 bg-[#0a0a0a]">
+          </div>
+          <div className="p-4 border-t border-zinc-800/50 bg-[#0a0a0a]">
               <Button
                 variant="ghost"
                 className="w-full justify-start text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
@@ -546,7 +546,7 @@ export default function Home() {
 
       {/* FAB to open AI sidebar when collapsed */}
         {!rightSidebarOpen && (
-          <div className="absolute right-4 bottom-4 z-50">
+          <div className="absolute right-4 top-20 z-50">
             <Button 
               variant="default" 
               className="rounded-full shadow-lg shadow-blue-500/20 h-12 w-12 p-0 bg-blue-600 hover:bg-blue-500 text-white flex items-center justify-center border-none"
@@ -557,6 +557,7 @@ export default function Home() {
             </Button>
           </div>
         )}
+        <PomodoroTimer projectId={projectId} />
     </div>
   );
 }

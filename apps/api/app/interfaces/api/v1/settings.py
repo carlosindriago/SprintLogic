@@ -60,6 +60,20 @@ async def fetch_provider_models(provider: str, api_key: str) -> list[dict]:
                     models = [{"id": m["id"], "name": m.get("name", m["id"])} for m in data.get("data", [])]
                 else:
                     raise HTTPException(status_code=400, detail="Failed to fetch OpenRouter models")
+            elif provider == "opencode-zen":
+                res = await client.get("https://opencode.ai/zen/v1/models", headers={"Authorization": f"Bearer {api_key}"})
+                if res.status_code == 200:
+                    data = res.json()
+                    models = [{"id": m["id"], "name": m["id"]} for m in data.get("data", [])]
+                else:
+                    raise HTTPException(status_code=400, detail="Invalid OpenCode Zen Key")
+            elif provider == "opencode-go":
+                res = await client.get("https://opencode.ai/zen/go/v1/models", headers={"Authorization": f"Bearer {api_key}"})
+                if res.status_code == 200:
+                    data = res.json()
+                    models = [{"id": m["id"], "name": m["id"]} for m in data.get("data", [])]
+                else:
+                    raise HTTPException(status_code=400, detail="Invalid OpenCode Go Key")
             else:
                 raise HTTPException(status_code=400, detail=f"Unsupported provider: {provider}")
         except httpx.RequestError as e:
@@ -118,7 +132,9 @@ async def verify_api_key(provider: str, request: APIKeyRequest):
         "gemini": "gemini/gemini-2.5-flash",
         "openai": "gpt-4o-mini",
         "anthropic": "claude-3-haiku-20240307",
-        "openrouter": "openrouter/auto"
+        "openrouter": "openrouter/auto",
+        "opencode-zen": "gpt-5-mini",
+        "opencode-go": "glm-5.2"
     }
     
     model = test_models.get(provider)
