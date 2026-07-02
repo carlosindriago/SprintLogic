@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Settings, FolderOpen, ChevronRight, Edit2, Trash2, PlusCircle, ChevronsUpDown, FilePlus, RefreshCw, Scan } from "lucide-react";
+import { Settings, FolderOpen, ChevronRight, Edit2, Trash2, PlusCircle, ChevronsUpDown, FilePlus, RefreshCw, ScanSearch } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useState, useEffect, useCallback } from "react";
 import { scanProject, getProjects, updateProject, deleteProject, analyzeProject } from "@/lib/api";
@@ -533,7 +533,7 @@ export default function Home() {
                         onClick={handleAnalyzeProject}
                         title="Analizar Proyecto"
                       >
-                        <Scan className="h-3.5 w-3.5" />
+                        <ScanSearch className="h-3.5 w-3.5" />
                       </Button>
                     </div>
                   </div>
