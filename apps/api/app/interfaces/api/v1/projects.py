@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
@@ -325,7 +325,7 @@ async def get_node_details(project_id: str, node_id: str, session: AsyncSession 
     }
 
 @router.get("/projects/{project_id}/files")
-async def get_project_files(project_id: str, session: AsyncSession = Depends(get_db_session)):
+async def get_project_files(project_id: str, background_tasks: BackgroundTasks, session: AsyncSession = Depends(get_db_session)):
     try:
         project_uuid = UUID(project_id)
     except ValueError:
@@ -359,6 +359,7 @@ async def get_project_files(project_id: str, session: AsyncSession = Depends(get
         raise HTTPException(status_code=404, detail="Project path not found on disk")
         
     tree = build_tree(project.path)
+    background_tasks.add_task(build_search_index, project.path)
     return tree
 
 @router.get("/projects/{project_id}/file/content")
