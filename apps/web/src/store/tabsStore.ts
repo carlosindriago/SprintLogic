@@ -4,7 +4,7 @@ import { GraphNode } from '../types';
 
 export type TabType = 'dashboard' | 'editor' | 'git-graph' | 'diff' | 'insights' | 'kanban' | 'graph';
 
-const FIXED_TABS = new Set(['dashboard', 'insights', 'kanban', 'graph', 'git-graph']);
+const FIXED_TABS = new Set(['dashboard']);
 
 export interface TabData {
   id: string;

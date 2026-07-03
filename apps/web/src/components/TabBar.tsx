@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import FileIcon from './FileIcon';
 
 const TAB_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  dashboard: BarChart3,
   insights: BarChart3,
   kanban: Layout,
   graph: Network,
@@ -65,7 +66,7 @@ export default function TabBar({ onToggleAi, aiOpen }: TabBarProps) {
     <div className="flex bg-zinc-900 border-b border-zinc-800/50 overflow-x-auto overflow-y-hidden shrink-0">
       {tabs.map((tab) => {
         const IconComponent = TAB_ICONS[tab.type];
-        const isFixed = ['insights', 'kanban', 'graph', 'git-graph', 'dashboard'].includes(tab.type);
+        const isFixed = tab.type === 'dashboard';
         const isGlobalTool = IconComponent != null;
 
         return (
