@@ -47,6 +47,7 @@ import NewFileDialog from "@/components/NewFileDialog";
 import ProjectInsightsPanel from "@/components/ProjectInsightsPanel";
 import AnalysisReportDialog from "@/components/AnalysisReportDialog";
 import OmniSearchModal from "@/components/OmniSearchModal";
+import CodeMentorPanel from "@/components/CodeMentorPanel";
 import { useProjectInsightsStore } from "@/store/projectInsightsStore";
 import { toast } from "sonner";
 import { useDoubleShift } from "@/hooks/useDoubleShift";
@@ -85,6 +86,10 @@ export default function Home() {
   const [fileTreeRefreshKey, setFileTreeRefreshKey] = useState(0);
   const [analysisDialogOpen, setAnalysisDialogOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [mentorOpen, setMentorOpen] = useState(false);
+  const [mentorFile, setMentorFile] = useState('');
+  const [mentorContent, setMentorContent] = useState('');
+  const [mentorTechStack, setMentorTechStack] = useState<Record<string, number>>({});
   const untitledCounter = useRef(0);
 
   const fetchProjects = useCallback(async () => {
@@ -124,6 +129,14 @@ export default function Home() {
       file_path: filePath,
       ...(line && { metadata: { position: { line, column: 1 } } }),
     });
+  };
+
+  const handleOpenMentor = (filePath: string, content: string) => {
+    const insights = useProjectInsightsStore.getState().data;
+    setMentorFile(filePath);
+    setMentorContent(content);
+    setMentorTechStack(insights?.tech_stack ?? {});
+    setMentorOpen(true);
   };
 
   useEffect(() => {
@@ -344,6 +357,7 @@ export default function Home() {
             node={activeTab.data.node}
             vimMode={vimMode}
             onSaveUntitled={activeTab.data.node.file_path ? undefined : (content) => handleSaveUntitled(activeTab.id, content)}
+            onMentor={handleOpenMentor}
           />
         );
       case 'git-graph':
@@ -794,6 +808,13 @@ export default function Home() {
         )}
         <AnalysisReportDialog open={analysisDialogOpen} onOpenChange={setAnalysisDialogOpen} />
         <OmniSearchModal open={searchOpen} onClose={() => setSearchOpen(false)} onSelect={handleSearchSelect} />
+        <CodeMentorPanel
+          open={mentorOpen}
+          onToggle={() => setMentorOpen(false)}
+          filePath={mentorFile}
+          fileContent={mentorContent}
+          techStack={mentorTechStack}
+        />
     </div>
   );
 }

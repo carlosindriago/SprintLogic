@@ -7,7 +7,7 @@ import { useTabsStore } from '@/store/tabsStore';
 import { useMarkersStore } from '@/store/markersStore';
 import { useUnsavedStore } from '@/store/unsavedStore';
 import type { GraphNode } from '@/types';
-import { Code2, ChevronRight, Pencil, Eye, MousePointer2 } from 'lucide-react';
+import { Code2, ChevronRight, Pencil, Eye, MousePointer2, GraduationCap } from 'lucide-react';
 
 interface LintDiagnostic {
   line: number;
@@ -39,11 +39,13 @@ export default function EditorTab({
   node,
   vimMode,
   onSaveUntitled,
+  onMentor,
 }: {
   projectId: string;
   node: GraphNode;
   vimMode: boolean;
   onSaveUntitled?: (content: string) => void;
+  onMentor?: (filePath: string, content: string) => void;
 }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -503,6 +505,19 @@ export default function EditorTab({
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/><line x1="9" y1="3" x2="18" y2="3"/><line x1="9" y1="8" x2="18" y2="8"/><path d="M4 21h16"/></svg>
           </button>
         </div>
+
+        {onMentor && (
+          <>
+            <div className="w-px h-5 bg-zinc-700/50 mx-1" />
+            <button
+              className={TOOLBAR_BUTTON}
+              onClick={() => onMentor(node.file_path || fileName, editorRef.current?.getValue() || '')}
+              title="Modo Sensei"
+            >
+              <GraduationCap className="w-3.5 h-3.5" />
+            </button>
+          </>
+        )}
 
         <div className="w-px h-5 bg-zinc-700/50 mx-1" />
 
