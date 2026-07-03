@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import ReactMarkdown from "react-markdown";
-import { KeyRound, Cpu, Send, Loader2, ChevronDown } from "lucide-react";
+import { KeyRound, Cpu, Send, Loader2, ChevronDown, Terminal } from "lucide-react";
 import { useLLMConfigStore } from "@/store/llmConfigStore";
 import { sendChatMessage, ChatMessage } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -31,6 +31,19 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
   const [loading, setLoading] = useState(false);
   const [usage, setUsage] = useState<{ completion_tokens?: number; total_tokens?: number } | null>(null);
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
+
+  const SLASH_COMMANDS = [
+    { command: '/explain', description: 'Explica el archivo o código actual', prompt: 'Explica qué hace este archivo y su rol en la arquitectura del proyecto.' },
+    { command: '/architecture', description: 'Resume la arquitectura del proyecto', prompt: 'Hazme un resumen de la arquitectura de este proyecto.' },
+    { command: '/improve', description: 'Sugiere mejoras en el código', prompt: 'Analiza este código y sugiere mejoras concretas de rendimiento, legibilidad y mantenibilidad.' },
+    { command: '/review', description: 'Revisa el código en busca de bugs', prompt: 'Revisa este código en busca de posibles bugs, edge cases no manejados y vulnerabilidades de seguridad.' },
+    { command: '/test', description: 'Sugiere casos de prueba', prompt: 'Sugiere casos de prueba unitarios y de integración para este código.' },
+    { command: '/docs', description: 'Genera documentación', prompt: 'Genera documentación concisa para este código: qué hace, parámetros, valores de retorno y ejemplo de uso.' },
+  ];
+
+  const [slashMenu, setSlashMenu] = useState<{ open: boolean; selectedIndex: number; filtered: typeof SLASH_COMMANDS }>({
+    open: false, selectedIndex: 0, filtered: SLASH_COMMANDS,
+  });
 
   const modelGroups = [
     { provider: "gemini", label: "Gemini", models: [
@@ -111,7 +124,51 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
     }
   };
 
+  const handleInputChange = (val: string) => {
+    setInput(val);
+    if (val.startsWith('/') && !val.includes(' ')) {
+      const term = val.slice(1).toLowerCase();
+      const filtered = SLASH_COMMANDS.filter(c => c.command.slice(1).startsWith(term));
+      setSlashMenu({ open: true, selectedIndex: 0, filtered });
+    } else {
+      setSlashMenu(prev => prev.open ? { ...prev, open: false } : prev);
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (slashMenu.open) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSlashMenu(prev => ({
+          ...prev,
+          selectedIndex: Math.min(prev.selectedIndex + 1, prev.filtered.length - 1),
+        }));
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSlashMenu(prev => ({
+          ...prev,
+          selectedIndex: Math.max(prev.selectedIndex - 1, 0),
+        }));
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        const selected = slashMenu.filtered[slashMenu.selectedIndex];
+        if (selected) {
+          setInput(selected.command + ' ');
+          setSlashMenu(prev => ({ ...prev, open: false }));
+        }
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setSlashMenu(prev => ({ ...prev, open: false }));
+        return;
+      }
+    }
+
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
@@ -228,15 +285,42 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
       </div>
 
       <div className="border-t border-zinc-800/50 p-2 shrink-0">
-        <div className="flex items-center gap-2 bg-zinc-900 rounded-lg px-3 py-1.5">
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Escribe un comando…"
-            className="flex-1 bg-transparent text-xs text-zinc-200 placeholder-zinc-500 outline-none"
-          />
+        <div className="relative">
+          {slashMenu.open && slashMenu.filtered.length > 0 && (
+            <div className="absolute bottom-full left-0 right-0 mb-1 bg-zinc-800 border border-zinc-700/50 rounded-lg shadow-xl overflow-hidden z-50">
+              {slashMenu.filtered.map((cmd, i) => (
+                <div
+                  key={cmd.command}
+                  className={cn(
+                    "flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors",
+                    i === slashMenu.selectedIndex
+                      ? "bg-blue-500/10 text-blue-300"
+                      : "text-zinc-400 hover:bg-zinc-700/50"
+                  )}
+                  onMouseEnter={() => setSlashMenu(prev => ({ ...prev, selectedIndex: i }))}
+                  onClick={() => {
+                    setInput(cmd.command + ' ');
+                    setSlashMenu(prev => ({ ...prev, open: false }));
+                  }}
+                >
+                  <Terminal className="w-3 h-3 shrink-0" />
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-[11px] font-medium">{cmd.command}</span>
+                    <span className="text-[10px] text-zinc-500 truncate">{cmd.description}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex items-center gap-2 bg-zinc-900 rounded-lg px-3 py-1.5">
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => handleInputChange(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="/ para comandos…"
+              className="flex-1 bg-transparent text-xs text-zinc-200 placeholder-zinc-500 outline-none"
+            />
           <button
             onClick={sendMessage}
             disabled={loading || !input.trim()}
@@ -244,6 +328,7 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
           >
             <Send className="w-3.5 h-3.5" />
           </button>
+        </div>
         </div>
       </div>
     </div>
