@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import ReactMarkdown from "react-markdown";
-import { KeyRound, Cpu, Send, Loader2 } from "lucide-react";
+import { KeyRound, Cpu, Send, Loader2, ChevronDown } from "lucide-react";
 import { useLLMConfigStore } from "@/store/llmConfigStore";
 import { sendChatMessage, ChatMessage } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -30,12 +30,23 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [usage, setUsage] = useState<{ completion_tokens?: number; total_tokens?: number } | null>(null);
+  const [modelMenuOpen, setModelMenuOpen] = useState(false);
 
-  const MODEL_OPTIONS = [
-    { id: "gemini/gemini-2.5-flash", name: "Gemini 2.5 Flash" },
-    { id: "gemini/gemini-1.5-pro", name: "Gemini 1.5 Pro" },
-    { id: "openai/gpt-4o", name: "GPT-4o" },
-    { id: "anthropic/claude-3-5-sonnet", name: "Claude 3.5 Sonnet" },
+  const modelGroups = [
+    { provider: "gemini", label: "Gemini", models: [
+      { id: "gemini/gemini-2.5-flash", name: "2.5 Flash" },
+      { id: "gemini/gemini-1.5-pro", name: "1.5 Pro" },
+    ]},
+    { provider: "openai", label: "OpenAI", models: [
+      { id: "openai/gpt-4o", name: "GPT-4o" },
+      { id: "openai/gpt-4o-mini", name: "GPT-4o Mini" },
+    ]},
+    { provider: "anthropic", label: "Claude", models: [
+      { id: "anthropic/claude-3-5-sonnet", name: "3.5 Sonnet" },
+    ]},
+    { provider: "openrouter", label: "OpenRouter", models: [
+      { id: "openrouter/anthropic/claude-3-5-sonnet", name: "Claude 3.5" },
+    ]},
   ];
 
   if (!activeModel) {
@@ -113,16 +124,57 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
         <Cpu className="w-4 h-4 text-blue-400" />
         <span className="text-xs font-semibold text-zinc-300">SprintLogic AI</span>
         <div className="flex-1" />
-        <select
-          value={currentModel ?? ''}
-          onChange={(e) => setSessionModel(e.target.value || null)}
-          className="text-[10px] bg-zinc-800/40 border border-zinc-700/30 rounded px-1.5 py-0.5 text-zinc-400 outline-none max-w-[140px] truncate"
-        >
-          <option value="">{activeModel ? activeModel.split("/").slice(1).join("/") : 'default'}</option>
-          {MODEL_OPTIONS.map((m) => (
-            <option key={m.id} value={m.id}>{m.name}</option>
-          ))}
-        </select>
+        <div className="relative">
+          <button
+            onClick={() => setModelMenuOpen(!modelMenuOpen)}
+            className="flex items-center gap-1 text-[10px] bg-zinc-800/40 border border-zinc-700/30 rounded px-2 py-0.5 text-zinc-400 hover:bg-zinc-700/40 transition-colors"
+          >
+            {currentModel ? currentModel.split("/").pop() : "default"}
+            <ChevronDown className="w-3 h-3" />
+          </button>
+          {modelMenuOpen && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setModelMenuOpen(false)} />
+              <div className="absolute right-0 top-full mt-1 z-50 w-48 bg-zinc-800 border border-zinc-700/50 rounded-lg shadow-xl overflow-hidden">
+                {modelGroups.map((group) => (
+                  <div key={group.provider}>
+                    <div className="px-3 py-1 text-[9px] font-semibold text-zinc-500 uppercase tracking-wider bg-zinc-800/50">
+                      {group.label}
+                    </div>
+                    {group.models.map((m) => (
+                      <button
+                        key={m.id}
+                        onClick={() => {
+                          setSessionModel(m.id);
+                          setModelMenuOpen(false);
+                        }}
+                        className={cn(
+                          "w-full text-left px-3 py-1.5 text-[11px] transition-colors",
+                          currentModel === m.id
+                            ? "bg-blue-500/10 text-blue-300"
+                            : "text-zinc-300 hover:bg-zinc-700"
+                        )}
+                      >
+                        {m.name}
+                      </button>
+                    ))}
+                  </div>
+                ))}
+                {sessionModel && (
+                  <button
+                    onClick={() => {
+                      setSessionModel(null);
+                      setModelMenuOpen(false);
+                    }}
+                    className="w-full text-left px-3 py-1.5 text-[11px] text-zinc-500 hover:bg-zinc-700 border-t border-zinc-700/50"
+                  >
+                    Usar predeterminado
+                  </button>
+                )}
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto custom-scrollbar p-3 flex flex-col gap-3">
