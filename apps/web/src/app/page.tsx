@@ -98,6 +98,22 @@ export default function Home() {
 
   useDoubleShift(() => setSearchOpen(true));
 
+  useEffect(() => {
+    const handler = (event: PromiseRejectionEvent) => {
+      const reason = event.reason;
+      if (
+        reason &&
+        (reason.name === 'Canceled' ||
+          reason.message?.includes('disposed') ||
+          reason.message?.includes('TextModel'))
+      ) {
+        event.preventDefault();
+      }
+    };
+    window.addEventListener('unhandledrejection', handler);
+    return () => window.removeEventListener('unhandledrejection', handler);
+  }, []);
+
   const handleSearchSelect = (result: { path: string; line?: number | null }) => {
     const filePath = result.path.split(':')[0];
     const line = result.line ?? undefined;

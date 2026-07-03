@@ -27,11 +27,16 @@ export default function GitStatusWidget({ projectId }: { projectId: string }) {
     };
 
     fetchStatus();
-    const interval = setInterval(fetchStatus, 30000);
+
+    // Fetch on window focus instead of polling
+    const onFocus = () => {
+      if (active) fetchStatus().catch(() => {});
+    };
+    window.addEventListener('focus', onFocus);
 
     return () => {
       active = false;
-      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
     };
   }, [projectId]);
 
