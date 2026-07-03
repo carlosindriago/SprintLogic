@@ -1,11 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 import json
 import litellm
 import httpx
+import asyncio
 
 from app.infrastructure.db.database import get_db_session
 from app.application.ai_agent import AIAgent
@@ -168,28 +170,42 @@ async def mentor_sensei(request: MentorRequest, background_tasks: BackgroundTask
         f"{docs_section}"
     )
 
-    try:
-        response = await litellm.acompletion(
-            model=model,
-            messages=[
-                {"role": "system", "content": SENSEI_SYSTEM_PROMPT},
-                {"role": "user", "content": user_message},
-            ],
-            api_key=api_key,
-        )
-        response_text = str(response.choices[0].message.content)
-
-        # Save interaction to long-term memory in background
-        if request.project_id:
-            summary = f"Modo Sensei en {request.file_path}: {request.user_query[:120]}"
-            background_tasks.add_task(
-                _save_memory,
-                request.project_id,
-                "sensei",
-                "chat_summary",
-                summary,
+    async def generate() -> AsyncGenerator[str, None]:
+        full_response = ""
+        try:
+            response = await litellm.acompletion(
+                model=model,
+                messages=[
+                    {"role": "system", "content": SENSEI_SYSTEM_PROMPT},
+                    {"role": "user", "content": user_message},
+                ],
+                api_key=api_key,
+                stream=True,
+                stream_options={"include_usage": True},
             )
+            async for chunk in response:
+                delta = chunk.choices[0].delta
+                if delta and delta.content:
+                    full_response += delta.content
+                    yield f"data: {json.dumps({'text': delta.content, 'is_done': False})}\n\n"
+                if hasattr(chunk, 'usage') and chunk.usage:
+                    usage = {
+                        "prompt_tokens": chunk.usage.prompt_tokens,
+                        "completion_tokens": chunk.usage.completion_tokens,
+                        "total_tokens": chunk.usage.total_tokens,
+                    }
+                    yield f"data: {json.dumps({'text': '', 'is_done': True, 'usage': usage})}\n\n"
 
-        return {"response": response_text}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Mentor error: {str(e)}")
+            if full_response and request.project_id:
+                summary = f"Modo Sensei en {request.file_path}: {request.user_query[:120]}"
+                background_tasks.add_task(
+                    _save_memory,
+                    request.project_id,
+                    "sensei",
+                    "chat_summary",
+                    summary + f" — Respuesta: {full_response[:200]}",
+                )
+        except Exception:
+            yield f"data: {json.dumps({'text': '', 'is_done': True, 'error': 'Stream error'})}\n\n"
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
