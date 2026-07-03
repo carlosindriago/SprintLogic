@@ -17,7 +17,7 @@ interface Props {
   onSelect: (result: SearchResult) => void;
 }
 
-export default function SearchEverywhereModal({ open, onClose, onSelect }: Props) {
+export default function OmniSearchModal({ open, onClose, onSelect }: Props) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -105,7 +105,7 @@ export default function SearchEverywhereModal({ open, onClose, onSelect }: Props
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Search Everywhere — archivos, símbolos..."
+            placeholder="OmniSearch — archivos, símbolos..."
             className="flex-1 bg-transparent text-sm text-zinc-200 placeholder-zinc-500 outline-none"
             autoFocus
           />

@@ -46,7 +46,7 @@ import PomodoroTimer from "@/components/PomodoroTimer";
 import NewFileDialog from "@/components/NewFileDialog";
 import ProjectInsightsPanel from "@/components/ProjectInsightsPanel";
 import AnalysisReportDialog from "@/components/AnalysisReportDialog";
-import SearchEverywhereModal from "@/components/SearchEverywhereModal";
+import OmniSearchModal from "@/components/OmniSearchModal";
 import { useProjectInsightsStore } from "@/store/projectInsightsStore";
 import { toast } from "sonner";
 import { useDoubleShift } from "@/hooks/useDoubleShift";
@@ -774,7 +774,7 @@ export default function Home() {
           />
         )}
         <AnalysisReportDialog open={analysisDialogOpen} onOpenChange={setAnalysisDialogOpen} />
-        <SearchEverywhereModal open={searchOpen} onClose={() => setSearchOpen(false)} onSelect={handleSearchSelect} />
+        <OmniSearchModal open={searchOpen} onClose={() => setSearchOpen(false)} onSelect={handleSearchSelect} />
     </div>
   );
 }
