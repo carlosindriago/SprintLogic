@@ -45,3 +45,15 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
             aiosqlite_conn._vec_loaded = True
             
         yield session
+
+
+async def init_fts5() -> None:
+    """Create the FTS5 virtual table for universal full-text search."""
+    from sqlalchemy import text
+
+    async with engine.begin() as conn:
+        await conn.execute(text(
+            "CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5("
+            "  type, name, path, content, line UNINDEXED"
+            ")"
+        ))

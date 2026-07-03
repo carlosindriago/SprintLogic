@@ -7,8 +7,14 @@ from app.interfaces.api.v1.chat import router as chat_router
 from app.interfaces.api.v1.git import router as git_router
 from app.interfaces.api.v1.lsp import router as lsp_router
 from app.interfaces.api.v1.editor import router as editor_router
+from app.infrastructure.db.database import init_fts5
 
 app = FastAPI(title="sprintLogic API")
+
+
+@app.on_event("startup")
+async def startup() -> None:
+    await init_fts5()
 
 app.add_middleware(
     CORSMiddleware,
