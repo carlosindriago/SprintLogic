@@ -4,6 +4,7 @@ import type { editor as monacoEditor, Uri } from 'monaco-editor';
 import { getFileContent, saveFileContent, API_BASE_URL } from '@/lib/api';
 import { useTabsStore } from '@/store/tabsStore';
 import { useMarkersStore } from '@/store/markersStore';
+import { useUnsavedStore } from '@/store/unsavedStore';
 import type { GraphNode } from '@/types';
 import { Code2, ChevronRight } from 'lucide-react';
 
@@ -66,8 +67,9 @@ export default function EditorTab({
       if (isMounted) setLoading(true);
 
       if (!node.file_path) {
-        originalContentRef.current = '// No file path provided';
-        currentContentRef.current = '// No file path provided';
+        const backup = useUnsavedStore.getState().getContent(node.id) || '';
+        originalContentRef.current = backup;
+        currentContentRef.current = backup;
         if (isMounted) setLoading(false);
         return;
       }
@@ -122,12 +124,13 @@ export default function EditorTab({
       originalContentRef.current = current;
       currentContentRef.current = current;
       setIsDirty(false);
+      useUnsavedStore.getState().clearContent(node.id);
     } catch {
       // silently fail
     } finally {
       setSaving(false);
     }
-  }, [projectId, node.file_path, saving, onSaveUntitled]);
+  }, [projectId, node.file_path, saving, onSaveUntitled, node.id]);
 
   handleSaveRef.current = handleSave;
 
@@ -278,10 +281,18 @@ export default function EditorTab({
     }
 
     let lintTimer: ReturnType<typeof setTimeout> | null = null;
+    let backupTimer: ReturnType<typeof setTimeout> | null = null;
 
     editor.onDidChangeModelContent(() => {
       if (dirtyCheckTimerRef.current) clearTimeout(dirtyCheckTimerRef.current);
       dirtyCheckTimerRef.current = setTimeout(checkDirty, 50);
+
+      if (!node.file_path) {
+        if (backupTimer) clearTimeout(backupTimer);
+        backupTimer = setTimeout(() => {
+          useUnsavedStore.getState().setContent(node.id, editor.getValue());
+        }, 1000);
+      }
 
       if (lintTimer) clearTimeout(lintTimer);
       lintTimer = setTimeout(async () => {
@@ -435,7 +446,7 @@ export default function EditorTab({
         <Editor
           height="100%"
           theme="vs-dark"
-          path={node.file_path}
+          path={node.file_path || node.id}
           defaultValue={currentContentRef.current}
           onMount={handleEditorDidMount}
           options={{
