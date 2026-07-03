@@ -334,10 +334,63 @@ export default function EditorTab({
       handleSaveRef.current();
     });
 
-    // Toggle read-only mode with 'i' key (vim-style)
+    // ── Vim-style read-only navigation ──────────────────────────────
+    // 'i' to enter edit mode (only when read-only)
     editor.addCommand(monaco.KeyCode.KeyI, () => {
       setEditable(true);
+    }, 'readOnly');
+
+    // 'Escape' to return to read-only mode (only when editable)
+    editor.addCommand(monaco.KeyCode.Escape, () => {
+      setEditable(false);
     }, '!readOnly');
+
+    // Navigation keys active only in read-only mode
+    editor.addCommand(monaco.KeyCode.KeyH, () => {
+      editor.trigger('keyboard', 'cursorLeft', null);
+    }, 'readOnly');
+    editor.addCommand(monaco.KeyCode.KeyJ, () => {
+      editor.trigger('keyboard', 'cursorDown', null);
+    }, 'readOnly');
+    editor.addCommand(monaco.KeyCode.KeyK, () => {
+      editor.trigger('keyboard', 'cursorUp', null);
+    }, 'readOnly');
+    editor.addCommand(monaco.KeyCode.KeyL, () => {
+      editor.trigger('keyboard', 'cursorRight', null);
+    }, 'readOnly');
+    editor.addCommand(monaco.KeyCode.KeyW, () => {
+      editor.trigger('keyboard', 'cursorWordRight', null);
+    }, 'readOnly');
+    editor.addCommand(monaco.KeyCode.KeyB, () => {
+      editor.trigger('keyboard', 'cursorWordLeft', null);
+    }, 'readOnly');
+    // gg → top of file (double-tap g within 500ms)
+    let lastGPress = 0;
+    editor.addCommand(monaco.KeyCode.KeyG, () => {
+      const now = Date.now();
+      if (now - lastGPress < 500) {
+        editor.setPosition({ lineNumber: 1, column: 1 });
+        lastGPress = 0;
+      } else {
+        lastGPress = now;
+      }
+    }, 'readOnly');
+    // Shift+G → bottom of file
+    editor.addCommand(monaco.KeyMod.Shift | monaco.KeyCode.KeyG, () => {
+      editor.trigger('keyboard', 'cursorBottom', null);
+    }, 'readOnly');
+    // Ctrl+D → page down
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyD, () => {
+      editor.trigger('keyboard', 'cursorPageDown', null);
+    }, 'readOnly');
+    // Ctrl+U → page up
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyU, () => {
+      editor.trigger('keyboard', 'cursorPageUp', null);
+    }, 'readOnly');
+    // / → find
+    editor.addCommand(monaco.KeyCode.Slash, () => {
+      editor.getAction('actions.find')?.run();
+    }, 'readOnly');
 
     checkDirty();
   }, [vimMode, node.metadata, checkDirty]);
