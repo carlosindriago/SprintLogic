@@ -25,6 +25,8 @@ export default function CodeMentorPanel({ open, onToggle, filePath, fileContent,
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [usage, setUsage] = useState<{ prompt_tokens: number; completion_tokens: number; total_tokens: number } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const context7ApiKey = useLLMConfigStore((s) => s.context7ApiKey);
 
@@ -35,9 +37,11 @@ export default function CodeMentorPanel({ open, onToggle, filePath, fileContent,
   const sendMessage = async (query: string) => {
     if (!query.trim() || loading) return;
     const userMsg: Message = { role: 'user', content: query };
-    setMessages((prev) => [...prev, userMsg]);
+    setMessages((prev) => [...prev, userMsg, { role: 'assistant', content: '' }]);
     setInput('');
     setLoading(true);
+    setIsStreaming(true);
+    setUsage(null);
 
     try {
       const res = await fetch(`${API_BASE_URL}/chat/mentor`, {
@@ -49,13 +53,54 @@ export default function CodeMentorPanel({ open, onToggle, filePath, fileContent,
           project_tech_stack: techStack,
           user_query: query,
           context7_api_key: context7ApiKey,
+          project_id: '',
         }),
       });
       if (!res.ok) throw new Error('Mentor error');
-      const data = await res.json();
-      setMessages((prev) => [...prev, { role: 'assistant', content: data.response }]);
+
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error('No stream');
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const parsed = JSON.parse(line.slice(6));
+              if (parsed.text) {
+                setMessages((prev) => {
+                  const next = [...prev];
+                  const last = next[next.length - 1];
+                  if (last?.role === 'assistant') {
+                    next[next.length - 1] = { ...last, content: last.content + parsed.text };
+                  }
+                  return next;
+                });
+              }
+              if (parsed.is_done) {
+                setIsStreaming(false);
+                if (parsed.usage) setUsage(parsed.usage);
+              }
+            } catch { /* skip malformed */ }
+          }
+        }
+      }
     } catch {
-      setMessages((prev) => [...prev, { role: 'assistant', content: 'Error al consultar al mentor.' }]);
+      setMessages((prev) => {
+        const next = [...prev];
+        const last = next[next.length - 1];
+        if (last?.role === 'assistant' && !last.content) {
+          next[next.length - 1] = { ...last, content: 'Error al consultar al mentor.' };
+        }
+        return next;
+      });
     } finally {
       setLoading(false);
     }
@@ -165,10 +210,16 @@ export default function CodeMentorPanel({ open, onToggle, filePath, fileContent,
             </div>
           ))}
 
-          {context7ApiKey && loading && (
+          {context7ApiKey && isStreaming && (
             <div className="self-start flex items-center gap-2 text-xs text-zinc-500 px-3 py-2">
               <Loader2 className="w-3 h-3 animate-spin" />
               El Sensei está pensando...
+            </div>
+          )}
+
+          {usage && !isStreaming && (
+            <div className="self-start text-[10px] text-zinc-600 px-3">
+              ⚡ {usage.completion_tokens} / {usage.total_tokens} tokens
             </div>
           )}
         </div>
@@ -182,11 +233,11 @@ export default function CodeMentorPanel({ open, onToggle, filePath, fileContent,
               onKeyDown={handleKeyDown}
               placeholder="Preguntale al Sensei..."
               className="flex-1 bg-transparent text-xs text-zinc-200 placeholder-zinc-500 outline-none"
-              disabled={loading}
+              disabled={loading || isStreaming}
             />
             <button
               onClick={() => sendMessage(input)}
-              disabled={loading || !input.trim()}
+              disabled={loading || isStreaming || !input.trim()}
               className="text-zinc-400 hover:text-white disabled:opacity-30 shrink-0"
             >
               <Send className="w-3.5 h-3.5" />
