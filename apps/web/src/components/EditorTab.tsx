@@ -336,61 +336,119 @@ export default function EditorTab({
 
     // ── Vim-style read-only navigation ──────────────────────────────
     // 'i' to enter edit mode (only when read-only)
-    editor.addCommand(monaco.KeyCode.KeyI, () => {
-      setEditable(true);
-    }, 'readOnly');
+    editor.addAction({
+      id: 'sprintlogic-unlock-editor',
+      label: 'Unlock editor for editing',
+      keybindings: [monaco.KeyCode.KeyI],
+      precondition: 'readOnly',
+      run: () => setEditable(true),
+    });
 
     // 'Escape' to return to read-only mode (only when editable)
-    editor.addCommand(monaco.KeyCode.Escape, () => {
-      setEditable(false);
-    }, '!readOnly');
+    editor.addAction({
+      id: 'sprintlogic-lock-editor',
+      label: 'Return to read-only mode',
+      keybindings: [monaco.KeyCode.Escape],
+      precondition: '!readOnly',
+      run: () => setEditable(false),
+    });
 
-    // Navigation keys active only in read-only mode
-    editor.addCommand(monaco.KeyCode.KeyH, () => {
-      editor.trigger('keyboard', 'cursorLeft', null);
-    }, 'readOnly');
-    editor.addCommand(monaco.KeyCode.KeyJ, () => {
-      editor.trigger('keyboard', 'cursorDown', null);
-    }, 'readOnly');
-    editor.addCommand(monaco.KeyCode.KeyK, () => {
-      editor.trigger('keyboard', 'cursorUp', null);
-    }, 'readOnly');
-    editor.addCommand(monaco.KeyCode.KeyL, () => {
-      editor.trigger('keyboard', 'cursorRight', null);
-    }, 'readOnly');
-    editor.addCommand(monaco.KeyCode.KeyW, () => {
-      editor.trigger('keyboard', 'cursorWordRight', null);
-    }, 'readOnly');
-    editor.addCommand(monaco.KeyCode.KeyB, () => {
-      editor.trigger('keyboard', 'cursorWordLeft', null);
-    }, 'readOnly');
+    editor.addAction({
+      id: 'sprintlogic-nav-left',
+      label: 'Move cursor left',
+      keybindings: [monaco.KeyCode.KeyH],
+      precondition: 'readOnly',
+      run: (ed) => ed.trigger('keyboard', 'cursorLeft', null),
+    });
+    editor.addAction({
+      id: 'sprintlogic-nav-down',
+      label: 'Move cursor down',
+      keybindings: [monaco.KeyCode.KeyJ],
+      precondition: 'readOnly',
+      run: (ed) => ed.trigger('keyboard', 'cursorDown', null),
+    });
+    editor.addAction({
+      id: 'sprintlogic-nav-up',
+      label: 'Move cursor up',
+      keybindings: [monaco.KeyCode.KeyK],
+      precondition: 'readOnly',
+      run: (ed) => ed.trigger('keyboard', 'cursorUp', null),
+    });
+    editor.addAction({
+      id: 'sprintlogic-nav-right',
+      label: 'Move cursor right',
+      keybindings: [monaco.KeyCode.KeyL],
+      precondition: 'readOnly',
+      run: (ed) => ed.trigger('keyboard', 'cursorRight', null),
+    });
+    editor.addAction({
+      id: 'sprintlogic-nav-word-right',
+      label: 'Move cursor word right',
+      keybindings: [monaco.KeyCode.KeyW],
+      precondition: 'readOnly',
+      run: (ed) => ed.trigger('keyboard', 'cursorWordRight', null),
+    });
+    editor.addAction({
+      id: 'sprintlogic-nav-word-left',
+      label: 'Move cursor word left',
+      keybindings: [monaco.KeyCode.KeyB],
+      precondition: 'readOnly',
+      run: (ed) => ed.trigger('keyboard', 'cursorWordLeft', null),
+    });
+
     // gg → top of file (double-tap g within 500ms)
     let lastGPress = 0;
-    editor.addCommand(monaco.KeyCode.KeyG, () => {
-      const now = Date.now();
-      if (now - lastGPress < 500) {
-        editor.setPosition({ lineNumber: 1, column: 1 });
-        lastGPress = 0;
-      } else {
-        lastGPress = now;
-      }
-    }, 'readOnly');
+    editor.addAction({
+      id: 'sprintlogic-nav-top',
+      label: 'Go to top of file (gg)',
+      keybindings: [monaco.KeyCode.KeyG],
+      precondition: 'readOnly',
+      run: (ed) => {
+        const now = Date.now();
+        if (now - lastGPress < 500) {
+          ed.setPosition({ lineNumber: 1, column: 1 });
+          lastGPress = 0;
+        } else {
+          lastGPress = now;
+        }
+      },
+    });
+
     // Shift+G → bottom of file
-    editor.addCommand(monaco.KeyMod.Shift | monaco.KeyCode.KeyG, () => {
-      editor.trigger('keyboard', 'cursorBottom', null);
-    }, 'readOnly');
+    editor.addAction({
+      id: 'sprintlogic-nav-bottom',
+      label: 'Go to bottom of file',
+      keybindings: [monaco.KeyMod.Shift | monaco.KeyCode.KeyG],
+      precondition: 'readOnly',
+      run: (ed) => ed.trigger('keyboard', 'cursorBottom', null),
+    });
+
     // Ctrl+D → page down
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyD, () => {
-      editor.trigger('keyboard', 'cursorPageDown', null);
-    }, 'readOnly');
+    editor.addAction({
+      id: 'sprintlogic-nav-page-down',
+      label: 'Scroll page down',
+      keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyD],
+      precondition: 'readOnly',
+      run: (ed) => ed.trigger('keyboard', 'cursorPageDown', null),
+    });
+
     // Ctrl+U → page up
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyU, () => {
-      editor.trigger('keyboard', 'cursorPageUp', null);
-    }, 'readOnly');
+    editor.addAction({
+      id: 'sprintlogic-nav-page-up',
+      label: 'Scroll page up',
+      keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyU],
+      precondition: 'readOnly',
+      run: (ed) => ed.trigger('keyboard', 'cursorPageUp', null),
+    });
+
     // / → find
-    editor.addCommand(monaco.KeyCode.Slash, () => {
-      editor.getAction('actions.find')?.run();
-    }, 'readOnly');
+    editor.addAction({
+      id: 'sprintlogic-nav-find',
+      label: 'Open find widget',
+      keybindings: [monaco.KeyCode.Slash],
+      precondition: 'readOnly',
+      run: (ed) => ed.getAction('actions.find')?.run(),
+    });
 
     checkDirty();
   }, [vimMode, node.metadata, checkDirty]);
