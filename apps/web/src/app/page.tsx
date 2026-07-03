@@ -227,6 +227,23 @@ export default function Home() {
     }
   };
 
+  const handleNavigateToMarker = (filePath: string, line: number, column: number) => {
+    addTab({
+      id: filePath,
+      title: filePath.split('/').pop() || filePath,
+      type: 'editor',
+      data: {
+        node: {
+          id: filePath,
+          label: "File" as const,
+          name: filePath.split('/').pop() || filePath,
+          file_path: filePath,
+          metadata: { position: { line, column } },
+        }
+      }
+    });
+  };
+
   const handleAnalyzeProject = async () => {
     if (!projectId) return;
     const { setLoading, setData } = useProjectInsightsStore.getState();
@@ -635,6 +652,7 @@ export default function Home() {
                         onFileSelect={handleFileTreeSelect}
                         onNewFile={handleNewFile}
                         refreshKey={fileTreeRefreshKey}
+                        onNavigateToMarker={handleNavigateToMarker}
                       />
                     </div>
                   ) : (

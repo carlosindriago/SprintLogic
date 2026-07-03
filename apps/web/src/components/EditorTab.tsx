@@ -320,7 +320,11 @@ export default function EditorTab({
       try {
         const metadataStr = typeof node.metadata === "string" ? node.metadata : JSON.stringify(node.metadata);
         const meta = JSON.parse(metadataStr);
-        if (meta.start_line) {
+        if (meta.position) {
+          editor.revealLineInCenter(meta.position.line);
+          editor.setPosition({ lineNumber: meta.position.line, column: meta.position.column || 1 });
+          editor.focus();
+        } else if (meta.start_line) {
           editor.revealLineInCenter(meta.start_line);
           editor.setPosition({ lineNumber: meta.start_line, column: 1 });
         }
