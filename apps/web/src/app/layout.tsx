@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import ThemeProvider from "@/components/ThemeProvider";
-import ErrorSilencer from "@/components/ErrorSilencer";
 import { Toaster } from "sonner";
 
 const geistSans = Geist({
@@ -31,7 +30,21 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <ErrorSilencer />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              window.addEventListener('unhandledrejection', function(event) {
+                var r = event.reason;
+                if (!r) return;
+                var n = r.name || '';
+                var m = r.message || '';
+                if (n === 'Canceled' || m === 'Canceled' || m.includes('disposed') || m.includes('TextModel') || n === 'AbortError') {
+                  event.preventDefault();
+                }
+              });
+            `,
+          }}
+        />
         <ThemeProvider>{children}</ThemeProvider>
         <Toaster theme="dark" position="bottom-right" />
       </body>
