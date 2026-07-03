@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text
 from typing import List, Dict, Any
 from uuid import UUID
 from pathlib import Path
@@ -473,16 +474,36 @@ async def analyze_project(project_id: str, session: AsyncSession = Depends(get_d
     import os
     from collections import Counter
 
+    # ── Clear and rebuild FTS5 search index ───────────────────────────
+    await session.execute(text("DELETE FROM search_index"))
+
     tech_stack: dict[str, int] = {}
     total_files = 0
+    inserts: list[dict[str, str]] = []
 
     for dirpath, dirnames, filenames in os.walk(project_root):
         dirnames[:] = [d for d in dirnames if d not in IGNORE_DIRS and not d.startswith('.')]
         for filename in filenames:
             ext = Path(filename).suffix.lower()
+            file_path = str(Path(dirpath) / filename)
             if ext:
                 tech_stack[ext] = tech_stack.get(ext, 0) + 1
             total_files += 1
+            inserts.append({
+                "type": "file",
+                "name": filename,
+                "path": file_path,
+            })
+
+    if inserts:
+        values = ", ".join(
+            f"('{r['type']}', '{r['name'].replace(chr(39), chr(39)+chr(39))}', '{r['path'].replace(chr(39), chr(39)+chr(39))}')"
+            for r in inserts
+        )
+        await session.execute(text(
+            f"INSERT INTO search_index (type, name, path) VALUES {values}"
+        ))
+        await session.commit()
 
     # ── Run language scanners ──────────────────────────────────────────
     from app.infrastructure.scanners.python_scanner import PythonScanner
