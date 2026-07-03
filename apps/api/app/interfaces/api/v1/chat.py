@@ -9,6 +9,7 @@ import httpx
 from app.infrastructure.db.database import get_db_session
 from app.application.ai_agent import AIAgent
 from app.infrastructure.security.credential_manager import CredentialManager
+from app.infrastructure.ai.context_builder import build_agent_context
 from uuid import UUID
 
 router = APIRouter()
@@ -97,6 +98,7 @@ class MentorRequest(BaseModel):
     project_tech_stack: Dict[str, Any] = {}
     user_query: str = "Hazme un desglose arquitectónico de este archivo"
     context7_api_key: str = ""
+    project_id: str = ""
 
 
 class MentorResponse(BaseModel):
@@ -104,12 +106,19 @@ class MentorResponse(BaseModel):
 
 
 @router.post("/mentor", response_model=MentorResponse)
-async def mentor_sensei(request: MentorRequest):
+async def mentor_sensei(request: MentorRequest, session: AsyncSession = Depends(get_db_session)):
     provider = "gemini"
     model = "gemini/gemini-2.5-flash"
     api_key = CredentialManager.get_api_key(provider)
     if not api_key:
         raise HTTPException(status_code=400, detail="Gemini API key not configured")
+
+    # Retrieve episodic project memory
+    memory_context = ""
+    if request.project_id:
+        memory_context = await build_agent_context(
+            session, request.project_id, request.user_query, "sensei"
+        )
 
     # Fetch Context7 documentation if API key is available
     context7_docs = ""
@@ -130,6 +139,7 @@ async def mentor_sensei(request: MentorRequest):
         f"Archivo: {request.file_path}\n\n"
         f"Tech Stack del proyecto: {json.dumps(request.project_tech_stack, indent=2)}\n\n"
         f"Código del archivo:\n```\n{request.content[:8000]}\n```\n\n"
+        f"{memory_context}\n"
         f"Pregunta del usuario: {request.user_query}"
         f"{docs_section}"
     )
