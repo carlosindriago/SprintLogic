@@ -505,6 +505,37 @@ async def analyze_project(project_id: str, session: AsyncSession = Depends(get_d
         ))
         await session.commit()
 
+    # ── Extract and index code symbols ────────────────────────────────
+    from app.infrastructure.scanners.symbol_extractor import extract_symbols
+
+    symbol_inserts: list[str] = []
+    MAX_FILE_BYTES = 500_000  # skip files > 500KB to avoid memory issues
+
+    for entry in inserts:
+        file_path = Path(entry["path"])
+        if not file_path.exists() or file_path.stat().st_size > MAX_FILE_BYTES:
+            continue
+        ext = file_path.suffix.lower()
+        if ext not in {".ts", ".tsx", ".js", ".jsx", ".py", ".rs", ".go", ".java", ".php"}:
+            continue
+        try:
+            content = file_path.read_text(encoding="utf-8", errors="ignore")
+        except Exception:
+            continue
+        symbols = extract_symbols(str(file_path), content)
+        for sym in symbols:
+            safe_name = sym["name"].replace("'", "''")
+            safe_path = str(file_path).replace("'", "''")
+            symbol_inserts.append(
+                f"('symbol', '{safe_name}', '{safe_path}', {sym['line']})"
+            )
+
+    if symbol_inserts:
+        await session.execute(text(
+            f"INSERT INTO search_index (type, name, path, line) VALUES {', '.join(symbol_inserts)}"
+        ))
+        await session.commit()
+
     # ── Run language scanners ──────────────────────────────────────────
     from app.infrastructure.scanners.python_scanner import PythonScanner
 
