@@ -17,44 +17,49 @@ export interface TabData {
   };
 }
 
+interface ProjectSession {
+  tabs: TabData[];
+  activeTabId: string | null;
+}
+
 interface TabsState {
   tabs: TabData[];
   activeTabId: string | null;
   dirtyFiles: Record<string, boolean>;
+  currentProjectId: string | null;
+  projectSessions: Record<string, ProjectSession>;
+
   addTab: (tab: TabData) => void;
   removeTab: (id: string) => void;
   setActiveTab: (id: string) => void;
   updateTab: (id: string, partial: Partial<TabData>) => void;
   markDirty: (id: string, dirty: boolean) => void;
   setAllClean: () => void;
+  switchProject: (projectId: string | null) => void;
 }
+
+const DEFAULT_SESSION: ProjectSession = {
+  tabs: [{ id: 'dashboard', title: 'Dashboard', type: 'dashboard' }],
+  activeTabId: 'dashboard',
+};
 
 export const useTabsStore = create<TabsState>()(
   persist(
     (set, get) => ({
-      tabs: [
-        {
-          id: 'dashboard',
-          title: 'Dashboard',
-          type: 'dashboard'
-        }
-      ],
-      activeTabId: 'dashboard',
+      tabs: DEFAULT_SESSION.tabs,
+      activeTabId: DEFAULT_SESSION.activeTabId,
       dirtyFiles: {},
+      currentProjectId: null,
+      projectSessions: {},
 
       addTab: (tab) => {
         const { tabs } = get();
         const exists = tabs.find(t => t.id === tab.id);
-        
         if (exists) {
           set({ activeTabId: tab.id });
           return;
         }
-
-        set({ 
-          tabs: [...tabs, tab],
-          activeTabId: tab.id
-        });
+        set({ tabs: [...tabs, tab], activeTabId: tab.id });
       },
 
       removeTab: (id) => {
@@ -65,12 +70,9 @@ export const useTabsStore = create<TabsState>()(
           set({ activeTabId: id });
           return;
         }
-
         const newTabs = tabs.filter(t => t.id !== id);
         const newDirty = { ...dirtyFiles };
         delete newDirty[id];
-        
-        // If we are closing the active tab, switch to another tab
         if (activeTabId === id) {
           const closedIndex = tabs.findIndex(t => t.id === id);
           const nextTab = newTabs[closedIndex] || newTabs[closedIndex - 1] || newTabs[0];
@@ -80,15 +82,11 @@ export const useTabsStore = create<TabsState>()(
         }
       },
 
-      setActiveTab: (id) => {
-        set({ activeTabId: id });
-      },
+      setActiveTab: (id) => set({ activeTabId: id }),
 
       updateTab: (id, partial) => {
         const { tabs } = get();
-        set({
-          tabs: tabs.map(t => t.id === id ? { ...t, ...partial } : t)
-        });
+        set({ tabs: tabs.map(t => t.id === id ? { ...t, ...partial } : t) });
       },
 
       markDirty: (id, dirty) => {
@@ -96,21 +94,47 @@ export const useTabsStore = create<TabsState>()(
         if (dirty) {
           set({ dirtyFiles: { ...dirtyFiles, [id]: true } });
         } else {
-          const newDirty = { ...dirtyFiles };
-          delete newDirty[id];
-          set({ dirtyFiles: newDirty });
+          const next = { ...dirtyFiles };
+          delete next[id];
+          set({ dirtyFiles: next });
         }
       },
 
-      setAllClean: () => {
-        set({ dirtyFiles: {} });
-      }
+      setAllClean: () => set({ dirtyFiles: {} }),
+
+      switchProject: (projectId) => {
+        const { currentProjectId, tabs, activeTabId, projectSessions } = get();
+
+        // Save current session
+        const nextSessions = { ...projectSessions };
+        if (currentProjectId) {
+          nextSessions[currentProjectId] = { tabs, activeTabId };
+        }
+
+        // Load target session (or default if no previous session)
+        const target = projectId
+          ? (nextSessions[projectId] ?? { ...DEFAULT_SESSION, tabs: [...DEFAULT_SESSION.tabs] })
+          : DEFAULT_SESSION;
+
+        set({
+          currentProjectId: projectId,
+          projectSessions: nextSessions,
+          tabs: target.tabs,
+          activeTabId: target.activeTabId,
+          dirtyFiles: {},
+        });
+      },
     }),
     {
       name: 'sprintlogic-tabs-storage',
       partialize: (state) => {
-        const { dirtyFiles, ...persisted } = state;
-        return persisted;
+        const { tabs, activeTabId, dirtyFiles, currentProjectId, projectSessions } = state;
+        // Also save current session before persisting
+        const sessions = { ...projectSessions };
+        if (currentProjectId) {
+          sessions[currentProjectId] = { tabs, activeTabId };
+        }
+        return { currentProjectId, projectSessions: sessions };
       },
     }
   )

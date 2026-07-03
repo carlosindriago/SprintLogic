@@ -76,7 +76,7 @@ export default function Home() {
   const [addProjectOpen, setAddProjectOpen] = useState(false);
   const [vimMode, setVimMode] = useState(false);
   
-  const { tabs, activeTabId, addTab } = useTabsStore();
+  const { tabs, activeTabId, addTab, switchProject } = useTabsStore();
   const { accentColor, setAccentColor, uiScale, setUiScale } = useThemeStore();
 
   const [settingsTab, setSettingsTab] = useState<'llms' | 'appearance'>('llms');
@@ -102,6 +102,10 @@ export default function Home() {
   }, []);
 
   useDoubleShift(() => setSearchOpen(true));
+
+  useEffect(() => {
+    switchProject(projectId);
+  }, [projectId, switchProject]);
 
   const handleSearchSelect = (result: { path: string; line?: number | null }) => {
     const filePath = result.path.split(':')[0];
