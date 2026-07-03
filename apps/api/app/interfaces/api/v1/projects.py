@@ -617,6 +617,63 @@ async def search_everywhere(
     except Exception:
         return {"results": []}
 
+
+class MemorySaveRequest(BaseModel):
+    agent_name: str
+    context_type: str  # architectural_decision, bug_fix, chat_summary
+    memory_content: str
+
+
+@router.post("/projects/{project_id}/memory")
+async def save_project_memory(project_id: str, request: MemorySaveRequest, session: AsyncSession = Depends(get_db_session)):
+    await session.execute(
+        text(
+            "INSERT INTO project_memories (project_id, agent_name, context_type, memory_content) "
+            "VALUES (:pid, :agent, :ctype, :content)"
+        ),
+        {
+            "pid": project_id,
+            "agent": request.agent_name.replace("'", "''"),
+            "ctype": request.context_type,
+            "content": request.memory_content.replace("'", "''"),
+        },
+    )
+    await session.commit()
+    return {"status": "saved"}
+
+
+@router.get("/projects/{project_id}/memory/search")
+async def search_project_memory(
+    project_id: str,
+    q: str = Query(..., min_length=1),
+    session: AsyncSession = Depends(get_db_session),
+):
+    sanitized = q.replace("'", "''").strip()
+    if not sanitized:
+        return {"results": []}
+
+    query_str = sanitized + "*"
+
+    try:
+        result = await session.execute(
+            text(
+                "SELECT agent_name, context_type, memory_content FROM project_memories "
+                "WHERE project_memories MATCH :q AND project_id = :pid "
+                "ORDER BY rank LIMIT 20"
+            ),
+            {"q": query_str, "pid": project_id},
+        )
+        rows = result.fetchall()
+        return {
+            "results": [
+                {"agent_name": r[0], "context_type": r[1], "memory_content": r[2]}
+                for r in rows
+            ]
+        }
+    except Exception:
+        return {"results": []}
+
+
 from sse_starlette.sse import EventSourceResponse
 import asyncio
 from app.infrastructure.kanban_sync import kanban_sync
