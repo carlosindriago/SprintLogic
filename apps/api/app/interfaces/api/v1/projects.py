@@ -7,7 +7,7 @@ from uuid import UUID
 from pathlib import Path
 import os
 
-from app.infrastructure.db.database import get_db_session
+from app.infrastructure.db.database import get_db_session, AsyncSessionLocal
 from app.infrastructure.git.git_gateway import LocalGitGateway
 from app.infrastructure.db.project_repository import SQLAlchemyProjectRepository
 from app.infrastructure.repositories.graph_repository import SQLAlchemyGraphRepository
@@ -455,6 +455,80 @@ async def create_project_file(project_id: str, path: str, payload: FileContentUp
 
 IGNORE_DIRS = {"node_modules", ".git", ".next", "dist", "__pycache__", ".venv", "target", "build", ".turbo", "coverage"}
 
+
+async def build_search_index(project_root: str, session: AsyncSession | None = None) -> int:
+    """Rebuild the FTS5 search index for a project directory.
+
+    Can receive an existing session (from /analyze) or create its own
+    (for background tasks). Returns total files indexed.
+    """
+    from app.infrastructure.scanners.symbol_extractor import extract_symbols
+
+    own_session = session is None
+    if own_session:
+        session = AsyncSessionLocal()
+
+    try:
+        root = Path(project_root).resolve()
+        await session.execute(text("DELETE FROM search_index"))
+
+        inserts: list[dict[str, str]] = []
+        import os as _os
+
+        for dirpath, dirnames, filenames in _os.walk(root):
+            dirnames[:] = [d for d in dirnames if d not in IGNORE_DIRS and not d.startswith('.')]
+            for filename in filenames:
+                file_path = str(Path(dirpath) / filename)
+                inserts.append({
+                    "type": "file",
+                    "name": filename,
+                    "path": file_path,
+                })
+
+        if inserts:
+            values = ", ".join(
+                f"('{r['type']}', '{r['name'].replace(chr(39), chr(39)+chr(39))}', "
+                f"'{r['path'].replace(chr(39), chr(39)+chr(39))}')"
+                for r in inserts
+            )
+            await session.execute(text(
+                f"INSERT INTO search_index (type, name, path) VALUES {values}"
+            ))
+
+        symbol_inserts: list[str] = []
+        MAX_FILE_BYTES = 500_000
+
+        for entry in inserts:
+            fp = Path(entry["path"])
+            if not fp.exists() or fp.stat().st_size > MAX_FILE_BYTES:
+                continue
+            ext = fp.suffix.lower()
+            if ext not in {".ts", ".tsx", ".js", ".jsx", ".py", ".rs", ".go", ".java", ".php"}:
+                continue
+            try:
+                content = fp.read_text(encoding="utf-8", errors="ignore")
+            except Exception:
+                continue
+            symbols = extract_symbols(str(fp), content)
+            for sym in symbols:
+                safe_name = sym["name"].replace("'", "''")
+                safe_path = str(fp).replace("'", "''")
+                symbol_inserts.append(
+                    f"('symbol', '{safe_name}', '{safe_path}', {sym['line']})"
+                )
+
+        if symbol_inserts:
+            await session.execute(text(
+                f"INSERT INTO search_index (type, name, path, line) VALUES {', '.join(symbol_inserts)}"
+            ))
+
+        await session.commit()
+        return len(inserts)
+    finally:
+        if own_session and session:
+            await session.close()
+
+
 @router.post("/projects/{project_id}/analyze")
 async def analyze_project(project_id: str, session: AsyncSession = Depends(get_db_session)):
     try:
@@ -474,67 +548,20 @@ async def analyze_project(project_id: str, session: AsyncSession = Depends(get_d
     import os
     from collections import Counter
 
-    # ── Clear and rebuild FTS5 search index ───────────────────────────
-    await session.execute(text("DELETE FROM search_index"))
+    # ── Rebuild FTS5 search index ──────────────────────────────────────
+    await build_search_index(str(project_root), session)
 
+    # ── Tech stack counting ────────────────────────────────────────────
     tech_stack: dict[str, int] = {}
     total_files = 0
-    inserts: list[dict[str, str]] = []
 
     for dirpath, dirnames, filenames in os.walk(project_root):
         dirnames[:] = [d for d in dirnames if d not in IGNORE_DIRS and not d.startswith('.')]
         for filename in filenames:
             ext = Path(filename).suffix.lower()
-            file_path = str(Path(dirpath) / filename)
             if ext:
                 tech_stack[ext] = tech_stack.get(ext, 0) + 1
             total_files += 1
-            inserts.append({
-                "type": "file",
-                "name": filename,
-                "path": file_path,
-            })
-
-    if inserts:
-        values = ", ".join(
-            f"('{r['type']}', '{r['name'].replace(chr(39), chr(39)+chr(39))}', '{r['path'].replace(chr(39), chr(39)+chr(39))}')"
-            for r in inserts
-        )
-        await session.execute(text(
-            f"INSERT INTO search_index (type, name, path) VALUES {values}"
-        ))
-        await session.commit()
-
-    # ── Extract and index code symbols ────────────────────────────────
-    from app.infrastructure.scanners.symbol_extractor import extract_symbols
-
-    symbol_inserts: list[str] = []
-    MAX_FILE_BYTES = 500_000  # skip files > 500KB to avoid memory issues
-
-    for entry in inserts:
-        file_path = Path(entry["path"])
-        if not file_path.exists() or file_path.stat().st_size > MAX_FILE_BYTES:
-            continue
-        ext = file_path.suffix.lower()
-        if ext not in {".ts", ".tsx", ".js", ".jsx", ".py", ".rs", ".go", ".java", ".php"}:
-            continue
-        try:
-            content = file_path.read_text(encoding="utf-8", errors="ignore")
-        except Exception:
-            continue
-        symbols = extract_symbols(str(file_path), content)
-        for sym in symbols:
-            safe_name = sym["name"].replace("'", "''")
-            safe_path = str(file_path).replace("'", "''")
-            symbol_inserts.append(
-                f"('symbol', '{safe_name}', '{safe_path}', {sym['line']})"
-            )
-
-    if symbol_inserts:
-        await session.execute(text(
-            f"INSERT INTO search_index (type, name, path, line) VALUES {', '.join(symbol_inserts)}"
-        ))
-        await session.commit()
 
     # ── Run language scanners ──────────────────────────────────────────
     from app.infrastructure.scanners.python_scanner import PythonScanner
