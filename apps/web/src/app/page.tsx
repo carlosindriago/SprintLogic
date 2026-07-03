@@ -73,9 +73,6 @@ export default function Home() {
   const [addProjectOpen, setAddProjectOpen] = useState(false);
   const [vimMode, setVimMode] = useState(false);
   
-  const [dashboardTab, setDashboardTab] = useState<'graph' | 'kanban' | 'insights'>('insights');
-  
-  // Dashboard Tabs (Graph vs Kanban vs Insights)
   const { tabs, activeTabId, addTab } = useTabsStore();
   const { accentColor, setAccentColor, uiScale, setUiScale } = useThemeStore();
 
@@ -234,24 +231,16 @@ export default function Home() {
 
     switch (activeTab.type) {
       case 'dashboard':
+      case 'insights':
         return (
-          <div className="flex flex-col h-full">
-            <div className="flex items-center gap-2 px-4 pt-2 border-b border-zinc-800/50 bg-zinc-900">
-              <button onClick={() => setDashboardTab('insights')} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${dashboardTab === 'insights' ? 'border-blue-500 text-blue-400' : 'border-transparent text-zinc-400 hover:text-zinc-300'}`}>Insights</button>
-              <button onClick={() => setDashboardTab('graph')} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${dashboardTab === 'graph' ? 'border-blue-500 text-blue-400' : 'border-transparent text-zinc-400 hover:text-zinc-300'}`}>Grafo 2D</button>
-              <button onClick={() => setDashboardTab('kanban')} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${dashboardTab === 'kanban' ? 'border-blue-500 text-blue-400' : 'border-transparent text-zinc-400 hover:text-zinc-300'}`}>Kanban (Sprints)</button>
-            </div>
-            <div className="flex-1 relative overflow-hidden bg-[#151515]">
-              {dashboardTab === 'insights' ? (
-                projectId ? <InsightDashboard projectId={projectId} key={projectId} /> : <div className="p-4 text-zinc-400">Selecciona un proyecto...</div>
-              ) : dashboardTab === 'graph' ? (
-                <GraphScene projectId={projectId} key={projectId} onNodeClick={handleNodeClick} />
-              ) : (
-                <KanbanBoard projectId={projectId} key={projectId} onNodeClick={handleKanbanNodeClick} />
-              )}
-            </div>
+          <div className="flex-1 relative overflow-hidden bg-[#151515]">
+            {projectId ? <InsightDashboard projectId={projectId} key={projectId} /> : <div className="p-4 text-zinc-400">Selecciona un proyecto...</div>}
           </div>
         );
+      case 'graph':
+        return <GraphScene projectId={projectId} key={projectId} onNodeClick={handleNodeClick} />;
+      case 'kanban':
+        return <KanbanBoard projectId={projectId} key={projectId} onNodeClick={handleKanbanNodeClick} />;
       case 'editor':
         if (!projectId || !activeTab.data?.node) return null;
         return <EditorTab projectId={projectId} node={activeTab.data.node} vimMode={vimMode} />;
