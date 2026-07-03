@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text
 import json
 import litellm
 import httpx
@@ -105,8 +106,31 @@ class MentorResponse(BaseModel):
     response: str
 
 
+async def _save_memory(project_id: str, agent_name: str, context_type: str, content: str) -> None:
+    """Persist an interaction summary to project_memories FTS5."""
+    from app.infrastructure.db.database import AsyncSessionLocal
+
+    async with AsyncSessionLocal() as session:
+        try:
+            await session.execute(
+                text(
+                    "INSERT INTO project_memories (project_id, agent_name, context_type, memory_content) "
+                    "VALUES (:pid, :agent, :ctype, :content)"
+                ),
+                {
+                    "pid": project_id,
+                    "agent": agent_name,
+                    "ctype": context_type,
+                    "content": content[:500],
+                },
+            )
+            await session.commit()
+        except Exception:
+            pass
+
+
 @router.post("/mentor", response_model=MentorResponse)
-async def mentor_sensei(request: MentorRequest, session: AsyncSession = Depends(get_db_session)):
+async def mentor_sensei(request: MentorRequest, background_tasks: BackgroundTasks, session: AsyncSession = Depends(get_db_session)):
     provider = "gemini"
     model = "gemini/gemini-2.5-flash"
     api_key = CredentialManager.get_api_key(provider)
@@ -153,6 +177,19 @@ async def mentor_sensei(request: MentorRequest, session: AsyncSession = Depends(
             ],
             api_key=api_key,
         )
-        return {"response": str(response.choices[0].message.content)}
+        response_text = str(response.choices[0].message.content)
+
+        # Save interaction to long-term memory in background
+        if request.project_id:
+            summary = f"Modo Sensei en {request.file_path}: {request.user_query[:120]}"
+            background_tasks.add_task(
+                _save_memory,
+                request.project_id,
+                "sensei",
+                "chat_summary",
+                summary,
+            )
+
+        return {"response": response_text}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Mentor error: {str(e)}")
