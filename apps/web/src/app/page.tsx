@@ -28,7 +28,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Settings, FolderOpen, ChevronRight, Edit2, Trash2, PlusCircle, ChevronsUpDown, FilePlus, RefreshCw, ScanSearch, Layout, Network, GitBranch, BarChart3 } from "lucide-react";
 import dynamic from "next/dynamic";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { scanProject, getProjects, updateProject, deleteProject, analyzeProject } from "@/lib/api";
 import { Switch } from "@/components/ui/switch";
 import SprintLogicChat from "@/components/SprintLogicChat";
@@ -79,8 +79,10 @@ export default function Home() {
   const [settingsTab, setSettingsTab] = useState<'llms' | 'appearance'>('llms');
   const [newFileDialogOpen, setNewFileDialogOpen] = useState(false);
   const [newFileDirectory, setNewFileDirectory] = useState('');
+  const [newFileInitialContent, setNewFileInitialContent] = useState('');
   const [fileTreeRefreshKey, setFileTreeRefreshKey] = useState(0);
   const [analysisDialogOpen, setAnalysisDialogOpen] = useState(false);
+  const untitledCounter = useRef(0);
 
   const fetchProjects = useCallback(async () => {
     try {
@@ -169,17 +171,60 @@ export default function Home() {
 
   const handleNewFile = (directory?: string) => {
     setNewFileDirectory(directory || '');
+    setNewFileInitialContent('');
+    setNewFileDialogOpen(true);
+  };
+
+  const handleNewUntitled = () => {
+    if (!projectId) return;
+    untitledCounter.current += 1;
+    const id = `untitled-${untitledCounter.current}`;
+    addTab({
+      id,
+      title: `Sin título ${untitledCounter.current}`,
+      type: 'editor',
+      data: {
+        node: {
+          id,
+          label: "File" as const,
+          name: `Sin título ${untitledCounter.current}`,
+          file_path: '',
+        }
+      }
+    });
+  };
+
+  const handleSaveUntitled = (tabId: string, content: string) => {
+    setNewFileDirectory('');
+    setNewFileInitialContent(content);
     setNewFileDialogOpen(true);
   };
 
   const handleFileCreated = (filePath: string) => {
     setFileTreeRefreshKey(k => k + 1);
-    handleNodeClick({
-      id: filePath,
-      label: "File",
-      name: filePath.split('/').pop() || filePath,
-      file_path: filePath,
-    });
+    const { tabs, activeTabId, updateTab } = useTabsStore.getState();
+    const activeTab = tabs.find(t => t.id === activeTabId);
+    if (activeTab && activeTab.type === 'editor' && activeTab.data?.node && !activeTab.data.node.file_path) {
+      updateTab(activeTabId!, {
+        id: filePath,
+        title: filePath.split('/').pop() || filePath,
+        data: {
+          node: {
+            id: filePath,
+            label: "File" as const,
+            name: filePath.split('/').pop() || filePath,
+            file_path: filePath,
+          }
+        }
+      });
+    } else {
+      handleNodeClick({
+        id: filePath,
+        label: "File",
+        name: filePath.split('/').pop() || filePath,
+        file_path: filePath,
+      });
+    }
   };
 
   const handleAnalyzeProject = async () => {
@@ -243,7 +288,14 @@ export default function Home() {
         return <KanbanBoard projectId={projectId} key={projectId} onNodeClick={handleKanbanNodeClick} />;
       case 'editor':
         if (!projectId || !activeTab.data?.node) return null;
-        return <EditorTab projectId={projectId} node={activeTab.data.node} vimMode={vimMode} />;
+        return (
+          <EditorTab
+            projectId={projectId}
+            node={activeTab.data.node}
+            vimMode={vimMode}
+            onSaveUntitled={activeTab.data.node.file_path ? undefined : (content) => handleSaveUntitled(activeTab.id, content)}
+          />
+        );
       case 'git-graph':
         if (!projectId) return null;
         return <GitGraphTab projectId={projectId} />;
@@ -637,7 +689,7 @@ export default function Home() {
             </div>
           ) : (
             <>
-              <TabBar onToggleAi={toggleRightSidebar} aiOpen={rightSidebarOpen} onNewFile={() => handleNewFile()} />
+              <TabBar onToggleAi={toggleRightSidebar} aiOpen={rightSidebarOpen} onNewFile={handleNewUntitled} />
               <div className="flex-1 relative overflow-hidden bg-[#151515]">
                 {renderActiveTabContent()}
               </div>
@@ -685,6 +737,7 @@ export default function Home() {
             onOpenChange={setNewFileDialogOpen}
             projectId={projectId}
             defaultDirectory={newFileDirectory}
+            initialContent={newFileInitialContent}
             onCreated={handleFileCreated}
           />
         )}

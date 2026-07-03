@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import Editor, { type OnMount } from '@monaco-editor/react';
 import type { editor as monacoEditor } from 'monaco-editor';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
@@ -15,6 +15,7 @@ interface NewFileDialogProps {
   onOpenChange: (open: boolean) => void;
   projectId: string;
   defaultDirectory?: string;
+  initialContent?: string;
   onCreated: (filePath: string) => void;
 }
 
@@ -23,12 +24,20 @@ export default function NewFileDialog({
   onOpenChange,
   projectId,
   defaultDirectory = '',
+  initialContent = '',
   onCreated,
 }: NewFileDialogProps) {
   const [fileName, setFileName] = useState('');
-  const [content, setContent] = useState('');
+  const [content, setContent] = useState(initialContent);
   const [creating, setCreating] = useState(false);
   const editorRef = useRef<monacoEditor.IStandaloneCodeEditor | null>(null);
+
+  useEffect(() => {
+    if (open) {
+      setFileName('');
+      setContent(initialContent);
+    }
+  }, [open, initialContent]);
 
   const filePath = defaultDirectory
     ? `${defaultDirectory.replace(/\/$/, '')}/${fileName}`

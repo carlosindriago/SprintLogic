@@ -36,10 +36,12 @@ export default function EditorTab({
   projectId,
   node,
   vimMode,
+  onSaveUntitled,
 }: {
   projectId: string;
   node: GraphNode;
   vimMode: boolean;
+  onSaveUntitled?: (content: string) => void;
 }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -108,7 +110,11 @@ export default function EditorTab({
   }, []);
 
   const handleSave = useCallback(async () => {
-    if (!node.file_path || saving || !editorRef.current) return;
+    if (saving || !editorRef.current) return;
+    if (!node.file_path) {
+      onSaveUntitled?.(editorRef.current.getValue());
+      return;
+    }
     setSaving(true);
     try {
       const current = editorRef.current.getValue();
@@ -121,7 +127,7 @@ export default function EditorTab({
     } finally {
       setSaving(false);
     }
-  }, [projectId, node.file_path, saving]);
+  }, [projectId, node.file_path, saving, onSaveUntitled]);
 
   handleSaveRef.current = handleSave;
 
@@ -182,7 +188,9 @@ export default function EditorTab({
   }, []);
 
   const filePath = node?.file_path ?? '';
-  const fileName = filePath.split('/').pop() ?? 'untitled';
+  const fileName = node.file_path
+    ? (filePath.split('/').pop() || 'untitled')
+    : (node.name || 'Sin título');
   const fileMarkers = useMarkersStore((s) => s.files[filePath]);
 
   const handleEditorDidMount: OnMount = useCallback((editor, monaco) => {
