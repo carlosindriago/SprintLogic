@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Settings, FolderOpen, ChevronRight, Edit2, Trash2, PlusCircle, ChevronsUpDown, FilePlus, RefreshCw, ScanSearch } from "lucide-react";
+import { Settings, FolderOpen, ChevronRight, Edit2, Trash2, PlusCircle, ChevronsUpDown, FilePlus, RefreshCw, ScanSearch, Layout, Network, GitBranch, BarChart3 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useState, useEffect, useCallback } from "react";
 import { scanProject, getProjects, updateProject, deleteProject, analyzeProject } from "@/lib/api";
@@ -209,6 +209,10 @@ export default function Home() {
     });
   };
 
+  const launchTool = (tabId: string, title: string, type: 'insights' | 'kanban' | 'graph' | 'git-graph') => {
+    addTab({ id: tabId, title, type });
+  };
+
   const handleKanbanNodeClick = async (nodeId: string) => {
     if (!projectId) return;
     try {
@@ -347,6 +351,46 @@ export default function Home() {
                     </div>
                   </DialogContent>
                 </Dialog>
+              </div>
+
+              {/* Activity Bar — global tool launchers */}
+              <div className="flex items-center gap-1 px-1 py-1.5 bg-zinc-800/50 rounded-lg">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-700"
+                  onClick={() => launchTool('insights', 'Insights', 'insights')}
+                  title="Insights"
+                >
+                  <BarChart3 className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-700"
+                  onClick={() => launchTool('graph', 'Grafo 2D', 'graph')}
+                  title="Grafo 2D"
+                >
+                  <Network className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-700"
+                  onClick={() => launchTool('kanban', 'Kanban', 'kanban')}
+                  title="Kanban"
+                >
+                  <Layout className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-700"
+                  onClick={() => launchTool('git-graph', 'Control Git', 'git-graph')}
+                  title="Control Git"
+                >
+                  <GitBranch className="w-4 h-4" />
+                </Button>
               </div>
 
               {/* 1. Selector de Proyectos (Mejorado) */}
