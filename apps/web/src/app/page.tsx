@@ -388,7 +388,7 @@ export default function Home() {
                   </Button>
                 </div>
                 <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-                  <DialogContent className="sm:max-w-[425px] bg-zinc-900 text-zinc-200 border-zinc-800/50">
+                  <DialogContent className="sm:max-w-3xl w-full bg-zinc-900 text-zinc-200 border-zinc-800/50 ring-zinc-700/50">
                     <DialogHeader>
                       <DialogTitle>Configuración</DialogTitle>
                       <DialogDescription className="text-zinc-400">
