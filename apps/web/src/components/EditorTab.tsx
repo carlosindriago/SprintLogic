@@ -56,7 +56,10 @@ export default function EditorTab({
   const currentContentRef = useRef('');
   const editorRef = useRef<monacoEditor.IStandaloneCodeEditor | null>(null);
   const vimInstanceRef = useRef<{ dispose(): void } | null>(null);
+  const vimObserverRef = useRef<MutationObserver | null>(null);
   const dirtyCheckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const backupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleSaveRef = useRef<() => Promise<void>>(async () => {});
 
   const markDirty = useTabsStore((s) => s.markDirty);
@@ -105,6 +108,13 @@ export default function EditorTab({
 
     return () => {
       isMounted = false;
+      if (lintTimerRef.current) clearTimeout(lintTimerRef.current);
+      if (backupTimerRef.current) clearTimeout(backupTimerRef.current);
+      if (dirtyCheckTimerRef.current) clearTimeout(dirtyCheckTimerRef.current);
+      if (vimObserverRef.current) {
+        vimObserverRef.current.disconnect();
+        vimObserverRef.current = null;
+      }
       if (vimInstanceRef.current) {
         vimInstanceRef.current.dispose();
         vimInstanceRef.current = null;
@@ -312,6 +322,7 @@ export default function EditorTab({
         }
       });
       observer.observe(statusNode, { characterData: true, subtree: true, childList: true });
+      vimObserverRef.current = observer;
     }).catch(() => {
       console.error("Vim initialization failed");
     });
@@ -331,22 +342,27 @@ export default function EditorTab({
       } catch { /* ignore */ }
     }
 
-    let lintTimer: ReturnType<typeof setTimeout> | null = null;
-    let backupTimer: ReturnType<typeof setTimeout> | null = null;
-
     editor.onDidChangeModelContent(() => {
       if (dirtyCheckTimerRef.current) clearTimeout(dirtyCheckTimerRef.current);
-      dirtyCheckTimerRef.current = setTimeout(checkDirty, 50);
+      dirtyCheckTimerRef.current = setTimeout(() => {
+        if (editor.getModel() && !editor.getModel()?.isDisposed()) {
+          checkDirty();
+        }
+      }, 50);
 
       // Auto-backup unsaved changes to localStorage (all files)
-      if (backupTimer) clearTimeout(backupTimer);
-      backupTimer = setTimeout(() => {
+      if (backupTimerRef.current) clearTimeout(backupTimerRef.current);
+      backupTimerRef.current = setTimeout(() => {
+        const model = editor.getModel();
+        if (!model || model.isDisposed()) return;
         const backupKey = node.file_path || node.id;
         useUnsavedStore.getState().setContent(backupKey, editor.getValue());
       }, 1000);
 
-      if (lintTimer) clearTimeout(lintTimer);
-      lintTimer = setTimeout(async () => {
+      if (lintTimerRef.current) clearTimeout(lintTimerRef.current);
+      lintTimerRef.current = setTimeout(async () => {
+        const model = editor.getModel();
+        if (!model || model.isDisposed()) return;
         try {
           const res = await fetch(`${API_BASE_URL}/editor/lint`, {
             method: 'POST',
@@ -358,8 +374,8 @@ export default function EditorTab({
           });
           if (!res.ok) return;
           const diagnostics: LintDiagnostic[] = await res.json();
-          const model = editor.getModel();
-          if (!model) return;
+          const model2 = editor.getModel();
+          if (!model2 || model2.isDisposed()) return;
           const markers = diagnostics.map((d) => ({
             severity: monaco.MarkerSeverity.Error,
             message: d.message,
@@ -368,7 +384,7 @@ export default function EditorTab({
             endLineNumber: d.line,
             endColumn: d.column + 1,
           }));
-          monaco.editor.setModelMarkers(model, 'lint', markers);
+          monaco.editor.setModelMarkers(model2, 'lint', markers);
         } catch {
           // network errors silently ignored
         }
