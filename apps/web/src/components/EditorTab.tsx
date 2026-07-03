@@ -6,7 +6,7 @@ import { useTabsStore } from '@/store/tabsStore';
 import { useMarkersStore } from '@/store/markersStore';
 import { useUnsavedStore } from '@/store/unsavedStore';
 import type { GraphNode } from '@/types';
-import { Code2, ChevronRight } from 'lucide-react';
+import { Code2, ChevronRight, Pencil } from 'lucide-react';
 
 interface LintDiagnostic {
   line: number;
@@ -47,6 +47,7 @@ export default function EditorTab({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
+  const [editable, setEditable] = useState(false);
   const originalContentRef = useRef('');
   const currentContentRef = useRef('');
   const editorRef = useRef<monacoEditor.IStandaloneCodeEditor | null>(null);
@@ -66,8 +67,11 @@ export default function EditorTab({
     const loadContent = async () => {
       if (isMounted) setLoading(true);
 
+      // Restore unsaved backup if it exists (survives crashes / restarts)
+      const backupKey = node.file_path || node.id;
+      const backup = useUnsavedStore.getState().getContent(backupKey);
+
       if (!node.file_path) {
-        const backup = useUnsavedStore.getState().getContent(node.id) || '';
         originalContentRef.current = backup;
         currentContentRef.current = backup;
         if (isMounted) setLoading(false);
@@ -77,9 +81,11 @@ export default function EditorTab({
       try {
         const data = await getFileContent(projectId, node.file_path);
         if (isMounted) {
-          originalContentRef.current = data;
-          currentContentRef.current = data;
-          setIsDirty(false);
+          // If there's a backup and it differs from disk, restore it
+          const restored = backup && backup !== data ? backup : data;
+          originalContentRef.current = restored;
+          currentContentRef.current = restored;
+          if (restored !== data) setIsDirty(true);
           setLoading(false);
         }
       } catch {
@@ -124,7 +130,7 @@ export default function EditorTab({
       originalContentRef.current = current;
       currentContentRef.current = current;
       setIsDirty(false);
-      useUnsavedStore.getState().clearContent(node.id);
+      useUnsavedStore.getState().clearContent(node.file_path);
     } catch {
       // silently fail
     } finally {
@@ -287,12 +293,12 @@ export default function EditorTab({
       if (dirtyCheckTimerRef.current) clearTimeout(dirtyCheckTimerRef.current);
       dirtyCheckTimerRef.current = setTimeout(checkDirty, 50);
 
-      if (!node.file_path) {
-        if (backupTimer) clearTimeout(backupTimer);
-        backupTimer = setTimeout(() => {
-          useUnsavedStore.getState().setContent(node.id, editor.getValue());
-        }, 1000);
-      }
+      // Auto-backup unsaved changes to localStorage (all files)
+      if (backupTimer) clearTimeout(backupTimer);
+      backupTimer = setTimeout(() => {
+        const backupKey = node.file_path || node.id;
+        useUnsavedStore.getState().setContent(backupKey, editor.getValue());
+      }, 1000);
 
       if (lintTimer) clearTimeout(lintTimer);
       lintTimer = setTimeout(async () => {
@@ -328,6 +334,11 @@ export default function EditorTab({
       handleSaveRef.current();
     });
 
+    // Toggle read-only mode with 'i' key (vim-style)
+    editor.addCommand(monaco.KeyCode.KeyI, () => {
+      setEditable(true);
+    }, '!readOnly');
+
     checkDirty();
   }, [vimMode, node.metadata, checkDirty]);
 
@@ -347,6 +358,16 @@ export default function EditorTab({
           {fileName}
           {isDirty && <span className="text-yellow-400 ml-0.5">&bull;</span>}
         </span>
+
+        {!editable && (
+          <button
+            onClick={() => setEditable(true)}
+            className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 hover:bg-amber-500/20 transition-colors shrink-0"
+            title="Solo lectura — Click o presiona i para editar"
+          >
+            <Pencil className="w-3 h-3" />
+          </button>
+        )}
 
         <div className="flex-1" />
 
@@ -450,7 +471,7 @@ export default function EditorTab({
           defaultValue={currentContentRef.current}
           onMount={handleEditorDidMount}
           options={{
-            readOnly: false,
+            readOnly: !editable,
             minimap: { enabled: false },
             fontSize: 13,
             wordWrap: "on",
