@@ -342,12 +342,21 @@ export default function EditorTab({
 
     editor.onKeyDown((e) => {
       const mode = editorModeRef.current;
-      if (mode === 'editable') return;
 
       const ctrl = e.ctrlKey || e.metaKey;
 
       // Always allow Ctrl+S in any mode
       if (ctrl && e.keyCode === monaco.KeyCode.KeyS) return;
+
+      // 'Escape' → back to locked mode (works from any mode)
+      if (!ctrl && e.keyCode === monaco.KeyCode.Escape) {
+        e.preventDefault();
+        e.stopPropagation();
+        setEditorMode('locked');
+        return;
+      }
+
+      if (mode === 'editable') return;
 
       // 'i' → enter editable mode
       if (!ctrl && e.keyCode === monaco.KeyCode.KeyI) {
@@ -362,14 +371,6 @@ export default function EditorTab({
         e.preventDefault();
         e.stopPropagation();
         setEditorMode('visual');
-        return;
-      }
-
-      // 'Escape' → back to locked mode
-      if (!ctrl && e.keyCode === monaco.KeyCode.Escape) {
-        e.preventDefault();
-        e.stopPropagation();
-        setEditorMode('locked');
         return;
       }
 
