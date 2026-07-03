@@ -637,7 +637,7 @@ export default function Home() {
             </div>
           ) : (
             <>
-              <TabBar onToggleAi={toggleRightSidebar} aiOpen={rightSidebarOpen} />
+              <TabBar onToggleAi={toggleRightSidebar} aiOpen={rightSidebarOpen} onNewFile={() => handleNewFile()} />
               <div className="flex-1 relative overflow-hidden bg-[#151515]">
                 {renderActiveTabContent()}
               </div>

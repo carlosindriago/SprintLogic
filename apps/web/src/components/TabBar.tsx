@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useTabsStore } from '@/store/tabsStore';
 import { useMarkersStore } from '@/store/markersStore';
-import { X, BarChart3, Layout, Network, GitBranch } from 'lucide-react';
+import { X, BarChart3, Layout, Network, GitBranch, FilePlus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import FileIcon from './FileIcon';
 
@@ -16,6 +16,7 @@ const TAB_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
 interface TabBarProps {
   onToggleAi?: () => void;
   aiOpen?: boolean;
+  onNewFile?: () => void;
 }
 
 function TabMarkerBadge({
@@ -44,7 +45,7 @@ function TabMarkerBadge({
   );
 }
 
-export default function TabBar({ onToggleAi, aiOpen }: TabBarProps) {
+export default function TabBar({ onToggleAi, aiOpen, onNewFile }: TabBarProps) {
   const { tabs, activeTabId, setActiveTab, removeTab } = useTabsStore();
   const markersFiles = useMarkersStore((s) => s.files);
 
@@ -107,11 +108,21 @@ export default function TabBar({ onToggleAi, aiOpen }: TabBarProps) {
           )}
         </div>
       )})}
+      <div className="ml-auto flex items-center shrink-0">
+      {onNewFile && (
+        <button
+          onClick={onNewFile}
+          className="flex items-center gap-1.5 px-2.5 py-2 text-xs font-medium transition-colors text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800"
+          title="Nuevo Archivo (Ctrl+N)"
+        >
+          <FilePlus className="w-3.5 h-3.5" />
+        </button>
+      )}
       {onToggleAi && (
         <button
           onClick={onToggleAi}
           className={cn(
-            "ml-auto shrink-0 flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors border-l border-zinc-800/50",
+            "flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors border-l border-zinc-800/50",
             aiOpen
               ? "bg-blue-600/20 text-blue-400"
               : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800"
@@ -122,6 +133,7 @@ export default function TabBar({ onToggleAi, aiOpen }: TabBarProps) {
           <span>AI</span>
         </button>
       )}
+      </div>
     </div>
   );
 }
