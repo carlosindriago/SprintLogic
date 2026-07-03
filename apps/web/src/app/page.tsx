@@ -211,7 +211,7 @@ export default function Home() {
   const handleNewUntitled = () => {
     if (!projectId) return;
     untitledCounter.current += 1;
-    const id = `untitled-${untitledCounter.current}`;
+    const id = `untitled-${Date.now()}-${untitledCounter.current}`;
     addTab({
       id,
       title: `Sin título ${untitledCounter.current}`,
@@ -741,7 +741,7 @@ export default function Home() {
           ) : (
             <>
               <TabBar onToggleAi={toggleRightSidebar} aiOpen={rightSidebarOpen} onNewFile={handleNewUntitled} />
-              <div className="flex-1 relative overflow-hidden bg-[#151515]">
+              <div className="flex-1 relative overflow-hidden bg-[#151515]" key={activeTabId}>
                 {renderActiveTabContent()}
               </div>
             </>
