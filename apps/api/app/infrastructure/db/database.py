@@ -48,12 +48,17 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def init_fts5() -> None:
-    """Create the FTS5 virtual table for universal full-text search."""
+    """Create FTS5 virtual tables for search and agent memory."""
     from sqlalchemy import text
 
     async with engine.begin() as conn:
         await conn.execute(text(
             "CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5("
             "  type, name, path, content, line UNINDEXED"
+            ")"
+        ))
+        await conn.execute(text(
+            "CREATE VIRTUAL TABLE IF NOT EXISTS project_memories USING fts5("
+            "  project_id UNINDEXED, agent_name, context_type, memory_content"
             ")"
         ))
