@@ -242,13 +242,17 @@ export default function EditorTab({
       const syncMarkersForUri = (monacoInstance: typeof monaco, uri: Uri) => {
         const { setMarkers } = useMarkersStore.getState();
         const allMarkers = monacoInstance.editor.getModelMarkers({ resource: uri });
-        const errors = allMarkers.filter((m: monacoEditor.IMarker) => m.severity === monacoInstance.MarkerSeverity.Error).length;
-        const warnings = allMarkers.filter((m: monacoEditor.IMarker) => m.severity === monacoInstance.MarkerSeverity.Warning).length;
+        const markers = allMarkers.map((m: monacoEditor.IMarker) => ({
+          line: m.startLineNumber,
+          column: m.startColumn,
+          message: m.message,
+          severity: m.severity,
+        }));
         const path = normalizeMonacoUri(uri);
-        if (errors > 0 || warnings > 0) {
-          console.log('[markers]', path, { errors, warnings, totalMarkers: allMarkers.length });
+        if (markers.length > 0) {
+          console.log('[markers]', path, { total: markers.length });
         }
-        setMarkers(path, { errors, warnings });
+        setMarkers(path, markers);
       };
 
       monaco.editor.onDidChangeMarkers((uris: readonly Uri[]) => {
