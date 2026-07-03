@@ -1,9 +1,16 @@
 import { useEffect } from 'react';
 import { useTabsStore } from '@/store/tabsStore';
 import { useMarkersStore } from '@/store/markersStore';
-import { X } from 'lucide-react';
+import { X, BarChart3, Layout, Network, GitBranch } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import FileIcon from './FileIcon';
+
+const TAB_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  insights: BarChart3,
+  kanban: Layout,
+  graph: Network,
+  'git-graph': GitBranch,
+};
 
 interface TabBarProps {
   onToggleAi?: () => void;
@@ -56,22 +63,34 @@ export default function TabBar({ onToggleAi, aiOpen }: TabBarProps) {
 
   return (
     <div className="flex bg-zinc-900 border-b border-zinc-800/50 overflow-x-auto overflow-y-hidden shrink-0">
-      {tabs.map((tab) => (
+      {tabs.map((tab) => {
+        const IconComponent = TAB_ICONS[tab.type];
+        const isFixed = ['insights', 'kanban', 'graph', 'git-graph', 'dashboard'].includes(tab.type);
+        const isGlobalTool = IconComponent != null;
+
+        return (
         <div
           key={tab.id}
           className={cn(
-            "group flex items-center gap-2 px-4 py-2 border-r border-zinc-800/50 min-w-32 max-w-48 text-sm cursor-pointer select-none transition-colors",
+            "group flex items-center gap-2 border-r border-zinc-800/50 text-sm cursor-pointer select-none transition-colors",
+            isGlobalTool ? "px-2.5 py-2" : "px-4 py-2 min-w-32 max-w-48",
             activeTabId === tab.id 
               ? "bg-zinc-800 text-blue-400 border-t-2 border-t-blue-500" 
               : "bg-zinc-900 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-300 border-t-2 border-t-transparent"
           )}
           onClick={() => setActiveTab(tab.id)}
+          title={isGlobalTool ? tab.title : undefined}
         >
-          {tab.type === 'editor' && <FileIcon fileName={tab.title} className="w-3.5 h-3.5 shrink-0" />}
-          <span className="truncate flex-1" title={tab.title}>{tab.title}</span>
-          <TabMarkerBadge path={getTabPath(tab)} markersFiles={markersFiles} />
+          {isGlobalTool && IconComponent ? (
+            <IconComponent className="w-4 h-4 shrink-0" />
+          ) : tab.type === 'editor' ? (
+            <FileIcon fileName={tab.title} className="w-3.5 h-3.5 shrink-0" />
+          ) : null}
           
-          {tab.id !== 'dashboard' && (
+          {!isGlobalTool && <span className="truncate flex-1" title={tab.title}>{tab.title}</span>}
+          {!isGlobalTool && <TabMarkerBadge path={getTabPath(tab)} markersFiles={markersFiles} />}
+          
+          {!isFixed && (
             <div 
               className={cn(
                 "rounded-sm hover:bg-zinc-700 p-0.5",
@@ -86,8 +105,7 @@ export default function TabBar({ onToggleAi, aiOpen }: TabBarProps) {
             </div>
           )}
         </div>
-      ))}
-
+      )})}
       {onToggleAi && (
         <button
           onClick={onToggleAi}

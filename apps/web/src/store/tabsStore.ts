@@ -2,7 +2,9 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { GraphNode } from '../types';
 
-export type TabType = 'dashboard' | 'editor' | 'git-graph' | 'diff';
+export type TabType = 'dashboard' | 'editor' | 'git-graph' | 'diff' | 'insights' | 'kanban' | 'graph';
+
+const FIXED_TABS = new Set(['dashboard', 'insights', 'kanban', 'graph', 'git-graph']);
 
 export interface TabData {
   id: string;
@@ -56,9 +58,14 @@ export const useTabsStore = create<TabsState>()(
       },
 
       removeTab: (id) => {
-        if (id === 'dashboard') return; // Cannot close dashboard
-
         const { tabs, activeTabId, dirtyFiles } = get();
+        const tab = tabs.find(t => t.id === id);
+        if (!tab) return;
+        if (FIXED_TABS.has(tab.type)) {
+          set({ activeTabId: id });
+          return;
+        }
+
         const newTabs = tabs.filter(t => t.id !== id);
         const newDirty = { ...dirtyFiles };
         delete newDirty[id];
