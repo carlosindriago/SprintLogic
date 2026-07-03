@@ -98,12 +98,15 @@ export default function Home() {
 
   useDoubleShift(() => setSearchOpen(true));
 
-  const handleSearchSelect = (result: { path: string }) => {
+  const handleSearchSelect = (result: { path: string; line?: number | null }) => {
+    const filePath = result.path.split(':')[0];
+    const line = result.line ?? undefined;
     handleNodeClick({
-      id: result.path,
+      id: filePath,
       label: "File",
-      name: result.path.split('/').pop() || result.path,
-      file_path: result.path,
+      name: filePath.split('/').pop() || filePath,
+      file_path: filePath,
+      ...(line && { metadata: { position: { line, column: 1 } } }),
     });
   };
 

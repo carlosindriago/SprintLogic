@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, File, Hash } from 'lucide-react';
+import { Search, File, Box } from 'lucide-react';
 import { API_BASE_URL } from '@/lib/api';
 
 interface SearchResult {
@@ -123,7 +123,7 @@ export default function OmniSearchModal({ open, onClose, onSelect }: Props) {
 
           {results.map((r, i) => (
             <div
-              key={`${r.path}-${i}`}
+              key={`${r.path}-${r.line ?? 0}-${i}`}
               className={`flex items-center gap-3 px-4 py-2 cursor-pointer transition-colors ${
                 i === selectedIndex
                   ? 'bg-blue-500/10 text-blue-300'
@@ -135,14 +135,25 @@ export default function OmniSearchModal({ open, onClose, onSelect }: Props) {
               }}
               onMouseEnter={() => setSelectedIndex(i)}
             >
-              {r.type === 'file' ? (
-                <File className="w-3.5 h-3.5 shrink-0" />
+              {r.type === 'symbol' ? (
+                <Box className="w-3.5 h-3.5 shrink-0 text-purple-400" />
               ) : (
-                <Hash className="w-3.5 h-3.5 shrink-0" />
+                <File className="w-3.5 h-3.5 shrink-0" />
               )}
               <div className="flex flex-col min-w-0">
-                <span className="text-xs truncate">{r.name}</span>
-                <span className="text-[10px] text-zinc-500 truncate">{r.path}</span>
+                <span className="text-xs truncate">
+                  {r.type === 'symbol' && r.line && (
+                    <span className="text-zinc-500 font-mono mr-1">
+                      {r.line}:
+                    </span>
+                  )}
+                  {r.name}
+                </span>
+                <span className="text-[10px] text-zinc-500 truncate">
+                  {r.type === 'symbol' && r.line
+                    ? `${r.path}:${r.line}`
+                    : r.path}
+                </span>
               </div>
             </div>
           ))}
