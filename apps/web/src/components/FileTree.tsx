@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronRight, ChevronDown, Folder, FilePlus, FolderPlus } from 'lucide-react';
+import { ChevronRight, ChevronDown, Folder, FilePlus, FolderPlus, AlertCircle, AlertTriangle } from 'lucide-react';
 import { getProjectFiles } from '@/lib/api';
 import { FileTreeNode } from '@/types';
 import FileIcon from './FileIcon';
-import { useMarkersStore } from '@/store/markersStore';
+import { useMarkersStore, type MarkerData } from '@/store/markersStore';
+import { cn } from '@/lib/utils';
 
 interface FileTreeProps {
   projectId: string;
@@ -17,10 +18,12 @@ const TreeNode: React.FC<{
   onSelect: (path: string) => void;
   depth: number;
   onNewFile?: (directory?: string) => void;
-  allFiles: Record<string, { errors: number; warnings: number }>;
-}> = ({ node, onSelect, depth, onNewFile, allFiles }) => {
+  allFiles: Record<string, { errors: number; warnings: number; markers: MarkerData[] }>;
+  onNavigateToMarker?: (filePath: string, line: number, column: number) => void;
+}> = ({ node, onSelect, depth, onNewFile, allFiles, onNavigateToMarker }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [showMarkers, setShowMarkers] = useState(false);
   const paddingLeft = `${depth * 12 + 8}px`;
 
   const handleContextMenu = (e: React.MouseEvent) => {
@@ -61,7 +64,7 @@ const TreeNode: React.FC<{
         {isOpen && node.children && (
           <div>
             {node.children.map((child, idx) => (
-              <TreeNode key={idx} node={child} onSelect={onSelect} depth={depth + 1} onNewFile={onNewFile} allFiles={allFiles} />
+              <TreeNode key={idx} node={child} onSelect={onSelect} depth={depth + 1} onNewFile={onNewFile} allFiles={allFiles} onNavigateToMarker={onNavigateToMarker} />
             ))}
           </div>
         )}
@@ -109,8 +112,45 @@ const TreeNode: React.FC<{
       >
         <FileIcon fileName={node.name} className="w-4 h-4 mr-2 shrink-0" />
         <span className="text-sm truncate">{node.name}</span>
-        <FileMarkerBadge filePath={node.path} />
+        <FileMarkerBadge
+          filePath={node.path}
+          onToggle={() => setShowMarkers((v) => !v)}
+          expanded={showMarkers}
+        />
       </div>
+
+      {showMarkers && allFiles[node.path] && (
+        <div style={{ paddingLeft: `${depth * 12 + 40}px` }} className="pb-1">
+          {[...allFiles[node.path].markers]
+            .sort((a, b) => b.severity - a.severity || a.line - b.line)
+            .slice(0, 12)
+            .map((m, i) => (
+              <div
+                key={i}
+                className="flex items-start gap-1 py-0.5 text-[11px] cursor-pointer hover:bg-zinc-800/50 rounded px-1 group/marker"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onNavigateToMarker?.(node.path, m.line, m.column);
+                }}
+              >
+                {m.severity === 8 ? (
+                  <AlertCircle className="w-3 h-3 text-red-400 shrink-0 mt-0.5" />
+                ) : (
+                  <AlertTriangle className="w-3 h-3 text-yellow-400 shrink-0 mt-0.5" />
+                )}
+                <span className="text-zinc-500 font-mono shrink-0">Ln {m.line}</span>
+                <span className="text-zinc-400 truncate group-hover/marker:text-zinc-300">
+                  {m.message}
+                </span>
+              </div>
+            ))}
+          {allFiles[node.path].markers.length > 12 && (
+            <div className="text-[10px] text-zinc-600 pl-4">
+              +{allFiles[node.path].markers.length - 12} más
+            </div>
+          )}
+        </div>
+      )}
 
       {contextMenu && (
         <div
@@ -164,27 +204,42 @@ function sumDescendantMarkers(
   return { errors, warnings };
 }
 
-function FileMarkerBadge({ filePath }: { filePath: string }) {
+function FileMarkerBadge({ filePath, onToggle, expanded }: { filePath: string; onToggle: () => void; expanded: boolean }) {
   const markers = useMarkersStore((s) => s.files[filePath]);
   if (!markers || (markers.errors === 0 && markers.warnings === 0)) return null;
 
   return (
     <span className="ml-1.5 flex items-center gap-0.5 shrink-0">
       {markers.errors > 0 && (
-        <span className="inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-red-500/20 text-[10px] font-semibold text-red-400 leading-none">
+        <button
+          className={cn(
+            "inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full text-[10px] font-semibold leading-none transition-colors",
+            expanded ? "bg-red-500/30 text-red-300" : "bg-red-500/20 text-red-400 hover:bg-red-500/30"
+          )}
+          onClick={(e) => { e.stopPropagation(); onToggle(); }}
+        >
           {markers.errors}
-        </span>
+        </button>
       )}
       {markers.warnings > 0 && (
-        <span className="inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-yellow-500/20 text-[10px] font-semibold text-yellow-400 leading-none">
+        <button
+          className={cn(
+            "inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full text-[10px] font-semibold leading-none transition-colors",
+            expanded ? "bg-yellow-500/30 text-yellow-300" : "bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30"
+          )}
+          onClick={(e) => { e.stopPropagation(); onToggle(); }}
+        >
           {markers.warnings}
-        </span>
+        </button>
+      )}
+      {expanded && (
+        <ChevronDown className="w-3 h-3 text-zinc-500" />
       )}
     </span>
   );
 }
 
-export default function FileTree({ projectId, onFileSelect, onNewFile, refreshKey }: FileTreeProps) {
+export default function FileTree({ projectId, onFileSelect, onNewFile, refreshKey, onNavigateToMarker }: FileTreeProps & { onNavigateToMarker?: (filePath: string, line: number, column: number) => void }) {
   const [tree, setTree] = useState<FileTreeNode | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -233,7 +288,7 @@ export default function FileTree({ projectId, onFileSelect, onNewFile, refreshKe
   return (
     <div className="py-2 overflow-x-auto">
       {tree.children?.map((child, idx) => (
-        <TreeNode key={idx} node={child} onSelect={onFileSelect} depth={0} onNewFile={onNewFile} allFiles={allFiles} />
+        <TreeNode key={idx} node={child} onSelect={onFileSelect} depth={0} onNewFile={onNewFile} allFiles={allFiles} onNavigateToMarker={onNavigateToMarker} />
       ))}
     </div>
   );
