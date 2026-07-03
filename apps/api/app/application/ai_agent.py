@@ -1,11 +1,12 @@
 import json
 import litellm
+from pathlib import Path
 from typing import List, Dict, Any
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, text
 from app.infrastructure.security.credential_manager import CredentialManager
-from app.infrastructure.db.models import AIMemoryModel, ContextSnippetModel
+from app.infrastructure.db.models import AIMemoryModel, ContextSnippetModel, ProjectModel
 
 class AIAgent:
     def __init__(self, session: AsyncSession, project_id: UUID | str | None = None):
@@ -57,8 +58,38 @@ class AIAgent:
                         "required": ["query"]
                     }
                 }
-            }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "search_codebase",
+                    "description": "Full-text search across all project files and symbols. Use this to find files, classes, or function definitions by name or keyword.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {"type": "string", "description": "Search term — file name, symbol name, or keyword"}
+                        },
+                        "required": ["query"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "read_local_file",
+                    "description": "Reads the content of a file within the project. Returns the first 2000 characters.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "file_path": {"type": "string", "description": "Relative or absolute path to the file"}
+                        },
+                        "required": ["file_path"]
+                    }
+                }
+            },
         ]
+
+        self._project_root: str | None = None
 
     async def _handle_tool_call(self, tool_call: Any) -> str:
         """Executes a requested tool call and returns a string response."""
@@ -98,8 +129,78 @@ class AIAgent:
             if not snippets:
                 return "No context found."
             return json.dumps([{"type": s.type, "content": s.content} for s in snippets])
-            
+
+        elif name == "search_codebase":
+            query = args["query"]
+            sanitized = query.replace("'", "''").strip() + "*"
+            result = await self.session.execute(
+                text(
+                    "SELECT type, name, path, line FROM search_index "
+                    "WHERE search_index MATCH :q ORDER BY rank LIMIT 20"
+                ),
+                {"q": sanitized},
+            )
+            rows = result.fetchall()
+            if not rows:
+                return "No results found in codebase."
+            return json.dumps([
+                {"type": r[0], "name": r[1], "path": r[2], "line": r[3]}
+                for r in rows
+            ])
+
+        elif name == "read_local_file":
+            file_path = args["file_path"]
+            root = await self._get_project_root()
+            if not root:
+                return "Error: No project context available."
+
+            target = Path(file_path)
+            if not target.is_absolute():
+                target = Path(root) / file_path
+            target = target.resolve()
+
+            if not target.is_relative_to(root):
+                return "Error: Access denied — file is outside the project."
+
+            try:
+                content = target.read_text(encoding="utf-8", errors="ignore")
+                return content[:2000] + ("...(truncated)" if len(content) > 2000 else "")
+            except FileNotFoundError:
+                return f"Error: File not found — {file_path}"
+            except Exception as e:
+                return f"Error reading file: {str(e)}"
+
         return "Unknown tool."
+
+    async def _get_project_root(self) -> str | None:
+        if self._project_root:
+            return self._project_root
+        if not self.project_id:
+            return None
+        try:
+            project_uuid = self.project_id if isinstance(self.project_id, UUID) else UUID(str(self.project_id))
+        except (ValueError, TypeError):
+            return None
+        stmt = select(ProjectModel).where(ProjectModel.id == project_uuid)
+        result = await self.session.execute(stmt)
+        project = result.scalar_one_or_none()
+        if project and project.path:
+            self._project_root = str(Path(project.path).resolve())
+            return self._project_root
+        return None
+
+    async def _build_system_message(self) -> str:
+        root = await self._get_project_root()
+        if not root:
+            return ""
+        return (
+            f"Eres SprintLogic AI, el arquitecto de software integrado en el IDE del usuario. "
+            f"NO ERES UN ASISTENTE WEB GENÉRICO. "
+            f"El usuario está trabajando en el proyecto alojado localmente en {root}. "
+            f"Tienes capacidad de leer archivos y buscar en el proyecto a través de las herramientas proporcionadas. "
+            f"Usa search_codebase para encontrar archivos, clases o funciones. "
+            f"Usa read_local_file para inspeccionar el contenido de archivos específicos."
+        )
 
     def _get_provider(self, model: str) -> str:
         model_lower = model.lower()
@@ -119,9 +220,14 @@ class AIAgent:
         """
         provider = self._get_provider(model)
         api_key = CredentialManager.get_api_key(provider)
-        
+
         if not api_key and provider != "openrouter" and "ollama" not in model.lower():
             raise ValueError(f"API Key for {provider} not configured.")
+
+        # Inject project context as system message
+        system_msg = await self._build_system_message()
+        if system_msg:
+            messages = [{"role": "system", "content": system_msg}] + [m for m in messages if m.get("role") != "system"]
 
         # Prepare LiteLLM call
         response = await litellm.acompletion(
