@@ -814,6 +814,10 @@ export default function Home() {
           filePath={mentorFile}
           fileContent={mentorContent}
           techStack={mentorTechStack}
+          onOpenSettings={() => {
+            setSettingsTab('llms');
+            setSettingsOpen(true);
+          }}
         />
     </div>
   );

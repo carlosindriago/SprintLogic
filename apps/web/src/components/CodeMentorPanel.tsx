@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useRef, useEffect } from 'react';
-import { GraduationCap, Send, Loader2, X, ChevronRight } from 'lucide-react';
+import { GraduationCap, Send, Loader2, ChevronRight, Brain, Settings } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { API_BASE_URL } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { useLLMConfigStore } from '@/store/llmConfigStore';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -17,13 +18,15 @@ interface Props {
   filePath: string;
   fileContent: string;
   techStack: Record<string, number>;
+  onOpenSettings?: () => void;
 }
 
-export default function CodeMentorPanel({ open, onToggle, filePath, fileContent, techStack }: Props) {
+export default function CodeMentorPanel({ open, onToggle, filePath, fileContent, techStack, onOpenSettings }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const context7ApiKey = useLLMConfigStore((s) => s.context7ApiKey);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
@@ -45,6 +48,7 @@ export default function CodeMentorPanel({ open, onToggle, filePath, fileContent,
           content: fileContent.slice(0, 8000),
           project_tech_stack: techStack,
           user_query: query,
+          context7_api_key: context7ApiKey,
         }),
       });
       if (!res.ok) throw new Error('Mentor error');
@@ -94,7 +98,24 @@ export default function CodeMentorPanel({ open, onToggle, filePath, fileContent,
         </div>
 
         <div ref={scrollRef} className="flex-1 overflow-y-auto custom-scrollbar p-3 flex flex-col gap-3">
-          {messages.length === 0 && !loading && (
+          {!context7ApiKey ? (
+            <div className="flex flex-col items-center justify-center h-full text-center gap-3 text-zinc-500">
+              <Brain className="w-12 h-12 text-zinc-700" />
+              <h3 className="text-sm font-semibold text-zinc-400">Activa el Modo Sensei</h3>
+              <p className="text-xs max-w-[240px] leading-relaxed">
+                Para evitar alucinaciones, el Mentor necesita conectarse a Context7 para leer la documentación de tu Tech Stack en tiempo real.
+              </p>
+              {onOpenSettings && (
+                <button
+                  onClick={onOpenSettings}
+                  className="text-[11px] mt-1 px-3 py-1.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 transition-colors flex items-center gap-1.5"
+                >
+                  <Settings className="w-3 h-3" />
+                  Ir a Ajustes
+                </button>
+              )}
+            </div>
+          ) : messages.length === 0 && !loading ? (
             <div className="flex flex-col items-center justify-center h-full text-center gap-2 text-zinc-600">
               <GraduationCap className="w-10 h-10 text-zinc-700" />
               <p className="text-xs max-w-[220px]">
@@ -108,9 +129,9 @@ export default function CodeMentorPanel({ open, onToggle, filePath, fileContent,
                 Analizar {filePath.split('/').pop() || 'archivo'}
               </button>
             </div>
-          )}
+          ) : null}
 
-          {messages.map((m, i) => (
+          {context7ApiKey && messages.map((m, i) => (
             <div
               key={i}
               className={cn(
@@ -144,7 +165,7 @@ export default function CodeMentorPanel({ open, onToggle, filePath, fileContent,
             </div>
           ))}
 
-          {loading && (
+          {context7ApiKey && loading && (
             <div className="self-start flex items-center gap-2 text-xs text-zinc-500 px-3 py-2">
               <Loader2 className="w-3 h-3 animate-spin" />
               El Sensei está pensando...
@@ -152,6 +173,7 @@ export default function CodeMentorPanel({ open, onToggle, filePath, fileContent,
           )}
         </div>
 
+        {context7ApiKey && (
         <div className="border-t border-zinc-800/50 p-2 shrink-0">
           <div className="flex items-center gap-2 bg-zinc-900 rounded-lg px-3 py-1.5">
             <input
@@ -171,6 +193,7 @@ export default function CodeMentorPanel({ open, onToggle, filePath, fileContent,
             </button>
           </div>
         </div>
+        )}
       </div>
     </div>
   );
