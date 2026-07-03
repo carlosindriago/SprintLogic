@@ -265,12 +265,24 @@ export default function EditorTab({
     // ── Vim mode: always active for normal/visual/insert editing ──
     import("monaco-vim").then(({ initVimMode }) => {
       const statusNode = document.createElement('div');
+      statusNode.style.position = 'absolute';
+      statusNode.style.bottom = '0';
+      statusNode.style.left = '0';
+      statusNode.style.right = '0';
+      statusNode.style.width = '100%';
       statusNode.style.padding = '2px 8px';
       statusNode.style.fontSize = '12px';
       statusNode.style.backgroundColor = '#1e1e1e';
       statusNode.style.borderTop = '1px solid #333';
       statusNode.style.color = '#fff';
-      editor.getContainerDomNode().parentElement?.appendChild(statusNode);
+      statusNode.style.zIndex = '10';
+
+      const container = editor.getContainerDomNode();
+      if (container) {
+        container.style.position = 'relative';
+        container.style.overflow = 'hidden';
+        container.appendChild(statusNode);
+      }
       vimStatusRef.current = statusNode;
 
       const vim = initVimMode(editor, statusNode);
