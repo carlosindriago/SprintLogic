@@ -33,11 +33,6 @@ const PROVIDERS = [
 
 const KEY_MIN_LENGTH = 8;
 
-/**
- * Renders a real, length-aware mask of the stored key.
- * `sk-••••••••••••AaBbCcDd` style: first 4 + bullets + last 4.
- * Falls back to a fixed-width mask if the key is shorter than 8 chars.
- */
 function maskKey(key: string | null): string {
   if (!key || key.length < KEY_MIN_LENGTH) {
     return "••••••••••••••••••••••••••••";
@@ -53,19 +48,13 @@ function SkeletonModelList() {
       {[0, 1, 2].map((i) => (
         <div
           key={i}
-          className="h-9 w-full rounded-md bg-zinc-900/60 border border-zinc-800/50 animate-pulse"
+          className="h-9 w-full rounded-md bg-zinc-950 border border-zinc-800/50 animate-pulse"
         />
       ))}
     </div>
   );
 }
 
-/**
- * Per-provider config pane. Renders fresh on every provider change thanks
- * to the `key={activeProvider}` prop in the parent — no effect needed to
- * reset state, just mount-time fetch. This is the React 19 "derived state
- * via key" pattern recommended over setState-in-effect.
- */
 function ProviderConfig({
   provider,
   defaultModel,
@@ -86,9 +75,6 @@ function ProviderConfig({
 
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  // Mount-time fetch: data refresh happens via the `key` prop on the parent,
-  // not via setState in this effect. The empty deps array is intentional —
-  // the `key` prop forces a full remount when the provider changes.
   /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
     let cancelled = false;
@@ -138,8 +124,6 @@ function ProviderConfig({
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setValidationError(message);
-      // IMPORTANT: keep the user's input so they don't lose what they typed
-      // on a transient network failure.
     } finally {
       setIsValidating(false);
     }
@@ -186,16 +170,23 @@ function ProviderConfig({
     : "";
 
   return (
-    <div className="w-2/3 p-4 flex flex-col gap-6 bg-zinc-900 overflow-y-auto custom-scrollbar">
+    <div className="flex flex-col gap-6 p-5">
       <div className="flex flex-col gap-2">
-        <Label className="text-zinc-300 flex items-center gap-2">
-          API Key
+        <div className="flex items-center justify-between">
+          <Label className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">
+            API Key
+          </Label>
           {isConfigured && !isEditing && (
             <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wide text-emerald-400/90">
               <CheckCircle2 className="w-3 h-3" /> configurada
             </span>
           )}
-        </Label>
+          {!isConfigured && isEditing && (
+            <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wide text-amber-400/90">
+              <XCircle className="w-3 h-3" /> faltante
+            </span>
+          )}
+        </div>
 
         {isConfigured && !isEditing ? (
           <div className="flex w-full items-center gap-2">
@@ -218,7 +209,7 @@ function ProviderConfig({
               type="button"
               variant="outline"
               size="sm"
-              className="bg-zinc-900 border-zinc-800 hover:bg-red-950/40 hover:text-red-300 hover:border-red-900/60 h-9"
+              className="bg-zinc-800 border-zinc-700/50 hover:bg-red-950/40 hover:text-red-300 hover:border-red-900/60 h-9"
               onClick={handleDeleteKey}
               aria-label="Eliminar llave almacenada"
             >
@@ -233,7 +224,7 @@ function ProviderConfig({
               autoComplete="off"
               spellCheck={false}
               placeholder="Pega tu API Key aquí…"
-              className="bg-zinc-950 border-zinc-800 text-zinc-200 pr-10 font-mono"
+              className="bg-zinc-950 border-zinc-800 text-zinc-200 pr-10 font-mono px-3 py-2"
               value={keyInput}
               onChange={(e) => {
                 setKeyInput(e.target.value);
@@ -266,7 +257,7 @@ function ProviderConfig({
           </p>
         )}
 
-        <p className="text-xs text-zinc-500">
+        <p className="text-xs text-zinc-500 mt-1">
           {isConfigured && !isEditing
             ? "La llave se almacena cifrada en el keyring del sistema. Nunca abandona tu máquina."
             : "La llave se valida y guarda automáticamente al salir del campo."}
@@ -274,7 +265,9 @@ function ProviderConfig({
       </div>
 
       <div className="flex flex-col gap-2">
-        <Label className="text-zinc-300">Modelo predeterminado</Label>
+        <Label className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">
+          Modelo predeterminado
+        </Label>
         {isFetchingModels ? (
           <SkeletonModelList />
         ) : models.length > 0 ? (
@@ -302,7 +295,7 @@ function ProviderConfig({
           </div>
         )}
         {isCurrentProviderDefault && models.length > 0 && (
-          <p className="text-[11px] text-zinc-500">
+          <p className="text-[11px] text-zinc-500 mt-1">
             El modelo seleccionado se usa como predeterminado global para chat,
             generación de commits y demás funciones IA.
           </p>
@@ -332,24 +325,32 @@ function Context7Section({
     onSave(trimmed);
     setInput('');
     setSaved(true);
+    toast.success("API Key de Context7 guardada");
   };
 
   const handleClear = () => {
     onSave('');
     setSaved(false);
+    toast.success("API Key de Context7 eliminada");
   };
 
   return (
-    <div className="w-2/3 p-4 flex flex-col gap-4 bg-zinc-900 overflow-y-auto custom-scrollbar">
+    <div className="flex flex-col gap-6 p-5">
       <div className="flex flex-col gap-2">
-        <Label className="text-zinc-300 flex items-center gap-2">
-          Context7 (MCP)
-          {saved && (
-            <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wide text-blue-400/90">
+        <div className="flex items-center justify-between">
+          <Label className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">
+            API Key
+          </Label>
+          {saved ? (
+            <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wide text-emerald-400/90">
               <CheckCircle2 className="w-3 h-3" /> configurada
             </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wide text-amber-400/90">
+              <XCircle className="w-3 h-3" /> faltante
+            </span>
           )}
-        </Label>
+        </div>
 
         {saved ? (
           <div className="flex w-full items-center gap-2">
@@ -372,7 +373,7 @@ function Context7Section({
               type="button"
               variant="outline"
               size="sm"
-              className="bg-zinc-900 border-zinc-800 hover:bg-red-950/40 hover:text-red-300 hover:border-red-900/60 h-9"
+              className="bg-zinc-800 border-zinc-700/50 hover:bg-red-950/40 hover:text-red-300 hover:border-red-900/60 h-9"
               onClick={handleClear}
             >
               <Trash2 className="w-3.5 h-3.5" />
@@ -384,7 +385,7 @@ function Context7Section({
               type="password"
               autoComplete="off"
               placeholder="ctx7_..."
-              className="bg-zinc-950 border-zinc-800 text-zinc-200 flex-1 font-mono"
+              className="bg-zinc-950 border-zinc-800 text-zinc-200 flex-1 font-mono px-3 py-2"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
@@ -403,20 +404,33 @@ function Context7Section({
           </div>
         )}
 
-        <p className="text-xs text-zinc-500">
+        <p className="text-xs text-zinc-500 mt-1">
           Permite al Modo Sensei leer la documentación oficial actualizada de tus librerías.
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <Label className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">
+          Acerca de Context7
+        </Label>
+        <p className="text-xs text-zinc-500 leading-relaxed">
+          Context7 provee acceso en tiempo real a la documentación oficial de React, Next.js,
+          Tailwind, TypeScript, Python y cientos de librerías más. El Modo Sensei la consulta
+          automáticamente para fundamentar sus respuestas en la documentación vigente.
         </p>
       </div>
     </div>
   );
 }
 
+type ActiveSection = string; // provider id or 'context7'
+
 export default function LLMSettingsPanel() {
   const defaultModel = useLLMConfigStore((s) => s.defaultModel);
   const setDefaultModel = useLLMConfigStore((s) => s.setDefaultModel);
   const context7ApiKey = useLLMConfigStore((s) => s.context7ApiKey);
   const setContext7ApiKey = useLLMConfigStore((s) => s.setContext7ApiKey);
-  const [activeProvider, setActiveProvider] = useState("gemini");
+  const [activeSection, setActiveSection] = useState<ActiveSection>("gemini");
 
   const handleSelectModel = useCallback(
     (provider: string, modelId: string) => {
@@ -425,51 +439,73 @@ export default function LLMSettingsPanel() {
     [setDefaultModel],
   );
 
+  const isLLMProvider = activeSection !== 'context7';
+
   return (
-    <div className="flex h-[420px] border border-zinc-800/50 rounded-md overflow-hidden">
-      {/* Provider sidebar */}
-      <div className="w-1/3 bg-zinc-900/50 border-r border-zinc-800/50 flex flex-col">
+    <div className="flex h-[440px] border border-zinc-800/50 rounded-lg overflow-hidden">
+      {/* Sidebar */}
+      <div className="w-[220px] bg-zinc-900/50 border-r border-zinc-800/50 flex flex-col overflow-y-auto shrink-0">
+        <div className="px-3 pt-4 pb-1">
+          <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-widest">
+            Modelos LLM
+          </span>
+        </div>
         {PROVIDERS.map((provider) => {
-          const isActive = activeProvider === provider.id;
+          const isActive = activeSection === provider.id;
           return (
             <button
               key={provider.id}
               type="button"
-              onClick={() => setActiveProvider(provider.id)}
-              className={`text-left px-4 py-3 text-sm transition-colors flex items-center justify-between ${
+              onClick={() => setActiveSection(provider.id)}
+              className={`text-left px-3 py-1.5 text-xs transition-colors flex items-center justify-between ${
                 isActive
-                  ? "bg-zinc-800 text-zinc-100 border-l-2 border-blue-500 font-medium"
+                  ? "bg-blue-500/10 text-blue-300 border-l-2 border-blue-500 font-medium"
                   : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200 border-l-2 border-transparent"
               }`}
             >
-              <span>{provider.name}</span>
+              <span className="truncate">{provider.name}</span>
               {provider.id === defaultModel.split("/")[0] && (
-                <span
-                  className="text-[10px] uppercase tracking-wide text-blue-400/80"
-                  title="Modelo predeterminado activo"
-                >
+                <span className="text-[9px] uppercase tracking-wide text-blue-400/80 ml-1 shrink-0">
                   activo
                 </span>
               )}
             </button>
           );
         })}
+
+        <div className="px-3 pt-4 pb-1 mt-1 border-t border-zinc-800/50">
+          <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-widest">
+            Integraciones
+          </span>
+        </div>
+        <button
+          onClick={() => setActiveSection('context7')}
+          className={`text-left px-3 py-1.5 text-xs transition-colors flex items-center gap-2 ${
+            activeSection === 'context7'
+              ? "bg-blue-500/10 text-blue-300 border-l-2 border-blue-500 font-medium"
+              : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200 border-l-2 border-transparent"
+          }`}
+        >
+          <Brain className="w-3.5 h-3.5 shrink-0" />
+          Context7 MCP
+        </button>
       </div>
 
-      {/* Main configuration area — `key` forces a fresh fetch on provider switch */}
-      <div className="w-2/3 flex flex-col overflow-hidden">
-        <ProviderConfig
-          key={activeProvider}
-          provider={activeProvider}
-          defaultModel={defaultModel}
-          onSelectModel={handleSelectModel}
-        />
-        <div className="border-t border-zinc-800/50 shrink-0">
+      {/* Content */}
+      <div className="flex-1 bg-zinc-900 overflow-y-auto custom-scrollbar">
+        {isLLMProvider ? (
+          <ProviderConfig
+            key={activeSection}
+            provider={activeSection}
+            defaultModel={defaultModel}
+            onSelectModel={handleSelectModel}
+          />
+        ) : (
           <Context7Section
             apiKey={context7ApiKey}
             onSave={setContext7ApiKey}
           />
-        </div>
+        )}
       </div>
     </div>
   );
