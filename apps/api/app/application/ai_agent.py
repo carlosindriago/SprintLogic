@@ -1,5 +1,6 @@
 import json
 import litellm
+import traceback
 from pathlib import Path
 from typing import List, Dict, Any
 from uuid import UUID
@@ -94,21 +95,25 @@ class AIAgent:
     async def _handle_tool_call(self, tool_call: Any) -> str:
         """Executes a requested tool call and returns a string response."""
         name = tool_call.function.name
-        args = json.loads(tool_call.function.arguments)
+        try:
+            raw_args = tool_call.function.arguments or "{}"
+            args = json.loads(raw_args)
+        except (json.JSONDecodeError, AttributeError):
+            return "Error: invalid tool arguments."
 
         if name == "mem_save":
             memory = AIMemoryModel(
                 project_id=self.project_id,
-                memory_type=args["memory_type"],
-                topic=args["topic"],
-                content=args["content"]
+                memory_type=args.get("memory_type", "unknown"),
+                topic=args.get("topic", "untitled"),
+                content=args.get("content", "")
             )
             self.session.add(memory)
             await self.session.commit()
-            return f"Memory '{args['topic']}' saved successfully."
+            return f"Memory '{args.get('topic', 'untitled')}' saved successfully."
 
         elif name == "mem_search":
-            query = args["query"]
+            query = args.get("query", "")
             stmt = select(AIMemoryModel).where(AIMemoryModel.content.icontains(query))
             if self.project_id:
                 stmt = stmt.where(AIMemoryModel.project_id == self.project_id)
@@ -119,7 +124,7 @@ class AIAgent:
             return json.dumps([{"topic": m.topic, "content": m.content, "type": m.memory_type} for m in memories])
 
         elif name == "context_search":
-            query = args["query"]
+            query = args.get("query", "")
             # Fallback to basic ILIKE search since sqlite-vec virtual table is not yet fully configured with triggers
             stmt = select(ContextSnippetModel).where(ContextSnippetModel.content.icontains(query))
             if self.project_id:
@@ -131,7 +136,7 @@ class AIAgent:
             return json.dumps([{"type": s.type, "content": s.content} for s in snippets])
 
         elif name == "search_codebase":
-            query = args["query"]
+            query = args.get("query", "")
             sanitized = query.replace("'", "''").strip() + "*"
             result = await self.session.execute(
                 text(
@@ -149,7 +154,7 @@ class AIAgent:
             ])
 
         elif name == "read_local_file":
-            file_path = args["file_path"]
+            file_path = args.get("file_path", "")
             root = await self._get_project_root()
             if not root:
                 return "Error: No project context available."
@@ -218,50 +223,60 @@ class AIAgent:
         """
         Processes a chat conversation and allows the AI to call tools before returning a final response.
         """
-        provider = self._get_provider(model)
-        api_key = CredentialManager.get_api_key(provider)
+        try:
+            provider = self._get_provider(model)
+            api_key = CredentialManager.get_api_key(provider)
 
-        if not api_key and provider != "openrouter" and "ollama" not in model.lower():
-            raise ValueError(f"API Key for {provider} not configured.")
+            if not api_key and provider != "openrouter" and "ollama" not in model.lower():
+                raise ValueError(f"API Key for {provider} not configured.")
 
-        # Inject project context as system message
-        system_msg = await self._build_system_message()
-        if system_msg:
-            messages = [{"role": "system", "content": system_msg}] + [m for m in messages if m.get("role") != "system"]
+            # Inject project context as system message
+            system_msg = await self._build_system_message()
+            if system_msg:
+                messages = [{"role": "system", "content": system_msg}] + [m for m in messages if m.get("role") != "system"]
 
-        # Prepare LiteLLM call
-        response = await litellm.acompletion(
-            model=model,
-            messages=messages,
-            tools=self.tools,
-            api_key=api_key
-        )
-
-        message = response.choices[0].message
-
-        # If model wants to call tools
-        if message.tool_calls:
-            # Add the model's tool calls to the messages
-            messages.append(message.model_dump())
-            
-            for tool_call in message.tool_calls:
-                tool_response_str = await self._handle_tool_call(tool_call)
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tool_call.id,
-                    "name": tool_call.function.name,
-                    "content": tool_response_str
-                })
-            
-            # Second call to get final answer
-            second_response = await litellm.acompletion(
+            # Prepare LiteLLM call
+            response = await litellm.acompletion(
                 model=model,
                 messages=messages,
+                tools=self.tools,
                 api_key=api_key
             )
-            return str(second_response.choices[0].message.content)
 
-        return str(message.content)
+            if not response.choices or len(response.choices) == 0:
+                return "Error: No response from LLM."
+
+            message = response.choices[0].message
+
+            # If model wants to call tools
+            if getattr(message, 'tool_calls', None):
+                messages.append(message.model_dump())
+
+                for tool_call in message.tool_calls:
+                    tool_response_str = await self._handle_tool_call(tool_call)
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "name": tool_call.function.name,
+                        "content": tool_response_str
+                    })
+
+                second_response = await litellm.acompletion(
+                    model=model,
+                    messages=messages,
+                    api_key=api_key
+                )
+
+                if not second_response.choices or len(second_response.choices) == 0:
+                    return "Error: No response from LLM after tool calls."
+
+                return str(getattr(second_response.choices[0].message, 'content', '') or '')
+
+            return str(getattr(message, 'content', '') or '')
+
+        except Exception as e:
+            traceback.print_exc()
+            raise
 
     @staticmethod
     def _coerce_project_id(value: UUID | str | None) -> UUID | None:
