@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
@@ -522,6 +522,41 @@ async def analyze_project(project_id: str, session: AsyncSession = Depends(get_d
         "total_files": total_files,
         "global_markers": global_markers,
     }
+
+@router.get("/search")
+async def search_everywhere(
+    q: str = Query(..., min_length=1, description="Search query"),
+    session: AsyncSession = Depends(get_db_session),
+):
+    sanitized = q.replace("'", "''").strip()
+    if not sanitized:
+        return {"results": []}
+
+    query_str = sanitized + "*"
+
+    try:
+        result = await session.execute(
+            text(
+                "SELECT type, name, path, line FROM search_index "
+                "WHERE search_index MATCH :q ORDER BY rank LIMIT 50"
+            ),
+            {"q": query_str},
+        )
+        rows = result.fetchall()
+
+        return {
+            "results": [
+                {
+                    "type": row[0],
+                    "name": row[1],
+                    "path": row[2],
+                    "line": row[3],
+                }
+                for row in rows
+            ]
+        }
+    except Exception:
+        return {"results": []}
 
 from sse_starlette.sse import EventSourceResponse
 import asyncio
