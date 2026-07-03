@@ -51,6 +51,7 @@ export default function EditorTab({
   const [editorMode, setEditorMode] = useState<'locked' | 'visual' | 'editable'>('locked');
   const editorModeRef = useRef(editorMode);
   editorModeRef.current = editorMode;
+  const vimStatusRef = useRef<HTMLDivElement | null>(null);
   const originalContentRef = useRef('');
   const currentContentRef = useRef('');
   const editorRef = useRef<monacoEditor.IStandaloneCodeEditor | null>(null);
@@ -261,22 +262,43 @@ export default function EditorTab({
       }
     }
 
-    if (vimMode) {
-      import("monaco-vim").then(({ initVimMode }) => {
-        const statusNode = document.createElement('div');
-        statusNode.style.padding = '2px 8px';
-        statusNode.style.fontSize = '12px';
-        statusNode.style.backgroundColor = '#1e1e1e';
-        statusNode.style.borderTop = '1px solid #333';
-        statusNode.style.color = '#fff';
-        editor.getContainerDomNode().parentElement?.appendChild(statusNode);
+    // ── Vim mode: always active for normal/visual/insert editing ──
+    import("monaco-vim").then(({ initVimMode }) => {
+      const statusNode = document.createElement('div');
+      statusNode.style.padding = '2px 8px';
+      statusNode.style.fontSize = '12px';
+      statusNode.style.backgroundColor = '#1e1e1e';
+      statusNode.style.borderTop = '1px solid #333';
+      statusNode.style.color = '#fff';
+      editor.getContainerDomNode().parentElement?.appendChild(statusNode);
+      vimStatusRef.current = statusNode;
 
-        const vim = initVimMode(editor, statusNode);
-        vimInstanceRef.current = vim;
-      }).catch((err) => {
-        console.error("Vim initialization failed:", err);
+      const vim = initVimMode(editor, statusNode);
+      vimInstanceRef.current = vim;
+
+      // Sync vim mode → React state via MutationObserver on status bar
+      const modeLabels: Record<string, typeof editorModeRef.current> = {
+        'NORMAL': 'locked',
+        'VISUAL': 'visual',
+        'VISUAL LINE': 'visual',
+        'VISUAL BLOCK': 'visual',
+        'INSERT': 'editable',
+        'REPLACE': 'editable',
+      };
+      const observer = new MutationObserver(() => {
+        const text = statusNode.textContent?.trim().toUpperCase() || '';
+        for (const [label, mode] of Object.entries(modeLabels)) {
+          if (text.startsWith(label)) {
+            editorModeRef.current = mode;
+            setEditorMode(mode);
+            break;
+          }
+        }
       });
-    }
+      observer.observe(statusNode, { characterData: true, subtree: true, childList: true });
+    }).catch(() => {
+      console.error("Vim initialization failed");
+    });
 
     if (node.metadata) {
       try {
@@ -337,110 +359,38 @@ export default function EditorTab({
       handleSaveRef.current();
     });
 
-    // ── Vim-style mode system ──────────────────────────────────────
-    let lastGPress = 0;
+    // ── Sublime-style shortcuts for insert mode ──────────────────
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyD, () => {
+      editor.getAction('editor.action.addSelectionToNextFindMatch')?.run();
+    }, '!vimMode');
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyD, () => {
+      editor.getAction('editor.action.copyLinesDownAction')?.run();
+    });
+    editor.addCommand(monaco.KeyMod.Alt | monaco.KeyCode.UpArrow, () => {
+      editor.getAction('editor.action.moveLinesUpAction')?.run();
+    });
+    editor.addCommand(monaco.KeyMod.Alt | monaco.KeyCode.DownArrow, () => {
+      editor.getAction('editor.action.moveLinesDownAction')?.run();
+    });
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyL, () => {
+      editor.getAction('editor.action.expandLineSelection')?.run();
+    });
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyK, () => {
+      editor.getAction('editor.action.deleteLines')?.run();
+    });
+    editor.addCommand(monaco.KeyMod.Alt | monaco.KeyCode.KeyA, () => {
+      editor.getAction('editor.action.insertCursorAbove')?.run();
+    });
+    editor.addCommand(monaco.KeyMod.Alt | monaco.KeyCode.KeyB, () => {
+      editor.getAction('editor.action.insertCursorBelow')?.run();
+    });
 
-    editor.onKeyDown((e) => {
-      const mode = editorModeRef.current;
-
-      const ctrl = e.ctrlKey || e.metaKey;
-
-      // Always allow Ctrl+S in any mode
-      if (ctrl && e.keyCode === monaco.KeyCode.KeyS) return;
-
-      // 'Escape' → back to locked mode (works from any mode)
-      if (!ctrl && e.keyCode === monaco.KeyCode.Escape) {
-        e.preventDefault();
-        e.stopPropagation();
-        setEditorMode('locked');
-        return;
-      }
-
-      if (mode === 'editable') return;
-
-      // 'i' → enter editable mode
-      if (!ctrl && e.keyCode === monaco.KeyCode.KeyI) {
-        e.preventDefault();
-        e.stopPropagation();
-        setEditorMode('editable');
-        return;
-      }
-
-      // 'v' → enter visual mode
-      if (!ctrl && e.keyCode === monaco.KeyCode.KeyV) {
-        e.preventDefault();
-        e.stopPropagation();
-        setEditorMode('visual');
-        return;
-      }
-
-      // ── Locked mode: navigation only ──
-      if (mode === 'locked') {
-        switch (e.keyCode) {
-          case monaco.KeyCode.KeyH: editor.trigger('keyboard', 'cursorLeft', null); e.preventDefault(); e.stopPropagation(); return;
-          case monaco.KeyCode.KeyJ: editor.trigger('keyboard', 'cursorDown', null); e.preventDefault(); e.stopPropagation(); return;
-          case monaco.KeyCode.KeyK: editor.trigger('keyboard', 'cursorUp', null); e.preventDefault(); e.stopPropagation(); return;
-          case monaco.KeyCode.KeyL: editor.trigger('keyboard', 'cursorRight', null); e.preventDefault(); e.stopPropagation(); return;
-          case monaco.KeyCode.KeyW: editor.trigger('keyboard', 'cursorWordRight', null); e.preventDefault(); e.stopPropagation(); return;
-          case monaco.KeyCode.KeyB: editor.trigger('keyboard', 'cursorWordLeft', null); e.preventDefault(); e.stopPropagation(); return;
-          case monaco.KeyCode.KeyG: {
-            if (e.shiftKey) {
-              editor.trigger('keyboard', 'cursorBottom', null);
-              e.preventDefault(); e.stopPropagation();
-              return;
-            }
-            const now = Date.now();
-            if (now - lastGPress < 500) {
-              editor.setPosition({ lineNumber: 1, column: 1 });
-              lastGPress = 0;
-            } else {
-              lastGPress = now;
-            }
-            e.preventDefault(); e.stopPropagation(); return;
-          }
-          case monaco.KeyCode.Slash:
-            editor.getAction('actions.find')?.run();
-            e.preventDefault(); e.stopPropagation();
-            return;
-          case monaco.KeyCode.KeyD:
-            if (ctrl) { editor.trigger('keyboard', 'cursorPageDown', null); e.preventDefault(); e.stopPropagation(); return; }
-            break;
-          case monaco.KeyCode.KeyU:
-            if (ctrl) { editor.trigger('keyboard', 'cursorPageUp', null); e.preventDefault(); e.stopPropagation(); return; }
-            break;
-        }
-        e.preventDefault();
-        e.stopPropagation();
-        return;
-      }
-
-      // ── Visual mode: allow movement/nav keys for selection, block typing ──
-      if (mode === 'visual') {
-        switch (e.keyCode) {
-          case monaco.KeyCode.KeyH:
-          case monaco.KeyCode.KeyJ:
-          case monaco.KeyCode.KeyK:
-          case monaco.KeyCode.KeyL:
-          case monaco.KeyCode.KeyW:
-          case monaco.KeyCode.KeyB:
-          case monaco.KeyCode.Home:
-          case monaco.KeyCode.End:
-          case monaco.KeyCode.PageUp:
-          case monaco.KeyCode.PageDown:
-          case monaco.KeyCode.UpArrow:
-          case monaco.KeyCode.DownArrow:
-          case monaco.KeyCode.LeftArrow:
-          case monaco.KeyCode.RightArrow:
-            return;
-        }
-        e.preventDefault();
-        e.stopPropagation();
-        return;
-      }
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+      handleSaveRef.current();
     });
 
     checkDirty();
-  }, [vimMode, node.metadata, checkDirty]);
+  }, [node.metadata, checkDirty]);
 
   if (loading) {
     return (
@@ -461,51 +411,40 @@ export default function EditorTab({
 
         {editorMode !== 'editable' && (
           <span className="flex items-center gap-0.5 shrink-0">
-            <button
-              onClick={() => setEditorMode('locked')}
-              className={cn(
-                "px-1.5 py-0.5 rounded text-[10px] transition-colors flex items-center gap-0.5 border",
-                editorMode === 'locked'
-                  ? "bg-zinc-700/50 text-zinc-300 border-zinc-600"
-                  : "text-zinc-500 border-transparent hover:bg-zinc-700/30"
-              )}
-              title="Modo Normal — navegación con h/j/k/l"
-            >
+            <span className={cn(
+              "px-1.5 py-0.5 rounded text-[10px] transition-colors flex items-center gap-0.5 border",
+              editorMode === 'locked'
+                ? "bg-zinc-700/50 text-zinc-300 border-zinc-600"
+                : "text-zinc-500 border-transparent"
+            )}>
               <Eye className="w-3 h-3" />
               Normal
-            </button>
-            <button
-              onClick={() => setEditorMode('visual')}
-              className={cn(
-                "px-1.5 py-0.5 rounded text-[10px] transition-colors flex items-center gap-0.5 border",
-                editorMode === 'visual'
-                  ? "bg-purple-500/10 text-purple-400 border-purple-500/20"
-                  : "text-zinc-500 border-transparent hover:bg-zinc-700/30"
-              )}
-              title="Modo Visual — seleccionar texto"
-            >
+            </span>
+            <span className={cn(
+              "px-1.5 py-0.5 rounded text-[10px] transition-colors flex items-center gap-0.5 border",
+              editorMode === 'visual'
+                ? "bg-purple-500/10 text-purple-400 border-purple-500/20"
+                : "text-zinc-500 border-transparent"
+            )}>
               <MousePointer2 className="w-3 h-3" />
               Visual
-            </button>
+            </span>
             <button
-              onClick={() => setEditorMode('editable')}
+              onClick={() => editorRef.current?.trigger('keyboard', 'type', { text: 'i' })}
               className="px-1.5 py-0.5 rounded text-[10px] transition-colors flex items-center gap-0.5 border text-zinc-500 border-transparent hover:bg-green-500/10 hover:text-green-400 hover:border-green-500/20"
-              title="Modo Edición — escribir código"
+              title="Modo Edición (i)"
             >
               <Pencil className="w-3 h-3" />
+              Editar
             </button>
           </span>
         )}
 
         {editorMode === 'editable' && (
-          <button
-            onClick={() => setEditorMode('locked')}
-            className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-green-500/10 text-green-400 border border-green-500/20 hover:bg-green-500/20 transition-colors shrink-0"
-            title="Modo Edición — Esc para bloquear"
-          >
+          <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-green-500/10 text-green-400 border border-green-500/20 shrink-0">
             <Pencil className="w-3 h-3" />
-            Editando
-          </button>
+            Insert
+          </span>
         )}
 
         <div className="flex-1" />
