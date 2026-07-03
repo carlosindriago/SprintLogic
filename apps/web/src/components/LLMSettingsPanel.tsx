@@ -20,7 +20,7 @@ import {
   ModelResult,
 } from "@/lib/api";
 import { useLLMConfigStore } from "@/store/llmConfigStore";
-import { Loader2, KeyRound, CheckCircle2, XCircle, Trash2 } from "lucide-react";
+import { Loader2, KeyRound, CheckCircle2, XCircle, Trash2, Brain } from "lucide-react";
 
 const PROVIDERS = [
   { id: "gemini", name: "Google Gemini" },
@@ -312,9 +312,110 @@ function ProviderConfig({
   );
 }
 
+function Context7Section({
+  apiKey,
+  onSave,
+}: {
+  apiKey: string;
+  onSave: (key: string) => void;
+}) {
+  const [input, setInput] = useState('');
+  const [saved, setSaved] = useState(!!apiKey);
+
+  useEffect(() => {
+    setSaved(!!apiKey);
+  }, [apiKey]);
+
+  const handleSave = () => {
+    const trimmed = input.trim();
+    if (!trimmed) return;
+    onSave(trimmed);
+    setInput('');
+    setSaved(true);
+  };
+
+  const handleClear = () => {
+    onSave('');
+    setSaved(false);
+  };
+
+  return (
+    <div className="w-2/3 p-4 flex flex-col gap-4 bg-zinc-900 overflow-y-auto custom-scrollbar">
+      <div className="flex flex-col gap-2">
+        <Label className="text-zinc-300 flex items-center gap-2">
+          Context7 (MCP)
+          {saved && (
+            <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wide text-blue-400/90">
+              <CheckCircle2 className="w-3 h-3" /> configurada
+            </span>
+          )}
+        </Label>
+
+        {saved ? (
+          <div className="flex w-full items-center gap-2">
+            <div className="flex-1 bg-zinc-950 border border-zinc-800 rounded-md px-3 py-2 text-sm text-zinc-500 flex items-center gap-2 font-mono">
+              <Brain className="w-4 h-4 shrink-0 text-blue-400" />
+              <span className="truncate">
+                {apiKey.slice(0, 6)}••••••••••{apiKey.slice(-4)}
+              </span>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="bg-zinc-800 border-zinc-700/50 hover:bg-zinc-700 h-9"
+              onClick={() => setSaved(false)}
+            >
+              Reemplazar
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="bg-zinc-900 border-zinc-800 hover:bg-red-950/40 hover:text-red-300 hover:border-red-900/60 h-9"
+              onClick={handleClear}
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </Button>
+          </div>
+        ) : (
+          <div className="flex w-full items-center gap-2">
+            <Input
+              type="password"
+              autoComplete="off"
+              placeholder="ctx7_..."
+              className="bg-zinc-950 border-zinc-800 text-zinc-200 flex-1 font-mono"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleSave();
+              }}
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              className="bg-zinc-800 border-zinc-700/50 hover:bg-zinc-700 h-9"
+              onClick={handleSave}
+              disabled={!input.trim()}
+            >
+              Guardar
+            </Button>
+          </div>
+        )}
+
+        <p className="text-xs text-zinc-500">
+          Permite al Modo Sensei leer la documentación oficial actualizada de tus librerías.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export default function LLMSettingsPanel() {
   const defaultModel = useLLMConfigStore((s) => s.defaultModel);
   const setDefaultModel = useLLMConfigStore((s) => s.setDefaultModel);
+  const context7ApiKey = useLLMConfigStore((s) => s.context7ApiKey);
+  const setContext7ApiKey = useLLMConfigStore((s) => s.setContext7ApiKey);
   const [activeProvider, setActiveProvider] = useState("gemini");
 
   const handleSelectModel = useCallback(
@@ -356,12 +457,20 @@ export default function LLMSettingsPanel() {
       </div>
 
       {/* Main configuration area — `key` forces a fresh fetch on provider switch */}
-      <ProviderConfig
-        key={activeProvider}
-        provider={activeProvider}
-        defaultModel={defaultModel}
-        onSelectModel={handleSelectModel}
-      />
+      <div className="w-2/3 flex flex-col overflow-hidden">
+        <ProviderConfig
+          key={activeProvider}
+          provider={activeProvider}
+          defaultModel={defaultModel}
+          onSelectModel={handleSelectModel}
+        />
+        <div className="border-t border-zinc-800/50 shrink-0">
+          <Context7Section
+            apiKey={context7ApiKey}
+            onSave={setContext7ApiKey}
+          />
+        </div>
+      </div>
     </div>
   );
 }
