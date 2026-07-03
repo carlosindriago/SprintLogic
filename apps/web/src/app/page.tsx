@@ -46,8 +46,10 @@ import PomodoroTimer from "@/components/PomodoroTimer";
 import NewFileDialog from "@/components/NewFileDialog";
 import ProjectInsightsPanel from "@/components/ProjectInsightsPanel";
 import AnalysisReportDialog from "@/components/AnalysisReportDialog";
+import SearchEverywhereModal from "@/components/SearchEverywhereModal";
 import { useProjectInsightsStore } from "@/store/projectInsightsStore";
 import { toast } from "sonner";
+import { useDoubleShift } from "@/hooks/useDoubleShift";
 
 // Monaco bundles are large and depend on `window`/`document`. They MUST
 // never enter the server bundle — that is what was pegging the CPU on
@@ -82,6 +84,7 @@ export default function Home() {
   const [newFileInitialContent, setNewFileInitialContent] = useState('');
   const [fileTreeRefreshKey, setFileTreeRefreshKey] = useState(0);
   const [analysisDialogOpen, setAnalysisDialogOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const untitledCounter = useRef(0);
 
   const fetchProjects = useCallback(async () => {
@@ -92,6 +95,17 @@ export default function Home() {
       console.error("Failed to load projects", e);
     }
   }, []);
+
+  useDoubleShift(() => setSearchOpen(true));
+
+  const handleSearchSelect = (result: { path: string }) => {
+    handleNodeClick({
+      id: result.path,
+      label: "File",
+      name: result.path.split('/').pop() || result.path,
+      file_path: result.path,
+    });
+  };
 
   useEffect(() => {
     let active = true;
@@ -760,6 +774,7 @@ export default function Home() {
           />
         )}
         <AnalysisReportDialog open={analysisDialogOpen} onOpenChange={setAnalysisDialogOpen} />
+        <SearchEverywhereModal open={searchOpen} onClose={() => setSearchOpen(false)} onSelect={handleSearchSelect} />
     </div>
   );
 }
