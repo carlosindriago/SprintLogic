@@ -276,10 +276,14 @@ class AIAgent:
                     api_key=api_key
                 )
 
-                if not second_response.choices or len(second_response.choices) == 0:
-                    return "Error: No response from LLM after tool calls."
+                if second_response.choices and len(second_response.choices) > 0:
+                    content = getattr(second_response.choices[0].message, 'content', '')
+                    if content:
+                        return str(content)
 
-                return str(getattr(second_response.choices[0].message, 'content', '') or '')
+                # Fallback: return tool results when second call returns empty
+                results = [m["content"] for m in messages if m.get("role") == "tool"]
+                return "Resultados de herramientas:\n" + "\n".join(results[:3])
 
             return str(getattr(message, 'content', '') or '')
 
