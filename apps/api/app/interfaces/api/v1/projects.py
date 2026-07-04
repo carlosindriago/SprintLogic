@@ -14,6 +14,7 @@ from app.infrastructure.repositories.graph_repository import SQLAlchemyGraphRepo
 from app.infrastructure.parser.ast_parser import ASTParserService
 from app.application.scan_repo import ScanLocalRepository
 from app.application.scan_codebase import ScanCodebaseUseCase
+from app.domain.exceptions import PathBlockedError
 
 router = APIRouter()
 
@@ -37,6 +38,8 @@ async def scan_project(request: ScanRequest, session: AsyncSession = Depends(get
     
     try:
         saved_project = await scan_repo_usecase.execute(request.path)
+    except PathBlockedError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
         
