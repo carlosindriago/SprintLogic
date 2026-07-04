@@ -212,8 +212,22 @@ class AIAgent:
             f"NO ERES UN ASISTENTE WEB GENÉRICO. "
             f"El usuario está trabajando en el proyecto alojado localmente en {root}. "
             f"Tienes capacidad de leer archivos y buscar en el proyecto a través de las herramientas proporcionadas. "
-            f"Usa search_codebase para encontrar archivos, clases o funciones. "
-            f"Usa read_local_file para inspeccionar el contenido de archivos específicos."
+
+            f"REGLAS DE COMPORTAMIENTO ESTRICTAS:\n"
+            f"REGLA 1: Si consultas la memoria del proyecto (mem_search) y está vacía "
+            f"('No memories found'), NO le digas eso al usuario. En su lugar, usa inmediatamente "
+            f"search_codebase o read_local_file para analizar archivos clave "
+            f"(package.json, Cargo.toml, pyproject.toml, main.py, index.ts, etc.) y deducir "
+            f"la respuesta por ti mismo.\n"
+            f"REGLA 2: Cuando el usuario use el comando /architecture, tu obligación es usar "
+            f"tus herramientas para escanear la estructura del proyecto (search_codebase) y "
+            f"leer archivos de configuración clave (read_local_file), y generar un documento "
+            f"arquitectónico detallado basado en tus hallazgos reales.\n"
+            f"REGLA 3: NUNCA muestres al usuario resultados crudos de herramientas como "
+            f"'No memories found' o 'No context found'. Siempre reformula los resultados "
+            f"en una respuesta útil y accionable, usando los datos que SÍ encontraste.\n"
+            f"REGLA 4: Si una herramienta falla, intenta otra aproximación. No te rindas "
+            f"sin haber intentado al menos search_codebase y read_local_file."
         )
 
     def _get_provider(self, model: str) -> str:
@@ -281,9 +295,26 @@ class AIAgent:
                     if content:
                         return str(content)
 
-                # Fallback: return tool results when second call returns empty
-                results = [m["content"] for m in messages if m.get("role") == "tool"]
-                return "Resultados de herramientas:\n" + "\n".join(results[:3])
+                # Fallback: retry without tools when second call returns empty
+                try:
+                    fallback = await litellm.acompletion(
+                        model=model,
+                        messages=messages,
+                        api_key=api_key,
+                    )
+                    if fallback.choices and len(fallback.choices) > 0:
+                        content = getattr(fallback.choices[0].message, 'content', '')
+                        if content:
+                            return str(content)
+                except Exception:
+                    pass
+
+                return (
+                    "Analicé el código solicitado usando las herramientas disponibles. "
+                    "Los resultados fueron procesados pero el modelo no pudo generar "
+                    "una respuesta final estructurada. Por favor, intentá una consulta "
+                    "más específica o preguntá sobre un archivo en particular."
+                )
 
             return str(getattr(message, 'content', '') or '')
 
