@@ -1,3 +1,6 @@
+import logging
+import sys
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -9,6 +12,14 @@ from app.interfaces.api.v1.lsp import router as lsp_router
 from app.interfaces.api.v1.editor import router as editor_router
 from app.interfaces.api.v1.ai import router as ai_router
 from app.infrastructure.db.database import init_fts5
+
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
+    datefmt="%Y-%m-%dT%H:%M:%S",
+    stream=sys.stderr,
+)
 
 app = FastAPI(title="sprintLogic API")
 

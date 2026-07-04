@@ -1,6 +1,6 @@
 import json
+import logging
 import litellm
-import traceback
 from pathlib import Path
 from typing import List, Dict, Any
 from uuid import UUID
@@ -347,7 +347,8 @@ class AIAgent:
             return str(getattr(message, 'content', '') or '')
 
         except Exception as e:
-            traceback.print_exc()
+            _logger = logging.getLogger(__name__)
+            _logger.exception("AI agent execution failed")
             raise
 
     @staticmethod

@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 from app.application.scan_repo import ScanLocalRepository
+from app.domain.exceptions import ScannerError
 from app.domain.git_models import GitBranch, GitCommit
 
 
@@ -53,4 +54,18 @@ async def test_scan_local_repository_not_found(mock_is_dir, mock_gateway, mock_r
         await use_case.execute("/tmp/missing")
 
     mock_gateway.get_current_branch.assert_not_called()
+    mock_repository.save_project.assert_not_called()
+
+
+@pytest.mark.asyncio
+@patch.object(Path, "is_dir", return_value=True)
+async def test_scan_local_repository_git_failure_raises_scanner_error(
+    mock_is_dir, mock_gateway, mock_repository,
+):
+    mock_gateway.get_current_branch.side_effect = RuntimeError("Not a git repo")
+    use_case = ScanLocalRepository(mock_gateway, mock_repository)
+
+    with pytest.raises(ScannerError, match="Git repository scan failed"):
+        await use_case.execute("/tmp/myrepo")
+
     mock_repository.save_project.assert_not_called()

@@ -1,8 +1,13 @@
+import logging
 import os
-from app.domain.project import Project
+
+from app.domain.exceptions import ScannerError
 from app.domain.path_validator import PathSecurityValidator
+from app.domain.project import Project
 from app.infrastructure.db.project_repository import SQLAlchemyProjectRepository
 from app.infrastructure.git.git_gateway import LocalGitGateway
+
+_logger = logging.getLogger(__name__)
 
 
 class ScanLocalRepository:
@@ -19,8 +24,15 @@ class ScanLocalRepository:
         try:
             branch = await self.git_gateway.get_current_branch(str(canonical))
             commits = await self.git_gateway.get_recent_commits(str(canonical), limit=1)
-        except Exception:
-            pass
+        except Exception as e:
+            _logger.error(
+                "Git operations failed for path=%s: %s", repo_path, e,
+                exc_info=True,
+            )
+            raise ScannerError(
+                f"Git repository scan failed for {repo_path}: {e}",
+                repo_path=str(canonical),
+            ) from e
 
         repo_name = canonical.name or os.path.basename(str(canonical))
         project = Project(path=str(canonical), name=repo_name)

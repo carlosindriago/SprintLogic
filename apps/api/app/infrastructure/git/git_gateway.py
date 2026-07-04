@@ -293,13 +293,13 @@ class LocalGitGateway:
             behind_str = await self._run_command(repo_path, "rev-list", "--count", "HEAD..@{u}")
             behind = int(behind_str.strip()) if behind_str.strip().isdigit() else 0
         except RuntimeError:
-            pass
+            _audit_log.debug("No upstream tracking branch configured for %s", repo_path)
 
         try:
             ahead_str = await self._run_command(repo_path, "rev-list", "--count", "@{u}..HEAD")
             ahead = int(ahead_str.strip()) if ahead_str.strip().isdigit() else 0
         except RuntimeError:
-            pass
+            _audit_log.debug("No upstream tracking branch configured for %s", repo_path)
 
         return {
             "branch": branch.name,
