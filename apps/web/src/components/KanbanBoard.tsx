@@ -412,7 +412,19 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
     return <div className="h-full flex items-center justify-center text-zinc-500">Selecciona un proyecto para ver el Kanban.</div>;
   }
 
-  const getTasksByStatus = (status: string) => tasks.filter(t => t.status === status);
+  // ⚡ Bolt: Performance Optimization
+  // Groups tasks by status in a single pass O(N).
+  // Prevents filtering the entire tasks array 3 times per column on every render,
+  // reducing complexity from O(C * N) to O(N) and improving drag-and-drop responsiveness.
+  const tasksByStatus = useMemo(() => {
+    return tasks.reduce((acc, task) => {
+      const status = task.status;
+      if (!acc[status]) acc[status] = [];
+      acc[status].push(task);
+      return acc;
+    }, {} as Record<string, Task[]>);
+  }, [tasks]);
+
   const activeTask = activeId ? tasks.find(t => t.id === activeId) : null;
 
   return (
@@ -455,30 +467,34 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
       {/* Kanban Columns view */}
       <div className="flex-1 flex p-6 gap-4 overflow-x-auto overflow-y-hidden custom-scrollbar bg-[#111112]">
         <DndContext collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-          {columns.map(col => (
-            <div key={col.id} className={cn("flex flex-col bg-zinc-900 rounded-lg min-w-[280px] max-w-[320px] border-t-2 shrink-0 border-zinc-800", col.color)}>
-              <div className="p-3 font-semibold text-zinc-300 text-sm border-b border-zinc-800/50 flex items-center justify-between">
-                <span>{col.title}</span>
-                <span className="text-xs bg-zinc-850 px-2 py-0.5 rounded-full text-zinc-500 font-medium">
-                  {getTasksByStatus(col.id).length}
-                </span>
+          {columns.map(col => {
+            const columnTasks = tasksByStatus[col.id] || [];
+
+            return (
+              <div key={col.id} className={cn("flex flex-col bg-zinc-900 rounded-lg min-w-[280px] max-w-[320px] border-t-2 shrink-0 border-zinc-800", col.color)}>
+                <div className="p-3 font-semibold text-zinc-300 text-sm border-b border-zinc-800/50 flex items-center justify-between">
+                  <span>{col.title}</span>
+                  <span className="text-xs bg-zinc-850 px-2 py-0.5 rounded-full text-zinc-500 font-medium">
+                    {columnTasks.length}
+                  </span>
+                </div>
+                <ScrollArea className="flex-1 p-3">
+                  <SortableContext items={columnTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
+                    <div id={col.id} className="min-h-[300px]">
+                      {columnTasks.map(task => (
+                        <SortableTask
+                          key={task.id}
+                          task={task}
+                          onNodeClick={onNodeClick}
+                          onStartPomodoro={handleStartPomodoro}
+                        />
+                      ))}
+                    </div>
+                  </SortableContext>
+                </ScrollArea>
               </div>
-              <ScrollArea className="flex-1 p-3">
-                <SortableContext items={getTasksByStatus(col.id).map(t => t.id)} strategy={verticalListSortingStrategy}>
-                  <div id={col.id} className="min-h-[300px]">
-                    {getTasksByStatus(col.id).map(task => (
-                      <SortableTask 
-                        key={task.id} 
-                        task={task} 
-                        onNodeClick={onNodeClick} 
-                        onStartPomodoro={handleStartPomodoro} 
-                      />
-                    ))}
-                  </div>
-                </SortableContext>
-              </ScrollArea>
-            </div>
-          ))}
+            );
+          })}
 
           <DragOverlay>
             {activeTask ? (
