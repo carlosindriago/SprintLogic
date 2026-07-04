@@ -22,6 +22,9 @@ interface LLMConfigState {
   setLoaded: (loaded: boolean) => void;
   context7ApiKey: string;
   setContext7ApiKey: (key: string) => void;
+  apiKeys: Record<string, string>;
+  setApiKey: (provider: string, key: string) => void;
+  removeApiKey: (provider: string) => void;
 }
 
 export const useLLMConfigStore = create<LLMConfigState>()(
@@ -33,12 +36,20 @@ export const useLLMConfigStore = create<LLMConfigState>()(
       setLoaded: (loaded) => set({ isLoaded: loaded }),
       context7ApiKey: '',
       setContext7ApiKey: (key) => set({ context7ApiKey: key }),
+      apiKeys: {},
+      setApiKey: (provider, key) => set((state) => ({ apiKeys: { ...state.apiKeys, [provider]: key } })),
+      removeApiKey: (provider) => set((state) => {
+        const newKeys = { ...state.apiKeys };
+        delete newKeys[provider];
+        return { apiKeys: newKeys };
+      }),
     }),
     {
       name: 'sprintlogic-llm-config',
       partialize: (state) => ({
         defaultModel: state.defaultModel,
         context7ApiKey: state.context7ApiKey,
+        apiKeys: state.apiKeys,
       }),
     },
   ),

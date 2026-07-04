@@ -33,13 +33,26 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
   const [availableModels, setAvailableModels] = useState<{
     provider: string; models: { id: string; name: string }[];
   }[]>([]);
+  const apiKeys = useLLMConfigStore((s) => s.apiKeys);
 
   useEffect(() => {
-    fetch(`${API_BASE_URL}/ai/active-models`)
+    fetch(`${API_BASE_URL}/ai/active-models`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        gemini_key: apiKeys.gemini || null,
+        openai_key: apiKeys.openai || null,
+        anthropic_key: apiKeys.anthropic || null,
+        openrouter_key: apiKeys.openrouter || null,
+        opencode_zen_key: apiKeys['opencode-zen'] || null,
+        opencode_go_key: apiKeys['opencode-go'] || null,
+        nvidia_key: apiKeys.nvidia || null,
+      }),
+    })
       .then(res => res.json())
       .then(data => setAvailableModels(data))
       .catch(() => {});
-  }, []);
+  }, [apiKeys]);
 
   const SLASH_COMMANDS = [
     { command: '/explain', description: 'Explica el archivo o código actual', prompt: 'Explica qué hace este archivo y su rol en la arquitectura del proyecto.' },

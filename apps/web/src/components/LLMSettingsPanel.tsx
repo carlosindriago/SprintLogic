@@ -74,6 +74,8 @@ function ProviderConfig({
   const [validationError, setValidationError] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
 
+  const setApiKey = useLLMConfigStore((s) => s.setApiKey);
+  const removeApiKey = useLLMConfigStore((s) => s.removeApiKey);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   /* eslint-disable react-hooks/exhaustive-deps */
@@ -119,6 +121,7 @@ function ProviderConfig({
       setKeyInput("");
       setIsEditing(false);
       setStoredKeyPreview(maskKey(trimmed));
+      setApiKey(provider, trimmed);
       toast.success("Llave validada y guardada", {
         description: "Modelos cargados correctamente",
       });
@@ -156,6 +159,7 @@ function ProviderConfig({
       setStoredKeyPreview(null);
       setIsEditing(true);
       setValidationError(null);
+      removeApiKey(provider);
       toast.success("Llave eliminada", {
         description: `La credencial de ${provider} fue removida.`,
       });
