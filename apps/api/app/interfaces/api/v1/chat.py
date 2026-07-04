@@ -82,17 +82,24 @@ class ChatResponse(BaseModel):
     response: str
 
 
-@router.post("/", response_model=ChatResponse)
+@router.post("/")
 async def chat_with_ai(request: ChatRequest, session: AsyncSession = Depends(get_db_session)):
     """Handles chat messages with the AI and manages tool calls."""
-    try:
-        agent = AIAgent(session=session, project_id=request.project_id)
-        response_text = await agent.chat(request.messages, model=request.model)
-        return {"response": response_text}
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
+    async def generate():
+        try:
+            agent = AIAgent(session=session, project_id=request.project_id)
+            response_text = await agent.chat(request.messages, model=request.model)
+            yield f"data: {json.dumps({'text': response_text, 'is_done': False})}\n\n"
+            yield f"data: {json.dumps({'text': '', 'is_done': True})}\n\n"
+        except Exception as e:
+            error_str = str(e)
+            if "429" in error_str or "RateLimitError" in error_str or "Quota exceeded" in error_str:
+                msg = "⚠️ Límite de cuota excedido para este modelo. Por favor, selecciona un modelo diferente en el menú superior."
+                yield f"data: {json.dumps({'text': msg, 'is_done': True, 'error': True})}\n\n"
+            else:
+                yield f"data: {json.dumps({'text': f'Error interno: {error_str}', 'is_done': True, 'error': True})}\n\n"
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
 
 
 class MentorRequest(BaseModel):

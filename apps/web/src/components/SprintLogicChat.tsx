@@ -104,16 +104,55 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
     setUsage(null);
 
     try {
-      const data = await sendChatMessage({
-        messages: newMessages,
-        model: currentModel,
-        project_id: projectId,
+      const res = await fetch(`${API_BASE_URL}/chat/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: newMessages,
+          model: currentModel,
+          project_id: projectId,
+        }),
       });
-      setMessages([...newMessages, { role: "assistant", content: data.response }]);
-      setUsage({ completion_tokens: data.response.length, total_tokens: data.response.length + trimmed.length });
-    } catch (e) {
-      const errMsg = e instanceof Error ? e.message : String(e);
-      setMessages([...newMessages, { role: "system", content: `Error: ${errMsg}` }]);
+      if (!res.ok) throw new Error("Chat request failed");
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error("No stream");
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let streamedText = "";
+      let isError = false;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              const parsed = JSON.parse(line.slice(6));
+              if (parsed.error) isError = true;
+              if (parsed.text !== undefined) {
+                streamedText = parsed.text;
+                setMessages((prev) => {
+                  const next = [...prev];
+                  const last = next[next.length - 1];
+                  if (last?.role === "assistant") {
+                     next[next.length - 1] = { ...last, content: streamedText, isError };
+                  } else {
+                     next.push({ role: "assistant", content: streamedText, isError });
+                  }
+                  return next;
+                });
+              }
+            } catch { /* skip */ }
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Chat error:", error);
+      setMessages((prev) => [...prev, { role: "system", content: "Hubo un error al procesar el mensaje. Por favor intenta de nuevo." }]);
     } finally {
       setLoading(false);
     }
@@ -244,6 +283,8 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
                 ? 'bg-blue-500/10 text-blue-200 self-end'
                 : m.role === 'system'
                 ? 'bg-red-900/20 text-red-200 border border-red-800/30 self-start'
+                : m.isError
+                ? "bg-orange-900/20 text-orange-200 border border-orange-800/30 self-start"
                 : 'bg-zinc-800/50 text-zinc-300 self-start'
             )}
           >

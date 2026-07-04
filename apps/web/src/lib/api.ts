@@ -312,6 +312,7 @@ export const generateWBS = async (projectId: string, requirements: string, model
 export interface ChatMessage {
   role: "user" | "assistant" | "system";
   content: string;
+  isError?: boolean;
 }
 
 export interface ChatRequestPayload {
