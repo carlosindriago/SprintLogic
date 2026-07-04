@@ -262,6 +262,8 @@ class AIAgent:
             return "openai"
         elif "openrouter" in model_lower:
             return "openrouter"
+        elif "nvidia" in model_lower or "nim" in model_lower:
+            return "nvidia"
         return "gemini"
 
     async def chat(self, messages: List[Dict[str, str]], model: str = "gemini/gemini-1.5-pro-latest") -> str:

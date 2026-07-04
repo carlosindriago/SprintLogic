@@ -126,6 +126,17 @@ async def fetch_provider_models(provider: str, api_key: str) -> list[dict]:
                 data = res.json()
                 models = [{"id": m["id"], "name": m["id"]} for m in data.get("data", [])]
 
+            elif provider == "nvidia":
+                headers["Authorization"] = f"Bearer {api_key}"
+                res = await client.get("https://integrate.api.nvidia.com/v1/models", headers=headers)
+                if res.status_code != 200:
+                    raise ProviderFetchError("Invalid Nvidia NIM Key")
+                data = res.json()
+                models = [
+                    {"id": m["id"], "name": m["id"]}
+                    for m in data.get("data", [])
+                ]
+
             else:
                 raise ProviderFetchError(f"Unsupported provider: {provider}")
 
@@ -213,6 +224,10 @@ CURATED_MODELS = {
     "opencode-go": [
         {"id": "opencode-go/default", "name": "OpenCode Go"},
     ],
+    "nvidia": [
+        {"id": "nvidia/meta/llama-3.1-70b-instruct", "name": "Llama 3.1 70B (NIM)"},
+        {"id": "nvidia/meta/llama-3.1-8b-instruct", "name": "Llama 3.1 8B (NIM)"},
+    ],
 }
 
 PROVIDER_LABELS = {
@@ -222,6 +237,7 @@ PROVIDER_LABELS = {
     "openrouter": "OpenRouter",
     "opencode-zen": "OpenCode Zen",
     "opencode-go": "OpenCode Go",
+    "nvidia": "Nvidia NIM",
 }
 
 

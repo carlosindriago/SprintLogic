@@ -29,6 +29,7 @@ const PROVIDERS = [
   { id: "openrouter", name: "OpenRouter" },
   { id: "opencode-zen", name: "OpenCode Zen" },
   { id: "opencode-go", name: "OpenCode Go" },
+  { id: "nvidia", name: "Nvidia NIM" },
 ];
 
 const KEY_MIN_LENGTH = 8;
