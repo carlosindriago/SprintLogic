@@ -20,6 +20,8 @@ llm_gateway = LiteLLMGateway()
 class GitActionRequest(BaseModel):
     action: str
     message: str = ""
+    files: list[str] | None = None
+    confirm: bool = False
 
 class CreateBranchRequest(BaseModel):
     name: str
@@ -116,7 +118,15 @@ async def execute_git_action(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    result = await git_gateway.execute_action(project.path, request.action, request.message)
+    result = await git_gateway.execute_action(
+        project.path,
+        request.action,
+        request.message,
+        files=request.files,
+        confirm=request.confirm,
+    )
+    if result.get("status") == "blocked":
+        raise HTTPException(status_code=403, detail=result.get("message"))
     if result.get("status") == "error":
         raise HTTPException(status_code=500, detail=result.get("message"))
 
