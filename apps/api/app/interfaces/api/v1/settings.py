@@ -188,3 +188,53 @@ async def delete_api_key(provider: str):
     """Removes the stored API key for `provider` from the OS keyring."""
     CredentialManager.delete_api_key(provider)
     return {"status": "success", "message": f"API key for {provider} deleted"}
+
+
+CURATED_MODELS = {
+    "gemini": [
+        {"id": "gemini/gemini-2.5-flash", "name": "Gemini 2.5 Flash"},
+        {"id": "gemini/gemini-1.5-pro", "name": "Gemini 1.5 Pro"},
+    ],
+    "openai": [
+        {"id": "openai/gpt-4o", "name": "GPT-4o"},
+        {"id": "openai/gpt-4o-mini", "name": "GPT-4o Mini"},
+    ],
+    "anthropic": [
+        {"id": "anthropic/claude-3-5-sonnet-20241022", "name": "Claude 3.5 Sonnet"},
+        {"id": "anthropic/claude-3-haiku-20240307", "name": "Claude 3 Haiku"},
+    ],
+    "openrouter": [
+        {"id": "openrouter/anthropic/claude-3.5-sonnet", "name": "Claude 3.5 Sonnet"},
+        {"id": "openrouter/openai/gpt-4o", "name": "GPT-4o"},
+    ],
+    "opencode-zen": [
+        {"id": "opencode-zen/default", "name": "OpenCode Zen"},
+    ],
+    "opencode-go": [
+        {"id": "opencode-go/default", "name": "OpenCode Go"},
+    ],
+}
+
+PROVIDER_LABELS = {
+    "gemini": "Gemini",
+    "openai": "OpenAI",
+    "anthropic": "Claude",
+    "openrouter": "OpenRouter",
+    "opencode-zen": "OpenCode Zen",
+    "opencode-go": "OpenCode Go",
+}
+
+
+@router.get("/ai/models")
+async def get_curated_models():
+    """Returns curated chat/code models grouped by provider with valid API keys."""
+    results: list[dict] = []
+    for provider, models in CURATED_MODELS.items():
+        key = CredentialManager.get_api_key(provider)
+        if key:
+            results.append({
+                "provider": PROVIDER_LABELS.get(provider, provider),
+                "provider_id": provider,
+                "models": models,
+            })
+    return results
