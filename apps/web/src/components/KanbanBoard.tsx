@@ -408,10 +408,6 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
     }
   };
 
-  if (!projectId) {
-    return <div className="h-full flex items-center justify-center text-zinc-500">Selecciona un proyecto para ver el Kanban.</div>;
-  }
-
   // ⚡ Bolt: Performance Optimization
   // Groups tasks by status in a single pass O(N).
   // Prevents filtering the entire tasks array 3 times per column on every render,
@@ -424,6 +420,10 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
       return acc;
     }, {} as Record<string, Task[]>);
   }, [tasks]);
+
+  if (!projectId) {
+    return <div className="h-full flex items-center justify-center text-zinc-500">Selecciona un proyecto para ver el Kanban.</div>;
+  }
 
   const activeTask = activeId ? tasks.find(t => t.id === activeId) : null;
 
