@@ -37,11 +37,14 @@ export const useLLMConfigStore = create<LLMConfigState>()(
       context7ApiKey: '',
       setContext7ApiKey: (key) => set({ context7ApiKey: key }),
       apiKeys: {},
-      setApiKey: (provider, key) => set((state) => ({ apiKeys: { ...state.apiKeys, [provider]: key } })),
+      setApiKey: (provider, key) => set((state) => ({ 
+        ...state, 
+        apiKeys: { ...(state.apiKeys || {}), [provider]: key } 
+      })),
       removeApiKey: (provider) => set((state) => {
-        const newKeys = { ...state.apiKeys };
+        const newKeys = { ...(state.apiKeys || {}) };
         delete newKeys[provider];
-        return { apiKeys: newKeys };
+        return { ...state, apiKeys: newKeys };
       }),
     }),
     {
