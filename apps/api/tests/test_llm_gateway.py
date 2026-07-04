@@ -1,12 +1,15 @@
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 import pytest
+
 from app.infrastructure.ai.llm_gateway import LiteLLMGateway
+
 
 @patch("app.infrastructure.ai.llm_gateway.CredentialManager.get_api_key")
 @patch("app.infrastructure.ai.llm_gateway.litellm.completion")
 def test_generate_completion_success(mock_completion, mock_get_api_key):
     mock_get_api_key.return_value = "fake-api-key"
-    
+
     mock_response = MagicMock()
     mock_response.choices = [MagicMock()]
     mock_response.choices[0].message.content = "Mocked LLM response"

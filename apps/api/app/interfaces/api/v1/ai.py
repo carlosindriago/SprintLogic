@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
+
 from app.interfaces.api.v1.settings import CURATED_MODELS
 
 router = APIRouter()
@@ -17,7 +18,7 @@ class APIKeysPayload(BaseModel):
 async def get_active_models(payload: APIKeysPayload):
     """Returns curated chat/code models grouped by provider with valid API keys."""
     results: list[dict] = []
-    
+
     key_mapping = {
         "gemini": payload.gemini_key,
         "openai": payload.openai_key,

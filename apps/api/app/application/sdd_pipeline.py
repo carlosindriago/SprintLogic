@@ -1,5 +1,6 @@
+from app.domain.sdd_models import ProjectProposal, TaskBreakdown, TechnicalSpec
 from app.infrastructure.ai.llm_gateway import LiteLLMGateway
-from app.domain.sdd_models import ProjectProposal, TechnicalSpec, TaskBreakdown
+
 
 class SDDPipelineUseCase:
     """Use case for running the SDD pipeline (Proposal -> Spec -> Tasks)."""

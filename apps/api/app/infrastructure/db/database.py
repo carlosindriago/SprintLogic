@@ -4,9 +4,9 @@ import os
 from collections.abc import AsyncGenerator
 from pathlib import Path
 
+from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
-from sqlalchemy import event, text
 
 DB_DIR = Path.home() / ".local" / "share" / "sprintlogic"
 DB_DIR.mkdir(parents=True, exist_ok=True)
@@ -23,7 +23,7 @@ class Base(DeclarativeBase):
 import sqlite_vec
 
 engine = create_async_engine(
-    DATABASE_URL, 
+    DATABASE_URL,
     pool_pre_ping=True,
     connect_args={
         "check_same_thread": False,
@@ -48,13 +48,13 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
         conn = await session.connection()
         raw = await conn.get_raw_connection()
         aiosqlite_conn = raw.driver_connection
-        
+
         if not getattr(aiosqlite_conn, "_vec_loaded", False):
             await aiosqlite_conn.enable_load_extension(True)
             await aiosqlite_conn.load_extension(sqlite_vec.loadable_path())
             await aiosqlite_conn.enable_load_extension(False)
             aiosqlite_conn._vec_loaded = True
-            
+
         yield session
 
 

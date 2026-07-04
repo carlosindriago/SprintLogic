@@ -1,14 +1,17 @@
 import json
 import logging
-import litellm
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import Any
 from uuid import UUID
-from sqlalchemy.ext.asyncio import AsyncSession
+
+import litellm
 from sqlalchemy import select, text
-from app.infrastructure.security.credential_manager import CredentialManager
-from app.infrastructure.db.models import AIMemoryModel, ContextSnippetModel, ProjectModel
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.infrastructure.db.database import AsyncSessionLocal
+from app.infrastructure.db.models import AIMemoryModel, ContextSnippetModel, ProjectModel
+from app.infrastructure.security.credential_manager import CredentialManager
+
 
 class AIAgent:
     def __init__(self, session: AsyncSession, project_id: UUID | str | None = None):
@@ -266,7 +269,7 @@ class AIAgent:
             return "nvidia"
         return "gemini"
 
-    async def chat(self, messages: List[Dict[str, str]], model: str = "gemini/gemini-1.5-pro-latest") -> str:
+    async def chat(self, messages: list[dict[str, str]], model: str = "gemini/gemini-1.5-pro-latest") -> str:
         """
         Processes a chat conversation and allows the AI to call tools before returning a final response.
         """
@@ -346,7 +349,7 @@ class AIAgent:
 
             return str(getattr(message, 'content', '') or '')
 
-        except Exception as e:
+        except Exception:
             _logger = logging.getLogger(__name__)
             _logger.exception("AI agent execution failed")
             raise

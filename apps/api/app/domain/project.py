@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from enum import Enum
 from uuid import UUID, uuid4
 
 
@@ -18,7 +16,7 @@ class Project:
     def __post_init__(self) -> None:
         if not self.name or not self.name.strip():
             raise ValueError("Project name cannot be empty")
-        
+
         if not self.path or not self.path.strip():
             raise ValueError("Project path cannot be empty")
 

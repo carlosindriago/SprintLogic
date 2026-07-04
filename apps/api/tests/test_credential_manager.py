@@ -1,7 +1,9 @@
-import pytest
 from unittest.mock import patch
+
 import keyring
+
 from app.infrastructure.security.credential_manager import CredentialManager
+
 
 @patch("app.infrastructure.security.credential_manager.keyring.set_password")
 def test_save_api_key(mock_set_password):

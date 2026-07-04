@@ -1,7 +1,8 @@
-import pytest
 import uuid
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
+
+import pytest
 
 from app.application.scan_repo import ScanLocalRepository
 from app.domain.exceptions import ScannerError

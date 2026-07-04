@@ -3,11 +3,12 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import DateTime, String, Enum as SQLAlchemyEnum, ForeignKey
+from sqlalchemy import DateTime, ForeignKey, String
+from sqlalchemy import Enum as SQLAlchemyEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.domain.graph_models import EdgeType, NodeLabel
 from app.infrastructure.db.database import Base
-from app.domain.graph_models import NodeLabel, EdgeType
 
 
 class UserModel(Base):

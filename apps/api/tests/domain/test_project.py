@@ -1,5 +1,7 @@
 import pytest
+
 from app.domain.project import Project
+
 
 def test_create_valid_project():
     project = Project(name="My Project", path="/tmp/project")

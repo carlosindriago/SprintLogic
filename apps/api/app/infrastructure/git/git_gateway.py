@@ -2,9 +2,9 @@ import asyncio
 import json
 import logging
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from app.domain.git_models import GitBranch, GitCommit
+from app.domain.git_models import GitBranch
 
 _audit_log = logging.getLogger("sprintlogic.audit")
 
@@ -37,7 +37,7 @@ class LocalGitGateway:
             json.dumps(kwargs, default=str),
         )
 
-    async def stage_files(self, repo_path: str, files: List[str]) -> str:
+    async def stage_files(self, repo_path: str, files: list[str]) -> str:
         if not files:
             raise ValueError("stage_files requires a non-empty list of file paths")
         return await self._run_command(repo_path, "add", "--", *files)
@@ -49,7 +49,7 @@ class LocalGitGateway:
         except RuntimeError:
             return GitBranch(name="unknown", is_active=False)
 
-    async def get_recent_commits(self, repo_path: str, limit: int = 100) -> List[Dict[str, Any]]:
+    async def get_recent_commits(self, repo_path: str, limit: int = 100) -> list[dict[str, Any]]:
         try:
             output = await self._run_command(
                 repo_path, "log", f"-n{limit}",
@@ -73,7 +73,7 @@ class LocalGitGateway:
         except RuntimeError:
             return []
 
-    async def get_status(self, repo_path: str) -> Dict[str, Any]:
+    async def get_status(self, repo_path: str) -> dict[str, Any]:
         try:
             status_output = await self._run_command(repo_path, "status", "--porcelain")
             branch = await self.get_current_branch(repo_path)
@@ -111,9 +111,9 @@ class LocalGitGateway:
         repo_path: str,
         action: str,
         message: str = "",
-        files: Optional[List[str]] = None,
+        files: list[str] | None = None,
         confirm: bool = False,
-    ) -> Dict[str, str]:
+    ) -> dict[str, str]:
         DESTRUCTIVE = frozenset({"commit", "push", "pull"})
 
         if action in DESTRUCTIVE and not confirm:
@@ -171,7 +171,7 @@ class LocalGitGateway:
             self._audit(action, repo_path, "FAILED", error=str(e))
             return {"status": "error", "message": str(e)}
 
-    async def get_commit_details(self, repo_path: str, commit_hash: str) -> Dict[str, Any]:
+    async def get_commit_details(self, repo_path: str, commit_hash: str) -> dict[str, Any]:
         try:
             output = await self._run_command(
                 repo_path, "show", "--name-status",
@@ -222,7 +222,7 @@ class LocalGitGateway:
         await process.communicate()
         return process.returncode == 0
 
-    async def get_branches(self, repo_path: str) -> List[Dict[str, Any]]:
+    async def get_branches(self, repo_path: str) -> list[dict[str, Any]]:
         fmt = "%(refname:short)|%(upstream:trackshort)|%(push:trackshort)"
         try:
             ref_output = await self._run_command(
@@ -231,7 +231,7 @@ class LocalGitGateway:
         except RuntimeError:
             ref_output = ""
 
-        tracking_map: Dict[str, Dict[str, Any]] = {}
+        tracking_map: dict[str, dict[str, Any]] = {}
         for line in ref_output.split("\n"):
             if not line:
                 continue
@@ -284,7 +284,7 @@ class LocalGitGateway:
 
         return branches
 
-    async def get_sync_status(self, repo_path: str) -> Dict[str, Any]:
+    async def get_sync_status(self, repo_path: str) -> dict[str, Any]:
         branch = await self.get_current_branch(repo_path)
         ahead = 0
         behind = 0
@@ -338,7 +338,7 @@ class LocalGitGateway:
             raise
 
     async def create_branch(
-        self, repo_path: str, branch_name: str, start_point: Optional[str] = None,
+        self, repo_path: str, branch_name: str, start_point: str | None = None,
     ) -> str:
         if start_point:
             return await self._run_command(repo_path, "branch", branch_name, start_point)

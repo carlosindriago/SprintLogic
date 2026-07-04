@@ -1,18 +1,18 @@
-from typing import List
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import delete, select
-
-from app.domain.graph_models import GraphNode, GraphEdge
-from app.domain.graph_repository import GraphRepository
-from app.infrastructure.db.models import GraphNodeModel, GraphEdgeModel
-
 from uuid import UUID
+
+from sqlalchemy import delete, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.domain.graph_models import GraphEdge, GraphNode
+from app.domain.graph_repository import GraphRepository
+from app.infrastructure.db.models import GraphEdgeModel, GraphNodeModel
+
 
 class SQLAlchemyGraphRepository(GraphRepository):
     def __init__(self, session: AsyncSession):
         self.session = session
-        
-    async def save_nodes(self, nodes: List[GraphNode]) -> None:
+
+    async def save_nodes(self, nodes: list[GraphNode]) -> None:
         for node in nodes:
             node_model = GraphNodeModel(
                 id=node.id,
@@ -23,8 +23,8 @@ class SQLAlchemyGraphRepository(GraphRepository):
             )
             self.session.add(node_model)
         await self.session.commit()
-            
-    async def save_edges(self, edges: List[GraphEdge]) -> None:
+
+    async def save_edges(self, edges: list[GraphEdge]) -> None:
         for edge in edges:
             edge_model = GraphEdgeModel(
                 project_id=edge.project_id,
@@ -34,13 +34,13 @@ class SQLAlchemyGraphRepository(GraphRepository):
             )
             self.session.add(edge_model)
         await self.session.commit()
-        
+
     async def clear_by_project(self, project_id: UUID) -> None:
         await self.session.execute(delete(GraphEdgeModel).where(GraphEdgeModel.project_id == project_id))
         await self.session.execute(delete(GraphNodeModel).where(GraphNodeModel.project_id == project_id))
         await self.session.commit()
 
-    async def get_nodes_by_project(self, project_id: UUID) -> List[GraphNode]:
+    async def get_nodes_by_project(self, project_id: UUID) -> list[GraphNode]:
         result = await self.session.execute(select(GraphNodeModel).where(GraphNodeModel.project_id == project_id))
         models = result.scalars().all()
         return [
@@ -48,7 +48,7 @@ class SQLAlchemyGraphRepository(GraphRepository):
             for m in models
         ]
 
-    async def get_edges_by_project(self, project_id: UUID) -> List[GraphEdge]:
+    async def get_edges_by_project(self, project_id: UUID) -> list[GraphEdge]:
         result = await self.session.execute(select(GraphEdgeModel).where(GraphEdgeModel.project_id == project_id))
         models = result.scalars().all()
         return [

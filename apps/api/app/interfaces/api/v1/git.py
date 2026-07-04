@@ -1,16 +1,17 @@
-from fastapi import APIRouter, Depends, HTTPException, Header, Request
+import hashlib
+import json
+import time
+from typing import Any, Literal
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Optional, Literal, Dict, Any
-from uuid import UUID
-import hashlib
-import time
-import json
 
+from app.infrastructure.ai.llm_gateway import LiteLLMGateway
 from app.infrastructure.db.database import get_db_session
 from app.infrastructure.db.project_repository import SQLAlchemyProjectRepository
 from app.infrastructure.git.git_gateway import LocalGitGateway
-from app.infrastructure.ai.llm_gateway import LiteLLMGateway
 
 router = APIRouter()
 git_gateway = LocalGitGateway()
@@ -25,7 +26,7 @@ class GitActionRequest(BaseModel):
 
 class CreateBranchRequest(BaseModel):
     name: str
-    start_point: Optional[str] = None
+    start_point: str | None = None
 
 class CheckoutRequest(BaseModel):
     target: str
@@ -42,10 +43,10 @@ class AddRemoteRequest(BaseModel):
 
 # Simple in-memory idempotency store
 # Map of idempotency_key -> { 'body_hash': str, 'response': dict, 'timestamp': float }
-IDEMPOTENCY_STORE: Dict[str, Dict[str, Any]] = {}
+IDEMPOTENCY_STORE: dict[str, dict[str, Any]] = {}
 IDEMPOTENCY_TTL = 86400  # 24 hours
 
-def get_idempotent_response(key: Optional[str], body_dict: dict):
+def get_idempotent_response(key: str | None, body_dict: dict):
     if not key:
         return None
     now = time.time()
@@ -53,7 +54,7 @@ def get_idempotent_response(key: Optional[str], body_dict: dict):
     expired = [k for k, v in IDEMPOTENCY_STORE.items() if now - v['timestamp'] > IDEMPOTENCY_TTL]
     for k in expired:
         del IDEMPOTENCY_STORE[k]
-        
+
     if key in IDEMPOTENCY_STORE:
         record = IDEMPOTENCY_STORE[key]
         body_hash = hashlib.sha256(json.dumps(body_dict, sort_keys=True).encode()).hexdigest()
@@ -62,7 +63,7 @@ def get_idempotent_response(key: Optional[str], body_dict: dict):
         return record['response']
     return None
 
-def store_idempotent_response(key: Optional[str], body_dict: dict, response: dict):
+def store_idempotent_response(key: str | None, body_dict: dict, response: dict):
     if not key:
         return
     body_hash = hashlib.sha256(json.dumps(body_dict, sort_keys=True).encode()).hexdigest()
@@ -134,7 +135,7 @@ async def execute_git_action(
 
 
 class GenerateCommitMessageRequest(BaseModel):
-    model: Optional[str] = "gemini/gemini-2.5-flash"
+    model: str | None = "gemini/gemini-2.5-flash"
 
 @router.post("/{project_id}/git/generate-commit-message")
 async def generate_commit_message(project_id: str, request: GenerateCommitMessageRequest, session: AsyncSession = Depends(get_db_session)):
@@ -160,7 +161,7 @@ async def generate_commit_message(project_id: str, request: GenerateCommitMessag
         )
 
         message = llm_gateway.generate_completion(prompt=prompt, model=request.model)
-        
+
         # Clean up any potential markdown formatting the LLM might have returned
         message = message.strip()
         if message.startswith("```"):
@@ -354,7 +355,7 @@ async def reset_commit(
     hash: str,
     request: ResetRequest,
     session: AsyncSession = Depends(get_db_session),
-    idempotency_key: Optional[str] = Header(None)
+    idempotency_key: str | None = Header(None)
 ):
     cached = get_idempotent_response(idempotency_key, request.model_dump())
     if cached: return cached
@@ -380,7 +381,7 @@ async def revert_commit(
     project_id: str,
     hash: str,
     session: AsyncSession = Depends(get_db_session),
-    idempotency_key: Optional[str] = Header(None)
+    idempotency_key: str | None = Header(None)
 ):
     cached = get_idempotent_response(idempotency_key, {})
     if cached: return cached
@@ -406,7 +407,7 @@ async def cherry_pick_commit(
     project_id: str,
     hash: str,
     session: AsyncSession = Depends(get_db_session),
-    idempotency_key: Optional[str] = Header(None)
+    idempotency_key: str | None = Header(None)
 ):
     cached = get_idempotent_response(idempotency_key, {})
     if cached: return cached
@@ -432,7 +433,7 @@ async def merge_branch(
     project_id: str,
     request: MergeRequest,
     session: AsyncSession = Depends(get_db_session),
-    idempotency_key: Optional[str] = Header(None)
+    idempotency_key: str | None = Header(None)
 ):
     cached = get_idempotent_response(idempotency_key, request.model_dump())
     if cached: return cached

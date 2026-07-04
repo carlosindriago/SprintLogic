@@ -1,9 +1,10 @@
 import os
-import pytest
 from pathlib import Path
 
-from app.domain.path_validator import PathSecurityValidator
+import pytest
+
 from app.domain.exceptions import PathBlockedError
+from app.domain.path_validator import PathSecurityValidator
 
 
 class TestPathSecurityValidator:
@@ -16,7 +17,7 @@ class TestPathSecurityValidator:
         with pytest.raises(PathBlockedError, match="cannot be empty"):
             PathSecurityValidator.validate_project_path("   ")
 
-    def test_root_blocked(self):
+    def test_root_blocked2(self):
         with pytest.raises(PathBlockedError, match="protected system directory"):
             PathSecurityValidator.validate_project_path("/")
 

@@ -4,15 +4,14 @@ import sys
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.interfaces.api.v1.projects import router as projects_router
-from app.interfaces.api.v1.settings import router as settings_router
+from app.infrastructure.db.database import init_fts5
+from app.interfaces.api.v1.ai import router as ai_router
 from app.interfaces.api.v1.chat import router as chat_router
+from app.interfaces.api.v1.editor import router as editor_router
 from app.interfaces.api.v1.git import router as git_router
 from app.interfaces.api.v1.lsp import router as lsp_router
-from app.interfaces.api.v1.editor import router as editor_router
-from app.interfaces.api.v1.ai import router as ai_router
-from app.infrastructure.db.database import init_fts5
-
+from app.interfaces.api.v1.projects import router as projects_router
+from app.interfaces.api.v1.settings import router as settings_router
 
 logging.basicConfig(
     level=logging.INFO,

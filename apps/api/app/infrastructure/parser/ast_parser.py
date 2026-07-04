@@ -1,5 +1,7 @@
 import os
+
 import tree_sitter
+
 try:
     import tree_sitter_python
 except ImportError:
@@ -29,7 +31,8 @@ try:
 except ImportError:
     tree_sitter_css = None
 
-from app.domain.graph_models import GraphNode, NodeLabel, GraphEdge, EdgeType
+from app.domain.graph_models import EdgeType, GraphEdge, GraphNode, NodeLabel
+
 
 def get_language(ext):
     if ext == ".py" and tree_sitter_python:
@@ -53,19 +56,20 @@ def get_language(ext):
 
 from uuid import UUID
 
+
 def extract_nodes_from_code(project_id: UUID, file_path: str, code: bytes, ext: str):
     lang = get_language(ext)
     if not lang:
         return [], []
-        
+
     parser = tree_sitter.Parser()
     parser.language = lang
     tree = parser.parse(code)
-    
+
     nodes = []
     edges = []
     imports = set()
-    
+
     import json
 
     file_node_id = f"file:{file_path}"
@@ -81,7 +85,7 @@ def extract_nodes_from_code(project_id: UUID, file_path: str, code: bytes, ext: 
         })
     )
     nodes.append(file_node)
-    
+
     def traverse(node):
         if "import" in node.type or "require" in node.type:
             for child in node.children:
@@ -120,7 +124,7 @@ def extract_nodes_from_code(project_id: UUID, file_path: str, code: bytes, ext: 
                     target_id=class_id,
                     type=EdgeType.CONTAINS
                 ))
-                
+
         elif node.type in ("function_definition", "function_declaration", "method_definition"):
             name_node = None
             for child in node.children:
@@ -147,7 +151,7 @@ def extract_nodes_from_code(project_id: UUID, file_path: str, code: bytes, ext: 
                     target_id=func_id,
                     type=EdgeType.CONTAINS
                 ))
-                
+
         for child in node.children:
             traverse(child)
 
@@ -160,15 +164,15 @@ class ASTParserService:
             self.ignore_dirs = {".git", "node_modules", "venv", ".venv", "__pycache__", ".pytest_cache", "migrations"}
         else:
             self.ignore_dirs = set(ignore_dirs)
-            
+
     def parse_directory(self, project_id: UUID, dir_path: str):
         all_nodes = []
         all_edges = []
         file_imports = {}
-        
+
         for root, dirs, files in os.walk(dir_path):
             dirs[:] = [d for d in dirs if d not in self.ignore_dirs]
-            
+
             for file in files:
                 ext = os.path.splitext(file)[1]
                 if ext in (".py", ".ts", ".tsx", ".java", ".php", ".go", ".html", ".htm", ".css"):
@@ -207,5 +211,5 @@ class ASTParserService:
         for edge in all_edges:
             key = (edge.source_id, edge.target_id, edge.type)
             unique_edges[key] = edge
-            
+
         return all_nodes, list(unique_edges.values())

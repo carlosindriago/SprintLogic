@@ -2,7 +2,7 @@ import asyncio
 import hashlib
 import logging
 import os
-from typing import Awaitable, Callable, Dict, Set
+from collections.abc import Awaitable, Callable
 
 from watchfiles import Change, awatch
 
@@ -12,9 +12,9 @@ _logger = logging.getLogger(__name__)
 class FileWatcherService:
 
     def __init__(self):
-        self._tasks: Dict[str, asyncio.Task] = {}
-        self._watched_paths: Dict[str, str] = {}
-        self._backend_writes: Dict[str, str] = {}
+        self._tasks: dict[str, asyncio.Task] = {}
+        self._watched_paths: dict[str, str] = {}
+        self._backend_writes: dict[str, str] = {}
         self._on_change_callbacks: list[Callable[[str, Change, str], Awaitable[None]]] = []
 
     def add_callback(self, callback: Callable[[str, Change, str], Awaitable[None]]):
@@ -33,7 +33,7 @@ class FileWatcherService:
 
                     if filepath in self._backend_writes:
                         try:
-                            with open(filepath, "r", encoding="utf-8") as f:
+                            with open(filepath, encoding="utf-8") as f:
                                 current_content = f.read()
                             current_hash = hashlib.md5(current_content.encode()).hexdigest()
 
@@ -46,7 +46,7 @@ class FileWatcherService:
                     for callback in self._on_change_callbacks:
                         try:
                             await callback(project_id, change, filepath)
-                        except Exception as e:
+                        except Exception:
                             _logger.error(
                                 "Error in watcher callback for project=%s file=%s",
                                 project_id, filepath, exc_info=True,

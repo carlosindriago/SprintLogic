@@ -1,19 +1,19 @@
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+import json
+from collections.abc import AsyncGenerator
+from typing import Any
+
+import httpx
+import litellm
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import List, Dict, Any, Optional, AsyncGenerator
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
-import json
-import litellm
-import httpx
-import asyncio
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.infrastructure.db.database import get_db_session
 from app.application.ai_agent import AIAgent
-from app.infrastructure.security.credential_manager import CredentialManager
 from app.infrastructure.ai.context_builder import build_agent_context
-from uuid import UUID
+from app.infrastructure.db.database import get_db_session
+from app.infrastructure.security.credential_manager import CredentialManager
 
 router = APIRouter()
 
@@ -73,8 +73,8 @@ async def _fetch_context7_docs(api_key: str, query: str, tech_stack: dict) -> st
 
 
 class ChatRequest(BaseModel):
-    messages: List[Dict[str, Any]]
-    project_id: Optional[str] = None
+    messages: list[dict[str, Any]]
+    project_id: str | None = None
     model: str = "gemini-1.5-pro-latest"
 
 
@@ -105,7 +105,7 @@ async def chat_with_ai(request: ChatRequest, session: AsyncSession = Depends(get
 class MentorRequest(BaseModel):
     file_path: str
     content: str
-    project_tech_stack: Dict[str, Any] = {}
+    project_tech_stack: dict[str, Any] = {}
     user_query: str = "Hazme un desglose arquitectónico de este archivo"
     context7_api_key: str = ""
     project_id: str = ""

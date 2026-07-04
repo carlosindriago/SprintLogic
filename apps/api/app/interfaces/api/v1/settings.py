@@ -1,10 +1,10 @@
+import httpx
+from cachetools import TTLCache
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from cachetools import TTLCache
 
-from app.infrastructure.security.credential_manager import CredentialManager
 from app.infrastructure.ai.llm_gateway import LiteLLMGateway
-import httpx
+from app.infrastructure.security.credential_manager import CredentialManager
 
 router = APIRouter()
 llm_gateway = LiteLLMGateway()

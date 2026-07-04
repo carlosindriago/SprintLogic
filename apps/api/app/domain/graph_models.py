@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from enum import Enum
 
+
 class NodeLabel(str, Enum):
     FILE = "File"
     CLASS = "Class"
@@ -12,6 +13,7 @@ class EdgeType(str, Enum):
     CONTAINS = "CONTAINS"
 
 from uuid import UUID
+
 
 @dataclass
 class GraphNode:

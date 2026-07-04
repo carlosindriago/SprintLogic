@@ -1,7 +1,7 @@
 import asyncio
+from unittest.mock import AsyncMock, patch
 
 import pytest
-from unittest.mock import AsyncMock, patch
 
 from app.infrastructure.git.git_gateway import LocalGitGateway
 
