@@ -33,11 +33,13 @@ function TabMarkerBadge({
     <span className="flex items-center gap-0.5 shrink-0">
       {markers.errors > 0 && (
         <span className="inline-flex items-center justify-center min-w-[14px] h-3.5 px-1 rounded-full bg-red-500/20 text-[9px] font-semibold text-red-400 leading-none">
+          <span className="sr-only">Errors: </span>
           {markers.errors}
         </span>
       )}
       {markers.warnings > 0 && (
         <span className="inline-flex items-center justify-center min-w-[14px] h-3.5 px-1 rounded-full bg-yellow-500/20 text-[9px] font-semibold text-yellow-400 leading-none">
+          <span className="sr-only">Warnings: </span>
           {markers.warnings}
         </span>
       )}
@@ -64,7 +66,7 @@ export default function TabBar({ onToggleAi, aiOpen, onNewFile }: TabBarProps) {
   }, [tabs, markersFiles]);
 
   return (
-    <div className="flex bg-zinc-900 border-b border-zinc-800/50 overflow-x-auto overflow-y-hidden shrink-0">
+    <div className="flex bg-zinc-900 border-b border-zinc-800/50 overflow-x-auto overflow-y-hidden shrink-0" role="tablist" aria-label="Tabs">
       {tabs.map((tab) => {
         const IconComponent = TAB_ICONS[tab.type];
         const isFixed = tab.type === 'dashboard';
@@ -73,14 +75,23 @@ export default function TabBar({ onToggleAi, aiOpen, onNewFile }: TabBarProps) {
         return (
         <div
           key={tab.id}
+          role="tab"
+          aria-selected={activeTabId === tab.id}
+          tabIndex={0}
           className={cn(
-            "group flex items-center gap-2 border-r border-zinc-800/50 text-sm cursor-pointer select-none transition-colors",
+            "group flex items-center gap-2 border-r border-zinc-800/50 text-sm cursor-pointer select-none transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-500 focus-visible:ring-inset",
             isGlobalTool ? "px-2.5 py-2" : "px-4 py-2 min-w-32 max-w-48",
             activeTabId === tab.id 
               ? "bg-zinc-800 text-blue-400 border-t-2 border-t-blue-500" 
               : "bg-zinc-900 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-300 border-t-2 border-t-transparent"
           )}
           onClick={() => setActiveTab(tab.id)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setActiveTab(tab.id);
+            }
+          }}
           title={isGlobalTool ? tab.title : undefined}
         >
           {isGlobalTool && IconComponent ? (
@@ -93,10 +104,12 @@ export default function TabBar({ onToggleAi, aiOpen, onNewFile }: TabBarProps) {
           {!isGlobalTool && <TabMarkerBadge path={getTabPath(tab)} markersFiles={markersFiles} />}
           
           {!isFixed && (
-            <div 
+            <button
+              type="button"
+              aria-label={`Close ${tab.title} tab`}
               className={cn(
-                "rounded-sm hover:bg-zinc-700 p-0.5",
-                activeTabId === tab.id ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                "rounded-sm hover:bg-zinc-700 p-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
+                activeTabId === tab.id ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
               )}
               onClick={(e) => {
                 e.stopPropagation();
@@ -104,7 +117,7 @@ export default function TabBar({ onToggleAi, aiOpen, onNewFile }: TabBarProps) {
               }}
             >
               <X className="w-3.5 h-3.5" />
-            </div>
+            </button>
           )}
         </div>
       )})}
