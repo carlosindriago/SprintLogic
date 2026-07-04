@@ -30,7 +30,6 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [usage, setUsage] = useState<{ completion_tokens?: number; total_tokens?: number } | null>(null);
-  const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const [availableModels, setAvailableModels] = useState<{
     provider: string; models: { id: string; name: string }[];
   }[]>([]);
@@ -215,61 +214,38 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
         <Cpu className="w-4 h-4 text-blue-400" />
         <span className="text-xs font-semibold text-zinc-300">SprintLogic AI</span>
         <div className="flex-1" />
-        <div className="relative">
-          <button
-            onClick={() => setModelMenuOpen(!modelMenuOpen)}
-            className="flex items-center gap-1 text-[10px] bg-zinc-800/40 border border-zinc-700/30 rounded px-2 py-0.5 text-zinc-400 hover:bg-zinc-700/40 transition-colors"
-          >
-            {currentModel ? currentModel.split("/").pop() : "default"}
-            <ChevronDown className="w-3 h-3" />
-          </button>
-          {modelMenuOpen && (
-            <>
-              <div className="fixed inset-0 z-40" onClick={() => setModelMenuOpen(false)} />
-              <div className="absolute right-0 top-full mt-1 z-50 w-48 bg-zinc-800 border border-zinc-700/50 rounded-lg shadow-xl overflow-hidden">
-                {modelGroups.length === 0 ? (
-                  <div className="px-3 py-2 text-[11px] text-zinc-500 text-center italic cursor-not-allowed">
-                    Configura una API Key en Ajustes
-                  </div>
-                ) : (
-                  modelGroups.map((group) => (
-                    <div key={group.provider}>
-                      <div className="px-3 py-1 text-[9px] font-semibold text-zinc-500 uppercase tracking-wider bg-zinc-800/50">
-                        {group.label || group.provider}
-                      </div>
-                    {group.models.map((m) => (
-                      <button
-                        key={m.id}
-                        onClick={() => {
-                          setSessionModel(m.id);
-                          setModelMenuOpen(false);
-                        }}
-                        className={cn(
-                          "w-full text-left px-3 py-1.5 text-[11px] transition-colors",
-                          currentModel === m.id
-                            ? "bg-blue-500/10 text-blue-300"
-                            : "text-zinc-300 hover:bg-zinc-700"
-                        )}
-                      >
-                        {m.name}
-                      </button>
-                    ))}
-                  </div>
-                )))}
-                {sessionModel && (
-                  <button
-                    onClick={() => {
-                      setSessionModel(null);
-                      setModelMenuOpen(false);
-                    }}
-                    className="w-full text-left px-3 py-1.5 text-[11px] text-zinc-500 hover:bg-zinc-700 border-t border-zinc-700/50"
-                  >
-                    Usar predeterminado
-                  </button>
-                )}
-              </div>
-            </>
-          )}
+        <div className="flex gap-2 relative">
+          <div className="relative flex items-center hover:bg-zinc-800 px-2 py-1 rounded transition-colors">
+            <Cpu className="w-3 h-3 mr-1 text-zinc-400" />
+            <select
+              value={currentModel || ""}
+              onChange={(e) => {
+                if (e.target.value === "clear") {
+                  setSessionModel(null);
+                } else {
+                  setSessionModel(e.target.value);
+                }
+              }}
+              disabled={availableModels.length === 0}
+              className="appearance-none bg-transparent border-none text-xs text-zinc-300 focus:outline-none pr-4 cursor-pointer disabled:cursor-not-allowed disabled:text-zinc-500"
+            >
+              {availableModels.length === 0 ? (
+                <option disabled value="">Sin Modelos Disponibles</option>
+              ) : (
+                <>
+                  <option disabled value="">Seleccionar Modelo</option>
+                  {availableModels.map((group) => (
+                    <optgroup key={group.provider} label={group.provider}>
+                      {group.models.map((m) => (
+                        <option key={m.id} value={m.id}>{m.name}</option>
+                      ))}
+                    </optgroup>
+                  ))}
+                  <option value="clear">Cerrar Sesión de Modelo</option>
+                </>
+              )}
+            </select>
+          </div>
         </div>
       </div>
 
