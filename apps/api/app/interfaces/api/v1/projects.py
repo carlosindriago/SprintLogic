@@ -492,16 +492,13 @@ async def build_search_index(project_root: str, session: AsyncSession | None = N
                 })
 
         if inserts:
-            values = ", ".join(
-                f"('{r['type']}', '{r['name'].replace(chr(39), chr(39)+chr(39))}', "
-                f"'{r['path'].replace(chr(39), chr(39)+chr(39))}')"
-                for r in inserts
+            await session.execute(
+                text("INSERT INTO search_index (type, name, path) VALUES (:type, :name, :path)"),
+                inserts
             )
-            await session.execute(text(
-                f"INSERT INTO search_index (type, name, path) VALUES {values}"
-            ))
 
-        symbol_inserts: list[str] = []
+        from typing import Any
+        symbol_inserts: list[dict[str, Any]] = []
         MAX_FILE_BYTES = 500_000
 
         for entry in inserts:
@@ -517,16 +514,18 @@ async def build_search_index(project_root: str, session: AsyncSession | None = N
                 continue
             symbols = extract_symbols(str(fp), content)
             for sym in symbols:
-                safe_name = sym["name"].replace("'", "''")
-                safe_path = str(fp).replace("'", "''")
-                symbol_inserts.append(
-                    f"('symbol', '{safe_name}', '{safe_path}', {sym['line']})"
-                )
+                symbol_inserts.append({
+                    "type": "symbol",
+                    "name": sym["name"],
+                    "path": str(fp),
+                    "line": sym["line"]
+                })
 
         if symbol_inserts:
-            await session.execute(text(
-                f"INSERT INTO search_index (type, name, path, line) VALUES {', '.join(symbol_inserts)}"
-            ))
+            await session.execute(
+                text("INSERT INTO search_index (type, name, path, line) VALUES (:type, :name, :path, :line)"),
+                symbol_inserts
+            )
 
         await session.commit()
         return len(inserts)
