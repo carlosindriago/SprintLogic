@@ -31,14 +31,14 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
   const [loading, setLoading] = useState(false);
   const [usage, setUsage] = useState<{ completion_tokens?: number; total_tokens?: number } | null>(null);
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
-  const [modelGroups, setModelGroups] = useState<{
-    provider: string; provider_id?: string; label?: string; models: { id: string; name: string }[];
+  const [availableModels, setAvailableModels] = useState<{
+    provider: string; models: { id: string; name: string }[];
   }[]>([]);
 
   useEffect(() => {
-    fetch(`${API_BASE_URL}/ai/models`)
+    fetch(`${API_BASE_URL}/ai/active-models`)
       .then(res => res.json())
-      .then(data => setModelGroups(data))
+      .then(data => setAvailableModels(data))
       .catch(() => {});
   }, []);
 
