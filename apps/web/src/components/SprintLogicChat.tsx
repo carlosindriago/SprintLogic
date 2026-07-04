@@ -1,9 +1,9 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import ReactMarkdown from "react-markdown";
 import { KeyRound, Cpu, Send, Loader2, ChevronDown, Terminal } from "lucide-react";
 import { useLLMConfigStore } from "@/store/llmConfigStore";
-import { sendChatMessage, ChatMessage } from "@/lib/api";
+import { sendChatMessage, ChatMessage, API_BASE_URL } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 interface SprintLogicChatProps {
@@ -31,6 +31,16 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
   const [loading, setLoading] = useState(false);
   const [usage, setUsage] = useState<{ completion_tokens?: number; total_tokens?: number } | null>(null);
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
+  const [modelGroups, setModelGroups] = useState<{
+    provider: string; provider_id?: string; label?: string; models: { id: string; name: string }[];
+  }[]>([]);
+
+  useEffect(() => {
+    fetch(`${API_BASE_URL}/ai/models`)
+      .then(res => res.json())
+      .then(data => setModelGroups(data))
+      .catch(() => {});
+  }, []);
 
   const SLASH_COMMANDS = [
     { command: '/explain', description: 'Explica el archivo o código actual', prompt: 'Explica qué hace este archivo y su rol en la arquitectura del proyecto.' },
@@ -45,22 +55,7 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
     open: false, selectedIndex: 0, filtered: SLASH_COMMANDS,
   });
 
-  const modelGroups = [
-    { provider: "gemini", label: "Gemini", models: [
-      { id: "gemini/gemini-2.5-flash", name: "2.5 Flash" },
-      { id: "gemini/gemini-1.5-pro", name: "1.5 Pro" },
-    ]},
-    { provider: "openai", label: "OpenAI", models: [
-      { id: "openai/gpt-4o", name: "GPT-4o" },
-      { id: "openai/gpt-4o-mini", name: "GPT-4o Mini" },
-    ]},
-    { provider: "anthropic", label: "Claude", models: [
-      { id: "anthropic/claude-3-5-sonnet", name: "3.5 Sonnet" },
-    ]},
-    { provider: "openrouter", label: "OpenRouter", models: [
-      { id: "openrouter/anthropic/claude-3-5-sonnet", name: "Claude 3.5" },
-    ]},
-  ];
+
 
   if (!activeModel) {
     return (
@@ -193,11 +188,16 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
             <>
               <div className="fixed inset-0 z-40" onClick={() => setModelMenuOpen(false)} />
               <div className="absolute right-0 top-full mt-1 z-50 w-48 bg-zinc-800 border border-zinc-700/50 rounded-lg shadow-xl overflow-hidden">
-                {modelGroups.map((group) => (
-                  <div key={group.provider}>
-                    <div className="px-3 py-1 text-[9px] font-semibold text-zinc-500 uppercase tracking-wider bg-zinc-800/50">
-                      {group.label}
-                    </div>
+                {modelGroups.length === 0 ? (
+                  <div className="px-3 py-2 text-[11px] text-zinc-500 text-center italic cursor-not-allowed">
+                    Configura una API Key en Ajustes
+                  </div>
+                ) : (
+                  modelGroups.map((group) => (
+                    <div key={group.provider}>
+                      <div className="px-3 py-1 text-[9px] font-semibold text-zinc-500 uppercase tracking-wider bg-zinc-800/50">
+                        {group.label || group.provider}
+                      </div>
                     {group.models.map((m) => (
                       <button
                         key={m.id}
@@ -216,7 +216,7 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
                       </button>
                     ))}
                   </div>
-                ))}
+                )))}
                 {sessionModel && (
                   <button
                     onClick={() => {
