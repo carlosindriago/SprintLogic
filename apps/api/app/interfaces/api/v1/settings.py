@@ -225,8 +225,10 @@ CURATED_MODELS = {
         {"id": "opencode-go/default", "name": "OpenCode Go"},
     ],
     "nvidia": [
-        {"id": "nvidia/meta/llama-3.1-70b-instruct", "name": "Llama 3.1 70B (NIM)"},
-        {"id": "nvidia/meta/llama-3.1-8b-instruct", "name": "Llama 3.1 8B (NIM)"},
+        {"id": "nvidia_nim/meta/llama-3.1-70b-instruct", "name": "Llama 3.1 70B (NIM)"},
+        {"id": "nvidia_nim/meta/llama-3.1-8b-instruct", "name": "Llama 3.1 8B (NIM)"},
+        {"id": "nvidia_nim/mistralai/mixtral-8x22b-instruct-v0.1", "name": "Mixtral 8x22B (NIM)"},
+        {"id": "nvidia_nim/nvidia/nemotron-4-340b-instruct", "name": "Nemotron 4 340B (NIM)"},
     ],
 }
 
