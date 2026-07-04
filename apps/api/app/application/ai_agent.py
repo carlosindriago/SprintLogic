@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text
 from app.infrastructure.security.credential_manager import CredentialManager
 from app.infrastructure.db.models import AIMemoryModel, ContextSnippetModel, ProjectModel
+from app.infrastructure.db.database import AsyncSessionLocal
 
 class AIAgent:
     def __init__(self, session: AsyncSession, project_id: UUID | str | None = None):
@@ -101,90 +102,97 @@ class AIAgent:
         except (json.JSONDecodeError, AttributeError):
             return "Error: invalid tool arguments."
 
-        if name == "mem_save":
-            memory = AIMemoryModel(
-                project_id=self.project_id,
-                memory_type=args.get("memory_type", "unknown"),
-                topic=args.get("topic", "untitled"),
-                content=args.get("content", "")
-            )
-            self.session.add(memory)
-            await self.session.commit()
-            return f"Memory '{args.get('topic', 'untitled')}' saved successfully."
+        # Use a fresh short-lived session for tool calls to avoid
+        # holding the DB connection during LLM network I/O.
+        async with AsyncSessionLocal() as session:
 
-        elif name == "mem_search":
-            query = args.get("query", "")
-            stmt = select(AIMemoryModel).where(AIMemoryModel.content.icontains(query))
-            if self.project_id:
-                stmt = stmt.where(AIMemoryModel.project_id == self.project_id)
-            result = await self.session.execute(stmt)
-            memories = result.scalars().all()
-            if not memories:
-                return "No memories found."
-            return json.dumps([{"topic": m.topic, "content": m.content, "type": m.memory_type} for m in memories])
+            if name == "mem_save":
+                memory = AIMemoryModel(
+                    project_id=self.project_id,
+                    memory_type=args.get("memory_type", "unknown"),
+                    topic=args.get("topic", "untitled"),
+                    content=args.get("content", "")
+                )
+                session.add(memory)
+                await session.commit()
+                return f"Memory '{args.get('topic', 'untitled')}' saved successfully."
 
-        elif name == "context_search":
-            query = args.get("query", "")
-            # Fallback to basic ILIKE search since sqlite-vec virtual table is not yet fully configured with triggers
-            stmt = select(ContextSnippetModel).where(ContextSnippetModel.content.icontains(query))
-            if self.project_id:
-                stmt = stmt.where(ContextSnippetModel.project_id == self.project_id)
-            result = await self.session.execute(stmt)
-            snippets = result.scalars().all()
-            if not snippets:
-                return "No context found."
-            return json.dumps([{"type": s.type, "content": s.content} for s in snippets])
+            elif name == "mem_search":
+                query = args.get("query", "")
+                stmt = select(AIMemoryModel).where(AIMemoryModel.content.icontains(query))
+                if self.project_id:
+                    stmt = stmt.where(AIMemoryModel.project_id == self.project_id)
+                result = await session.execute(stmt)
+                memories = result.scalars().all()
+                if not memories:
+                    return "No memories found."
+                return json.dumps([{"topic": m.topic, "content": m.content, "type": m.memory_type} for m in memories])
 
-        elif name == "search_codebase":
-            query = args.get("query", "")
-            sanitized = query.replace("'", "''").strip() + "*"
-            result = await self.session.execute(
-                text(
-                    "SELECT type, name, path, line FROM search_index "
-                    "WHERE search_index MATCH :q ORDER BY rank LIMIT 20"
-                ),
-                {"q": sanitized},
-            )
-            rows = result.fetchall()
-            if not rows:
-                return "No results found in codebase."
-            return json.dumps([
-                {"type": r[0], "name": r[1], "path": r[2], "line": r[3]}
-                for r in rows
-            ])
+            elif name == "context_search":
+                query = args.get("query", "")
+                stmt = select(ContextSnippetModel).where(ContextSnippetModel.content.icontains(query))
+                if self.project_id:
+                    stmt = stmt.where(ContextSnippetModel.project_id == self.project_id)
+                result = await session.execute(stmt)
+                snippets = result.scalars().all()
+                if not snippets:
+                    return "No context found."
+                return json.dumps([{"type": s.type, "content": s.content} for s in snippets])
 
-        elif name == "read_local_file":
-            file_path = args.get("file_path", "")
-            root = await self._get_project_root()
-            if not root:
-                return "Error: No project context available."
+            elif name == "search_codebase":
+                query = args.get("query", "")
+                sanitized = query.replace("'", "''").strip() + "*"
+                result = await session.execute(
+                    text(
+                        "SELECT type, name, path, line FROM search_index "
+                        "WHERE search_index MATCH :q ORDER BY rank LIMIT 20"
+                    ),
+                    {"q": sanitized},
+                )
+                rows = result.fetchall()
+                if not rows:
+                    return "No results found in codebase."
+                return json.dumps([
+                    {"type": r[0], "name": r[1], "path": r[2], "line": r[3]}
+                    for r in rows
+                ])
 
-            target = Path(file_path)
-            if not target.is_absolute():
-                target = Path(root) / file_path
-            target = target.resolve()
+            elif name == "read_local_file":
+                file_path = args.get("file_path", "")
+                root = await self._get_project_root()
+                if not root:
+                    return "Error: No project context available."
 
-            if not target.is_relative_to(root):
-                return "Error: Access denied — file is outside the project."
+                target = Path(file_path)
+                if not target.is_absolute():
+                    target = Path(root) / file_path
+                target = target.resolve()
 
-            try:
-                content = target.read_text(encoding="utf-8", errors="ignore")
-                return content[:2000] + ("...(truncated)" if len(content) > 2000 else "")
-            except FileNotFoundError:
-                return f"Error: File not found — {file_path}"
-            except Exception as e:
-                return f"Error reading file: {str(e)}"
+                if not target.is_relative_to(root):
+                    return "Error: Access denied — file is outside the project."
+
+                try:
+                    content = target.read_text(encoding="utf-8", errors="ignore")
+                    return content[:2000] + ("...(truncated)" if len(content) > 2000 else "")
+                except FileNotFoundError:
+                    return f"Error: File not found — {file_path}"
+                except Exception as e:
+                    return f"Error reading file: {str(e)}"
 
         return "Unknown tool."
 
     async def _get_project_root(self) -> str | None:
-        if self._project_root:
-            return self._project_root
+        """Fetches and caches the project root path. Uses self.session
+        only on first call (from _build_system_message before LLM call)."""
+        if self._project_root is not None:
+            return self._project_root or None
         if not self.project_id:
+            self._project_root = ""
             return None
         try:
             project_uuid = self.project_id if isinstance(self.project_id, UUID) else UUID(str(self.project_id))
         except (ValueError, TypeError):
+            self._project_root = ""
             return None
         stmt = select(ProjectModel).where(ProjectModel.id == project_uuid)
         result = await self.session.execute(stmt)
@@ -192,6 +200,7 @@ class AIAgent:
         if project and project.path:
             self._project_root = str(Path(project.path).resolve())
             return self._project_root
+        self._project_root = ""
         return None
 
     async def _build_system_message(self) -> str:
