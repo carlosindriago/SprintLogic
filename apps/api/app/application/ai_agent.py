@@ -282,6 +282,10 @@ class AIAgent:
             if system_msg:
                 messages = [{"role": "system", "content": system_msg}] + [m for m in messages if m.get("role") != "system"]
 
+            import os
+            if provider == "nvidia" and api_key:
+                os.environ["NVIDIA_NIM_API_KEY"] = api_key
+
             # Prepare LiteLLM call
             response = await litellm.acompletion(
                 model=model,
