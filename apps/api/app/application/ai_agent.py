@@ -140,8 +140,30 @@ class AIAgent:
                 return json.dumps([{"type": s.type, "content": s.content} for s in snippets])
 
             elif name == "search_codebase":
-                query = args.get("query", "")
-                sanitized = query.replace("'", "''").strip() + "*"
+                query = args.get("query", "").strip()
+
+                if not query or query in ("*", "**"):
+                    return (
+                        "ToolError: Invalid FTS5 query. Do not use standalone wildcards "
+                        "like '*'. Search for specific architectural keywords like 'main', "
+                        "'config', 'package.json', 'index', 'docker', 'router', 'component', "
+                        "'controller', 'service', or file names."
+                    )
+
+                # Sanitize for FTS5 MATCH: escape single quotes, wrap dotted names
+                sanitized = query.replace("'", "''")
+                if "." in sanitized and not sanitized.startswith('"'):
+                    sanitized = f'"{sanitized}"'
+                sanitized += "*"
+
+                # Reject queries that are only special FTS5 chars after sanitization
+                cleaned = sanitized.replace("*", "").replace('"', "").replace("-", "").strip()
+                if not cleaned or not any(c.isalnum() for c in cleaned):
+                    return (
+                        "ToolError: Query contains only special characters. "
+                        "Search for meaningful terms like 'main', 'App', 'config', 'router'."
+                    )
+
                 result = await session.execute(
                     text(
                         "SELECT type, name, path, line FROM search_index "

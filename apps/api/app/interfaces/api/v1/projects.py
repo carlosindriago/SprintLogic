@@ -588,8 +588,12 @@ async def search_everywhere(
     session: AsyncSession = Depends(get_db_session),
 ):
     sanitized = q.replace("'", "''").strip()
-    if not sanitized:
+    if not sanitized or sanitized in ("*", "**"):
         return {"results": []}
+
+    # Wrap dotted names like package.json for FTS5
+    if "." in sanitized and not sanitized.startswith('"'):
+        sanitized = f'"{sanitized}"'
 
     query_str = sanitized + "*"
 
