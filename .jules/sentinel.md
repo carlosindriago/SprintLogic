@@ -1,0 +1,4 @@
+## 2024-07-04 - [Fix SQL Injection in SQLite Full Text Search]
+**Vulnerability:** SQL injection vulnerability when indexing project files due to manually constructing `INSERT` statements with string concatenation rather than using parameterized queries. The values were partially manually escaped using `.replace("'", "''")` and `chr(39)` replacements, which is error-prone and a security risk.
+**Learning:** This existed because the developer might not be familiar with passing a list of dictionaries to `session.execute(text("..."), list_of_dicts)` in SQLAlchemy to perform a bulk insert, and thus resorted to building the values string manually.
+**Prevention:** Use SQLAlchemy's built-in parameter binding with `session.execute` and a list of dictionaries for bulk operations. Avoid string concatenation for SQL statements whenever possible.

@@ -10,8 +10,10 @@ class MyClass:
 def my_function():
     pass
 """
+    from uuid import uuid4
     file_path = "fake/path.py"
-    nodes, edges, _ = extract_nodes_from_code(file_path, code, ".py")
+    project_id = uuid4()
+    nodes, edges, _ = extract_nodes_from_code(project_id, file_path, code, ".py")
     
     assert len(nodes) == 4 # File, MyClass, my_method, my_function
     

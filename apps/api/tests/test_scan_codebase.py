@@ -21,8 +21,13 @@ class FakeGraphRepository(GraphRepository):
         self.nodes = []
         self.edges = []
 
+    async def clear_by_project(self, project_id) -> None:
+        self.cleared = True
+        self.nodes = []
+        self.edges = []
+
 class FakeParserService:
-    def parse_directory(self, dir_path: str):
+    def parse_directory(self, project_id, dir_path: str):
         return ["node1", "node2"], ["edge1"]
 
 @pytest.mark.asyncio
@@ -30,9 +35,11 @@ async def test_scan_codebase_orchestration():
     repo = FakeGraphRepository()
     parser = FakeParserService()
     
+    from uuid import uuid4
     usecase = ScanCodebaseUseCase(parser=parser, repository=repo) # type: ignore
     
-    await usecase.execute("fake/dir")
+    project_id = uuid4()
+    await usecase.execute(project_id, "fake/dir")
     
     assert repo.cleared is True
     assert repo.nodes == ["node1", "node2"]
