@@ -6,6 +6,12 @@ import { useLLMConfigStore } from "@/store/llmConfigStore";
 import { API_BASE_URL } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
+interface ChatMessage {
+  role: "user" | "assistant" | "system";
+  content: string;
+  isError?: boolean;
+}
+
 interface SprintLogicChatProps {
   projectId: string | null;
   onOpenSettings?: () => void;
