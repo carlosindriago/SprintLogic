@@ -5,7 +5,6 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-
 EMAIL_REGEX = re.compile(r"^[^@]+@[^@]+\.[^@]+$")
 
 
@@ -19,7 +18,7 @@ class User:
     def __post_init__(self) -> None:
         if not self.email or not EMAIL_REGEX.match(self.email):
             raise ValueError("Invalid email format")
-            
+
         if not self.name or not self.name.strip():
             raise ValueError("User name cannot be empty")
 
