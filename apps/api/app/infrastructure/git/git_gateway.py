@@ -506,3 +506,90 @@ class LocalGitGateway:
                 return {"status": "reverted", "action": "restored", "file_path": file_path}
             except RuntimeError as e:
                 return {"status": "error", "message": str(e)}
+
+    @staticmethod
+    def _count_non_empty_lines(output: str | BaseException) -> int:
+        if isinstance(output, BaseException):
+            return 0
+        return len([line for line in output.split("\n") if line.strip()])
+
+    @staticmethod
+    def _parse_name_status(output: str | BaseException) -> list[dict[str, str]]:
+        if isinstance(output, BaseException):
+            return []
+        items: list[dict[str, str]] = []
+        for line in output.split("\n"):
+            if not line.strip():
+                continue
+            parts = line.split("\t")
+            if len(parts) >= 2:
+                items.append({"status": parts[0], "file_path": parts[1]})
+        return items
+
+    async def get_git_dashboard(self, repo_path: str) -> dict[str, Any]:
+        tasks = {
+            "tracked_files": self._run_command(repo_path, "ls-files"),
+            "untracked_files": self._run_command(
+                repo_path, "ls-files", "--others", "--exclude-standard",
+            ),
+            "ignored_files": self._run_command(
+                repo_path, "ls-files", "--others", "--ignored", "--exclude-standard",
+            ),
+            "last_commit_files": self._run_command(
+                repo_path, "show", "--name-only", "--format=", "HEAD",
+            ),
+            "staged_status": self._run_command(
+                repo_path, "diff", "--name-status", "--cached",
+            ),
+            "last_commit_status": self._run_command(
+                repo_path, "show", "--name-status", "--format=", "HEAD",
+            ),
+            "modified_files": self._run_command(
+                repo_path, "diff", "--name-only", "HEAD",
+            ),
+            "current_branch": self._run_command(repo_path, "branch", "--show-current"),
+        }
+
+        results = await asyncio.gather(*tasks.values(), return_exceptions=True)
+        mapped = dict(zip(tasks.keys(), results))
+
+        diff_with_main: dict[str, int | None] = {"ahead": None, "behind": None}
+        try:
+            output = await self._run_command(
+                repo_path, "rev-list", "--left-right", "--count", "main...HEAD",
+            )
+            parts = output.split("\t")
+            if len(parts) == 2:
+                diff_with_main = {"ahead": int(parts[1]), "behind": int(parts[0])}
+        except RuntimeError:
+            pass
+
+        tracked_count = self._count_non_empty_lines(mapped["tracked_files"])
+
+        return {
+            "kpis": {
+                "total_files": tracked_count,
+                "tracked": tracked_count,
+                "untracked": self._count_non_empty_lines(mapped["untracked_files"]),
+                "ignored": self._count_non_empty_lines(mapped["ignored_files"]),
+                "modified": self._count_non_empty_lines(mapped["modified_files"]),
+                "last_commit_files": self._count_non_empty_lines(mapped["last_commit_files"]),
+            },
+            "lists": {
+                "untracked_list": (
+                    []
+                    if isinstance(mapped["untracked_files"], BaseException)
+                    else mapped["untracked_files"].split("\n")
+                ),
+                "staged_list": self._parse_name_status(mapped["staged_status"]),
+                "last_commit_list": self._parse_name_status(mapped["last_commit_status"]),
+            },
+            "branch": {
+                "current_branch": (
+                    "unknown"
+                    if isinstance(mapped["current_branch"], BaseException)
+                    else mapped["current_branch"] or "unknown"
+                ),
+                "diff_with_main": diff_with_main,
+            },
+        }

@@ -546,3 +546,23 @@ async def revert_file(
         raise HTTPException(status_code=500, detail=result.get("message"))
 
     return result
+
+
+@router.get("/{project_id}/git/dashboard")
+async def get_git_dashboard(
+    project_id: str,
+    session: AsyncSession = Depends(get_db_session),
+):
+    try:
+        project = await SQLAlchemyProjectRepository(session).get_project(UUID(project_id))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID")
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    try:
+        dashboard = await git_gateway.get_git_dashboard(project.path)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return dashboard
