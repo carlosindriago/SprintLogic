@@ -500,8 +500,8 @@ export default function GitGraphTab({ projectId }: { projectId: string }) {
                     <span className={b.is_current ? "font-bold text-blue-400 truncate" : "truncate"}>{b.name}</span>
                   </div>
                   <div className="flex gap-1 text-[10px] shrink-0">
-                    {b.ahead > 0 && <span className="text-green-400 bg-green-400/10 px-1 rounded">↑{b.ahead}</span>}
-                    {b.behind > 0 && <span className="text-red-400 bg-red-400/10 px-1 rounded">↓{b.behind}</span>}
+                    {(b.ahead ?? 0) > 0 && <span className="text-green-400 bg-green-400/10 px-1 rounded">↑{b.ahead}</span>}
+                    {(b.behind ?? 0) > 0 && <span className="text-red-400 bg-red-400/10 px-1 rounded">↓{b.behind}</span>}
                     {b.is_local_only && <span className="text-zinc-500 bg-zinc-500/10 px-1 rounded">local</span>}
                   </div>
                 </DropdownMenuItem>
