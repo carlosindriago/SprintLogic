@@ -477,3 +477,32 @@ class LocalGitGateway:
         except RuntimeError:
             pass
         return files
+
+    async def revert_file_changes(self, repo_path: str, file_path: str) -> dict[str, Any]:
+        full_path = os.path.join(repo_path, file_path)
+
+        try:
+            status_output = await self._run_command(
+                repo_path, "status", "--porcelain", "--", file_path,
+            )
+        except RuntimeError:
+            status_output = ""
+
+        is_untracked = status_output.startswith("??")
+
+        if is_untracked:
+            try:
+                os.remove(full_path)
+                return {"status": "reverted", "action": "deleted", "file_path": file_path}
+            except OSError as e:
+                return {"status": "error", "message": f"Failed to delete file: {e}"}
+
+        try:
+            await self._run_command(repo_path, "restore", "--", file_path)
+            return {"status": "reverted", "action": "restored", "file_path": file_path}
+        except RuntimeError:
+            try:
+                await self._run_command(repo_path, "checkout", "HEAD", "--", file_path)
+                return {"status": "reverted", "action": "restored", "file_path": file_path}
+            except RuntimeError as e:
+                return {"status": "error", "message": str(e)}

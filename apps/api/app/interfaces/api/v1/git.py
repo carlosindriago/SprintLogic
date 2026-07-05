@@ -521,3 +521,28 @@ async def get_local_changes(
         })
 
     return {"files": files}
+
+
+class RevertRequest(BaseModel):
+    file_path: str
+
+
+@router.post("/{project_id}/git/revert")
+async def revert_file(
+    project_id: str,
+    request: RevertRequest,
+    session: AsyncSession = Depends(get_db_session),
+):
+    try:
+        project = await SQLAlchemyProjectRepository(session).get_project(UUID(project_id))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID")
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    result = await git_gateway.revert_file_changes(project.path, request.file_path)
+
+    if result.get("status") == "error":
+        raise HTTPException(status_code=500, detail=result.get("message"))
+
+    return result
