@@ -1,5 +1,7 @@
 # ruff: noqa: E402, E501
 import os
+import re
+import shutil
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -27,6 +29,15 @@ class ScanRequest(BaseModel):
 
 class FileContentUpdate(BaseModel):
     content: str
+
+
+class RenameRequest(BaseModel):
+    path: str
+    new_name: str
+
+
+class FileOperationRequest(BaseModel):
+    path: str
 
 
 @router.get("/projects")
@@ -503,6 +514,121 @@ async def create_project_file(
         return {"status": "created", "path": str(candidate.relative_to(project_root))}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create file: {str(e)}")
+
+
+def _validate_and_resolve(project_path: str, file_path: str) -> Path:
+    project_root = Path(project_path).resolve()
+    target = Path(file_path)
+    candidate = (target if target.is_absolute() else project_root / target).resolve()
+
+    if not candidate.is_relative_to(project_root):
+        raise HTTPException(status_code=403, detail="Path is outside project directory")
+    return candidate
+
+
+@router.post("/projects/{project_id}/file/rename")
+async def rename_project_file(
+    project_id: str,
+    request: RenameRequest,
+    session: AsyncSession = Depends(get_db_session),
+):
+    try:
+        project_uuid = UUID(project_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+
+    repo = SQLAlchemyProjectRepository(session)
+    project = await repo.get_project(project_uuid)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    candidate = _validate_and_resolve(project.path, request.path)
+
+    if not candidate.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    if not re.match(r'^[^/\0]+$', request.new_name):
+        raise HTTPException(status_code=400, detail="Invalid file name")
+
+    new_path = candidate.parent / request.new_name
+    if not new_path.is_relative_to(Path(project.path).resolve()):
+        raise HTTPException(status_code=403, detail="Renamed path would be outside project directory")
+
+    if new_path.exists():
+        raise HTTPException(status_code=409, detail="A file with that name already exists")
+
+    try:
+        os.rename(str(candidate), str(new_path))
+        relative = str(new_path.relative_to(Path(project.path).resolve()))
+        return {"status": "renamed", "path": relative}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to rename file: {str(e)}")
+
+
+@router.post("/projects/{project_id}/file/duplicate")
+async def duplicate_project_file(
+    project_id: str,
+    request: FileOperationRequest,
+    session: AsyncSession = Depends(get_db_session),
+):
+    try:
+        project_uuid = UUID(project_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+
+    repo = SQLAlchemyProjectRepository(session)
+    project = await repo.get_project(project_uuid)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    candidate = _validate_and_resolve(project.path, request.path)
+
+    if not candidate.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    stem = candidate.stem
+    suffix = candidate.suffix
+    duplicate_path = candidate.parent / f"{stem}_copy{suffix}"
+
+    counter = 1
+    while duplicate_path.exists():
+        duplicate_path = candidate.parent / f"{stem}_copy{counter}{suffix}"
+        counter += 1
+
+    try:
+        shutil.copy2(str(candidate), str(duplicate_path))
+        relative = str(duplicate_path.relative_to(Path(project.path).resolve()))
+        return {"status": "duplicated", "path": relative}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to duplicate file: {str(e)}")
+
+
+@router.delete("/projects/{project_id}/file/delete")
+async def delete_project_file(
+    project_id: str,
+    path: str = Query(...),
+    session: AsyncSession = Depends(get_db_session),
+):
+    try:
+        project_uuid = UUID(project_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+
+    repo = SQLAlchemyProjectRepository(session)
+    project = await repo.get_project(project_uuid)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    candidate = _validate_and_resolve(project.path, path)
+
+    if not candidate.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    try:
+        os.remove(str(candidate))
+        return {"status": "deleted", "path": path}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete file: {str(e)}")
 
 
 IGNORE_DIRS = {
