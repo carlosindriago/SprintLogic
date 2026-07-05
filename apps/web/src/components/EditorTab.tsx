@@ -37,11 +37,13 @@ function normalizeMonacoUri(uri: Uri): string {
 export default function EditorTab({
   projectId,
   node,
+  vimMode,
   onSaveUntitled,
   onMentor,
 }: {
   projectId: string;
   node: GraphNode;
+  vimMode?: boolean;
   onSaveUntitled?: (content: string) => void;
   onMentor?: (filePath: string, content: string) => void;
 }) {
