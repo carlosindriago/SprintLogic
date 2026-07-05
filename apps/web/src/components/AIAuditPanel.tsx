@@ -1,16 +1,40 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { getLocalChanges, getFileLocalDiff, revertFile, API_BASE_URL, type ChangedFile, type FileLocalDiff } from '@/lib/api';
+import {
+  getGitDashboard,
+  getFileLocalDiff,
+  revertFile,
+  API_BASE_URL,
+  type GitDashboard,
+  type GitDashboardFileStatus,
+  type FileLocalDiff,
+} from '@/lib/api';
 import DiffViewer, { detectLanguage } from './DiffViewer';
-import { ArrowLeft, FolderGit2, Plus, Minus, FileText, RefreshCw } from 'lucide-react';
+import {
+  ArrowLeft,
+  FolderGit2,
+  FileText,
+  RefreshCw,
+  GitBranch,
+  GitCommit,
+  AlertCircle,
+  EyeOff,
+  Activity,
+  Layers,
+} from 'lucide-react';
 
 interface AIAuditPanelProps {
   projectId: string;
 }
 
+interface DashboardFile {
+  status: string;
+  file_path: string;
+}
+
 export default function AIAuditPanel({ projectId }: AIAuditPanelProps) {
-  const [files, setFiles] = useState<ChangedFile[]>([]);
+  const [dashboard, setDashboard] = useState<GitDashboard | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedFile, setSelectedFile] = useState<ChangedFile | null>(null);
+  const [selectedFile, setSelectedFile] = useState<DashboardFile | null>(null);
   const [diffData, setDiffData] = useState<FileLocalDiff | null>(null);
   const [diffLoading, setDiffLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -18,28 +42,36 @@ export default function AIAuditPanel({ projectId }: AIAuditPanelProps) {
   const [discarding, setDiscarding] = useState(false);
   const discardingRef = useRef(false);
   const wsRef = useRef<WebSocket | null>(null);
-  const fetchChangesRef = useRef<() => Promise<void>>(async () => {});
+  const fetchDashboardRef = useRef<() => Promise<void>>(async () => {});
 
-  const fetchChanges = useCallback(async () => {
+  const fetchDashboard = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await getLocalChanges(projectId);
-      setFiles(data.files);
+      const data = await getGitDashboard(projectId);
+      setDashboard(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load changes');
+      setError(err instanceof Error ? err.message : 'Failed to load dashboard');
     } finally {
       setLoading(false);
     }
   }, [projectId]);
 
   useEffect(() => {
-    fetchChangesRef.current = fetchChanges;
-  }, [fetchChanges]);
+    fetchDashboardRef.current = fetchDashboard;
+  }, [fetchDashboard]);
 
   useEffect(() => {
-    fetchChanges();
-  }, [fetchChanges]);
+    let cancelled = false;
+    const load = async () => {
+      if (cancelled) return;
+      await fetchDashboard();
+    };
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchDashboard]);
 
   useEffect(() => {
     const wsUrl = API_BASE_URL.replace(/^http/, "ws") + `/projects/${projectId}/ws`;
@@ -55,7 +87,7 @@ export default function AIAuditPanel({ projectId }: AIAuditPanelProps) {
         try {
           const data = JSON.parse(event.data);
           if (data.type === "file_changed") {
-            fetchChangesRef.current();
+            fetchDashboardRef.current();
           }
         } catch {
           // ignore malformed messages
@@ -81,13 +113,13 @@ export default function AIAuditPanel({ projectId }: AIAuditPanelProps) {
     };
   }, [projectId]);
 
-  const handleFileClick = useCallback(async (file: ChangedFile) => {
+  const handleFileClick = useCallback(async (file: DashboardFile) => {
     setSelectedFile(file);
     setDiffLoading(true);
     try {
       const data = await getFileLocalDiff(projectId, file.file_path);
       setDiffData(data);
-    } catch (err) {
+    } catch {
       setDiffData(null);
     } finally {
       setDiffLoading(false);
@@ -115,9 +147,6 @@ export default function AIAuditPanel({ projectId }: AIAuditPanelProps) {
       discardingRef.current = false;
     }
   }, [projectId, selectedFile]);
-
-  const modifiedFiles = files.filter((f) => f.is_modified);
-  const untrackedFiles = files.filter((f) => f.is_untracked);
 
   const statusBadge = (code: string) => {
     const map: Record<string, { label: string; className: string }> = {
@@ -148,10 +177,8 @@ export default function AIAuditPanel({ projectId }: AIAuditPanelProps) {
             Volver
           </button>
           <div className="w-px h-4 bg-zinc-700/50" />
-          {statusBadge(selectedFile.status_code)}
+          {statusBadge(selectedFile.status)}
           <span className="text-xs text-zinc-300 font-mono truncate">{selectedFile.file_path}</span>
-          <span className="text-[11px] text-green-400">+{selectedFile.added}</span>
-          <span className="text-[11px] text-red-400">-{selectedFile.deleted}</span>
           <button
             onClick={() => setConfirmDiscard(true)}
             disabled={discarding}
@@ -192,16 +219,24 @@ export default function AIAuditPanel({ projectId }: AIAuditPanelProps) {
     );
   }
 
+  const kpis = dashboard?.kpis;
+  const branch = dashboard?.branch;
+
   return (
-    <div className="flex flex-col h-full bg-[#151515]">
+    <div className="flex flex-col h-full bg-[#151515] overflow-hidden">
       <div className="flex items-center justify-between px-4 py-2 bg-zinc-900 border-b border-zinc-800/50 shrink-0">
         <div className="flex items-center gap-2">
           <FolderGit2 className="w-4 h-4 text-blue-400" />
-          <span className="text-sm font-medium text-zinc-200">Auditoría IA</span>
-          <span className="text-xs text-zinc-500">· {files.length} archivos</span>
+          <span className="text-sm font-medium text-zinc-200">Mission Control</span>
+          {branch && (
+            <span className="flex items-center gap-1 text-xs text-zinc-500 ml-2">
+              <GitBranch className="w-3 h-3" />
+              {branch.current_branch}
+            </span>
+          )}
         </div>
         <button
-          onClick={fetchChanges}
+          onClick={fetchDashboard}
           disabled={loading}
           className="p-1 rounded text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors disabled:opacity-30"
           title="Refrescar"
@@ -214,48 +249,86 @@ export default function AIAuditPanel({ projectId }: AIAuditPanelProps) {
         {loading ? (
           <div className="flex items-center justify-center py-16 text-zinc-500">
             <RefreshCw className="w-5 h-5 animate-spin mr-2" />
-            Escaneando cambios...
+            Cargando dashboard...
           </div>
         ) : error ? (
-          <div className="flex items-center justify-center py-16 text-red-400 text-sm">{error}</div>
-        ) : files.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-zinc-500 gap-2">
-            <FileText className="w-8 h-8 opacity-30" />
-            <span className="text-sm">Sin cambios locales</span>
-            <span className="text-xs text-zinc-600">El working tree está limpio</span>
+          <div className="flex items-center justify-center py-16 text-red-400 text-sm gap-2">
+            <AlertCircle className="w-4 h-4" />
+            {error}
+          </div>
+        ) : !dashboard ? (
+          <div className="flex items-center justify-center py-16 text-zinc-500 text-sm">
+            Sin datos del repositorio
           </div>
         ) : (
-          <div className="divide-y divide-zinc-800/50">
-            {modifiedFiles.length > 0 && (
-              <div>
-                <div className="px-4 py-2 text-[11px] font-medium text-zinc-500 uppercase tracking-wider">
-                  Modificados ({modifiedFiles.length})
-                </div>
-                {modifiedFiles.map((file) => (
-                  <FileRow
-                    key={file.file_path}
-                    file={file}
-                    onClick={handleFileClick}
-                    statusBadge={statusBadge}
-                  />
-                ))}
+          <div className="flex flex-col h-full">
+            <div className="grid grid-cols-3 md:grid-cols-6 gap-3 p-4 shrink-0">
+              <KPICard
+                icon={<Layers className="w-4 h-4 text-blue-400" />}
+                label="Total Archivos"
+                value={kpis?.total_files ?? 0}
+              />
+              <KPICard
+                icon={<FileText className="w-4 h-4 text-zinc-400" />}
+                label="Nuevos"
+                value={kpis?.untracked ?? 0}
+                accent="text-zinc-300"
+              />
+              <KPICard
+                icon={<EyeOff className="w-4 h-4 text-zinc-500" />}
+                label="Ignorados"
+                value={kpis?.ignored ?? 0}
+                accent="text-zinc-500"
+              />
+              <KPICard
+                icon={<Activity className="w-4 h-4 text-yellow-400" />}
+                label="Modificados"
+                value={kpis?.modified ?? 0}
+                accent="text-yellow-400"
+              />
+              <KPICard
+                icon={<GitBranch className="w-4 h-4 text-purple-400" />}
+                label="Rama Actual"
+                value={branch?.current_branch ?? '-'}
+                isText
+              />
+              <KPICard
+                icon={<GitCommit className="w-4 h-4 text-green-400" />}
+                label="Estado vs Main"
+                value={formatDiffWithMain(branch?.diff_with_main)}
+                isText
+                accent={mainStatusColor(branch?.diff_with_main)}
+              />
+            </div>
+
+            <div className="flex-1 min-h-0 px-4 pb-4">
+              <div className="flex gap-4 h-full min-h-[280px] overflow-x-auto">
+                <StatusColumn
+                  title="Sin seguimiento"
+                  icon={<FileText className="w-3.5 h-3.5 text-zinc-400" />}
+                  count={dashboard.lists.untracked_list.length}
+                  items={dashboard.lists.untracked_list.map((path) => ({ status: '??', file_path: path }))}
+                  onItemClick={handleFileClick}
+                  statusBadge={statusBadge}
+                />
+                <StatusColumn
+                  title="En preparación"
+                  icon={<GitCommit className="w-3.5 h-3.5 text-green-400" />}
+                  count={dashboard.lists.staged_list.length}
+                  items={dashboard.lists.staged_list}
+                  onItemClick={handleFileClick}
+                  statusBadge={statusBadge}
+                />
+                <StatusColumn
+                  title="Último commit"
+                  icon={<GitCommit className="w-3.5 h-3.5 text-blue-400" />}
+                  count={dashboard.lists.last_commit_list.length}
+                  items={dashboard.lists.last_commit_list}
+                  onItemClick={handleFileClick}
+                  statusBadge={statusBadge}
+                />
               </div>
-            )}
-            {untrackedFiles.length > 0 && (
-              <div>
-                <div className="px-4 py-2 text-[11px] font-medium text-zinc-500 uppercase tracking-wider">
-                  Sin seguimiento ({untrackedFiles.length})
-                </div>
-                {untrackedFiles.map((file) => (
-                  <FileRow
-                    key={file.file_path}
-                    file={file}
-                    onClick={handleFileClick}
-                    statusBadge={statusBadge}
-                  />
-                ))}
-              </div>
-            )}
+            </div>
           </div>
         )}
       </div>
@@ -263,42 +336,94 @@ export default function AIAuditPanel({ projectId }: AIAuditPanelProps) {
   );
 }
 
-function FileRow({
-  file,
+function KPICard({
+  icon,
+  label,
+  value,
+  accent,
+  isText,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string | number;
+  accent?: string;
+  isText?: boolean;
+}) {
+  return (
+    <div className="flex flex-col gap-2 p-3 bg-zinc-900/50 border border-zinc-800/50 rounded-lg">
+      <div className="flex items-center gap-2 text-[11px] text-zinc-500 uppercase tracking-wider">
+        {icon}
+        {label}
+      </div>
+      <div className={`text-lg font-semibold font-mono truncate ${accent ?? 'text-zinc-100'}`}>
+        {isText ? value : typeof value === 'number' ? value.toLocaleString() : value}
+      </div>
+    </div>
+  );
+}
+
+function StatusColumn({
+  title,
+  icon,
+  count,
+  items,
+  onItemClick,
+  statusBadge,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  count: number;
+  items: GitDashboardFileStatus[];
+  onItemClick: (file: DashboardFile) => void;
+  statusBadge: (code: string) => React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col min-w-[260px] flex-1 bg-zinc-900/30 border border-zinc-800/50 rounded-lg overflow-hidden">
+      <div className="flex items-center justify-between px-3 py-2 bg-zinc-900 border-b border-zinc-800/50 shrink-0">
+        <div className="flex items-center gap-2 text-xs font-medium text-zinc-300">
+          {icon}
+          {title}
+        </div>
+        <span className="text-[11px] text-zinc-500 font-mono">{count}</span>
+      </div>
+      <div className="flex-1 overflow-y-auto">
+        {items.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-8 text-zinc-600 gap-1">
+            <FileText className="w-5 h-5 opacity-30" />
+            <span className="text-[11px]">Vacío</span>
+          </div>
+        ) : (
+          items.map((item) => <DashboardFileRow key={item.file_path} item={item} onClick={onItemClick} statusBadge={statusBadge} />)
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DashboardFileRow({
+  item,
   onClick,
   statusBadge,
 }: {
-  file: ChangedFile;
-  onClick: (file: ChangedFile) => void;
+  item: GitDashboardFileStatus;
+  onClick: (file: DashboardFile) => void;
   statusBadge: (code: string) => React.ReactNode;
 }) {
-  const fileName = file.file_path.split('/').pop() || file.file_path;
-  const dirPath = file.file_path.includes('/')
-    ? file.file_path.substring(0, file.file_path.lastIndexOf('/'))
+  const fileName = item.file_path.split('/').pop() || item.file_path;
+  const dirPath = item.file_path.includes('/')
+    ? item.file_path.substring(0, item.file_path.lastIndexOf('/'))
     : '';
 
   return (
     <button
-      onClick={() => onClick(file)}
-      className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-zinc-800/30 transition-colors group"
+      onClick={() => onClick(item)}
+      className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-zinc-800/40 transition-colors group border-b border-zinc-800/30 last:border-b-0"
     >
-      {statusBadge(file.status_code)}
+      {statusBadge(item.status)}
       <div className="flex-1 min-w-0">
-        <div className="text-sm text-zinc-300 font-mono truncate">{fileName}</div>
+        <div className="text-xs text-zinc-300 font-mono truncate">{fileName}</div>
         {dirPath && (
-          <div className="text-[11px] text-zinc-600 truncate">{dirPath}</div>
-        )}
-      </div>
-      <div className="flex items-center gap-2 shrink-0 text-xs font-mono">
-        {file.added > 0 && (
-          <span className="flex items-center gap-0.5 text-green-500">
-            <Plus className="w-3 h-3" />{file.added}
-          </span>
-        )}
-        {file.deleted > 0 && (
-          <span className="flex items-center gap-0.5 text-red-400">
-            <Minus className="w-3 h-3" />{file.deleted}
-          </span>
+          <div className="text-[10px] text-zinc-600 truncate">{dirPath}</div>
         )}
       </div>
     </button>
@@ -344,4 +469,16 @@ function ConfirmationModal({
       </div>
     </div>
   );
+}
+
+function formatDiffWithMain(diff: { ahead: number | null; behind: number | null } | undefined): string {
+  if (!diff || diff.ahead === null || diff.behind === null) return 'N/A';
+  return `↑${diff.ahead} ↓${diff.behind}`;
+}
+
+function mainStatusColor(diff: { ahead: number | null; behind: number | null } | undefined): string {
+  if (!diff || diff.ahead === null || diff.behind === null) return 'text-zinc-500';
+  if (diff.behind > 0) return 'text-red-400';
+  if (diff.ahead > 0) return 'text-green-400';
+  return 'text-zinc-400';
 }

@@ -308,6 +308,41 @@ export const revertFile = async (
   return res.json();
 };
 
+export interface GitDashboardKPIs {
+  total_files: number;
+  tracked: number;
+  untracked: number;
+  ignored: number;
+  modified: number;
+  last_commit_files: number;
+}
+
+export interface GitDashboardFileStatus {
+  status: string;
+  file_path: string;
+}
+
+export interface GitDashboardBranch {
+  current_branch: string;
+  diff_with_main: { ahead: number | null; behind: number | null };
+}
+
+export interface GitDashboard {
+  kpis: GitDashboardKPIs;
+  lists: {
+    untracked_list: string[];
+    staged_list: GitDashboardFileStatus[];
+    last_commit_list: GitDashboardFileStatus[];
+  };
+  branch: GitDashboardBranch;
+}
+
+export const getGitDashboard = async (projectId: string): Promise<GitDashboard> => {
+  const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/git/dashboard`);
+  if (!res.ok) throw new Error("Failed to fetch git dashboard");
+  return res.json();
+};
+
 export interface KanbanColumn {
   id: string;
   title: string;
