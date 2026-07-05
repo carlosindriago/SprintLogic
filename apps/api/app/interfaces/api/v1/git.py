@@ -566,3 +566,74 @@ async def get_git_dashboard(
         raise HTTPException(status_code=500, detail=str(e))
 
     return dashboard
+
+
+class StageRequest(BaseModel):
+    file_path: str
+
+
+class CommitRequest(BaseModel):
+    message: str
+
+
+@router.post("/{project_id}/git/stage")
+async def stage_file(
+    project_id: str,
+    request: StageRequest,
+    session: AsyncSession = Depends(get_db_session),
+):
+    try:
+        project = await SQLAlchemyProjectRepository(session).get_project(UUID(project_id))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID")
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    try:
+        result = await git_gateway.stage_file(project.path, request.file_path)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return result
+
+
+@router.post("/{project_id}/git/unstage")
+async def unstage_file(
+    project_id: str,
+    request: StageRequest,
+    session: AsyncSession = Depends(get_db_session),
+):
+    try:
+        project = await SQLAlchemyProjectRepository(session).get_project(UUID(project_id))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID")
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    try:
+        result = await git_gateway.unstage_file(project.path, request.file_path)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return result
+
+
+@router.post("/{project_id}/git/commit")
+async def commit_changes(
+    project_id: str,
+    request: CommitRequest,
+    session: AsyncSession = Depends(get_db_session),
+):
+    try:
+        project = await SQLAlchemyProjectRepository(session).get_project(UUID(project_id))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID")
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    try:
+        result = await git_gateway.commit_changes(project.path, request.message)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return result

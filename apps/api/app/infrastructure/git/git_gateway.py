@@ -593,3 +593,15 @@ class LocalGitGateway:
                 "diff_with_main": diff_with_main,
             },
         }
+
+    async def stage_file(self, repo_path: str, file_path: str) -> dict[str, str]:
+        await self._run_command(repo_path, "add", "--", file_path)
+        return {"status": "staged", "file_path": file_path}
+
+    async def unstage_file(self, repo_path: str, file_path: str) -> dict[str, str]:
+        await self._run_command(repo_path, "restore", "--staged", "--", file_path)
+        return {"status": "unstaged", "file_path": file_path}
+
+    async def commit_changes(self, repo_path: str, message: str) -> dict[str, str]:
+        output = await self._run_command(repo_path, "commit", "-m", message)
+        return {"status": "committed", "message": message, "output": output.strip()}
