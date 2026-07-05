@@ -37,13 +37,11 @@ function normalizeMonacoUri(uri: Uri): string {
 export default function EditorTab({
   projectId,
   node,
-  vimMode,
   onSaveUntitled,
   onMentor,
 }: {
   projectId: string;
   node: GraphNode;
-  vimMode: boolean;
   onSaveUntitled?: (content: string) => void;
   onMentor?: (filePath: string, content: string) => void;
 }) {
@@ -52,10 +50,10 @@ export default function EditorTab({
   const [isDirty, setIsDirty] = useState(false);
   const [editorMode, setEditorMode] = useState<'locked' | 'visual' | 'editable'>('locked');
   const editorModeRef = useRef(editorMode);
-  editorModeRef.current = editorMode;
   const vimStatusRef = useRef<HTMLDivElement | null>(null);
   const originalContentRef = useRef('');
   const currentContentRef = useRef('');
+  const [initialValue, setInitialValue] = useState('');
   const editorRef = useRef<monacoEditor.IStandaloneCodeEditor | null>(null);
   const vimInstanceRef = useRef<{ dispose(): void } | null>(null);
   const vimObserverRef = useRef<MutationObserver | null>(null);
@@ -83,6 +81,7 @@ export default function EditorTab({
       if (!node.file_path) {
         originalContentRef.current = backup;
         currentContentRef.current = backup;
+        setInitialValue(backup);
         if (isMounted) setLoading(false);
         return;
       }
@@ -94,6 +93,7 @@ export default function EditorTab({
           const restored = backup && backup !== data ? backup : data;
           originalContentRef.current = restored;
           currentContentRef.current = restored;
+          setInitialValue(restored);
           if (restored !== data) setIsDirty(true);
           setLoading(false);
         }
@@ -122,7 +122,7 @@ export default function EditorTab({
         vimInstanceRef.current = null;
       }
     };
-  }, [projectId, node.file_path]);
+  }, [projectId, node.file_path, node.id]);
 
   const checkDirty = useCallback(() => {
     const editor = editorRef.current;
@@ -152,9 +152,11 @@ export default function EditorTab({
     } finally {
       setSaving(false);
     }
-  }, [projectId, node.file_path, saving, onSaveUntitled, node.id]);
+  }, [projectId, node.file_path, saving, onSaveUntitled]);
 
-  handleSaveRef.current = handleSave;
+  useEffect(() => {
+    handleSaveRef.current = handleSave;
+  }, [handleSave]);
 
   const handleSaveAll = useCallback(async () => {
     await handleSave();
@@ -428,7 +430,7 @@ export default function EditorTab({
     });
 
     checkDirty();
-  }, [node.metadata, checkDirty]);
+  }, [node.metadata, checkDirty, node.file_path, node.id]);
 
   if (loading) {
     return (
@@ -597,7 +599,7 @@ export default function EditorTab({
           height="100%"
           theme="vs-dark"
           path={node.file_path || node.id}
-          defaultValue={currentContentRef.current}
+          defaultValue={initialValue}
           onMount={handleEditorDidMount}
           options={{
             minimap: { enabled: false },

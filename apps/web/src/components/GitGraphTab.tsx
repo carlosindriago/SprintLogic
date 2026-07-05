@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Download, Upload, Check, GitCommit, RefreshCw, Archive, FileText, FilePlus, FileMinus, ChevronDown, Plus, AlertTriangle, GitBranch, Trash, GitPullRequest, Globe, Sparkles } from 'lucide-react';
@@ -64,12 +64,18 @@ function truncate(s: string, max: number): string {
 export default function GitGraphTab({ projectId }: { projectId: string }) {
   const [commits, setCommits] = useState<Commit[]>([]);
   const [activeBranch, setActiveBranch] = useState('main');
-  const [allBranches, setAllBranches] = useState<any[]>([]);
+  const [allBranches, setAllBranches] = useState<Array<{
+    name: string;
+    is_current?: boolean;
+    ahead?: number;
+    behind?: number;
+    is_local_only?: boolean;
+  }>>([]);
   const [loading, setLoading] = useState(true);
   const [commitMessage, setCommitMessage] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
   const [isGeneratingMessage, setIsGeneratingMessage] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  
   
   const [commitDetails, setCommitDetails] = useState<CommitDetails | null>(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
@@ -109,7 +115,6 @@ export default function GitGraphTab({ projectId }: { projectId: string }) {
   const fetchCommits = useCallback(async () => {
     try {
       setLoading(true);
-      setErrorMsg(null);
       const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/git/log`, undefined, 20, 500);
       if (res.ok) {
         const data = await res.json();
@@ -117,10 +122,10 @@ export default function GitGraphTab({ projectId }: { projectId: string }) {
         setActiveBranch(data.active_branch ?? 'main');
       } else {
         const errText = await res.text();
-        setErrorMsg(`HTTP ${res.status}: ${errText}`);
+        console.error(`HTTP ${res.status}: ${errText}`);
       }
-    } catch (e: any) {
-      setErrorMsg(`Fetch error: ${e.message}`);
+    } catch (e) {
+      console.error(`Fetch error: ${(e as Error).message}`);
     } finally {
       setLoading(false);
     }
@@ -140,6 +145,7 @@ export default function GitGraphTab({ projectId }: { projectId: string }) {
   }, [fetchCommits, fetchBranches, refreshSyncStatus]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     refreshAll();
   }, [refreshAll]);
 
@@ -246,7 +252,7 @@ export default function GitGraphTab({ projectId }: { projectId: string }) {
     try {
       const content = await getFileContent(projectId, '.gitignore');
       setGitIgnoreContent(content);
-    } catch (e) {
+    } catch (_e) {
       setGitIgnoreContent(''); // File might not exist
     } finally {
       setGitIgnoreLoading(false);
@@ -259,7 +265,7 @@ export default function GitGraphTab({ projectId }: { projectId: string }) {
       await saveFileContent(projectId, '.gitignore', gitIgnoreContent);
       toast.success('.gitignore actualizado');
       setGitIgnoreDialog(false);
-    } catch (e) {
+    } catch (_e) {
       toast.error('Error al guardar .gitignore');
     } finally {
       setGitIgnoreSaving(false);
@@ -323,8 +329,8 @@ export default function GitGraphTab({ projectId }: { projectId: string }) {
         const res = await addRemoteUrl(projectId, remoteUrlInput.trim());
         setActionLoading(false);
         
-        if (res.ok) {
-          const resData = (res as any).data;
+        if (res.ok && 'data' in res && res.data) {
+          const resData = res.data as { status: string; message: string };
           if (resData && resData.status === 'success') {
             toast.success(resData.message);
             setIsRemoteDialogOpen(false);
@@ -425,8 +431,8 @@ export default function GitGraphTab({ projectId }: { projectId: string }) {
     const res = await generateCommitMessage(projectId, defaultModel);
     setIsGeneratingMessage(false);
     
-    if (res.ok && (res as any).data?.status === 'success') {
-      const resData = (res as any).data;
+    if (res.ok && 'data' in res && res.data) {
+      const resData = res.data as { status: string; message: string };
       if (resData.message === "No hay cambios para hacer commit.") {
         toast.info(resData.message);
       } else {
@@ -434,13 +440,9 @@ export default function GitGraphTab({ projectId }: { projectId: string }) {
         toast.success('Mensaje generado');
       }
     } else {
-      toast.error('Error al generar', { description: (res as any).data?.message || res.error || 'Fallo inesperado.' });
+      const resData = 'data' in res ? (res.data as { message?: string }) : null;
+      toast.error('Error al generar', { description: resData?.message || res.error || 'Fallo inesperado.' });
     }
-  };
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    toast.success('Copiado al portapapeles');
   };
 
   const getFileIcon = (status: string) => {
