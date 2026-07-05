@@ -23,5 +23,5 @@ alembic upgrade head
 cd ../..
 
 echo "✅ Setup completado exitosamente."
-echo "Para iniciar la API: cd apps/api && uvicorn main:app --reload"
+echo "Para iniciar la API: cd apps/api && uvicorn app.main:app --reload"
 echo "Para iniciar la Web: cd apps/web && npm run dev"

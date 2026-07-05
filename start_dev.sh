@@ -104,7 +104,7 @@ fi
 
 echo -e "\nStarting SprintLogic Backend (FastAPI)..."
 cd apps/api
-.venv/bin/uvicorn main:app --reload --port 8000 &
+.venv/bin/uvicorn app.main:app --reload --port 8000 &
 BACKEND_PID=$!
 CHILD_PIDS+=("$BACKEND_PID")
 cd ../..
