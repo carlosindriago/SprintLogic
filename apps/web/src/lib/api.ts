@@ -289,6 +289,25 @@ export const getFileLocalDiff = async (
   return res.json();
 };
 
+export const revertFile = async (
+  projectId: string,
+  filePath: string,
+): Promise<{ status: string; action: string }> => {
+  const res = await fetchWithRetry(
+    `${API_BASE_URL}/projects/${projectId}/git/revert`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ file_path: filePath }),
+    },
+  );
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail || "Failed to revert file");
+  }
+  return res.json();
+};
+
 export interface KanbanColumn {
   id: string;
   title: string;

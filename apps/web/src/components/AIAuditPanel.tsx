@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { getLocalChanges, getFileLocalDiff, API_BASE_URL, type ChangedFile, type FileLocalDiff } from '@/lib/api';
+import { getLocalChanges, getFileLocalDiff, revertFile, API_BASE_URL, type ChangedFile, type FileLocalDiff } from '@/lib/api';
 import DiffViewer, { detectLanguage } from './DiffViewer';
 import { ArrowLeft, FolderGit2, Plus, Minus, FileText, RefreshCw } from 'lucide-react';
 
@@ -14,6 +14,9 @@ export default function AIAuditPanel({ projectId }: AIAuditPanelProps) {
   const [diffData, setDiffData] = useState<FileLocalDiff | null>(null);
   const [diffLoading, setDiffLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const [discarding, setDiscarding] = useState(false);
+  const discardingRef = useRef(false);
   const wsRef = useRef<WebSocket | null>(null);
   const fetchChangesRef = useRef<() => Promise<void>>(async () => {});
 
@@ -96,6 +99,23 @@ export default function AIAuditPanel({ projectId }: AIAuditPanelProps) {
     setDiffData(null);
   }, []);
 
+  const handleDiscard = useCallback(async () => {
+    if (!selectedFile || discardingRef.current) return;
+    discardingRef.current = true;
+    setDiscarding(true);
+    try {
+      await revertFile(projectId, selectedFile.file_path);
+      setSelectedFile(null);
+      setDiffData(null);
+      setConfirmDiscard(false);
+    } catch {
+      // silently fail
+    } finally {
+      setDiscarding(false);
+      discardingRef.current = false;
+    }
+  }, [projectId, selectedFile]);
+
   const modifiedFiles = files.filter((f) => f.is_modified);
   const untrackedFiles = files.filter((f) => f.is_untracked);
 
@@ -130,9 +150,26 @@ export default function AIAuditPanel({ projectId }: AIAuditPanelProps) {
           <div className="w-px h-4 bg-zinc-700/50" />
           {statusBadge(selectedFile.status_code)}
           <span className="text-xs text-zinc-300 font-mono truncate">{selectedFile.file_path}</span>
-          <span className="text-[11px] text-green-400 ml-auto">+{selectedFile.added}</span>
+          <span className="text-[11px] text-green-400">+{selectedFile.added}</span>
           <span className="text-[11px] text-red-400">-{selectedFile.deleted}</span>
+          <button
+            onClick={() => setConfirmDiscard(true)}
+            disabled={discarding}
+            className="ml-auto px-3 py-1 rounded text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-colors disabled:opacity-30"
+          >
+            {discarding ? "Descartando..." : "Descartar Cambios"}
+          </button>
         </div>
+
+        {confirmDiscard && (
+          <ConfirmationModal
+            fileName={selectedFile.file_path.split("/").pop() || selectedFile.file_path}
+            onConfirm={handleDiscard}
+            onCancel={() => setConfirmDiscard(false)}
+            loading={discarding}
+          />
+        )}
+
         <div className="flex-1 relative">
           {diffLoading ? (
             <div className="absolute inset-0 flex items-center justify-center text-zinc-500">
@@ -265,5 +302,46 @@ function FileRow({
         )}
       </div>
     </button>
+  );
+}
+
+function ConfirmationModal({
+  fileName,
+  onConfirm,
+  onCancel,
+  loading,
+}: {
+  fileName: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+  loading: boolean;
+}) {
+  return (
+    <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/70">
+      <div className="bg-zinc-900 border border-zinc-700 rounded-lg p-6 max-w-sm w-full mx-4 shadow-2xl">
+        <h3 className="text-sm font-medium text-zinc-100 mb-2">Descartar cambios</h3>
+        <p className="text-xs text-zinc-400 mb-6">
+          ¿Estás seguro de que querés descartar todos los cambios locales en{" "}
+          <span className="text-zinc-300 font-mono">{fileName}</span>? Esta acción no se puede
+          deshacer.
+        </p>
+        <div className="flex gap-3 justify-end">
+          <button
+            onClick={onCancel}
+            disabled={loading}
+            className="px-4 py-1.5 rounded text-xs text-zinc-300 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700/50 transition-colors disabled:opacity-30"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={loading}
+            className="px-4 py-1.5 rounded text-xs font-medium bg-red-600 text-white hover:bg-red-500 border border-red-500/20 transition-colors disabled:opacity-30"
+          >
+            {loading ? "Descartando..." : "Descartar"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
