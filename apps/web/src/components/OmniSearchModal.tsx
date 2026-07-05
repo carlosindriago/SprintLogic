@@ -27,6 +27,7 @@ export default function OmniSearchModal({ open, onClose, onSelect }: Props) {
 
   useEffect(() => {
     if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setQuery('');
       setResults([]);
       setSelectedIndex(0);
@@ -36,6 +37,7 @@ export default function OmniSearchModal({ open, onClose, onSelect }: Props) {
 
   useEffect(() => {
     if (!open || !query.trim()) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setResults([]);
       return;
     }

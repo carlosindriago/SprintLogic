@@ -1,9 +1,9 @@
 import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import ReactMarkdown from "react-markdown";
-import { KeyRound, Cpu, Send, Loader2, ChevronDown, Terminal } from "lucide-react";
+import { KeyRound, Cpu, Send, Loader2, Terminal } from "lucide-react";
 import { useLLMConfigStore } from "@/store/llmConfigStore";
-import { sendChatMessage, ChatMessage, API_BASE_URL } from "@/lib/api";
+import { API_BASE_URL } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 interface SprintLogicChatProps {
