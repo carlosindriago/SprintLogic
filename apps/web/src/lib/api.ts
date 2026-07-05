@@ -168,6 +168,43 @@ export const createFile = async (projectId: string, path: string, content: strin
   return res.json();
 };
 
+export const renameFile = async (projectId: string, path: string, newName: string) => {
+  const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/file/rename`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path, new_name: newName }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail || 'Failed to rename file');
+  }
+  return res.json();
+};
+
+export const duplicateFile = async (projectId: string, path: string) => {
+  const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/file/duplicate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail || 'Failed to duplicate file');
+  }
+  return res.json();
+};
+
+export const deleteFile = async (projectId: string, path: string) => {
+  const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/file/delete?path=${encodeURIComponent(path)}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail || 'Failed to delete file');
+  }
+  return res.json();
+};
+
 export const getCommitDetails = async (projectId: string, hash: string): Promise<CommitDetails> => {
   const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/git/commits/${hash}`);
   if (!res.ok) throw new Error("Failed to fetch commit details");
