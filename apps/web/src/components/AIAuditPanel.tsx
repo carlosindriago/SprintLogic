@@ -3,6 +3,8 @@ import {
   getGitDashboard,
   getFileLocalDiff,
   revertFile,
+  stageFile,
+  unstageFile,
   API_BASE_URL,
   type GitDashboard,
   type GitDashboardFileStatus,
@@ -20,6 +22,8 @@ import {
   EyeOff,
   Activity,
   Layers,
+  Plus,
+  Minus,
 } from 'lucide-react';
 
 interface AIAuditPanelProps {
@@ -41,6 +45,7 @@ export default function AIAuditPanel({ projectId }: AIAuditPanelProps) {
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [discarding, setDiscarding] = useState(false);
   const discardingRef = useRef(false);
+  const stagingRef = useRef(false);
   const wsRef = useRef<WebSocket | null>(null);
   const fetchDashboardRef = useRef<() => Promise<void>>(async () => {});
 
@@ -147,6 +152,30 @@ export default function AIAuditPanel({ projectId }: AIAuditPanelProps) {
       discardingRef.current = false;
     }
   }, [projectId, selectedFile]);
+
+  const handleStage = useCallback(async (filePath: string) => {
+    if (stagingRef.current) return;
+    stagingRef.current = true;
+    try {
+      await stageFile(projectId, filePath);
+    } catch {
+      // silently fail; WebSocket refresh is the recovery
+    } finally {
+      stagingRef.current = false;
+    }
+  }, [projectId]);
+
+  const handleUnstage = useCallback(async (filePath: string) => {
+    if (stagingRef.current) return;
+    stagingRef.current = true;
+    try {
+      await unstageFile(projectId, filePath);
+    } catch {
+      // silently fail
+    } finally {
+      stagingRef.current = false;
+    }
+  }, [projectId]);
 
   const statusBadge = (code: string) => {
     const map: Record<string, { label: string; className: string }> = {
@@ -310,6 +339,10 @@ export default function AIAuditPanel({ projectId }: AIAuditPanelProps) {
                   items={dashboard.lists.untracked_list.map((path) => ({ status: '??', file_path: path }))}
                   onItemClick={handleFileClick}
                   statusBadge={statusBadge}
+                  onAction={handleStage}
+                  onActionAll={() => handleStage('.')}
+                  headerActionLabel="Stage All"
+                  showActionAll
                 />
                 <StatusColumn
                   title="En preparación"
@@ -318,6 +351,10 @@ export default function AIAuditPanel({ projectId }: AIAuditPanelProps) {
                   items={dashboard.lists.staged_list}
                   onItemClick={handleFileClick}
                   statusBadge={statusBadge}
+                  onAction={handleUnstage}
+                  onActionAll={() => handleUnstage('.')}
+                  headerActionLabel="Unstage All"
+                  showActionAll
                 />
                 <StatusColumn
                   title="Último commit"
@@ -369,6 +406,10 @@ function StatusColumn({
   items,
   onItemClick,
   statusBadge,
+  onAction,
+  onActionAll,
+  headerActionLabel,
+  showActionAll,
 }: {
   title: string;
   icon: React.ReactNode;
@@ -376,6 +417,10 @@ function StatusColumn({
   items: GitDashboardFileStatus[];
   onItemClick: (file: DashboardFile) => void;
   statusBadge: (code: string) => React.ReactNode;
+  onAction?: (filePath: string) => void;
+  onActionAll?: () => void;
+  headerActionLabel?: string;
+  showActionAll?: boolean;
 }) {
   return (
     <div className="flex flex-col min-w-[260px] flex-1 bg-zinc-900/30 border border-zinc-800/50 rounded-lg overflow-hidden">
@@ -384,7 +429,17 @@ function StatusColumn({
           {icon}
           {title}
         </div>
-        <span className="text-[11px] text-zinc-500 font-mono">{count}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] text-zinc-500 font-mono">{count}</span>
+          {showActionAll && onActionAll && count > 0 && (
+            <button
+              onClick={onActionAll}
+              className="text-[10px] px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200 transition-colors"
+            >
+              {headerActionLabel ?? 'Acción'}
+            </button>
+          )}
+        </div>
       </div>
       <div className="flex-1 overflow-y-auto">
         {items.length === 0 ? (
@@ -393,7 +448,15 @@ function StatusColumn({
             <span className="text-[11px]">Vacío</span>
           </div>
         ) : (
-          items.map((item) => <DashboardFileRow key={item.file_path} item={item} onClick={onItemClick} statusBadge={statusBadge} />)
+          items.map((item) => (
+            <DashboardFileRow
+              key={item.file_path}
+              item={item}
+              onClick={onItemClick}
+              statusBadge={statusBadge}
+              onAction={onAction}
+            />
+          ))
         )}
       </div>
     </div>
@@ -404,15 +467,19 @@ function DashboardFileRow({
   item,
   onClick,
   statusBadge,
+  onAction,
 }: {
   item: GitDashboardFileStatus;
   onClick: (file: DashboardFile) => void;
   statusBadge: (code: string) => React.ReactNode;
+  onAction?: (filePath: string) => void;
 }) {
   const fileName = item.file_path.split('/').pop() || item.file_path;
   const dirPath = item.file_path.includes('/')
     ? item.file_path.substring(0, item.file_path.lastIndexOf('/'))
     : '';
+
+  const isStaged = item.status !== '??';
 
   return (
     <button
@@ -426,6 +493,18 @@ function DashboardFileRow({
           <div className="text-[10px] text-zinc-600 truncate">{dirPath}</div>
         )}
       </div>
+      {onAction && (
+        <span
+          onClick={(e) => {
+            e.stopPropagation();
+            onAction(item.file_path);
+          }}
+          className={`opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-zinc-700 ${isStaged ? 'text-red-400' : 'text-green-400'}`}
+          title={isStaged ? 'Unstage' : 'Stage'}
+        >
+          {isStaged ? <Minus className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+        </span>
+      )}
     </button>
   );
 }

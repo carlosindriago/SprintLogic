@@ -343,6 +343,42 @@ export const getGitDashboard = async (projectId: string): Promise<GitDashboard> 
   return res.json();
 };
 
+export const stageFile = async (projectId: string, filePath: string) => {
+  const res = await fetchWithRetry(
+    `${API_BASE_URL}/projects/${projectId}/git/stage`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ file_path: filePath }),
+    },
+  );
+  if (!res.ok) throw new Error("Failed to stage file");
+};
+
+export const unstageFile = async (projectId: string, filePath: string) => {
+  const res = await fetchWithRetry(
+    `${API_BASE_URL}/projects/${projectId}/git/unstage`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ file_path: filePath }),
+    },
+  );
+  if (!res.ok) throw new Error("Failed to unstage file");
+};
+
+export const commitChanges = async (projectId: string, message: string) => {
+  const res = await fetchWithRetry(
+    `${API_BASE_URL}/projects/${projectId}/git/commit`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message }),
+    },
+  );
+  if (!res.ok) throw new Error("Failed to commit changes");
+};
+
 export interface KanbanColumn {
   id: string;
   title: string;
