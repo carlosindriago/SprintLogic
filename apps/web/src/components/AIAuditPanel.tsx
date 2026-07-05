@@ -304,6 +304,12 @@ export default function AIAuditPanel({ projectId }: AIAuditPanelProps) {
         >
           <RefreshCw className={`w-3.5 h-3.5 ${loading || refreshing ? 'animate-spin' : ''}`} />
         </button>
+        {refreshing && (
+          <span className="flex items-center gap-1.5 text-[11px] text-zinc-500 animate-pulse">
+            <RefreshCw className="w-3 h-3 animate-spin" />
+            Sincronizando...
+          </span>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto">
@@ -328,30 +334,35 @@ export default function AIAuditPanel({ projectId }: AIAuditPanelProps) {
                 icon={<Layers className="w-4 h-4 text-blue-400" />}
                 label="Total Archivos"
                 value={kpis?.total_files ?? 0}
+                pulsing={refreshing}
               />
               <KPICard
                 icon={<FileText className="w-4 h-4 text-zinc-400" />}
                 label="Nuevos"
                 value={kpis?.untracked ?? 0}
                 accent="text-zinc-300"
+                pulsing={refreshing}
               />
               <KPICard
                 icon={<EyeOff className="w-4 h-4 text-zinc-500" />}
                 label="Ignorados"
                 value={kpis?.ignored ?? 0}
                 accent="text-zinc-500"
+                pulsing={refreshing}
               />
               <KPICard
                 icon={<Activity className="w-4 h-4 text-yellow-400" />}
                 label="Modificados"
                 value={kpis?.modified ?? 0}
                 accent="text-yellow-400"
+                pulsing={refreshing}
               />
               <KPICard
                 icon={<GitBranch className="w-4 h-4 text-purple-400" />}
                 label="Rama Actual"
                 value={branch?.current_branch ?? '-'}
                 isText
+                pulsing={refreshing}
               />
               <KPICard
                 icon={<GitCommit className="w-4 h-4 text-green-400" />}
@@ -359,6 +370,7 @@ export default function AIAuditPanel({ projectId }: AIAuditPanelProps) {
                 value={formatDiffWithMain(branch?.diff_with_main)}
                 isText
                 accent={mainStatusColor(branch?.diff_with_main)}
+                pulsing={refreshing}
               />
             </div>
 
@@ -441,15 +453,17 @@ function KPICard({
   value,
   accent,
   isText,
+  pulsing,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string | number;
   accent?: string;
   isText?: boolean;
+  pulsing?: boolean;
 }) {
   return (
-    <div className="flex flex-col gap-2 p-3 bg-zinc-900/50 border border-zinc-800/50 rounded-lg">
+    <div className={`flex flex-col gap-2 p-3 bg-zinc-900/50 border border-zinc-800/50 rounded-lg transition-opacity duration-300 ${pulsing ? 'opacity-50' : 'opacity-100'}`}>
       <div className="flex items-center gap-2 text-[11px] text-zinc-500 uppercase tracking-wider">
         {icon}
         {label}
