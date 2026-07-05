@@ -530,7 +530,7 @@ async def build_search_index(project_root: str, session: AsyncSession | None = N
     own_session = session is None
     if own_session:
         session = AsyncSessionLocal()
-    
+
     assert session is not None
 
     try:

@@ -61,7 +61,7 @@ from uuid import UUID
 def extract_nodes_from_code(project_id: UUID, file_path: str, code: bytes, ext: str):
     lang = get_language(ext)
     if not lang:
-        return [], []
+        return [], [], []
 
     parser = tree_sitter.Parser()
     parser.language = lang
