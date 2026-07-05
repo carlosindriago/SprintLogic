@@ -141,6 +141,7 @@ function ProviderConfig({
         description: `${provider}/${modelId}`,
       });
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [provider, onSelectModel],
   );
 
@@ -167,6 +168,7 @@ function ProviderConfig({
       const message = err instanceof Error ? err.message : String(err);
       toast.error("No se pudo eliminar la llave", { description: message });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [provider]);
 
   const isCurrentProviderDefault = defaultModel.startsWith(`${provider}/`);
@@ -321,6 +323,7 @@ function Context7Section({
   const [saved, setSaved] = useState(!!apiKey);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSaved(!!apiKey);
   }, [apiKey]);
 

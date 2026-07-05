@@ -34,6 +34,7 @@ export default function NewFileDialog({
 
   useEffect(() => {
     if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setFileName('');
       setContent(initialContent);
     }

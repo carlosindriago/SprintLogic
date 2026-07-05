@@ -25,6 +25,7 @@ export function useGitSyncStatus(projectId: string) {
   }, [projectId]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchStatus();
     // Poll every 30 seconds
     const interval = setInterval(fetchStatus, 30000);

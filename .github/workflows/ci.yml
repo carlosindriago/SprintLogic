@@ -27,21 +27,21 @@ jobs:
           ADDITIONS=${{ github.event.pull_request.additions }}
           DELETIONS=${{ github.event.pull_request.deletions }}
           TOTAL=$((ADDITIONS + DELETIONS))
-
+          
           # Check for size:exception label
           LABELS="${{ join(github.event.pull_request.labels.*.name, ' ') }}"
-
+          
           if [[ "$LABELS" == *"size:exception"* ]]; then
             echo "✅ PR has size:exception label. Skipping size check. ($TOTAL lines)"
             exit 0
           fi
-
+          
           if [ "$TOTAL" -gt 400 ]; then
             echo "❌ PR exceeds 400 changed lines budget ($TOTAL lines)."
             echo "Please split this PR into smaller chunks or add the 'size:exception' label if approved by a maintainer."
             exit 1
           fi
-
+          
           echo "✅ PR size is within budget ($TOTAL lines)."
 
   test-api:
@@ -52,10 +52,10 @@ jobs:
         working-directory: ./apps/api
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Python 3.10
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
+          python-version: "3.12"
           cache: "pip"
       - name: Install dependencies
         run: |
