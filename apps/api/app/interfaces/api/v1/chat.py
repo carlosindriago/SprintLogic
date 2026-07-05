@@ -1,19 +1,19 @@
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+import json
+from collections.abc import AsyncGenerator
+from typing import Any
+
+import httpx
+import litellm
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import List, Dict, Any, Optional, AsyncGenerator
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
-import json
-import litellm
-import httpx
-import asyncio
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.infrastructure.db.database import get_db_session
 from app.application.ai_agent import AIAgent
-from app.infrastructure.security.credential_manager import CredentialManager
 from app.infrastructure.ai.context_builder import build_agent_context
-from uuid import UUID
+from app.infrastructure.db.database import get_db_session
+from app.infrastructure.security.credential_manager import CredentialManager
 
 router = APIRouter()
 
@@ -40,8 +40,12 @@ async def _fetch_context7_docs(api_key: str, query: str, tech_stack: dict) -> st
     # Extract library names from tech stack extensions
     libraries: list[str] = []
     ext_map = {
-        ".ts": "typescript", ".tsx": "react", ".js": "javascript",
-        ".py": "python", ".rs": "rust", ".go": "go",
+        ".ts": "typescript",
+        ".tsx": "react",
+        ".js": "javascript",
+        ".py": "python",
+        ".rs": "rust",
+        ".go": "go",
     }
     seen: set[str] = set()
     for ext in tech_stack:
@@ -73,8 +77,8 @@ async def _fetch_context7_docs(api_key: str, query: str, tech_stack: dict) -> st
 
 
 class ChatRequest(BaseModel):
-    messages: List[Dict[str, Any]]
-    project_id: Optional[str] = None
+    messages: list[dict[str, Any]]
+    project_id: str | None = None
     model: str = "gemini-1.5-pro-latest"
 
 
@@ -85,6 +89,7 @@ class ChatResponse(BaseModel):
 @router.post("/")
 async def chat_with_ai(request: ChatRequest, session: AsyncSession = Depends(get_db_session)):
     """Handles chat messages with the AI and manages tool calls."""
+
     async def generate():
         try:
             agent = AIAgent(session=session, project_id=request.project_id)
@@ -105,7 +110,7 @@ async def chat_with_ai(request: ChatRequest, session: AsyncSession = Depends(get
 class MentorRequest(BaseModel):
     file_path: str
     content: str
-    project_tech_stack: Dict[str, Any] = {}
+    project_tech_stack: dict[str, Any] = {}
     user_query: str = "Hazme un desglose arquitectónico de este archivo"
     context7_api_key: str = ""
     project_id: str = ""
@@ -139,7 +144,11 @@ async def _save_memory(project_id: str, agent_name: str, context_type: str, cont
 
 
 @router.post("/mentor", response_model=MentorResponse)
-async def mentor_sensei(request: MentorRequest, background_tasks: BackgroundTasks, session: AsyncSession = Depends(get_db_session)):
+async def mentor_sensei(
+    request: MentorRequest,
+    background_tasks: BackgroundTasks,
+    session: AsyncSession = Depends(get_db_session),
+):
     provider = "gemini"
     model = "gemini/gemini-2.5-flash"
     api_key = CredentialManager.get_api_key(provider)
@@ -163,9 +172,7 @@ async def mentor_sensei(request: MentorRequest, background_tasks: BackgroundTask
         )
 
     docs_section = (
-        f"\n\nDocumentación oficial relevante (Context7):\n{context7_docs}"
-        if context7_docs
-        else ""
+        f"\n\nDocumentación oficial relevante (Context7):\n{context7_docs}" if context7_docs else ""
     )
 
     user_message = (
@@ -195,7 +202,7 @@ async def mentor_sensei(request: MentorRequest, background_tasks: BackgroundTask
                 if delta and delta.content:
                     full_response += delta.content
                     yield f"data: {json.dumps({'text': delta.content, 'is_done': False})}\n\n"
-                if hasattr(chunk, 'usage') and chunk.usage:
+                if hasattr(chunk, "usage") and chunk.usage:
                     usage = {
                         "prompt_tokens": chunk.usage.prompt_tokens,
                         "completion_tokens": chunk.usage.completion_tokens,

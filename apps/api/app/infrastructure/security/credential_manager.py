@@ -1,9 +1,10 @@
 import keyring
 import keyring.errors
 
+
 class CredentialManager:
     """Manages AI API credentials securely using the OS keyring."""
-    
+
     @staticmethod
     def _get_namespace(provider: str) -> str:
         return f"sprintlogic_{provider.lower()}"

@@ -24,7 +24,6 @@ SENSITIVE_SCAN_DIRS: frozenset[str] = frozenset({".git", "node_modules", "__pyca
 
 
 class PathSecurityValidator:
-
     @staticmethod
     def validate_project_path(raw_path: str) -> Path:
         if not raw_path or not raw_path.strip():
@@ -40,9 +39,7 @@ class PathSecurityValidator:
         canonical_str = str(canonical)
 
         if canonical_str in BLOCKED_ROOTS:
-            raise PathBlockedError(
-                raw_path, f"{canonical_str} is a protected system directory"
-            )
+            raise PathBlockedError(raw_path, f"{canonical_str} is a protected system directory")
 
         if canonical.parent == Path("/home") and canonical_str not in BLOCKED_ROOTS:
             raise PathBlockedError(
@@ -51,9 +48,7 @@ class PathSecurityValidator:
 
         for part in canonical.parts:
             if part in BLOCKED_SENSITIVE_DIRS:
-                raise PathBlockedError(
-                    raw_path, f"Path contains sensitive directory '{part}'"
-                )
+                raise PathBlockedError(raw_path, f"Path contains sensitive directory '{part}'")
 
         return canonical
 
