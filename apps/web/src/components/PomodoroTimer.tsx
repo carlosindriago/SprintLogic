@@ -293,19 +293,23 @@ export default function PomodoroTimer({ projectId }: PomodoroTimerProps) {
               </div>
               <div className="flex items-center gap-0.5">
                 <button 
+                  aria-label="Minimizar Pomodoro"
+                  title="Minimizar Pomodoro"
                   onClick={() => setIsExpanded(false)} 
                   className="p-0.5 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200"
                 >
-                  <ChevronDown className="w-3 h-3" />
+                  <ChevronDown aria-hidden="true" className="w-3 h-3" />
                 </button>
                 <button 
+                  aria-label="Cerrar Pomodoro"
+                  title="Cerrar Pomodoro"
                   onClick={() => {
                     setActiveTask(null);
                     setIsRunning(false);
                   }} 
                   className="p-0.5 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200"
                 >
-                  <X className="w-3 h-3" />
+                  <X aria-hidden="true" className="w-3 h-3" />
                 </button>
               </div>
             </div>
@@ -336,19 +340,23 @@ export default function PomodoroTimer({ projectId }: PomodoroTimerProps) {
               {/* Action Buttons */}
               <div className="flex items-center gap-3">
                 <button 
+                  aria-label="Reiniciar Temporizador"
+                  title="Reiniciar Temporizador"
                   onClick={handleReset}
                   className="p-1.5 rounded-full bg-zinc-800 hover:bg-zinc-700 hover:text-zinc-100 transition-colors"
                 >
-                  <RotateCcw className="w-3 h-3" />
+                  <RotateCcw aria-hidden="true" className="w-3 h-3" />
                 </button>
                 <button 
+                  aria-label={isRunning ? "Pausar Temporizador" : "Iniciar Temporizador"}
+                  title={isRunning ? "Pausar Temporizador" : "Iniciar Temporizador"}
                   onClick={handleTogglePlay}
                   className={cn(
                     "p-2 rounded-full text-white shadow-lg transition-transform active:scale-95",
                     isRunning ? "bg-zinc-700 hover:bg-zinc-600" : "bg-orange-600 hover:bg-orange-500"
                   )}
                 >
-                  {isRunning ? <Pause className="w-4 h-4 fill-white" /> : <Play className="w-4 h-4 fill-white ml-0.5" />}
+                  {isRunning ? <Pause aria-hidden="true" className="w-4 h-4 fill-white" /> : <Play aria-hidden="true" className="w-4 h-4 fill-white ml-0.5" />}
                 </button>
               </div>
 
@@ -415,8 +423,9 @@ export default function PomodoroTimer({ projectId }: PomodoroTimerProps) {
                 {preset === 'custom' && (
                   <div className="grid grid-cols-2 gap-1.5 mt-0.5">
                     <div className="flex flex-col gap-0.5">
-                      <span className="text-[8px] text-zinc-500">Trabajo (mins)</span>
+                      <label htmlFor="work-time" className="text-[8px] text-zinc-500">Trabajo (mins)</label>
                       <input 
+                        id="work-time"
                         type="number" 
                         min="1" 
                         max="180"
@@ -430,8 +439,9 @@ export default function PomodoroTimer({ projectId }: PomodoroTimerProps) {
                       />
                     </div>
                     <div className="flex flex-col gap-0.5">
-                      <span className="text-[8px] text-zinc-500">Recreo (mins)</span>
+                      <label htmlFor="break-time" className="text-[8px] text-zinc-500">Recreo (mins)</label>
                       <input 
+                        id="break-time"
                         type="number" 
                         min="1" 
                         max="60"
