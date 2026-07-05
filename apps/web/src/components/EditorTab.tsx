@@ -132,12 +132,14 @@ export default function EditorTab({
   const handleSave = useCallback(async (saveAs?: string) => {
     if (isSavingRef.current || !editorRef.current) return;
 
-    const targetPath = saveAs || node.file_path;
-
-    if (!targetPath) {
+    if (isUntitled) {
       onSaveUntitled?.(editorRef.current.getValue());
       return;
     }
+
+    const targetPath = saveAs || node.file_path;
+
+    if (!targetPath) return;
 
     isSavingRef.current = true;
     setSaving(true);
@@ -154,7 +156,7 @@ export default function EditorTab({
       setSaving(false);
       isSavingRef.current = false;
     }
-  }, [projectId, node.file_path, onSaveUntitled]);
+  }, [projectId, node.file_path, isUntitled, onSaveUntitled]);
 
   useEffect(() => {
     handleSaveRef.current = handleSave;
@@ -217,6 +219,7 @@ export default function EditorTab({
   }, []);
 
   const filePath = node?.file_path ?? '';
+  const isUntitled = !node.file_path;
   const fileName = node.file_path
     ? (filePath.split('/').pop() || 'untitled')
     : (node.name || 'Sin título');
@@ -507,8 +510,8 @@ export default function EditorTab({
           <button
             className={TOOLBAR_BUTTON}
             onClick={handleSave}
-            disabled={!isDirty || saving}
-            title="Guardar (Ctrl+S)"
+            disabled={(!isDirty && !isUntitled) || saving}
+            title={isUntitled ? "Guardar como..." : "Guardar (Ctrl+S)"}
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
           </button>
