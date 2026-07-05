@@ -18,7 +18,7 @@ class SQLAlchemyProjectRepository:
             path=project.path,
             name=project.name,
             last_opened=project.last_opened,
-            created_at=project.created_at
+            created_at=project.created_at,
         )
         self.session.add(db_model)
         await self.session.flush()
@@ -38,11 +38,13 @@ class SQLAlchemyProjectRepository:
                 path=model.path,
                 name=model.name,
                 last_opened=model.last_opened,
-                created_at=model.created_at
+                created_at=model.created_at,
             )
         return None
 
-    async def update_project(self, project_id: UUID, name: str | None = None, path: str | None = None) -> Project | None:
+    async def update_project(
+        self, project_id: UUID, name: str | None = None, path: str | None = None
+    ) -> Project | None:
         model = await self.session.get(ProjectModel, project_id)
         if model:
             if name is not None:
@@ -55,7 +57,7 @@ class SQLAlchemyProjectRepository:
                 path=model.path,
                 name=model.name,
                 last_opened=model.last_opened,
-                created_at=model.created_at
+                created_at=model.created_at,
             )
         return None
 
@@ -66,7 +68,10 @@ class SQLAlchemyProjectRepository:
             from sqlalchemy import delete
 
             from app.infrastructure.db.models import GraphNodeModel
-            await self.session.execute(delete(GraphNodeModel).where(GraphNodeModel.project_id == project_id))
+
+            await self.session.execute(
+                delete(GraphNodeModel).where(GraphNodeModel.project_id == project_id)
+            )
 
             await self.session.delete(model)
             await self.session.flush()
@@ -74,7 +79,9 @@ class SQLAlchemyProjectRepository:
         return False
 
     async def get_all_projects(self) -> list[Project]:
-        result = await self.session.execute(select(ProjectModel).order_by(ProjectModel.last_opened.desc().nullslast()))
+        result = await self.session.execute(
+            select(ProjectModel).order_by(ProjectModel.last_opened.desc().nullslast())
+        )
         models = result.scalars().all()
         return [
             Project(
@@ -82,7 +89,7 @@ class SQLAlchemyProjectRepository:
                 path=m.path,
                 name=m.name,
                 last_opened=m.last_opened,
-                created_at=m.created_at
+                created_at=m.created_at,
             )
             for m in models
         ]

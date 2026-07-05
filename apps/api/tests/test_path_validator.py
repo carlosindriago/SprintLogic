@@ -8,7 +8,6 @@ from app.domain.path_validator import PathSecurityValidator
 
 
 class TestPathSecurityValidator:
-
     def test_empty_path_raises(self):
         with pytest.raises(PathBlockedError, match="cannot be empty"):
             PathSecurityValidator.validate_project_path("")

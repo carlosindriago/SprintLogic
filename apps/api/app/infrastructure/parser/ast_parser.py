@@ -54,6 +54,7 @@ def get_language(ext):
         return tree_sitter.Language(tree_sitter_css.language())
     return None
 
+
 from uuid import UUID
 
 
@@ -79,10 +80,12 @@ def extract_nodes_from_code(project_id: UUID, file_path: str, code: bytes, ext: 
         label=NodeLabel.FILE,
         name=os.path.basename(file_path),
         file_path=file_path,
-        meta_data=json.dumps({
-            "start_line": tree.root_node.start_point[0] + 1,
-            "end_line": tree.root_node.end_point[0] + 1
-        })
+        meta_data=json.dumps(
+            {
+                "start_line": tree.root_node.start_point[0] + 1,
+                "end_line": tree.root_node.end_point[0] + 1,
+            }
+        ),
     )
     nodes.append(file_node)
 
@@ -90,11 +93,11 @@ def extract_nodes_from_code(project_id: UUID, file_path: str, code: bytes, ext: 
         if "import" in node.type or "require" in node.type:
             for child in node.children:
                 if "string" in child.type:
-                    imp = code[child.start_byte:child.end_byte].decode("utf-8").strip("\"'")
+                    imp = code[child.start_byte : child.end_byte].decode("utf-8").strip("\"'")
                     if imp:
                         imports.add(imp)
                 elif child.type in ("dotted_name", "identifier"):
-                    imp = code[child.start_byte:child.end_byte].decode("utf-8")
+                    imp = code[child.start_byte : child.end_byte].decode("utf-8")
                     if imp:
                         imports.add(imp)
 
@@ -105,25 +108,31 @@ def extract_nodes_from_code(project_id: UUID, file_path: str, code: bytes, ext: 
                     name_node = child
                     break
             if name_node:
-                class_name = code[name_node.start_byte:name_node.end_byte].decode("utf-8")
+                class_name = code[name_node.start_byte : name_node.end_byte].decode("utf-8")
                 class_id = f"class:{file_path}:{class_name}"
-                nodes.append(GraphNode(
-                    id=class_id,
-                    project_id=project_id,
-                    label=NodeLabel.CLASS,
-                    name=class_name,
-                    file_path=file_path,
-                    meta_data=json.dumps({
-                        "start_line": node.start_point[0] + 1,
-                        "end_line": node.end_point[0] + 1
-                    })
-                ))
-                edges.append(GraphEdge(
-                    project_id=project_id,
-                    source_id=file_node_id,
-                    target_id=class_id,
-                    type=EdgeType.CONTAINS
-                ))
+                nodes.append(
+                    GraphNode(
+                        id=class_id,
+                        project_id=project_id,
+                        label=NodeLabel.CLASS,
+                        name=class_name,
+                        file_path=file_path,
+                        meta_data=json.dumps(
+                            {
+                                "start_line": node.start_point[0] + 1,
+                                "end_line": node.end_point[0] + 1,
+                            }
+                        ),
+                    )
+                )
+                edges.append(
+                    GraphEdge(
+                        project_id=project_id,
+                        source_id=file_node_id,
+                        target_id=class_id,
+                        type=EdgeType.CONTAINS,
+                    )
+                )
 
         elif node.type in ("function_definition", "function_declaration", "method_definition"):
             name_node = None
@@ -132,25 +141,31 @@ def extract_nodes_from_code(project_id: UUID, file_path: str, code: bytes, ext: 
                     name_node = child
                     break
             if name_node:
-                func_name = code[name_node.start_byte:name_node.end_byte].decode("utf-8")
+                func_name = code[name_node.start_byte : name_node.end_byte].decode("utf-8")
                 func_id = f"function:{file_path}:{func_name}"
-                nodes.append(GraphNode(
-                    id=func_id,
-                    project_id=project_id,
-                    label=NodeLabel.FUNCTION,
-                    name=func_name,
-                    file_path=file_path,
-                    meta_data=json.dumps({
-                        "start_line": node.start_point[0] + 1,
-                        "end_line": node.end_point[0] + 1
-                    })
-                ))
-                edges.append(GraphEdge(
-                    project_id=project_id,
-                    source_id=file_node_id,
-                    target_id=func_id,
-                    type=EdgeType.CONTAINS
-                ))
+                nodes.append(
+                    GraphNode(
+                        id=func_id,
+                        project_id=project_id,
+                        label=NodeLabel.FUNCTION,
+                        name=func_name,
+                        file_path=file_path,
+                        meta_data=json.dumps(
+                            {
+                                "start_line": node.start_point[0] + 1,
+                                "end_line": node.end_point[0] + 1,
+                            }
+                        ),
+                    )
+                )
+                edges.append(
+                    GraphEdge(
+                        project_id=project_id,
+                        source_id=file_node_id,
+                        target_id=func_id,
+                        type=EdgeType.CONTAINS,
+                    )
+                )
 
         for child in node.children:
             traverse(child)
@@ -158,10 +173,19 @@ def extract_nodes_from_code(project_id: UUID, file_path: str, code: bytes, ext: 
     traverse(tree.root_node)
     return nodes, edges, imports
 
+
 class ASTParserService:
     def __init__(self, ignore_dirs=None):
         if ignore_dirs is None:
-            self.ignore_dirs = {".git", "node_modules", "venv", ".venv", "__pycache__", ".pytest_cache", "migrations"}
+            self.ignore_dirs = {
+                ".git",
+                "node_modules",
+                "venv",
+                ".venv",
+                "__pycache__",
+                ".pytest_cache",
+                "migrations",
+            }
         else:
             self.ignore_dirs = set(ignore_dirs)
 
@@ -180,7 +204,9 @@ class ASTParserService:
                     try:
                         with open(file_path, "rb") as f:
                             code = f.read()
-                        nodes, edges, imports = extract_nodes_from_code(project_id, file_path, code, ext)
+                        nodes, edges, imports = extract_nodes_from_code(
+                            project_id, file_path, code, ext
+                        )
                         all_nodes.extend(nodes)
                         all_edges.extend(edges)
                         if imports:
@@ -200,12 +226,14 @@ class ASTParserService:
                     if base_fp.endswith(normalized_imp) or normalized_imp in fp:
                         target_id = f"file:{fp}"
                         if source_id != target_id:
-                            all_edges.append(GraphEdge(
-                                project_id=project_id,
-                                source_id=source_id,
-                                target_id=target_id,
-                                type=EdgeType.IMPORTS
-                            ))
+                            all_edges.append(
+                                GraphEdge(
+                                    project_id=project_id,
+                                    source_id=source_id,
+                                    target_id=target_id,
+                                    type=EdgeType.IMPORTS,
+                                )
+                            )
         # Deduplicate edges to prevent DB IntegrityError (UNIQUE constraint failed)
         unique_edges = {}
         for edge in all_edges:

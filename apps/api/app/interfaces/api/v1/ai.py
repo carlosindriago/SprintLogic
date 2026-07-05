@@ -5,6 +5,7 @@ from app.interfaces.api.v1.settings import CURATED_MODELS
 
 router = APIRouter()
 
+
 class APIKeysPayload(BaseModel):
     gemini_key: str | None = None
     openai_key: str | None = None
@@ -13,6 +14,7 @@ class APIKeysPayload(BaseModel):
     opencode_zen_key: str | None = None
     opencode_go_key: str | None = None
     nvidia_key: str | None = None
+
 
 @router.post("/active-models")
 async def get_active_models(payload: APIKeysPayload):
@@ -32,8 +34,10 @@ async def get_active_models(payload: APIKeysPayload):
     for provider, models in CURATED_MODELS.items():
         key = key_mapping.get(provider)
         if key:
-            results.append({
-                "provider": provider.upper(),
-                "models": models,
-            })
+            results.append(
+                {
+                    "provider": provider.upper(),
+                    "models": models,
+                }
+            )
     return results

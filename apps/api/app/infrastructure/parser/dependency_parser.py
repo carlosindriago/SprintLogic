@@ -23,14 +23,16 @@ async def parse_dependencies(repo_id: int, repo_path: str, session: AsyncSession
                 dev_deps = data.get("devDependencies", {})
 
                 content = f"File: {pjson.relative_to(base_path)}\n"
-                content += "Dependencies:\n" + "\n".join([f"- {k}: {v}" for k, v in deps.items()]) + "\n"
-                content += "DevDependencies:\n" + "\n".join([f"- {k}: {v}" for k, v in dev_deps.items()])
+                content += (
+                    "Dependencies:\n" + "\n".join([f"- {k}: {v}" for k, v in deps.items()]) + "\n"
+                )
+                content += "DevDependencies:\n" + "\n".join(
+                    [f"- {k}: {v}" for k, v in dev_deps.items()]
+                )
 
-                snippets.append(ContextSnippetModel(
-                    project_id=repo_id,
-                    type="dependency",
-                    content=content
-                ))
+                snippets.append(
+                    ContextSnippetModel(project_id=repo_id, type="dependency", content=content)
+                )
         except Exception:
             pass
 
@@ -53,13 +55,15 @@ async def parse_dependencies(repo_id: int, repo_path: str, session: AsyncSession
                 poetry_data = data.get("tool", {}).get("poetry", {})
                 p_deps = poetry_data.get("dependencies", {})
                 if p_deps:
-                    content += "Poetry Dependencies:\n" + "\n".join([f"- {k}: {v}" for k, v in p_deps.items()]) + "\n"
+                    content += (
+                        "Poetry Dependencies:\n"
+                        + "\n".join([f"- {k}: {v}" for k, v in p_deps.items()])
+                        + "\n"
+                    )
 
-                snippets.append(ContextSnippetModel(
-                    project_id=repo_id,
-                    type="dependency",
-                    content=content
-                ))
+                snippets.append(
+                    ContextSnippetModel(project_id=repo_id, type="dependency", content=content)
+                )
         except Exception:
             pass
 

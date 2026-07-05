@@ -51,10 +51,7 @@ class LiteLLMGateway:
             litellm_model = model if "/" in model else model_id
 
         response = litellm.completion(
-            model=litellm_model,
-            messages=messages,
-            api_key=api_key,
-            **kwargs
+            model=litellm_model, messages=messages, api_key=api_key, **kwargs
         )
 
         return str(response.choices[0].message.content)

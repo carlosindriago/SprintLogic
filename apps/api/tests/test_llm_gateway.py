@@ -21,10 +21,9 @@ def test_generate_completion_success(mock_completion, mock_get_api_key):
     assert result == "Mocked LLM response"
     mock_get_api_key.assert_called_once()
     mock_completion.assert_called_once_with(
-        model="gpt-4o",
-        messages=[{"role": "user", "content": "Hello AI"}],
-        api_key="fake-api-key"
+        model="gpt-4o", messages=[{"role": "user", "content": "Hello AI"}], api_key="fake-api-key"
     )
+
 
 @patch("app.infrastructure.ai.llm_gateway.CredentialManager.get_api_key")
 def test_generate_completion_missing_key(mock_get_api_key):

@@ -1,4 +1,3 @@
-
 from pydantic import BaseModel
 
 
@@ -7,9 +6,11 @@ class GitRepository(BaseModel):
     path: str
     name: str
 
+
 class GitBranch(BaseModel):
     name: str
     is_active: bool
+
 
 class GitCommit(BaseModel):
     hash: str

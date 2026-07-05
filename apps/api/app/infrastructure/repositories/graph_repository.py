@@ -19,7 +19,7 @@ class SQLAlchemyGraphRepository(GraphRepository):
                 project_id=node.project_id,
                 label=node.label,
                 name=node.name,
-                file_path=node.file_path
+                file_path=node.file_path,
             )
             self.session.add(node_model)
         await self.session.commit()
@@ -30,28 +30,40 @@ class SQLAlchemyGraphRepository(GraphRepository):
                 project_id=edge.project_id,
                 source_id=edge.source_id,
                 target_id=edge.target_id,
-                type=edge.type
+                type=edge.type,
             )
             self.session.add(edge_model)
         await self.session.commit()
 
     async def clear_by_project(self, project_id: UUID) -> None:
-        await self.session.execute(delete(GraphEdgeModel).where(GraphEdgeModel.project_id == project_id))
-        await self.session.execute(delete(GraphNodeModel).where(GraphNodeModel.project_id == project_id))
+        await self.session.execute(
+            delete(GraphEdgeModel).where(GraphEdgeModel.project_id == project_id)
+        )
+        await self.session.execute(
+            delete(GraphNodeModel).where(GraphNodeModel.project_id == project_id)
+        )
         await self.session.commit()
 
     async def get_nodes_by_project(self, project_id: UUID) -> list[GraphNode]:
-        result = await self.session.execute(select(GraphNodeModel).where(GraphNodeModel.project_id == project_id))
+        result = await self.session.execute(
+            select(GraphNodeModel).where(GraphNodeModel.project_id == project_id)
+        )
         models = result.scalars().all()
         return [
-            GraphNode(id=m.id, project_id=m.project_id, label=m.label, name=m.name, file_path=m.file_path)
+            GraphNode(
+                id=m.id, project_id=m.project_id, label=m.label, name=m.name, file_path=m.file_path
+            )
             for m in models
         ]
 
     async def get_edges_by_project(self, project_id: UUID) -> list[GraphEdge]:
-        result = await self.session.execute(select(GraphEdgeModel).where(GraphEdgeModel.project_id == project_id))
+        result = await self.session.execute(
+            select(GraphEdgeModel).where(GraphEdgeModel.project_id == project_id)
+        )
         models = result.scalars().all()
         return [
-            GraphEdge(project_id=m.project_id, source_id=m.source_id, target_id=m.target_id, type=m.type)
+            GraphEdge(
+                project_id=m.project_id, source_id=m.source_id, target_id=m.target_id, type=m.type
+            )
             for m in models
         ]

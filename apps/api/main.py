@@ -27,6 +27,7 @@ app = FastAPI(title="sprintLogic API")
 async def startup() -> None:
     await init_fts5()
 
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

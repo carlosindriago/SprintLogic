@@ -106,8 +106,7 @@ async def fetch_provider_models(provider: str, api_key: str) -> list[dict]:
                     raise ProviderFetchError("Failed to fetch OpenRouter models")
                 data = res.json()
                 models = [
-                    {"id": m["id"], "name": m.get("name", m["id"])}
-                    for m in data.get("data", [])
+                    {"id": m["id"], "name": m.get("name", m["id"])} for m in data.get("data", [])
                 ]
 
             elif provider == "opencode-zen":
@@ -128,14 +127,13 @@ async def fetch_provider_models(provider: str, api_key: str) -> list[dict]:
 
             elif provider == "nvidia":
                 headers["Authorization"] = f"Bearer {api_key}"
-                res = await client.get("https://integrate.api.nvidia.com/v1/models", headers=headers)
+                res = await client.get(
+                    "https://integrate.api.nvidia.com/v1/models", headers=headers
+                )
                 if res.status_code != 200:
                     raise ProviderFetchError("Invalid Nvidia NIM Key")
                 data = res.json()
-                models = [
-                    {"id": m["id"], "name": m["id"]}
-                    for m in data.get("data", [])
-                ]
+                models = [{"id": m["id"], "name": m["id"]} for m in data.get("data", [])]
 
             else:
                 raise ProviderFetchError(f"Unsupported provider: {provider}")
@@ -250,9 +248,11 @@ async def get_curated_models():
     for provider, models in CURATED_MODELS.items():
         key = CredentialManager.get_api_key(provider)
         if key:
-            results.append({
-                "provider": PROVIDER_LABELS.get(provider, provider),
-                "provider_id": provider,
-                "models": models,
-            })
+            results.append(
+                {
+                    "provider": PROVIDER_LABELS.get(provider, provider),
+                    "provider_id": provider,
+                    "models": models,
+                }
+            )
     return results

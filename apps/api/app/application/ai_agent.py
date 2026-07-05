@@ -28,13 +28,22 @@ class AIAgent:
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "memory_type": {"type": "string", "description": "e.g., 'decision', 'summary', 'architecture'"},
-                            "topic": {"type": "string", "description": "A short, stable key or topic name for this memory"},
-                            "content": {"type": "string", "description": "The detailed content to save"}
+                            "memory_type": {
+                                "type": "string",
+                                "description": "e.g., 'decision', 'summary', 'architecture'",
+                            },
+                            "topic": {
+                                "type": "string",
+                                "description": "A short, stable key or topic name for this memory",
+                            },
+                            "content": {
+                                "type": "string",
+                                "description": "The detailed content to save",
+                            },
                         },
-                        "required": ["memory_type", "topic", "content"]
-                    }
-                }
+                        "required": ["memory_type", "topic", "content"],
+                    },
+                },
             },
             {
                 "type": "function",
@@ -44,11 +53,14 @@ class AIAgent:
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "query": {"type": "string", "description": "Keyword to search in memories"}
+                            "query": {
+                                "type": "string",
+                                "description": "Keyword to search in memories",
+                            }
                         },
-                        "required": ["query"]
-                    }
-                }
+                        "required": ["query"],
+                    },
+                },
             },
             {
                 "type": "function",
@@ -58,11 +70,14 @@ class AIAgent:
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "query": {"type": "string", "description": "Keyword to search in context snippets"}
+                            "query": {
+                                "type": "string",
+                                "description": "Keyword to search in context snippets",
+                            }
                         },
-                        "required": ["query"]
-                    }
-                }
+                        "required": ["query"],
+                    },
+                },
             },
             {
                 "type": "function",
@@ -72,11 +87,14 @@ class AIAgent:
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "query": {"type": "string", "description": "Search term — file name, symbol name, or keyword"}
+                            "query": {
+                                "type": "string",
+                                "description": "Search term — file name, symbol name, or keyword",
+                            }
                         },
-                        "required": ["query"]
-                    }
-                }
+                        "required": ["query"],
+                    },
+                },
             },
             {
                 "type": "function",
@@ -86,11 +104,14 @@ class AIAgent:
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "file_path": {"type": "string", "description": "Relative or absolute path to the file"}
+                            "file_path": {
+                                "type": "string",
+                                "description": "Relative or absolute path to the file",
+                            }
                         },
-                        "required": ["file_path"]
-                    }
-                }
+                        "required": ["file_path"],
+                    },
+                },
             },
         ]
 
@@ -108,13 +129,12 @@ class AIAgent:
         # Use a fresh short-lived session for tool calls to avoid
         # holding the DB connection during LLM network I/O.
         async with AsyncSessionLocal() as session:
-
             if name == "mem_save":
                 memory = AIMemoryModel(
                     project_id=self.project_id,
                     memory_type=args.get("memory_type", "unknown"),
                     topic=args.get("topic", "untitled"),
-                    content=args.get("content", "")
+                    content=args.get("content", ""),
                 )
                 session.add(memory)
                 await session.commit()
@@ -129,11 +149,18 @@ class AIAgent:
                 memories = result.scalars().all()
                 if not memories:
                     return "No memories found."
-                return json.dumps([{"topic": m.topic, "content": m.content, "type": m.memory_type} for m in memories])
+                return json.dumps(
+                    [
+                        {"topic": m.topic, "content": m.content, "type": m.memory_type}
+                        for m in memories
+                    ]
+                )
 
             elif name == "context_search":
                 query = args.get("query", "")
-                stmt = select(ContextSnippetModel).where(ContextSnippetModel.content.icontains(query))
+                stmt = select(ContextSnippetModel).where(
+                    ContextSnippetModel.content.icontains(query)
+                )
                 if self.project_id:
                     stmt = stmt.where(ContextSnippetModel.project_id == self.project_id)
                 result = await session.execute(stmt)
@@ -177,10 +204,9 @@ class AIAgent:
                 rows = result.fetchall()
                 if not rows:
                     return "No results found in codebase."
-                return json.dumps([
-                    {"type": r[0], "name": r[1], "path": r[2], "line": r[3]}
-                    for r in rows
-                ])
+                return json.dumps(
+                    [{"type": r[0], "name": r[1], "path": r[2], "line": r[3]} for r in rows]
+                )
 
             elif name == "read_local_file":
                 file_path = args.get("file_path", "")
@@ -215,7 +241,9 @@ class AIAgent:
             self._project_root = ""
             return None
         try:
-            project_uuid = self.project_id if isinstance(self.project_id, UUID) else UUID(str(self.project_id))
+            project_uuid = (
+                self.project_id if isinstance(self.project_id, UUID) else UUID(str(self.project_id))
+            )
         except (ValueError, TypeError):
             self._project_root = ""
             return None
@@ -237,7 +265,6 @@ class AIAgent:
             f"NO ERES UN ASISTENTE WEB GENÉRICO. "
             f"El usuario está trabajando en el proyecto alojado localmente en {root}. "
             f"Tienes capacidad de leer archivos y buscar en el proyecto a través de las herramientas proporcionadas. "
-
             f"REGLAS DE COMPORTAMIENTO ESTRICTAS:\n"
             f"REGLA 1: Si consultas la memoria del proyecto (mem_search) y está vacía "
             f"('No memories found'), NO le digas eso al usuario. En su lugar, usa inmediatamente "
@@ -269,7 +296,9 @@ class AIAgent:
             return "nvidia"
         return "gemini"
 
-    async def chat(self, messages: list[dict[str, str]], model: str = "gemini/gemini-1.5-pro-latest") -> str:
+    async def chat(
+        self, messages: list[dict[str, str]], model: str = "gemini/gemini-1.5-pro-latest"
+    ) -> str:
         """
         Processes a chat conversation and allows the AI to call tools before returning a final response.
         """
@@ -283,18 +312,18 @@ class AIAgent:
             # Inject project context as system message
             system_msg = await self._build_system_message()
             if system_msg:
-                messages = [{"role": "system", "content": system_msg}] + [m for m in messages if m.get("role") != "system"]
+                messages = [{"role": "system", "content": system_msg}] + [
+                    m for m in messages if m.get("role") != "system"
+                ]
 
             import os
+
             if provider == "nvidia" and api_key:
                 os.environ["NVIDIA_NIM_API_KEY"] = api_key
 
             # Prepare LiteLLM call
             response = await litellm.acompletion(
-                model=model,
-                messages=messages,
-                tools=self.tools,
-                api_key=api_key
+                model=model, messages=messages, tools=self.tools, api_key=api_key
             )
 
             if not response.choices or len(response.choices) == 0:
@@ -303,26 +332,26 @@ class AIAgent:
             message = response.choices[0].message
 
             # If model wants to call tools
-            if getattr(message, 'tool_calls', None):
+            if getattr(message, "tool_calls", None):
                 messages.append(message.model_dump())
 
                 for tool_call in message.tool_calls:
                     tool_response_str = await self._handle_tool_call(tool_call)
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": tool_call.id,
-                        "name": tool_call.function.name,
-                        "content": tool_response_str
-                    })
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tool_call.id,
+                            "name": tool_call.function.name,
+                            "content": tool_response_str,
+                        }
+                    )
 
                 second_response = await litellm.acompletion(
-                    model=model,
-                    messages=messages,
-                    api_key=api_key
+                    model=model, messages=messages, api_key=api_key
                 )
 
                 if second_response.choices and len(second_response.choices) > 0:
-                    content = getattr(second_response.choices[0].message, 'content', '')
+                    content = getattr(second_response.choices[0].message, "content", "")
                     if content:
                         return str(content)
 
@@ -334,7 +363,7 @@ class AIAgent:
                         api_key=api_key,
                     )
                     if fallback.choices and len(fallback.choices) > 0:
-                        content = getattr(fallback.choices[0].message, 'content', '')
+                        content = getattr(fallback.choices[0].message, "content", "")
                         if content:
                             return str(content)
                 except Exception:
@@ -347,7 +376,7 @@ class AIAgent:
                     "más específica o preguntá sobre un archivo en particular."
                 )
 
-            return str(getattr(message, 'content', '') or '')
+            return str(getattr(message, "content", "") or "")
 
         except Exception:
             _logger = logging.getLogger(__name__)

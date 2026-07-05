@@ -20,7 +20,8 @@ class UnmergedBranchError(RuntimeError):
 class LocalGitGateway:
     async def _run_command(self, repo_path: str, *args: str) -> str:
         process = await asyncio.create_subprocess_exec(
-            "git", *args,
+            "git",
+            *args,
             cwd=repo_path,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
@@ -33,7 +34,9 @@ class LocalGitGateway:
     def _audit(self, action: str, repo_path: str, outcome: str, **kwargs: Any) -> None:
         _audit_log.info(
             "GIT_ACTION | action=%s | repo=%s | outcome=%s | %s",
-            action, repo_path, outcome,
+            action,
+            repo_path,
+            outcome,
             json.dumps(kwargs, default=str),
         )
 
@@ -52,7 +55,9 @@ class LocalGitGateway:
     async def get_recent_commits(self, repo_path: str, limit: int = 100) -> list[dict[str, Any]]:
         try:
             output = await self._run_command(
-                repo_path, "log", f"-n{limit}",
+                repo_path,
+                "log",
+                f"-n{limit}",
                 "--format=%H|%P|%s|%an|%ae|%cI",
             )
             commits: list[dict[str, Any]] = []
@@ -61,14 +66,16 @@ class LocalGitGateway:
                     continue
                 parts = line.split("|", 5)
                 if len(parts) == 6:
-                    commits.append({
-                        "hash": parts[0],
-                        "parents": parts[1].split() if parts[1] else [],
-                        "subject": parts[2],
-                        "author": parts[3],
-                        "email": parts[4],
-                        "date": parts[5],
-                    })
+                    commits.append(
+                        {
+                            "hash": parts[0],
+                            "parents": parts[1].split() if parts[1] else [],
+                            "subject": parts[2],
+                            "author": parts[3],
+                            "email": parts[4],
+                            "date": parts[5],
+                        }
+                    )
             return commits
         except RuntimeError:
             return []
@@ -118,7 +125,9 @@ class LocalGitGateway:
 
         if action in DESTRUCTIVE and not confirm:
             self._audit(
-                action, repo_path, "BLOCKED",
+                action,
+                repo_path,
+                "BLOCKED",
                 reason="confirmation required",
                 files=files or [],
             )
@@ -152,7 +161,9 @@ class LocalGitGateway:
                     )
                 await self._run_command(repo_path, "add", "--", *files)
                 out = await self._run_command(
-                    repo_path, "commit", "-m",
+                    repo_path,
+                    "commit",
+                    "-m",
                     message or "Automated commit from SprintLogic",
                 )
 
@@ -174,8 +185,11 @@ class LocalGitGateway:
     async def get_commit_details(self, repo_path: str, commit_hash: str) -> dict[str, Any]:
         try:
             output = await self._run_command(
-                repo_path, "show", "--name-status",
-                "--format=%H|%an|%cI|%s", commit_hash,
+                repo_path,
+                "show",
+                "--name-status",
+                "--format=%H|%an|%cI|%s",
+                commit_hash,
             )
             lines = output.split("\n")
             if not lines:
@@ -215,7 +229,10 @@ class LocalGitGateway:
 
     async def validate_ref_name(self, name: str) -> bool:
         process = await asyncio.create_subprocess_exec(
-            "git", "check-ref-format", "--branch", name,
+            "git",
+            "check-ref-format",
+            "--branch",
+            name,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -226,7 +243,10 @@ class LocalGitGateway:
         fmt = "%(refname:short)|%(upstream:trackshort)|%(push:trackshort)"
         try:
             ref_output = await self._run_command(
-                repo_path, "for-each-ref", f"--format={fmt}", "refs/heads/",
+                repo_path,
+                "for-each-ref",
+                f"--format={fmt}",
+                "refs/heads/",
             )
         except RuntimeError:
             ref_output = ""
@@ -243,6 +263,7 @@ class LocalGitGateway:
                 behind = 0
                 if upstream_track:
                     import re
+
                     ahead_match = re.search(r"ahead (\d+)", upstream_track)
                     behind_match = re.search(r"behind (\d+)", upstream_track)
                     if ahead_match:
@@ -270,17 +291,17 @@ class LocalGitGateway:
             if not name:
                 continue
 
-            track_info = tracking_map.get(
-                name, {"has_upstream": False, "ahead": 0, "behind": 0}
+            track_info = tracking_map.get(name, {"has_upstream": False, "ahead": 0, "behind": 0})
+            branches.append(
+                {
+                    "name": name,
+                    "is_current": is_current,
+                    "has_upstream": track_info["has_upstream"],
+                    "ahead": track_info["ahead"],
+                    "behind": track_info["behind"],
+                    "is_local_only": not track_info["has_upstream"],
+                }
             )
-            branches.append({
-                "name": name,
-                "is_current": is_current,
-                "has_upstream": track_info["has_upstream"],
-                "ahead": track_info["ahead"],
-                "behind": track_info["behind"],
-                "is_local_only": not track_info["has_upstream"],
-            })
 
         return branches
 
@@ -338,7 +359,10 @@ class LocalGitGateway:
             raise
 
     async def create_branch(
-        self, repo_path: str, branch_name: str, start_point: str | None = None,
+        self,
+        repo_path: str,
+        branch_name: str,
+        start_point: str | None = None,
     ) -> str:
         if start_point:
             return await self._run_command(repo_path, "branch", branch_name, start_point)
@@ -348,7 +372,10 @@ class LocalGitGateway:
         return await self._run_command(repo_path, "merge", source_branch)
 
     async def delete_branch(
-        self, repo_path: str, branch_name: str, force: bool = False,
+        self,
+        repo_path: str,
+        branch_name: str,
+        force: bool = False,
     ) -> str:
         if force:
             return await self._run_command(repo_path, "branch", "-D", branch_name)

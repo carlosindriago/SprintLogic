@@ -17,8 +17,10 @@ DATABASE_URL = os.getenv(
     f"sqlite+aiosqlite:///{DB_PATH}",
 )
 
+
 class Base(DeclarativeBase):
     pass
+
 
 import sqlite_vec
 
@@ -28,8 +30,9 @@ engine = create_async_engine(
     connect_args={
         "check_same_thread": False,
         "timeout": 15,
-    }
+    },
 )
+
 
 @event.listens_for(engine.sync_engine, "connect")
 def _set_sqlite_pragmas(dbapi_connection, _connection_record):
@@ -39,9 +42,11 @@ def _set_sqlite_pragmas(dbapi_connection, _connection_record):
     cursor.execute("PRAGMA synchronous=NORMAL")
     cursor.close()
 
+
 AsyncSessionLocal = async_sessionmaker(
     bind=engine, autoflush=False, autocommit=False, expire_on_commit=False
 )
+
 
 async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
     async with AsyncSessionLocal() as session:
@@ -61,13 +66,17 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
 async def init_fts5() -> None:
     """Create FTS5 virtual tables for search and agent memory."""
     async with engine.begin() as conn:
-        await conn.execute(text(
-            "CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5("
-            "  type, name, path, content, line UNINDEXED"
-            ")"
-        ))
-        await conn.execute(text(
-            "CREATE VIRTUAL TABLE IF NOT EXISTS project_memories USING fts5("
-            "  project_id UNINDEXED, agent_name, context_type, memory_content"
-            ")"
-        ))
+        await conn.execute(
+            text(
+                "CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5("
+                "  type, name, path, content, line UNINDEXED"
+                ")"
+            )
+        )
+        await conn.execute(
+            text(
+                "CREATE VIRTUAL TABLE IF NOT EXISTS project_memories USING fts5("
+                "  project_id UNINDEXED, agent_name, context_type, memory_content"
+                ")"
+            )
+        )

@@ -22,11 +22,12 @@ class ScanLocalRepository:
             raise ValueError(f"Repository path does not exist: {repo_path}")
 
         try:
-            branch = await self.git_gateway.get_current_branch(str(canonical))
-            commits = await self.git_gateway.get_recent_commits(str(canonical), limit=1)
+            await self.git_gateway.get_recent_commits(str(canonical), limit=1)
         except Exception as e:
             _logger.error(
-                "Git operations failed for path=%s: %s", repo_path, e,
+                "Git operations failed for path=%s: %s",
+                repo_path,
+                e,
                 exc_info=True,
             )
             raise ScannerError(

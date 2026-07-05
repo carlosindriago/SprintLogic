@@ -9,22 +9,25 @@ def test_sdd_pipeline_execution():
     # Arrange
     mock_gateway = MagicMock()
 
-    proposal_json = json.dumps({
-        "change_name": "Auth Service",
-        "description": "Implement user authentication.",
-        "objectives": ["Secure login", "JWT tokens"]
-    })
+    proposal_json = json.dumps(
+        {
+            "change_name": "Auth Service",
+            "description": "Implement user authentication.",
+            "objectives": ["Secure login", "JWT tokens"],
+        }
+    )
 
-    spec_json = json.dumps({
-        "architecture": "Microservice",
-        "dependencies": ["FastAPI", "PyJWT"],
-        "endpoints": ["/login", "/register"]
-    })
+    spec_json = json.dumps(
+        {
+            "architecture": "Microservice",
+            "dependencies": ["FastAPI", "PyJWT"],
+            "endpoints": ["/login", "/register"],
+        }
+    )
 
-    tasks_json = json.dumps({
-        "tasks": ["Setup FastAPI", "Implement JWT", "Create endpoints"],
-        "estimated_hours": 20.5
-    })
+    tasks_json = json.dumps(
+        {"tasks": ["Setup FastAPI", "Implement JWT", "Create endpoints"], "estimated_hours": 20.5}
+    )
 
     def mock_generate_completion(prompt, model, response_format):
         if response_format == ProjectProposal:

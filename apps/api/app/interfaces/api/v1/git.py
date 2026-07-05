@@ -24,53 +24,63 @@ class GitActionRequest(BaseModel):
     files: list[str] | None = None
     confirm: bool = False
 
+
 class CreateBranchRequest(BaseModel):
     name: str
     start_point: str | None = None
 
+
 class CheckoutRequest(BaseModel):
     target: str
 
+
 class ResetRequest(BaseModel):
-    mode: Literal['soft', 'mixed', 'hard']
+    mode: Literal["soft", "mixed", "hard"]
+
 
 class MergeRequest(BaseModel):
     source_branch: str
 
+
 class AddRemoteRequest(BaseModel):
     name: str = "origin"
     url: str
+
 
 # Simple in-memory idempotency store
 # Map of idempotency_key -> { 'body_hash': str, 'response': dict, 'timestamp': float }
 IDEMPOTENCY_STORE: dict[str, dict[str, Any]] = {}
 IDEMPOTENCY_TTL = 86400  # 24 hours
 
+
 def get_idempotent_response(key: str | None, body_dict: dict):
     if not key:
         return None
     now = time.time()
     # Cleanup expired keys periodically
-    expired = [k for k, v in IDEMPOTENCY_STORE.items() if now - v['timestamp'] > IDEMPOTENCY_TTL]
+    expired = [k for k, v in IDEMPOTENCY_STORE.items() if now - v["timestamp"] > IDEMPOTENCY_TTL]
     for k in expired:
         del IDEMPOTENCY_STORE[k]
 
     if key in IDEMPOTENCY_STORE:
         record = IDEMPOTENCY_STORE[key]
         body_hash = hashlib.sha256(json.dumps(body_dict, sort_keys=True).encode()).hexdigest()
-        if record['body_hash'] != body_hash:
-            raise HTTPException(status_code=409, detail="Conflict: Idempotency-Key used with different payload")
-        return record['response']
+        if record["body_hash"] != body_hash:
+            raise HTTPException(
+                status_code=409, detail="Conflict: Idempotency-Key used with different payload"
+            )
+        return record["response"]
     return None
+
 
 def store_idempotent_response(key: str | None, body_dict: dict, response: dict):
     if not key:
         return
     body_hash = hashlib.sha256(json.dumps(body_dict, sort_keys=True).encode()).hexdigest()
     IDEMPOTENCY_STORE[key] = {
-        'body_hash': body_hash,
-        'response': response,
-        'timestamp': time.time()
+        "body_hash": body_hash,
+        "response": response,
+        "timestamp": time.time(),
     }
 
 
@@ -137,8 +147,13 @@ async def execute_git_action(
 class GenerateCommitMessageRequest(BaseModel):
     model: str | None = "gemini/gemini-2.5-flash"
 
+
 @router.post("/{project_id}/git/generate-commit-message")
-async def generate_commit_message(project_id: str, request: GenerateCommitMessageRequest, session: AsyncSession = Depends(get_db_session)):
+async def generate_commit_message(
+    project_id: str,
+    request: GenerateCommitMessageRequest,
+    session: AsyncSession = Depends(get_db_session),
+):
     try:
         project = await SQLAlchemyProjectRepository(session).get_project(UUID(project_id))
     except ValueError:
@@ -178,7 +193,9 @@ async def generate_commit_message(project_id: str, request: GenerateCommitMessag
 
 
 @router.get("/{project_id}/git/commits/{hash}")
-async def get_commit_details(project_id: str, hash: str, session: AsyncSession = Depends(get_db_session)):
+async def get_commit_details(
+    project_id: str, hash: str, session: AsyncSession = Depends(get_db_session)
+):
     try:
         project = await SQLAlchemyProjectRepository(session).get_project(UUID(project_id))
     except ValueError:
@@ -195,7 +212,9 @@ async def get_commit_details(project_id: str, hash: str, session: AsyncSession =
 
 
 @router.get("/{project_id}/git/commits/{hash}/diff")
-async def get_commit_diff(project_id: str, hash: str, path: str, session: AsyncSession = Depends(get_db_session)):
+async def get_commit_diff(
+    project_id: str, hash: str, path: str, session: AsyncSession = Depends(get_db_session)
+):
     try:
         project = await SQLAlchemyProjectRepository(session).get_project(UUID(project_id))
     except ValueError:
@@ -207,15 +226,13 @@ async def get_commit_diff(project_id: str, hash: str, path: str, session: AsyncS
     modified = await git_gateway.get_file_at_commit(project.path, hash, path)
     original = await git_gateway.get_file_at_commit(project.path, f"{hash}^", path)
 
-    return {
-        "original": original,
-        "modified": modified
-    }
+    return {"original": original, "modified": modified}
 
 
 # -----------------------------------------------------------------------------
 # Advanced Git Client Endpoints
 # -----------------------------------------------------------------------------
+
 
 @router.get("/{project_id}/git/branches")
 async def get_branches(project_id: str, session: AsyncSession = Depends(get_db_session)):
@@ -258,9 +275,7 @@ async def get_remote_url(project_id: str, session: AsyncSession = Depends(get_db
 
 @router.post("/{project_id}/git/remotes")
 async def add_remote(
-    project_id: str,
-    request: AddRemoteRequest,
-    session: AsyncSession = Depends(get_db_session)
+    project_id: str, request: AddRemoteRequest, session: AsyncSession = Depends(get_db_session)
 ):
     try:
         project = await SQLAlchemyProjectRepository(session).get_project(UUID(project_id))
@@ -273,7 +288,10 @@ async def add_remote(
         await git_gateway.add_remote(project.path, request.name, request.url)
         is_valid = await git_gateway.verify_remote(project.path, request.name)
         if not is_valid:
-            return {"status": "success", "message": "Remoto vinculado, pero no se pudo verificar la conexión (¿requiere permisos?)."}
+            return {
+                "status": "success",
+                "message": "Remoto vinculado, pero no se pudo verificar la conexión (¿requiere permisos?).",
+            }
         return {"status": "success", "message": "Remoto vinculado correctamente."}
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -281,9 +299,7 @@ async def add_remote(
 
 @router.post("/{project_id}/git/branches")
 async def create_branch(
-    project_id: str,
-    request: CreateBranchRequest,
-    session: AsyncSession = Depends(get_db_session)
+    project_id: str, request: CreateBranchRequest, session: AsyncSession = Depends(get_db_session)
 ):
     try:
         project = await SQLAlchemyProjectRepository(session).get_project(UUID(project_id))
@@ -308,7 +324,7 @@ async def delete_branch(
     project_id: str,
     branch_name: str,
     force: bool = False,
-    session: AsyncSession = Depends(get_db_session)
+    session: AsyncSession = Depends(get_db_session),
 ):
     try:
         project = await SQLAlchemyProjectRepository(session).get_project(UUID(project_id))
@@ -318,20 +334,21 @@ async def delete_branch(
         raise HTTPException(status_code=404, detail="Project not found")
 
     from app.infrastructure.git.git_gateway import UnmergedBranchError
+
     try:
         out = await git_gateway.delete_branch(project.path, branch_name, force)
         return {"status": "success", "output": out}
     except UnmergedBranchError as e:
-        raise HTTPException(status_code=409, detail={"message": str(e), "requires_force": e.requires_force})
+        raise HTTPException(
+            status_code=409, detail={"message": str(e), "requires_force": e.requires_force}
+        )
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.put("/{project_id}/git/head")
 async def checkout_head(
-    project_id: str,
-    request: CheckoutRequest,
-    session: AsyncSession = Depends(get_db_session)
+    project_id: str, request: CheckoutRequest, session: AsyncSession = Depends(get_db_session)
 ):
     try:
         project = await SQLAlchemyProjectRepository(session).get_project(UUID(project_id))
@@ -355,10 +372,11 @@ async def reset_commit(
     hash: str,
     request: ResetRequest,
     session: AsyncSession = Depends(get_db_session),
-    idempotency_key: str | None = Header(None)
+    idempotency_key: str | None = Header(None),
 ):
     cached = get_idempotent_response(idempotency_key, request.model_dump())
-    if cached: return cached
+    if cached:
+        return cached
 
     try:
         project = await SQLAlchemyProjectRepository(session).get_project(UUID(project_id))
@@ -381,10 +399,11 @@ async def revert_commit(
     project_id: str,
     hash: str,
     session: AsyncSession = Depends(get_db_session),
-    idempotency_key: str | None = Header(None)
+    idempotency_key: str | None = Header(None),
 ):
     cached = get_idempotent_response(idempotency_key, {})
-    if cached: return cached
+    if cached:
+        return cached
 
     try:
         project = await SQLAlchemyProjectRepository(session).get_project(UUID(project_id))
@@ -407,10 +426,11 @@ async def cherry_pick_commit(
     project_id: str,
     hash: str,
     session: AsyncSession = Depends(get_db_session),
-    idempotency_key: str | None = Header(None)
+    idempotency_key: str | None = Header(None),
 ):
     cached = get_idempotent_response(idempotency_key, {})
-    if cached: return cached
+    if cached:
+        return cached
 
     try:
         project = await SQLAlchemyProjectRepository(session).get_project(UUID(project_id))
@@ -433,10 +453,11 @@ async def merge_branch(
     project_id: str,
     request: MergeRequest,
     session: AsyncSession = Depends(get_db_session),
-    idempotency_key: str | None = Header(None)
+    idempotency_key: str | None = Header(None),
 ):
     cached = get_idempotent_response(idempotency_key, request.model_dump())
-    if cached: return cached
+    if cached:
+        return cached
 
     try:
         project = await SQLAlchemyProjectRepository(session).get_project(UUID(project_id))

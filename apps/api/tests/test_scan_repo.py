@@ -22,10 +22,12 @@ def mock_gateway():
 @pytest.fixture
 def mock_repository():
     repo = AsyncMock()
+
     async def save(project_in):
         if not project_in.id:
             project_in.id = uuid.uuid4()
         return project_in
+
     repo.save_project.side_effect = save
     return repo
 
@@ -61,7 +63,9 @@ async def test_scan_local_repository_not_found(mock_is_dir, mock_gateway, mock_r
 @pytest.mark.asyncio
 @patch.object(Path, "is_dir", return_value=True)
 async def test_scan_local_repository_git_failure_raises_scanner_error(
-    mock_is_dir, mock_gateway, mock_repository,
+    mock_is_dir,
+    mock_gateway,
+    mock_repository,
 ):
     mock_gateway.get_current_branch.side_effect = RuntimeError("Not a git repo")
     use_case = ScanLocalRepository(mock_gateway, mock_repository)

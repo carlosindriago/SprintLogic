@@ -12,6 +12,7 @@ def slugify(text: str) -> str:
     text = re.sub(r"[-\s]+", "-", text)
     return text
 
+
 class KanbanSyncService:
     """Synchronizes tasks between a local tasks.md file and the Kanban board UI."""
 
@@ -33,10 +34,25 @@ class KanbanSyncService:
         # Default configuration matching the custom test column flow
         return {
             "columns": [
-                { "id": "todo", "title": "To Do", "color": "border-zinc-500", "rule": "manual" },
-                { "id": "in-progress", "title": "In Progress", "color": "border-blue-500", "rule": "pomodoro" },
-                { "id": "test", "title": "Test", "color": "border-purple-500", "rule": "auto-on-test-fail" },
-                { "id": "done", "title": "Done", "color": "border-green-500", "rule": "auto-on-test-pass" }
+                {"id": "todo", "title": "To Do", "color": "border-zinc-500", "rule": "manual"},
+                {
+                    "id": "in-progress",
+                    "title": "In Progress",
+                    "color": "border-blue-500",
+                    "rule": "pomodoro",
+                },
+                {
+                    "id": "test",
+                    "title": "Test",
+                    "color": "border-purple-500",
+                    "rule": "auto-on-test-fail",
+                },
+                {
+                    "id": "done",
+                    "title": "Done",
+                    "color": "border-green-500",
+                    "rule": "auto-on-test-pass",
+                },
             ]
         }
 
@@ -55,7 +71,7 @@ class KanbanSyncService:
             lines = f.readlines()
 
         tasks = []
-        current_column_title = "To Do" # Default column title
+        current_column_title = "To Do"  # Default column title
 
         for idx, line in enumerate(lines):
             line = line.strip()
@@ -99,20 +115,22 @@ class KanbanSyncService:
                 # Check for ID (e.g. task_id:SPRT-42)
                 task_id = meta.get("task_id")
 
-                tasks.append({
-                    "id": task_id if task_id else f"task-{idx}",
-                    "content": content,
-                    "status": status,
-                    "category": current_column_title,
-                    "affected_nodes": affected_nodes,
-                    "raw_line": idx,
-                    "commit": meta.get("commit"),
-                    "pomodoros": int(meta.get("pomodoros", 0)),
-                    "time_spent": int(meta.get("time_spent", 0)),
-                    "priority": meta.get("priority", "Medium"),
-                    "tags": meta.get("tags", "").split(",") if meta.get("tags") else [],
-                    "has_id": bool(task_id)
-                })
+                tasks.append(
+                    {
+                        "id": task_id if task_id else f"task-{idx}",
+                        "content": content,
+                        "status": status,
+                        "category": current_column_title,
+                        "affected_nodes": affected_nodes,
+                        "raw_line": idx,
+                        "commit": meta.get("commit"),
+                        "pomodoros": int(meta.get("pomodoros", 0)),
+                        "time_spent": int(meta.get("time_spent", 0)),
+                        "priority": meta.get("priority", "Medium"),
+                        "tags": meta.get("tags", "").split(",") if meta.get("tags") else [],
+                        "has_id": bool(task_id),
+                    }
+                )
 
         return tasks
 
@@ -166,10 +184,10 @@ class KanbanSyncService:
                 elif col_id == "in-progress":
                     status_char = "/"
 
-                content = task['content']
+                content = task["content"]
 
                 # Tags string
-                affected_nodes = task.get('affected_nodes', [])
+                affected_nodes = task.get("affected_nodes", [])
                 tags_str = ""
                 if affected_nodes:
                     tags_str = " " + " ".join([f"@{node}" for node in affected_nodes])
@@ -200,5 +218,6 @@ class KanbanSyncService:
 
         with open(filepath, "w", encoding="utf-8") as f:
             f.write(content)
+
 
 kanban_sync = KanbanSyncService()

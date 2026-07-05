@@ -24,7 +24,9 @@ async def test_get_current_branch(mock_exec, gateway):
     assert branch.name == "main"
     assert branch.is_active is True
     mock_exec.assert_called_once_with(
-        "git", "branch", "--show-current",
+        "git",
+        "branch",
+        "--show-current",
         cwd="/fake/path",
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
@@ -35,7 +37,9 @@ async def test_get_current_branch(mock_exec, gateway):
 @patch("app.infrastructure.git.git_gateway.asyncio.create_subprocess_exec")
 async def test_get_recent_commits(mock_exec, gateway):
     mock_process = AsyncMock()
-    fake_log = b"abcdef123|deadbeef|Init commit|Author Name|email@example.com|2023-10-10T10:00:00Z\n"
+    fake_log = (
+        b"abcdef123|deadbeef|Init commit|Author Name|email@example.com|2023-10-10T10:00:00Z\n"
+    )
     mock_process.communicate.return_value = (fake_log, b"")
     mock_process.returncode = 0
     mock_exec.return_value = mock_process
@@ -99,8 +103,11 @@ async def test_commit_with_files_and_confirm(mock_exec, gateway):
     mock_exec.return_value = mock_process
 
     result = await gateway.execute_action(
-        "/fake/path", "commit", message="feat: add test",
-        files=["test.py"], confirm=True,
+        "/fake/path",
+        "commit",
+        message="feat: add test",
+        files=["test.py"],
+        confirm=True,
     )
 
     assert result["status"] == "success"
@@ -131,7 +138,11 @@ async def test_stage_files(mock_exec, gateway):
 
     assert result == ""
     mock_exec.assert_called_once_with(
-        "git", "add", "--", "file1.py", "file2.py",
+        "git",
+        "add",
+        "--",
+        "file1.py",
+        "file2.py",
         cwd="/fake/path",
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,

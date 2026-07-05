@@ -20,9 +20,7 @@ class SDDPipelineUseCase:
             f"Requirements: {requirements}"
         )
         proposal_json = self.llm_gateway.generate_completion(
-            prompt=proposal_prompt,
-            model=self.model,
-            response_format=ProjectProposal
+            prompt=proposal_prompt, model=self.model, response_format=ProjectProposal
         )
         proposal = ProjectProposal.model_validate_json(proposal_json)
 
@@ -34,9 +32,7 @@ class SDDPipelineUseCase:
             f"Objectives: {', '.join(proposal.objectives)}"
         )
         spec_json = self.llm_gateway.generate_completion(
-            prompt=spec_prompt,
-            model=self.model,
-            response_format=TechnicalSpec
+            prompt=spec_prompt, model=self.model, response_format=TechnicalSpec
         )
         spec = TechnicalSpec.model_validate_json(spec_json)
 
@@ -48,14 +44,8 @@ class SDDPipelineUseCase:
             f"Endpoints: {', '.join(spec.endpoints)}"
         )
         task_json = self.llm_gateway.generate_completion(
-            prompt=task_prompt,
-            model=self.model,
-            response_format=TaskBreakdown
+            prompt=task_prompt, model=self.model, response_format=TaskBreakdown
         )
         tasks = TaskBreakdown.model_validate_json(task_json)
 
-        return {
-            "proposal": proposal,
-            "spec": spec,
-            "tasks": tasks
-        }
+        return {"proposal": proposal, "spec": spec, "tasks": tasks}

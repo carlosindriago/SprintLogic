@@ -40,8 +40,12 @@ async def _fetch_context7_docs(api_key: str, query: str, tech_stack: dict) -> st
     # Extract library names from tech stack extensions
     libraries: list[str] = []
     ext_map = {
-        ".ts": "typescript", ".tsx": "react", ".js": "javascript",
-        ".py": "python", ".rs": "rust", ".go": "go",
+        ".ts": "typescript",
+        ".tsx": "react",
+        ".js": "javascript",
+        ".py": "python",
+        ".rs": "rust",
+        ".go": "go",
     }
     seen: set[str] = set()
     for ext in tech_stack:
@@ -85,6 +89,7 @@ class ChatResponse(BaseModel):
 @router.post("/")
 async def chat_with_ai(request: ChatRequest, session: AsyncSession = Depends(get_db_session)):
     """Handles chat messages with the AI and manages tool calls."""
+
     async def generate():
         try:
             agent = AIAgent(session=session, project_id=request.project_id)
@@ -139,7 +144,11 @@ async def _save_memory(project_id: str, agent_name: str, context_type: str, cont
 
 
 @router.post("/mentor", response_model=MentorResponse)
-async def mentor_sensei(request: MentorRequest, background_tasks: BackgroundTasks, session: AsyncSession = Depends(get_db_session)):
+async def mentor_sensei(
+    request: MentorRequest,
+    background_tasks: BackgroundTasks,
+    session: AsyncSession = Depends(get_db_session),
+):
     provider = "gemini"
     model = "gemini/gemini-2.5-flash"
     api_key = CredentialManager.get_api_key(provider)
@@ -163,9 +172,7 @@ async def mentor_sensei(request: MentorRequest, background_tasks: BackgroundTask
         )
 
     docs_section = (
-        f"\n\nDocumentación oficial relevante (Context7):\n{context7_docs}"
-        if context7_docs
-        else ""
+        f"\n\nDocumentación oficial relevante (Context7):\n{context7_docs}" if context7_docs else ""
     )
 
     user_message = (
@@ -195,7 +202,7 @@ async def mentor_sensei(request: MentorRequest, background_tasks: BackgroundTask
                 if delta and delta.content:
                     full_response += delta.content
                     yield f"data: {json.dumps({'text': delta.content, 'is_done': False})}\n\n"
-                if hasattr(chunk, 'usage') and chunk.usage:
+                if hasattr(chunk, "usage") and chunk.usage:
                     usage = {
                         "prompt_tokens": chunk.usage.prompt_tokens,
                         "completion_tokens": chunk.usage.completion_tokens,

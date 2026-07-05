@@ -10,7 +10,6 @@ _logger = logging.getLogger(__name__)
 
 
 class FileWatcherService:
-
     def __init__(self):
         self._tasks: dict[str, asyncio.Task] = {}
         self._watched_paths: dict[str, str] = {}
@@ -49,7 +48,9 @@ class FileWatcherService:
                         except Exception:
                             _logger.error(
                                 "Error in watcher callback for project=%s file=%s",
-                                project_id, filepath, exc_info=True,
+                                project_id,
+                                filepath,
+                                exc_info=True,
                             )
         except asyncio.CancelledError:
             pass
