@@ -22,7 +22,7 @@ class Base(DeclarativeBase):
     pass
 
 
-import sqlite_vec
+import sqlite_vec  # type: ignore[import-untyped]
 
 engine = create_async_engine(
     DATABASE_URL,
@@ -54,7 +54,7 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
         raw = await conn.get_raw_connection()
         aiosqlite_conn = raw.driver_connection
 
-        if not getattr(aiosqlite_conn, "_vec_loaded", False):
+        if aiosqlite_conn and not getattr(aiosqlite_conn, "_vec_loaded", False):
             await aiosqlite_conn.enable_load_extension(True)
             await aiosqlite_conn.load_extension(sqlite_vec.loadable_path())
             await aiosqlite_conn.enable_load_extension(False)

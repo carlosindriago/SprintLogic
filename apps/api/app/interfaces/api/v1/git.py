@@ -145,7 +145,7 @@ async def execute_git_action(
 
 
 class GenerateCommitMessageRequest(BaseModel):
-    model: str | None = "gemini/gemini-2.5-flash"
+    model: str = "gemini/gemini-2.5-flash"
 
 
 @router.post("/{project_id}/git/generate-commit-message")

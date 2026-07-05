@@ -5,31 +5,31 @@ import tree_sitter
 try:
     import tree_sitter_python
 except ImportError:
-    tree_sitter_python = None
+    tree_sitter_python = None  # type: ignore[assignment]
 try:
     import tree_sitter_typescript
 except ImportError:
-    tree_sitter_typescript = None
+    tree_sitter_typescript = None  # type: ignore[assignment]
 try:
     import tree_sitter_java
 except ImportError:
-    tree_sitter_java = None
+    tree_sitter_java = None  # type: ignore[assignment]
 try:
     import tree_sitter_php
 except ImportError:
-    tree_sitter_php = None
+    tree_sitter_php = None  # type: ignore[assignment]
 try:
     import tree_sitter_go
 except ImportError:
-    tree_sitter_go = None
+    tree_sitter_go = None  # type: ignore[assignment]
 try:
     import tree_sitter_html
 except ImportError:
-    tree_sitter_html = None
+    tree_sitter_html = None  # type: ignore[assignment]
 try:
     import tree_sitter_css
 except ImportError:
-    tree_sitter_css = None
+    tree_sitter_css = None  # type: ignore[assignment]
 
 from app.domain.graph_models import EdgeType, GraphEdge, GraphNode, NodeLabel
 

@@ -156,7 +156,8 @@ class KanbanSyncService:
         next_id_num = max(existing_ids) + 1 if existing_ids else 1
 
         # Group tasks by column status
-        tasks_by_column = {col_id: [] for col_id in column_ids}
+        from typing import Any
+        tasks_by_column: dict[str, list[dict[str, Any]]] = {col_id: [] for col_id in column_ids}
         for task in tasks:
             status = task.get("status", "todo")
             if status not in tasks_by_column:

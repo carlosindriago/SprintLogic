@@ -206,8 +206,8 @@ async def python_lsp(websocket: WebSocket) -> None:
             tg.create_task(stderr_drain(), name="lsp.stderr_drain")
     except* Exception as eg:
         # Tasks normally finish via cancellation. Log anything else.
-        for exc in eg.exceptions:
-            logger.warning("LSP task group ended with: %r", exc)
+        for e in eg.exceptions:
+            logger.warning("LSP task group ended with: %r", e)
     finally:
         await _terminate_process(process)
         # Close the WebSocket gracefully if it is still open. FastAPI's

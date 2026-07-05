@@ -131,7 +131,7 @@ async def get_project_graph(project_id: str, session: AsyncSession = Depends(get
     # Calculate degrees
     in_degree = {n_id: 0 for n_id in valid_node_ids}
     out_degree = {n_id: 0 for n_id in valid_node_ids}
-    adj = {n_id: [] for n_id in valid_node_ids}
+    adj: dict[str, list[str]] = {n_id: [] for n_id in valid_node_ids}
 
     for e in filtered_edges:
         in_degree[e.target_id] += 1
@@ -530,6 +530,8 @@ async def build_search_index(project_root: str, session: AsyncSession | None = N
     own_session = session is None
     if own_session:
         session = AsyncSessionLocal()
+    
+    assert session is not None
 
     try:
         root = Path(project_root).resolve()
@@ -742,14 +744,14 @@ async def search_project_memory(
 
 import asyncio
 
-from sse_starlette.sse import EventSourceResponse
+from sse_starlette.sse import EventSourceResponse  # type: ignore[import-not-found]
 from watchfiles import Change
 
 from app.infrastructure.file_watcher import file_watcher
 from app.infrastructure.kanban_sync import kanban_sync
 
 # Global event queue for SSE per project
-project_event_queues: dict[str, list[asyncio.Queue]] = {}
+project_event_queues: dict[str, list[asyncio.Queue[dict[str, Any]]]] = {}
 
 
 async def file_watcher_callback(project_id: str, change: Change, filepath: str):
@@ -781,7 +783,7 @@ async def project_events(project_id: str, session: AsyncSession = Depends(get_db
     # Start watcher for this project
     await file_watcher.start_watching(project_id, project.path)
 
-    q = asyncio.Queue()
+    q: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
     if project_id not in project_event_queues:
         project_event_queues[project_id] = []
     project_event_queues[project_id].append(q)
@@ -956,9 +958,9 @@ async def sync_project_commits(project_id: str, session: AsyncSession = Depends(
     tests_passing = await run_workspace_tests(project.path)
 
     for commit in commits:
-        match = re.search(r"\[(SPRT-\d+)\]", commit.message)
+        match = re.search(r"\[(SPRT-\d+)\]", commit.get("message", ""))
         if not match:
-            match = re.search(r"\b(SPRT-\d+)\b", commit.message)
+            match = re.search(r"\b(SPRT-\d+)\b", commit.get("message", ""))
 
         if match:
             task_id = match.group(1)
@@ -967,8 +969,8 @@ async def sync_project_commits(project_id: str, session: AsyncSession = Depends(
                 target_status = done_col if tests_passing else test_col
 
                 # Link commit and move status if different
-                if task.get("commit") != commit.hash or task["status"] != target_status:
-                    task["commit"] = commit.hash
+                if task.get("commit") != commit.get("hash") or task["status"] != target_status:
+                    task["commit"] = commit.get("hash")
                     task["status"] = target_status
 
                     # Update category (column title)
@@ -1103,7 +1105,7 @@ async def get_project_insights(project_id: str, session: AsyncSession = Depends(
     nodes_result = await session.execute(
         select(GraphNodeModel.file_path).where(GraphNodeModel.project_id == project_uuid)
     )
-    extensions = {}
+    extensions: dict[str, int] = {}
     for (file_path,) in nodes_result:
         ext = os.path.splitext(file_path)[1]
         if ext:
@@ -1111,11 +1113,8 @@ async def get_project_insights(project_id: str, session: AsyncSession = Depends(
             extensions[ext] = extensions.get(ext, 0) + 1
 
     # Sort extensions by count descending
-    sorted_exts = sorted(
-        [{"name": k, "value": v} for k, v in extensions.items()],
-        key=lambda x: x["value"],
-        reverse=True,
-    )
+    sorted_items = sorted(extensions.items(), key=lambda item: item[1], reverse=True)
+    sorted_exts = [{"name": k, "value": v} for k, v in sorted_items]
 
     # 3. Total de Commits, Ramas activas y Logs recientes
     git_gateway = LocalGitGateway()

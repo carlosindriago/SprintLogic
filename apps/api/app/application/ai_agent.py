@@ -158,16 +158,16 @@ class AIAgent:
 
             elif name == "context_search":
                 query = args.get("query", "")
-                stmt = select(ContextSnippetModel).where(
+                snippet_stmt = select(ContextSnippetModel).where(
                     ContextSnippetModel.content.icontains(query)
                 )
                 if self.project_id:
-                    stmt = stmt.where(ContextSnippetModel.project_id == self.project_id)
-                result = await session.execute(stmt)
+                    snippet_stmt = snippet_stmt.where(ContextSnippetModel.project_id == self.project_id)
+                result = await session.execute(snippet_stmt)
                 snippets = result.scalars().all()
                 if not snippets:
                     return "No context found."
-                return json.dumps([{"type": s.type, "content": s.content} for s in snippets])
+                return json.dumps([{"type": s.label if hasattr(s, "label") else "snippet", "content": s.content} for s in snippets])
 
             elif name == "search_codebase":
                 query = args.get("query", "").strip()
