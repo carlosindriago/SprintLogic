@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import { Play, Pause, RotateCcw, X, Clock, AlertCircle, ChevronDown, ChevronUp, Check, ShieldAlert } from "lucide-react";
+import { Play, Pause, RotateCcw, X, Clock, AlertCircle, ChevronDown, Check } from "lucide-react";
 import { getProjectTasks, saveProjectTasks } from "@/lib/api";
 import { Task } from "@/types";
 import { cn } from "@/lib/utils";
@@ -57,6 +57,7 @@ export default function PomodoroTimer({ projectId }: PomodoroTimerProps) {
     if (recommendedPreset && preset !== recommendedPreset.preset) {
       handleSelectPreset(recommendedPreset.preset);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recommendedPreset]);
 
   // Listen to Global Task Trigger
@@ -103,10 +104,12 @@ export default function PomodoroTimer({ projectId }: PomodoroTimerProps) {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isRunning, timeLeft]);
 
   // Handle Preset selection
-  const handleSelectPreset = (p: '25-5' | '50-10' | 'custom', customWork = 25, customBreak = 5) => {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  function handleSelectPreset(p: '25-5' | '50-10' | 'custom', customWork = 25, customBreak = 5) {
     setPreset(p);
     setIsRunning(false);
     setIsBreak(false);
@@ -125,11 +128,12 @@ export default function PomodoroTimer({ projectId }: PomodoroTimerProps) {
   };
 
   // Timer Completion Handler
-  const handleTimerComplete = () => {
+  function handleTimerComplete() {
     setIsRunning(false);
     
     // Play chime sound (Subtle HTML5 Audio synthesis)
     try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
       const osc = audioCtx.createOscillator();
       const gain = audioCtx.createGain();
@@ -164,7 +168,7 @@ export default function PomodoroTimer({ projectId }: PomodoroTimerProps) {
     }
   };
 
-  const startBreakSession = () => {
+  function startBreakSession() {
     setIsBreak(true);
     const breakSecs = preset === '25-5' ? 5 * 60 : preset === '50-10' ? 10 * 60 : customBreakTime * 60;
     setDuration(breakSecs);

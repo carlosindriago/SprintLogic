@@ -20,7 +20,7 @@ class FakeGraphRepository(GraphRepository):
         self.cleared = True
         self.nodes = []
         self.edges = []
-
+        
     async def clear_by_project(self, project_id) -> None:
         self.cleared = True
         self.nodes = []
@@ -35,10 +35,10 @@ async def test_scan_codebase_orchestration():
     repo = FakeGraphRepository()
     parser = FakeParserService()
     
-    from uuid import uuid4
     usecase = ScanCodebaseUseCase(parser=parser, repository=repo) # type: ignore
     
-    project_id = uuid4()
+    import uuid
+    project_id = uuid.uuid4()
     await usecase.execute(project_id, "fake/dir")
     
     assert repo.cleared is True

@@ -61,6 +61,7 @@ export default function TabBar({ onToggleAi, aiOpen, onNewFile }: TabBarProps) {
     if (matched.length > 0) {
       console.log('[tabbar] tabs with markers:', matched.map(p => `${p}: errors=${markersFiles[p!]?.errors} warnings=${markersFiles[p!]?.warnings}`));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tabs, markersFiles]);
 
   return (
