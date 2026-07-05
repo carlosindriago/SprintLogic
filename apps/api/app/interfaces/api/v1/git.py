@@ -4,7 +4,7 @@ import time
 from typing import Any, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -467,9 +467,58 @@ async def merge_branch(
         raise HTTPException(status_code=404, detail="Project not found")
 
     try:
+    try:
         out = await git_gateway.merge(project.path, request.source_branch)
         resp = {"status": "success", "output": out}
         store_idempotent_response(idempotency_key, request.model_dump(), resp)
         return resp
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{project_id}/git/diff")
+async def get_file_local_diff(
+    project_id: str,
+    file_path: str = Query(...),
+    session: AsyncSession = Depends(get_db_session),
+):
+    try:
+        project = await SQLAlchemyProjectRepository(session).get_project(UUID(project_id))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID")
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    result = await git_gateway.get_file_diff(project.path, file_path)
+    if "error" in result:
+        raise HTTPException(status_code=404, detail=result["error"])
+    return result
+
+
+@router.get("/{project_id}/git/changes")
+async def get_local_changes(
+    project_id: str,
+    session: AsyncSession = Depends(get_db_session),
+):
+    try:
+        project = await SQLAlchemyProjectRepository(session).get_project(UUID(project_id))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID")
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    numstat = await git_gateway.get_diff_numstat(project.path)
+    changed_files = await git_gateway.get_changed_files(project.path)
+
+    numstat_map = {f["file_path"]: f for f in numstat}
+
+    files = []
+    for cf in changed_files:
+        metrics = numstat_map.get(cf["file_path"], {"added": 0, "deleted": 0})
+        files.append({
+            **cf,
+            "added": metrics["added"],
+            "deleted": metrics["deleted"],
+        })
+
+    return {"files": files}

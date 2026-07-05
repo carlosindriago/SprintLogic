@@ -411,3 +411,69 @@ class LocalGitGateway:
     async def is_merge_in_progress(self, repo_path: str) -> bool:
         merge_head_path = os.path.join(repo_path, ".git", "MERGE_HEAD")
         return os.path.exists(merge_head_path)
+
+    async def get_file_diff(self, repo_path: str, file_path: str) -> dict[str, Any]:
+        try:
+            diff_output = await self._run_command(repo_path, "diff", "HEAD", "--", file_path)
+            original = await self._run_command(repo_path, "show", f"HEAD:{file_path}")
+            full_path = os.path.join(repo_path, file_path)
+            with open(full_path, "r", encoding="utf-8") as f:
+                modified = f.read()
+            return {
+                "diff": diff_output,
+                "original_content": original,
+                "modified_content": modified,
+                "status": "modified",
+            }
+        except RuntimeError:
+            try:
+                full_path = os.path.join(repo_path, file_path)
+                with open(full_path, "r", encoding="utf-8") as f:
+                    modified = f.read()
+                return {
+                    "diff": "",
+                    "original_content": "",
+                    "modified_content": modified,
+                    "status": "untracked",
+                }
+            except (OSError, RuntimeError):
+                return {"error": f"Could not read file: {file_path}", "status": "error"}
+
+    async def get_diff_numstat(self, repo_path: str) -> list[dict[str, Any]]:
+        try:
+            output = await self._run_command(repo_path, "diff", "--numstat", "HEAD")
+            files: list[dict[str, Any]] = []
+            for line in output.split("\n"):
+                if not line:
+                    continue
+                parts = line.split("\t")
+                if len(parts) == 3:
+                    files.append({
+                        "added": int(parts[0]) if parts[0] != "-" else 0,
+                        "deleted": int(parts[1]) if parts[1] != "-" else 0,
+                        "file_path": parts[2],
+                    })
+            return files
+        except RuntimeError:
+            return []
+
+    async def get_changed_files(self, repo_path: str) -> list[dict[str, Any]]:
+        files: list[dict[str, Any]] = []
+        try:
+            output = await self._run_command(repo_path, "status", "--porcelain")
+            for line in output.split("\n"):
+                if not line:
+                    continue
+                code = line[:2].strip()
+                file_path = line[3:].strip()
+                if not file_path:
+                    continue
+                files.append({
+                    "status_code": code,
+                    "file_path": file_path,
+                    "is_untracked": code == "??",
+                    "is_modified": code in ("M", " M", "MM", "A", "AM", "D", "R"),
+                })
+        except RuntimeError:
+            pass
+        return files
