@@ -43,7 +43,6 @@ async def test_scan_local_repository_success(mock_is_dir, mock_gateway, mock_rep
     assert "/tmp/myrepo" in result.path
     assert result.name == "myrepo"
 
-    mock_gateway.get_current_branch.assert_called_once()
     mock_gateway.get_recent_commits.assert_called_once()
     mock_repository.save_project.assert_called_once()
 
@@ -56,7 +55,7 @@ async def test_scan_local_repository_not_found(mock_is_dir, mock_gateway, mock_r
     with pytest.raises(ValueError, match="Repository path does not exist"):
         await use_case.execute("/tmp/missing")
 
-    mock_gateway.get_current_branch.assert_not_called()
+    mock_gateway.get_recent_commits.assert_not_called()
     mock_repository.save_project.assert_not_called()
 
 
@@ -67,7 +66,7 @@ async def test_scan_local_repository_git_failure_raises_scanner_error(
     mock_gateway,
     mock_repository,
 ):
-    mock_gateway.get_current_branch.side_effect = RuntimeError("Not a git repo")
+    mock_gateway.get_recent_commits.side_effect = RuntimeError("Not a git repo")
     use_case = ScanLocalRepository(mock_gateway, mock_repository)
 
     with pytest.raises(ScannerError, match="Git repository scan failed"):
