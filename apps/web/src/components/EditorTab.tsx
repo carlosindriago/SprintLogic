@@ -54,6 +54,7 @@ export default function EditorTab({
   const editorRef = useRef<monacoEditor.IStandaloneCodeEditor | null>(null);
   const vimInstanceRef = useRef<{ dispose(): void } | null>(null);
   const vimObserverRef = useRef<MutationObserver | null>(null);
+  const vimPendingRef = useRef(false);
   const dirtyCheckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const backupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -117,6 +118,7 @@ export default function EditorTab({
         vimInstanceRef.current.dispose();
         vimInstanceRef.current = null;
       }
+      vimPendingRef.current = false;
     };
   }, [projectId, node.file_path, node.id]);
 
@@ -293,7 +295,15 @@ export default function EditorTab({
     }
 
     if (vimMode) {
+      if (vimInstanceRef.current) {
+        vimInstanceRef.current.dispose();
+        vimInstanceRef.current = null;
+      }
+
+      vimPendingRef.current = true;
       import("monaco-vim").then(({ initVimMode, VimMode }) => {
+        if (!vimPendingRef.current) return;
+
         const statusNode = document.createElement('div');
         statusNode.style.position = 'absolute';
         statusNode.style.bottom = '0';
