@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -743,6 +743,7 @@ async def search_project_memory(
 
 
 import asyncio
+import contextlib
 
 from sse_starlette.sse import EventSourceResponse  # type: ignore[import-not-found]
 from watchfiles import Change
@@ -802,6 +803,87 @@ async def project_events(project_id: str, session: AsyncSession = Depends(get_db
                 await file_watcher.stop_watching(project_id)
 
     return EventSourceResponse(event_generator())
+
+
+@router.websocket("/projects/{project_id}/ws")
+async def project_ws(websocket: WebSocket, project_id: str):
+    await websocket.accept()
+
+    try:
+        project_uuid = UUID(project_id)
+    except ValueError:
+        await websocket.close(code=1008, reason="Invalid project ID")
+        return
+
+    async with AsyncSessionLocal() as session:
+        repo = SQLAlchemyProjectRepository(session)
+        project = await repo.get_project(project_uuid)
+
+    if not project:
+        await websocket.close(code=1008, reason="Project not found")
+        return
+
+    await file_watcher.start_watching(project_id, project.path)
+
+    q: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+    if project_id not in project_event_queues:
+        project_event_queues[project_id] = []
+    project_event_queues[project_id].append(q)
+
+    pending_paths: set[str] = set()
+    pending_lock = asyncio.Lock()
+
+    async def flush():
+        async with pending_lock:
+            if not pending_paths:
+                return
+            paths = sorted(pending_paths)
+            pending_paths.clear()
+            try:
+                await websocket.send_json({"type": "file_changed", "paths": paths})
+            except Exception:
+                pass
+
+    async def debounce_loop():
+        try:
+            while True:
+                await asyncio.sleep(0.5)
+                await flush()
+        except asyncio.CancelledError:
+            await flush()
+
+    async def queue_consumer():
+        try:
+            while True:
+                event = await q.get()
+                async with pending_lock:
+                    pending_paths.add(event["filepath"])
+        except asyncio.CancelledError:
+            pass
+
+    debounce_task = asyncio.create_task(debounce_loop())
+    consumer_task = asyncio.create_task(queue_consumer())
+
+    try:
+        while True:
+            try:
+                await websocket.receive_text()
+            except WebSocketDisconnect:
+                break
+    finally:
+        debounce_task.cancel()
+        consumer_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await debounce_task
+        with contextlib.suppress(asyncio.CancelledError):
+            await consumer_task
+
+        if project_id in project_event_queues:
+            if q in project_event_queues[project_id]:
+                project_event_queues[project_id].remove(q)
+            if not project_event_queues[project_id]:
+                del project_event_queues[project_id]
+                await file_watcher.stop_watching(project_id)
 
 
 @router.get("/projects/{project_id}/tasks")
