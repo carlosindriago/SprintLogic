@@ -39,6 +39,7 @@ interface DashboardFile {
 export default function AIAuditPanel({ projectId }: AIAuditPanelProps) {
   const [dashboard, setDashboard] = useState<GitDashboard | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [selectedFile, setSelectedFile] = useState<DashboardFile | null>(null);
   const [diffData, setDiffData] = useState<FileLocalDiff | null>(null);
   const [diffLoading, setDiffLoading] = useState(false);
@@ -53,16 +54,27 @@ export default function AIAuditPanel({ projectId }: AIAuditPanelProps) {
   const wsRef = useRef<WebSocket | null>(null);
   const fetchDashboardRef = useRef<() => Promise<void>>(async () => {});
 
+  const dashboardRef = useRef<GitDashboard | null>(null);
+
   const fetchDashboard = useCallback(async () => {
-    setLoading(true);
+    const isInitial = dashboardRef.current === null;
+    if (isInitial) {
+      setLoading(true);
+    } else {
+      setRefreshing(true);
+    }
     setError(null);
     try {
       const data = await getGitDashboard(projectId);
+      dashboardRef.current = data;
       setDashboard(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load dashboard');
+      if (isInitial) {
+        setError(err instanceof Error ? err.message : 'Failed to load dashboard');
+      }
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, [projectId]);
 
@@ -286,21 +298,21 @@ export default function AIAuditPanel({ projectId }: AIAuditPanelProps) {
         </div>
         <button
           onClick={fetchDashboard}
-          disabled={loading}
+          disabled={loading || refreshing}
           className="p-1 rounded text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors disabled:opacity-30"
           title="Refrescar"
         >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`w-3.5 h-3.5 ${loading || refreshing ? 'animate-spin' : ''}`} />
         </button>
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {loading ? (
+        {loading && !dashboard ? (
           <div className="flex items-center justify-center py-16 text-zinc-500">
             <RefreshCw className="w-5 h-5 animate-spin mr-2" />
             Cargando dashboard...
           </div>
-        ) : error ? (
+        ) : error && !dashboard ? (
           <div className="flex items-center justify-center py-16 text-red-400 text-sm gap-2">
             <AlertCircle className="w-4 h-4" />
             {error}
