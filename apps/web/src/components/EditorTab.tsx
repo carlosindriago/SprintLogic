@@ -328,7 +328,8 @@ export default function EditorTab({
         const vim = initVimMode(editor, statusNode);
         vimInstanceRef.current = vim;
 
-        VimMode.Vim.defineEx('write', 'w', (args: { args: string }) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (VimMode as any).Vim.defineEx('write', 'w', (args: { args: string }) => {
           const filename = args.args.trim();
           if (filename) {
             const dir = node.file_path ? node.file_path.substring(0, node.file_path.lastIndexOf('/')) : '';
@@ -519,7 +520,7 @@ export default function EditorTab({
         <div className="flex items-center gap-0.5">
           <button
             className={TOOLBAR_BUTTON}
-            onClick={handleSave}
+            onClick={() => handleSave()}
             disabled={(!isDirty && !isUntitled) || saving}
             title={isUntitled ? "Guardar como..." : "Guardar (Ctrl+S)"}
           >
