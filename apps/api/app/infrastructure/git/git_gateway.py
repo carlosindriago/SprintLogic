@@ -544,6 +544,9 @@ class LocalGitGateway:
             "last_commit_status": self._run_command(
                 repo_path, "show", "--name-status", "--format=", "HEAD",
             ),
+            "penultimate_commit_status": self._run_command(
+                repo_path, "show", "--name-status", "--format=", "HEAD~1",
+            ),
             "modified_files": self._run_command(
                 repo_path, "diff", "--name-only", "HEAD",
             ),
@@ -583,6 +586,7 @@ class LocalGitGateway:
                 ),
                 "staged_list": self._parse_name_status(mapped["staged_status"]),
                 "last_commit_list": self._parse_name_status(mapped["last_commit_status"]),
+                "penultimate_commit_list": self._parse_name_status(mapped["penultimate_commit_status"]),
             },
             "branch": {
                 "current_branch": (
