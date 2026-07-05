@@ -526,6 +526,48 @@ class LocalGitGateway:
                 items.append({"status": parts[0], "file_path": parts[1]})
         return items
 
+    @staticmethod
+    def _parse_commit_files(output: str | BaseException) -> list[dict[str, Any]]:
+        if isinstance(output, BaseException):
+            return []
+        lines = output.split("\n")
+        if not lines or not lines[0].strip():
+            return []
+        timestamp_str = lines[0].strip()
+        try:
+            commit_ts = int(timestamp_str)
+        except ValueError:
+            commit_ts = None
+
+        items: list[dict[str, Any]] = []
+        for line in lines[1:]:
+            if not line.strip():
+                continue
+            parts = line.split("\t")
+            if len(parts) >= 2:
+                item: dict[str, Any] = {"status": parts[0], "file_path": parts[1]}
+                if commit_ts is not None:
+                    item["timestamp"] = commit_ts
+                items.append(item)
+        return items
+
+    async def _add_local_timestamps(
+        self, repo_path: str, items: list[dict[str, str]],
+    ) -> list[dict[str, Any]]:
+        if not items:
+            return []
+
+        async def get_one(item: dict[str, str]) -> dict[str, Any]:
+            full = os.path.join(repo_path, item["file_path"])
+            try:
+                loop = asyncio.get_running_loop()
+                mtime = await loop.run_in_executor(None, os.path.getmtime, full)
+                return {**item, "timestamp": int(mtime)}
+            except (FileNotFoundError, OSError):
+                return {**item, "timestamp": 0}
+
+        return list(await asyncio.gather(*(get_one(i) for i in items)))
+
     async def get_git_dashboard(self, repo_path: str) -> dict[str, Any]:
         tasks = {
             "tracked_files": self._run_command(repo_path, "ls-files"),
@@ -542,10 +584,10 @@ class LocalGitGateway:
                 repo_path, "diff", "--name-status", "--cached",
             ),
             "last_commit_status": self._run_command(
-                repo_path, "show", "--name-status", "--format=", "HEAD",
+                repo_path, "show", "--name-status", "--format=%ct", "HEAD",
             ),
             "penultimate_commit_status": self._run_command(
-                repo_path, "show", "--name-status", "--format=", "HEAD~1",
+                repo_path, "show", "--name-status", "--format=%ct", "HEAD~1",
             ),
             "modified_files": self._run_command(
                 repo_path, "diff", "--name-only", "HEAD",
@@ -569,24 +611,41 @@ class LocalGitGateway:
 
         tracked_count = self._count_non_empty_lines(mapped["tracked_files"])
 
+        untracked_paths: list[str] = (
+            []
+            if isinstance(mapped["untracked_files"], BaseException)
+            else [p for p in mapped["untracked_files"].split("\n") if p]
+        )
+        untracked_items = [{"status": "??", "file_path": p} for p in untracked_paths]
+
+        modified_paths: list[str] = (
+            []
+            if isinstance(mapped["modified_files"], BaseException)
+            else [p for p in mapped["modified_files"].split("\n") if p]
+        )
+        modified_items = [{"status": "M", "file_path": p} for p in modified_paths]
+
+        staged_items = self._parse_name_status(mapped["staged_status"])
+
+        enriched_untracked = await self._add_local_timestamps(repo_path, untracked_items)
+        enriched_modified = await self._add_local_timestamps(repo_path, modified_items)
+        enriched_staged = await self._add_local_timestamps(repo_path, staged_items)
+
         return {
             "kpis": {
                 "total_files": tracked_count,
                 "tracked": tracked_count,
-                "untracked": self._count_non_empty_lines(mapped["untracked_files"]),
+                "untracked": len(enriched_untracked),
                 "ignored": self._count_non_empty_lines(mapped["ignored_files"]),
-                "modified": self._count_non_empty_lines(mapped["modified_files"]),
+                "modified": len(enriched_modified),
                 "last_commit_files": self._count_non_empty_lines(mapped["last_commit_files"]),
             },
             "lists": {
-                "untracked_list": (
-                    []
-                    if isinstance(mapped["untracked_files"], BaseException)
-                    else mapped["untracked_files"].split("\n")
-                ),
-                "staged_list": self._parse_name_status(mapped["staged_status"]),
-                "last_commit_list": self._parse_name_status(mapped["last_commit_status"]),
-                "penultimate_commit_list": self._parse_name_status(mapped["penultimate_commit_status"]),
+                "untracked_list": enriched_untracked,
+                "modified_list": enriched_modified,
+                "staged_list": enriched_staged,
+                "last_commit_list": self._parse_commit_files(mapped["last_commit_status"]),
+                "penultimate_commit_list": self._parse_commit_files(mapped["penultimate_commit_status"]),
             },
             "branch": {
                 "current_branch": (
