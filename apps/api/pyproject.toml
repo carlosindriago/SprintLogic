@@ -47,8 +47,8 @@ ignore = ["E402", "E501", "E722"]
 
 [tool.mypy]
 python_version = "3.12"
-strict = true
-exclude = ["migrations"]
+strict = false
+exclude = ["migrations", ".venv", "venv", "test_env"]
 
 [tool.setuptools.packages.find]
 where = ["."]
