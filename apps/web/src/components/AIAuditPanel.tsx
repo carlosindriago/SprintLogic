@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { getLocalChanges, getFileLocalDiff, type ChangedFile, type FileLocalDiff } from '@/lib/api';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { getLocalChanges, getFileLocalDiff, API_BASE_URL, type ChangedFile, type FileLocalDiff } from '@/lib/api';
 import DiffViewer, { detectLanguage } from './DiffViewer';
 import { ArrowLeft, FolderGit2, Plus, Minus, FileText, RefreshCw } from 'lucide-react';
 
@@ -14,6 +14,8 @@ export default function AIAuditPanel({ projectId }: AIAuditPanelProps) {
   const [diffData, setDiffData] = useState<FileLocalDiff | null>(null);
   const [diffLoading, setDiffLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const fetchChangesRef = useRef<() => Promise<void>>(async () => {});
 
   const fetchChanges = useCallback(async () => {
     setLoading(true);
@@ -29,8 +31,52 @@ export default function AIAuditPanel({ projectId }: AIAuditPanelProps) {
   }, [projectId]);
 
   useEffect(() => {
+    fetchChangesRef.current = fetchChanges;
+  }, [fetchChanges]);
+
+  useEffect(() => {
     fetchChanges();
   }, [fetchChanges]);
+
+  useEffect(() => {
+    const wsUrl = API_BASE_URL.replace(/^http/, "ws") + `/projects/${projectId}/ws`;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const connect = () => {
+      if (wsRef.current?.readyState === WebSocket.OPEN) return;
+
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === "file_changed") {
+            fetchChangesRef.current();
+          }
+        } catch {
+          // ignore malformed messages
+        }
+      };
+
+      ws.onclose = () => {
+        wsRef.current = null;
+        reconnectTimer = setTimeout(connect, 3000);
+      };
+
+      ws.onerror = () => {
+        ws.close();
+      };
+    };
+
+    connect();
+
+    return () => {
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      wsRef.current?.close();
+      wsRef.current = null;
+    };
+  }, [projectId]);
 
   const handleFileClick = useCallback(async (file: ChangedFile) => {
     setSelectedFile(file);
