@@ -134,7 +134,7 @@ export default function EditorTab({
   const handleSave = useCallback(async (saveAs?: string) => {
     if (isSavingRef.current || !editorRef.current) return;
 
-    if (isUntitled) {
+    if (!node.file_path) {
       onSaveUntitled?.(editorRef.current.getValue());
       return;
     }
@@ -158,7 +158,7 @@ export default function EditorTab({
       setSaving(false);
       isSavingRef.current = false;
     }
-  }, [projectId, node.file_path, isUntitled, onSaveUntitled]);
+  }, [projectId, node.file_path, onSaveUntitled]);
 
   useEffect(() => {
     handleSaveRef.current = handleSave;
