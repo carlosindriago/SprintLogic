@@ -249,6 +249,43 @@ export const getGitStatus = async (projectId: string): Promise<GitStatus> => {
   return res.json();
 };
 
+export interface ChangedFile {
+  status_code: string;
+  file_path: string;
+  is_untracked: boolean;
+  is_modified: boolean;
+  added: number;
+  deleted: number;
+}
+
+export interface LocalChangesResponse {
+  files: ChangedFile[];
+}
+
+export const getLocalChanges = async (projectId: string): Promise<LocalChangesResponse> => {
+  const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/git/changes`);
+  if (!res.ok) throw new Error("Failed to fetch local changes");
+  return res.json();
+};
+
+export interface FileLocalDiff {
+  diff?: string;
+  original_content: string;
+  modified_content: string;
+  status: string;
+}
+
+export const getFileLocalDiff = async (
+  projectId: string,
+  filePath: string,
+): Promise<FileLocalDiff> => {
+  const res = await fetchWithRetry(
+    `${API_BASE_URL}/projects/${projectId}/git/diff?file_path=${encodeURIComponent(filePath)}`,
+  );
+  if (!res.ok) throw new Error("Failed to fetch file diff");
+  return res.json();
+};
+
 export interface KanbanColumn {
   id: string;
   title: string;

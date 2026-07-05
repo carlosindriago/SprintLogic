@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Settings, FolderOpen, ChevronRight, Edit2, Trash2, PlusCircle, ChevronsUpDown, FilePlus, RefreshCw, ScanSearch, Layout, Network, GitBranch, BarChart3 } from "lucide-react";
+import { Settings, FolderOpen, ChevronRight, Edit2, Trash2, PlusCircle, ChevronsUpDown, FilePlus, RefreshCw, ScanSearch, Layout, Network, GitBranch, BarChart3, FolderGit2 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { scanProject, getProjects, updateProject, deleteProject, analyzeProject } from "@/lib/api";
@@ -62,6 +62,11 @@ const EditorTab = dynamic(
 );
 const DiffTab = dynamic(
   () => import('@/components/DiffTab').then((m) => m.default),
+  { ssr: false },
+);
+
+const AIAuditPanel = dynamic(
+  () => import('@/components/AIAuditPanel').then((m) => m.default),
   { ssr: false },
 );
 
@@ -302,7 +307,7 @@ export default function Home() {
     });
   };
 
-  const launchTool = (tabId: string, title: string, type: 'insights' | 'kanban' | 'graph' | 'git-graph') => {
+  const launchTool = (tabId: string, title: string, type: 'insights' | 'kanban' | 'graph' | 'git-graph' | 'audit') => {
     addTab({ id: tabId, title, type });
   };
 
@@ -354,6 +359,9 @@ export default function Home() {
       case 'diff':
         if (!projectId || !activeTab.data?.hash || !activeTab.data?.filePath) return null;
         return <DiffTab projectId={projectId} hash={activeTab.data.hash} filePath={activeTab.data.filePath} />;
+      case 'audit':
+        if (!projectId) return null;
+        return <AIAuditPanel projectId={projectId} />;
       default:
         return <div className="p-4">Tipo de pestaña desconocido.</div>;
     }
@@ -483,6 +491,15 @@ export default function Home() {
                   title="Control Git"
                 >
                   <GitBranch className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-700"
+                  onClick={() => launchTool('audit', 'Auditoría IA', 'audit')}
+                  title="Auditoría IA"
+                >
+                  <FolderGit2 className="w-4 h-4" />
                 </Button>
               </div>
 
