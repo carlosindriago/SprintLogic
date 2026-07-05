@@ -467,7 +467,6 @@ async def merge_branch(
         raise HTTPException(status_code=404, detail="Project not found")
 
     try:
-    try:
         out = await git_gateway.merge(project.path, request.source_branch)
         resp = {"status": "success", "output": out}
         store_idempotent_response(idempotency_key, request.model_dump(), resp)
