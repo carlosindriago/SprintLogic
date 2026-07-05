@@ -5,6 +5,7 @@ import {
   revertFile,
   stageFile,
   unstageFile,
+  commitChanges,
   API_BASE_URL,
   type GitDashboard,
   type GitDashboardFileStatus,
@@ -46,6 +47,9 @@ export default function AIAuditPanel({ projectId }: AIAuditPanelProps) {
   const [discarding, setDiscarding] = useState(false);
   const discardingRef = useRef(false);
   const stagingRef = useRef(false);
+  const committingRef = useRef(false);
+  const [commitMessage, setCommitMessage] = useState('');
+  const [committing, setCommitting] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const fetchDashboardRef = useRef<() => Promise<void>>(async () => {});
 
@@ -177,6 +181,21 @@ export default function AIAuditPanel({ projectId }: AIAuditPanelProps) {
     }
   }, [projectId]);
 
+  const handleCommit = useCallback(async () => {
+    if (committingRef.current || !commitMessage.trim()) return;
+    committingRef.current = true;
+    setCommitting(true);
+    try {
+      await commitChanges(projectId, commitMessage.trim());
+      setCommitMessage('');
+    } catch {
+      // silently fail; WebSocket will refresh
+    } finally {
+      setCommitting(false);
+      committingRef.current = false;
+    }
+  }, [projectId, commitMessage]);
+
   const statusBadge = (code: string) => {
     const map: Record<string, { label: string; className: string }> = {
       'M': { label: 'M', className: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' },
@@ -250,6 +269,7 @@ export default function AIAuditPanel({ projectId }: AIAuditPanelProps) {
 
   const kpis = dashboard?.kpis;
   const branch = dashboard?.branch;
+  const stagedCount = dashboard?.lists.staged_list.length ?? 0;
 
   return (
     <div className="flex flex-col h-full bg-[#151515] overflow-hidden">
@@ -328,6 +348,36 @@ export default function AIAuditPanel({ projectId }: AIAuditPanelProps) {
                 isText
                 accent={mainStatusColor(branch?.diff_with_main)}
               />
+            </div>
+
+            <div className="px-4 pb-3 shrink-0">
+              <div className="flex items-end gap-3 p-3 bg-zinc-900/50 border border-zinc-800/50 rounded-lg">
+                <textarea
+                  value={commitMessage}
+                  onChange={(e) => setCommitMessage(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                      e.preventDefault();
+                      handleCommit();
+                    }
+                  }}
+                  placeholder={
+                    stagedCount === 0
+                      ? 'Agrega archivos al stage para habilitar el commit'
+                      : 'Mensaje del commit...'
+                  }
+                  disabled={stagedCount === 0 || committing}
+                  rows={2}
+                  className="flex-1 px-3 py-2 text-sm bg-zinc-800 border border-zinc-700/50 rounded text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600 resize-none disabled:opacity-40 font-mono"
+                />
+                <button
+                  onClick={handleCommit}
+                  disabled={stagedCount === 0 || !commitMessage.trim() || committing}
+                  className="px-4 py-2 rounded text-sm font-medium bg-green-600 text-white hover:bg-green-500 border border-green-500/20 transition-colors disabled:opacity-30 shrink-0"
+                >
+                  {committing ? 'Commiteando...' : 'Hacer Commit'}
+                </button>
+              </div>
             </div>
 
             <div className="flex-1 min-h-0 px-4 pb-4">
