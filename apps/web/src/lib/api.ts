@@ -333,6 +333,7 @@ export interface GitDashboard {
     untracked_list: string[];
     staged_list: GitDashboardFileStatus[];
     last_commit_list: GitDashboardFileStatus[];
+    penultimate_commit_list: GitDashboardFileStatus[];
   };
   branch: GitDashboardBranch;
 }

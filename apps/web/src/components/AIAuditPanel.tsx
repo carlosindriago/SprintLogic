@@ -438,6 +438,14 @@ export default function AIAuditPanel({ projectId }: AIAuditPanelProps) {
                   onItemClick={handleFileClick}
                   statusBadge={statusBadge}
                 />
+                <StatusColumn
+                  title="Penúltimo commit"
+                  icon={<GitCommit className="w-3.5 h-3.5 text-purple-400" />}
+                  count={dashboard.lists.penultimate_commit_list.length}
+                  items={dashboard.lists.penultimate_commit_list}
+                  onItemClick={handleFileClick}
+                  statusBadge={statusBadge}
+                />
               </div>
             </div>
           </div>
@@ -499,7 +507,7 @@ function StatusColumn({
   showActionAll?: boolean;
 }) {
   return (
-    <div className="flex flex-col min-w-[260px] flex-1 bg-zinc-900/30 border border-zinc-800/50 rounded-lg overflow-hidden">
+    <div className="flex flex-col min-w-[200px] flex-1 bg-zinc-900/30 border border-zinc-800/50 rounded-lg overflow-hidden">
       <div className="flex items-center justify-between px-3 py-2 bg-zinc-900 border-b border-zinc-800/50 shrink-0">
         <div className="flex items-center gap-2 text-xs font-medium text-zinc-300">
           {icon}
