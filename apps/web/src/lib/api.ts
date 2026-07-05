@@ -161,7 +161,10 @@ export const createFile = async (projectId: string, path: string, content: strin
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ content }),
   });
-  if (!res.ok) throw new Error("Failed to create file");
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail || "Failed to create file");
+  }
   return res.json();
 };
 

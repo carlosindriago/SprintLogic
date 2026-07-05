@@ -30,6 +30,7 @@ export default function NewFileDialog({
   const [fileName, setFileName] = useState('');
   const [content, setContent] = useState(initialContent);
   const [creating, setCreating] = useState(false);
+  const creatingRef = useRef(false);
   const editorRef = useRef<monacoEditor.IStandaloneCodeEditor | null>(null);
 
   useEffect(() => {
@@ -45,7 +46,8 @@ export default function NewFileDialog({
     : fileName;
 
   const handleCreate = useCallback(async () => {
-    if (!fileName.trim() || !projectId) return;
+    if (!fileName.trim() || !projectId || creatingRef.current) return;
+    creatingRef.current = true;
     setCreating(true);
     try {
       const result = await createFile(projectId, filePath, content);
@@ -58,6 +60,7 @@ export default function NewFileDialog({
       toast.error(err instanceof Error ? err.message : 'Error al crear archivo');
     } finally {
       setCreating(false);
+      creatingRef.current = false;
     }
   }, [fileName, filePath, content, projectId, onCreated, onOpenChange]);
 
