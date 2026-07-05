@@ -265,6 +265,8 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     }
   }, [graphData]);
 
+  const lowerSearchQuery = useMemo(() => searchQuery?.toLowerCase() || "", [searchQuery]);
+
   const neighbors = useMemo(() => {
     const map = new Map<string, Set<string>>();
     graphData.nodes.forEach(n => map.set(n.id as string, new Set()));
@@ -296,7 +298,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     if (!activeTypes.has(label)) return;
     
     // Filter by search
-    if (searchQuery && !name.toLowerCase().includes(searchQuery.toLowerCase())) return;
+    if (lowerSearchQuery && !name.toLowerCase().includes(lowerSearchQuery)) return;
 
     let radius = 3;
     let color = graphTheme.unknown;
@@ -359,7 +361,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     }
     
     ctx.globalAlpha = 1; // reset
-  }, [activeTypes, searchQuery, isFaded, hoverNode, focusNode]);
+  }, [activeTypes, lowerSearchQuery, isFaded, hoverNode, focusNode]);
 
   const paintLink = useCallback((link: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
     const sourceNode = link.source;
@@ -372,11 +374,11 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     
     if (!activeTypes.has(sourceLabel) || !activeTypes.has(targetLabel)) return;
 
-    if (searchQuery) {
+    if (lowerSearchQuery) {
       const sourceName = sourceNode.name as string;
       const targetName = targetNode.name as string;
-      if (!sourceName.toLowerCase().includes(searchQuery.toLowerCase()) && 
-          !targetName.toLowerCase().includes(searchQuery.toLowerCase())) return;
+      if (!sourceName.toLowerCase().includes(lowerSearchQuery) &&
+          !targetName.toLowerCase().includes(lowerSearchQuery)) return;
     }
 
     const faded = isFaded(sourceNode.id as string) && isFaded(targetNode.id as string);
@@ -399,7 +401,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     
     ctx.stroke();
     ctx.globalAlpha = 1;
-  }, [activeTypes, searchQuery, isFaded, showCycles]);
+  }, [activeTypes, lowerSearchQuery, isFaded, showCycles]);
 
   const toggleType = (type: string) => {
     setActiveTypes(prev => {
