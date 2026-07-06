@@ -26,10 +26,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Settings, FolderOpen, ChevronRight, Edit2, Trash2, PlusCircle, ChevronsUpDown, FilePlus, RefreshCw, ScanSearch, Layout, Network, GitBranch, BarChart3 } from "lucide-react";
+import { Settings, FolderOpen, ChevronRight, Edit2, Trash2, PlusCircle, ChevronsUpDown, FilePlus, RefreshCw, ScanSearch, Layout, Network, GitBranch, BarChart3, FolderGit2 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { scanProject, getProjects, updateProject, deleteProject, analyzeProject } from "@/lib/api";
+import { scanProject, getProjects, updateProject, deleteProject, analyzeProject, renameFile, duplicateFile, deleteFile } from "@/lib/api";
 import { Switch } from "@/components/ui/switch";
 import SprintLogicChat from "@/components/SprintLogicChat";
 import KanbanBoard from "@/components/KanbanBoard";
@@ -65,6 +65,11 @@ const DiffTab = dynamic(
   { ssr: false },
 );
 
+const AIAuditPanel = dynamic(
+  () => import('@/components/AIAuditPanel').then((m) => m.default),
+  { ssr: false },
+);
+
 const GraphScene = dynamic(() => import("@/components/GraphScene"), { ssr: false });
 
 export default function Home() {
@@ -91,6 +96,12 @@ export default function Home() {
   const [mentorContent, setMentorContent] = useState('');
   const [mentorTechStack, setMentorTechStack] = useState<Record<string, number>>({});
   const untitledCounter = useRef(0);
+  const [renameDialogOpen, setRenameDialogOpen] = useState(false);
+  const [renameFilePath, setRenameFilePath] = useState('');
+  const [renameNewName, setRenameNewName] = useState('');
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteFilePath, setDeleteFilePath] = useState('');
+  const [fileOperationError, setFileOperationError] = useState<string | null>(null);
 
   const fetchProjects = useCallback(async () => {
     try {
@@ -234,6 +245,55 @@ export default function Home() {
     setNewFileDialogOpen(true);
   };
 
+  const refreshFileTree = () => setFileTreeRefreshKey((k) => k + 1);
+
+  const handleFileRename = (path: string) => {
+    setFileOperationError(null);
+    setRenameFilePath(path);
+    setRenameNewName(path.split('/').pop() || '');
+    setRenameDialogOpen(true);
+  };
+
+  const handleConfirmRename = async () => {
+    if (!projectId || !renameNewName.trim()) return;
+    setFileOperationError(null);
+    try {
+      await renameFile(projectId, renameFilePath, renameNewName.trim());
+      setRenameDialogOpen(false);
+      refreshFileTree();
+    } catch (err) {
+      setFileOperationError(err instanceof Error ? err.message : 'Error al renombrar');
+    }
+  };
+
+  const handleFileDuplicate = async (path: string) => {
+    if (!projectId) return;
+    try {
+      await duplicateFile(projectId, path);
+      refreshFileTree();
+    } catch {
+      // silently fail
+    }
+  };
+
+  const handleFileDelete = (path: string) => {
+    setFileOperationError(null);
+    setDeleteFilePath(path);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!projectId) return;
+    setFileOperationError(null);
+    try {
+      await deleteFile(projectId, deleteFilePath);
+      setDeleteDialogOpen(false);
+      refreshFileTree();
+    } catch (err) {
+      setFileOperationError(err instanceof Error ? err.message : 'Error al eliminar');
+    }
+  };
+
   const handleFileCreated = (filePath: string) => {
     setFileTreeRefreshKey(k => k + 1);
     const { tabs, activeTabId, updateTab } = useTabsStore.getState();
@@ -302,7 +362,7 @@ export default function Home() {
     });
   };
 
-  const launchTool = (tabId: string, title: string, type: 'insights' | 'kanban' | 'graph' | 'git-graph') => {
+  const launchTool = (tabId: string, title: string, type: 'insights' | 'kanban' | 'graph' | 'git-graph' | 'audit') => {
     addTab({ id: tabId, title, type });
   };
 
@@ -354,6 +414,9 @@ export default function Home() {
       case 'diff':
         if (!projectId || !activeTab.data?.hash || !activeTab.data?.filePath) return null;
         return <DiffTab projectId={projectId} hash={activeTab.data.hash} filePath={activeTab.data.filePath} />;
+      case 'audit':
+        if (!projectId) return null;
+        return <AIAuditPanel projectId={projectId} />;
       default:
         return <div className="p-4">Tipo de pestaña desconocido.</div>;
     }
@@ -483,6 +546,15 @@ export default function Home() {
                   title="Control Git"
                 >
                   <GitBranch className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-700"
+                  onClick={() => launchTool('audit', 'Auditoría IA', 'audit')}
+                  title="Auditoría IA"
+                >
+                  <FolderGit2 className="w-4 h-4" />
                 </Button>
               </div>
 
@@ -688,6 +760,9 @@ export default function Home() {
                         onNewFile={handleNewFile}
                         refreshKey={fileTreeRefreshKey}
                         onNavigateToMarker={handleNavigateToMarker}
+                        onFileRename={handleFileRename}
+                        onFileDuplicate={handleFileDuplicate}
+                        onFileDelete={handleFileDelete}
                       />
                     </div>
                   ) : (
@@ -784,6 +859,71 @@ export default function Home() {
       </div>
 
       <PomodoroTimer projectId={projectId} />
+
+        <Dialog open={renameDialogOpen} onOpenChange={setRenameDialogOpen}>
+          <DialogContent className="bg-zinc-900 border-zinc-700 text-zinc-200 sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="text-sm">Renombrar archivo</DialogTitle>
+              <DialogDescription className="text-xs text-zinc-500">
+                {renameFilePath}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              <Input
+                value={renameNewName}
+                onChange={(e) => setRenameNewName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleConfirmRename()}
+                placeholder="Nuevo nombre"
+                autoFocus
+                className="bg-zinc-800 border-zinc-700 text-zinc-200 text-sm"
+              />
+              {fileOperationError && (
+                <p className="text-xs text-red-400">{fileOperationError}</p>
+              )}
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" size="sm" onClick={() => setRenameDialogOpen(false)}
+                  className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 text-xs">
+                  Cancelar
+                </Button>
+                <Button size="sm" onClick={handleConfirmRename}
+                  disabled={!renameNewName.trim()}
+                  className="bg-blue-600 hover:bg-blue-500 text-xs">
+                  Renombrar
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <DialogContent className="bg-zinc-900 border-zinc-700 text-zinc-200 sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="text-sm">Eliminar archivo</DialogTitle>
+              <DialogDescription className="text-xs text-zinc-500">
+                {deleteFilePath}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              <p className="text-xs text-zinc-400">
+                Esta acción eliminará el archivo del disco de forma permanente. Asegurate de que esté en Git o de que tengas un backup si querés recuperarlo después.
+              </p>
+              {fileOperationError && (
+                <p className="text-xs text-red-400">{fileOperationError}</p>
+              )}
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" size="sm" onClick={() => setDeleteDialogOpen(false)}
+                  className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 text-xs">
+                  Cancelar
+                </Button>
+                <Button size="sm" onClick={handleConfirmDelete}
+                  className="bg-red-600 hover:bg-red-500 text-xs">
+                  Eliminar
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
         {projectId && (
           <NewFileDialog
             open={newFileDialogOpen}

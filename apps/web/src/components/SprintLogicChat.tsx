@@ -25,6 +25,7 @@ function asValidModel(model: string): string | null {
 
 export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLogicChatProps) {
   const defaultModel = useLLMConfigStore((s) => s.defaultModel);
+  const setDefaultModel = useLLMConfigStore((s) => s.setDefaultModel);
   const activeModel = useMemo(() => asValidModel(defaultModel), [defaultModel]);
   const [sessionModel, setSessionModel] = useState<string | null>(null);
 
@@ -37,28 +38,23 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
   const [loading, setLoading] = useState(false);
   const [usage, setUsage] = useState<{ completion_tokens?: number; total_tokens?: number } | null>(null);
   const [availableModels, setAvailableModels] = useState<{
-    provider: string; models: { id: string; name: string }[];
+    provider: string;
+    provider_id: string;
+    is_configured: boolean;
+    models: { id: string; name: string }[];
   }[]>([]);
-  const apiKeys = useLLMConfigStore((s) => s.apiKeys);
 
   useEffect(() => {
-    fetch(`${API_BASE_URL}/ai/active-models`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        gemini_key: apiKeys.gemini || null,
-        openai_key: apiKeys.openai || null,
-        anthropic_key: apiKeys.anthropic || null,
-        openrouter_key: apiKeys.openrouter || null,
-        opencode_zen_key: apiKeys['opencode-zen'] || null,
-        opencode_go_key: apiKeys['opencode-go'] || null,
-        nvidia_key: apiKeys.nvidia || null,
-      }),
-    })
+    fetch(`${API_BASE_URL}/ai/models`)
       .then(res => res.json())
       .then(data => setAvailableModels(data))
       .catch(() => {});
-  }, [apiKeys]);
+  }, []);
+
+  const configuredGroups = useMemo(
+    () => availableModels.filter((g) => g.is_configured),
+    [availableModels],
+  );
 
   const SLASH_COMMANDS = [
     { command: '/explain', description: 'Explica el archivo o código actual', prompt: 'Explica qué hace este archivo y su rol en la arquitectura del proyecto.' },
@@ -242,19 +238,20 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
                 if (e.target.value === "clear") {
                   setSessionModel(null);
                 } else {
+                  setDefaultModel(e.target.value);
                   setSessionModel(e.target.value);
                 }
               }}
-              disabled={availableModels.length === 0}
+              disabled={configuredGroups.length === 0}
               className="appearance-none bg-transparent border-none text-xs text-zinc-300 focus:outline-none pr-4 cursor-pointer disabled:cursor-not-allowed disabled:text-zinc-500"
             >
-              {availableModels.length === 0 ? (
+              {configuredGroups.length === 0 ? (
                 <option disabled value="">Sin Modelos Disponibles</option>
               ) : (
                 <>
                   <option disabled value="">Seleccionar Modelo</option>
-                  {availableModels.map((group) => (
-                    <optgroup key={group.provider} label={group.provider}>
+                  {configuredGroups.map((group) => (
+                    <optgroup key={group.provider_id} label={group.provider}>
                       {group.models.map((m) => (
                         <option key={m.id} value={m.id}>{m.name}</option>
                       ))}
@@ -359,7 +356,8 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
             />
           <button
             onClick={sendMessage}
-            disabled={loading || !input.trim()}
+            disabled={loading || !input.trim() || !currentModel}
+            title={currentModel ? "Enviar mensaje" : "Seleccioná un modelo para enviar mensajes"}
             className="text-zinc-400 hover:text-white disabled:opacity-30 shrink-0"
           >
             <Send className="w-3.5 h-3.5" />

@@ -1,16 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronRight, ChevronDown, Folder, FilePlus, FolderPlus, AlertCircle, AlertTriangle } from 'lucide-react';
+import { ChevronRight, ChevronDown, Folder, FilePlus, FolderPlus, AlertCircle, AlertTriangle, Pencil, Copy, Trash2 } from 'lucide-react';
 import { getProjectFiles } from '@/lib/api';
 import { FileTreeNode } from '@/types';
 import FileIcon from './FileIcon';
 import { useMarkersStore, type MarkerData } from '@/store/markersStore';
 import { cn } from '@/lib/utils';
+import { ContextMenu, ContextMenuItem, ContextMenuSeparator } from './ContextMenu';
 
 interface FileTreeProps {
   projectId: string;
   onFileSelect: (path: string) => void;
   onNewFile?: (directory?: string) => void;
   refreshKey?: number;
+  onFileRename?: (path: string) => void;
+  onFileDuplicate?: (path: string) => void;
+  onFileDelete?: (path: string) => void;
 }
 
 const TreeNode: React.FC<{
@@ -20,7 +24,10 @@ const TreeNode: React.FC<{
   onNewFile?: (directory?: string) => void;
   allFiles: Record<string, { errors: number; warnings: number; markers: MarkerData[] }>;
   onNavigateToMarker?: (filePath: string, line: number, column: number) => void;
-}> = ({ node, onSelect, depth, onNewFile, allFiles, onNavigateToMarker }) => {
+  onFileRename?: (path: string) => void;
+  onFileDuplicate?: (path: string) => void;
+  onFileDelete?: (path: string) => void;
+}> = ({ node, onSelect, depth, onNewFile, allFiles, onNavigateToMarker, onFileRename, onFileDuplicate, onFileDelete }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [showMarkers, setShowMarkers] = useState(false);
@@ -64,39 +71,30 @@ const TreeNode: React.FC<{
         {isOpen && node.children && (
           <div>
             {node.children.map((child, idx) => (
-              <TreeNode key={idx} node={child} onSelect={onSelect} depth={depth + 1} onNewFile={onNewFile} allFiles={allFiles} onNavigateToMarker={onNavigateToMarker} />
+              <TreeNode key={idx} node={child} onSelect={onSelect} depth={depth + 1} onNewFile={onNewFile} allFiles={allFiles} onNavigateToMarker={onNavigateToMarker} onFileRename={onFileRename} onFileDuplicate={onFileDuplicate} onFileDelete={onFileDelete} />
             ))}
           </div>
         )}
 
         {contextMenu && (
-          <div
-            className="fixed z-50 bg-zinc-800 border border-zinc-700/50 rounded-lg shadow-xl py-1 min-w-[160px]"
-            style={{ left: contextMenu.x, top: contextMenu.y }}
-          >
-            <button
-              className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-700 transition-colors"
-              onClick={(e) => {
-                e.stopPropagation();
+          <ContextMenu position={contextMenu} onClose={closeContextMenu}>
+            <ContextMenuItem
+              icon={<FilePlus className="w-3.5 h-3.5 text-zinc-400" />}
+              label="Nuevo Archivo"
+              onClick={() => {
                 onNewFile?.(node.path);
                 closeContextMenu();
               }}
-            >
-              <FilePlus className="w-3.5 h-3.5 text-zinc-400" />
-              Nuevo Archivo
-            </button>
-            <button
-              className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-700 transition-colors"
-              onClick={(e) => {
-                e.stopPropagation();
+            />
+            <ContextMenuItem
+              icon={<FolderPlus className="w-3.5 h-3.5 text-zinc-400" />}
+              label="Nueva Carpeta"
+              onClick={() => {
                 onNewFile?.(node.path);
                 closeContextMenu();
               }}
-            >
-              <FolderPlus className="w-3.5 h-3.5 text-zinc-400" />
-              Nueva Carpeta
-            </button>
-          </div>
+            />
+          </ContextMenu>
         )}
       </div>
     );
@@ -153,35 +151,53 @@ const TreeNode: React.FC<{
       )}
 
       {contextMenu && (
-        <div
-          className="fixed z-50 bg-zinc-800 border border-zinc-700/50 rounded-lg shadow-xl py-1 min-w-[160px]"
-          style={{ left: contextMenu.x, top: contextMenu.y }}
-        >
-          <button
-            className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-700 transition-colors"
-            onClick={(e) => {
-              e.stopPropagation();
+        <ContextMenu position={contextMenu} onClose={closeContextMenu}>
+          <ContextMenuItem
+            icon={<FileIcon fileName={node.name} className="w-3.5 h-3.5" />}
+            label="Abrir"
+            onClick={() => {
               onSelect(node.path);
               closeContextMenu();
             }}
-          >
-            <FileIcon fileName={node.name} className="w-3.5 h-3.5" />
-            Abrir
-          </button>
-          <div className="h-px bg-zinc-700/50 my-0.5" />
-          <button
-            className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-700 transition-colors"
-            onClick={(e) => {
-              e.stopPropagation();
+          />
+          <ContextMenuSeparator />
+          <ContextMenuItem
+            icon={<Pencil className="w-3.5 h-3.5 text-zinc-400" />}
+            label="Renombrar"
+            onClick={() => {
+              onFileRename?.(node.path);
+              closeContextMenu();
+            }}
+          />
+          <ContextMenuItem
+            icon={<Copy className="w-3.5 h-3.5 text-zinc-400" />}
+            label="Duplicar"
+            onClick={() => {
+              onFileDuplicate?.(node.path);
+              closeContextMenu();
+            }}
+          />
+          <ContextMenuSeparator />
+          <ContextMenuItem
+            icon={<Trash2 className="w-3.5 h-3.5" />}
+            label="Eliminar"
+            destructive
+            onClick={() => {
+              onFileDelete?.(node.path);
+              closeContextMenu();
+            }}
+          />
+          <ContextMenuSeparator />
+          <ContextMenuItem
+            icon={<FilePlus className="w-3.5 h-3.5 text-zinc-400" />}
+            label="Nuevo Archivo aquí"
+            onClick={() => {
               const dir = node.path.substring(0, node.path.lastIndexOf('/'));
               onNewFile?.(dir);
               closeContextMenu();
             }}
-          >
-            <FilePlus className="w-3.5 h-3.5 text-zinc-400" />
-            Nuevo Archivo aquí
-          </button>
-        </div>
+          />
+        </ContextMenu>
       )}
     </>
   );
@@ -239,7 +255,7 @@ function FileMarkerBadge({ filePath, onToggle, expanded }: { filePath: string; o
   );
 }
 
-export default function FileTree({ projectId, onFileSelect, onNewFile, refreshKey, onNavigateToMarker }: FileTreeProps & { onNavigateToMarker?: (filePath: string, line: number, column: number) => void }) {
+export default function FileTree({ projectId, onFileSelect, onNewFile, refreshKey, onNavigateToMarker, onFileRename, onFileDuplicate, onFileDelete }: FileTreeProps & { onNavigateToMarker?: (filePath: string, line: number, column: number) => void }) {
   const [tree, setTree] = useState<FileTreeNode | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -288,7 +304,7 @@ export default function FileTree({ projectId, onFileSelect, onNewFile, refreshKe
   return (
     <div className="py-2 overflow-x-auto">
       {tree.children?.map((child, idx) => (
-        <TreeNode key={idx} node={child} onSelect={onFileSelect} depth={0} onNewFile={onNewFile} allFiles={allFiles} onNavigateToMarker={onNavigateToMarker} />
+        <TreeNode key={idx} node={child} onSelect={onFileSelect} depth={0} onNewFile={onNewFile} allFiles={allFiles} onNavigateToMarker={onNavigateToMarker} onFileRename={onFileRename} onFileDuplicate={onFileDuplicate} onFileDelete={onFileDelete} />
       ))}
     </div>
   );

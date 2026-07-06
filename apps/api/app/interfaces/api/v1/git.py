@@ -4,7 +4,7 @@ import time
 from typing import Any, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -473,3 +473,167 @@ async def merge_branch(
         return resp
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{project_id}/git/diff")
+async def get_file_local_diff(
+    project_id: str,
+    file_path: str = Query(...),
+    session: AsyncSession = Depends(get_db_session),
+):
+    try:
+        project = await SQLAlchemyProjectRepository(session).get_project(UUID(project_id))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID")
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    result = await git_gateway.get_file_diff(project.path, file_path)
+    if "error" in result:
+        raise HTTPException(status_code=404, detail=result["error"])
+    return result
+
+
+@router.get("/{project_id}/git/changes")
+async def get_local_changes(
+    project_id: str,
+    session: AsyncSession = Depends(get_db_session),
+):
+    try:
+        project = await SQLAlchemyProjectRepository(session).get_project(UUID(project_id))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID")
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    numstat = await git_gateway.get_diff_numstat(project.path)
+    changed_files = await git_gateway.get_changed_files(project.path)
+
+    numstat_map = {f["file_path"]: f for f in numstat}
+
+    files = []
+    for cf in changed_files:
+        metrics = numstat_map.get(cf["file_path"], {"added": 0, "deleted": 0})
+        files.append({
+            **cf,
+            "added": metrics["added"],
+            "deleted": metrics["deleted"],
+        })
+
+    return {"files": files}
+
+
+class RevertRequest(BaseModel):
+    file_path: str
+
+
+@router.post("/{project_id}/git/revert")
+async def revert_file(
+    project_id: str,
+    request: RevertRequest,
+    session: AsyncSession = Depends(get_db_session),
+):
+    try:
+        project = await SQLAlchemyProjectRepository(session).get_project(UUID(project_id))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID")
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    result = await git_gateway.revert_file_changes(project.path, request.file_path)
+
+    if result.get("status") == "error":
+        raise HTTPException(status_code=500, detail=result.get("message"))
+
+    return result
+
+
+@router.get("/{project_id}/git/dashboard")
+async def get_git_dashboard(
+    project_id: str,
+    session: AsyncSession = Depends(get_db_session),
+):
+    try:
+        project = await SQLAlchemyProjectRepository(session).get_project(UUID(project_id))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID")
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    try:
+        dashboard = await git_gateway.get_git_dashboard(project.path)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return dashboard
+
+
+class StageRequest(BaseModel):
+    file_path: str
+
+
+class CommitRequest(BaseModel):
+    message: str
+
+
+@router.post("/{project_id}/git/stage")
+async def stage_file(
+    project_id: str,
+    request: StageRequest,
+    session: AsyncSession = Depends(get_db_session),
+):
+    try:
+        project = await SQLAlchemyProjectRepository(session).get_project(UUID(project_id))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID")
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    try:
+        result = await git_gateway.stage_file(project.path, request.file_path)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return result
+
+
+@router.post("/{project_id}/git/unstage")
+async def unstage_file(
+    project_id: str,
+    request: StageRequest,
+    session: AsyncSession = Depends(get_db_session),
+):
+    try:
+        project = await SQLAlchemyProjectRepository(session).get_project(UUID(project_id))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID")
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    try:
+        result = await git_gateway.unstage_file(project.path, request.file_path)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return result
+
+
+@router.post("/{project_id}/git/commit")
+async def commit_changes(
+    project_id: str,
+    request: CommitRequest,
+    session: AsyncSession = Depends(get_db_session),
+):
+    try:
+        project = await SQLAlchemyProjectRepository(session).get_project(UUID(project_id))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID")
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    try:
+        result = await git_gateway.commit_changes(project.path, request.message)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return result

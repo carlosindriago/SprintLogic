@@ -79,7 +79,7 @@ async def _fetch_context7_docs(api_key: str, query: str, tech_stack: dict) -> st
 class ChatRequest(BaseModel):
     messages: list[dict[str, Any]]
     project_id: str | None = None
-    model: str = "gemini-1.5-pro-latest"
+    model: str
 
 
 class ChatResponse(BaseModel):
@@ -89,6 +89,8 @@ class ChatResponse(BaseModel):
 @router.post("/")
 async def chat_with_ai(request: ChatRequest, session: AsyncSession = Depends(get_db_session)):
     """Handles chat messages with the AI and manages tool calls."""
+    if not request.model or "/" not in request.model:
+        raise HTTPException(status_code=400, detail="Model name is required")
 
     async def generate():
         try:

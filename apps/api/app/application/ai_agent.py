@@ -8,6 +8,7 @@ import litellm
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.infrastructure.ai.provider_adapter import ProviderAdapter
 from app.infrastructure.db.database import AsyncSessionLocal
 from app.infrastructure.db.models import AIMemoryModel, ContextSnippetModel, ProjectModel
 from app.infrastructure.security.credential_manager import CredentialManager
@@ -283,21 +284,10 @@ class AIAgent:
         )
 
     def _get_provider(self, model: str) -> str:
-        model_lower = model.lower()
-        if "gemini" in model_lower:
-            return "gemini"
-        elif "claude" in model_lower or "anthropic" in model_lower:
-            return "anthropic"
-        elif "gpt" in model_lower or "openai" in model_lower:
-            return "openai"
-        elif "openrouter" in model_lower:
-            return "openrouter"
-        elif "nvidia" in model_lower or "nim" in model_lower:
-            return "nvidia"
-        return "gemini"
+        return ProviderAdapter.get_provider(model)
 
     async def chat(
-        self, messages: list[dict[str, str]], model: str = "gemini/gemini-1.5-pro-latest"
+        self, messages: list[dict[str, str]], model: str
     ) -> str:
         """
         Processes a chat conversation and allows the AI to call tools before returning a final response.
@@ -316,14 +306,16 @@ class AIAgent:
                     m for m in messages if m.get("role") != "system"
                 ]
 
-            import os
 
-            if provider == "nvidia" and api_key:
-                os.environ["NVIDIA_NIM_API_KEY"] = api_key
 
             # Prepare LiteLLM call
+            adapted = ProviderAdapter.adapt(model, api_key)
             response = await litellm.acompletion(
-                model=model, messages=messages, tools=self.tools, api_key=api_key
+                model=adapted["model"],
+                messages=messages,
+                tools=self.tools,
+                api_key=adapted["api_key"],
+                **adapted["kwargs"],
             )
 
             if not response.choices or len(response.choices) == 0:
@@ -347,7 +339,10 @@ class AIAgent:
                     )
 
                 second_response = await litellm.acompletion(
-                    model=model, messages=messages, api_key=api_key
+                    model=adapted["model"],
+                    messages=messages,
+                    api_key=adapted["api_key"],
+                    **adapted["kwargs"],
                 )
 
                 if second_response.choices and len(second_response.choices) > 0:
@@ -358,9 +353,10 @@ class AIAgent:
                 # Fallback: retry without tools when second call returns empty
                 try:
                     fallback = await litellm.acompletion(
-                        model=model,
+                        model=adapted["model"],
                         messages=messages,
-                        api_key=api_key,
+                        api_key=adapted["api_key"],
+                        **adapted["kwargs"],
                     )
                     if fallback.choices and len(fallback.choices) > 0:
                         content = getattr(fallback.choices[0].message, "content", "")

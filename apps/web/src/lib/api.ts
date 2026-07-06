@@ -161,7 +161,47 @@ export const createFile = async (projectId: string, path: string, content: strin
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ content }),
   });
-  if (!res.ok) throw new Error("Failed to create file");
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail || "Failed to create file");
+  }
+  return res.json();
+};
+
+export const renameFile = async (projectId: string, path: string, newName: string) => {
+  const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/file/rename`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path, new_name: newName }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail || 'Failed to rename file');
+  }
+  return res.json();
+};
+
+export const duplicateFile = async (projectId: string, path: string) => {
+  const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/file/duplicate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail || 'Failed to duplicate file');
+  }
+  return res.json();
+};
+
+export const deleteFile = async (projectId: string, path: string) => {
+  const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/file/delete?path=${encodeURIComponent(path)}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail || 'Failed to delete file');
+  }
   return res.json();
 };
 
@@ -247,6 +287,140 @@ export const getGitStatus = async (projectId: string): Promise<GitStatus> => {
   const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/git/status`);
   if (!res.ok) throw new Error("Failed to fetch git status");
   return res.json();
+};
+
+export interface ChangedFile {
+  status_code: string;
+  file_path: string;
+  is_untracked: boolean;
+  is_modified: boolean;
+  added: number;
+  deleted: number;
+}
+
+export interface LocalChangesResponse {
+  files: ChangedFile[];
+}
+
+export const getLocalChanges = async (projectId: string): Promise<LocalChangesResponse> => {
+  const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/git/changes`);
+  if (!res.ok) throw new Error("Failed to fetch local changes");
+  return res.json();
+};
+
+export interface FileLocalDiff {
+  diff?: string;
+  original_content: string;
+  modified_content: string;
+  status: string;
+}
+
+export const getFileLocalDiff = async (
+  projectId: string,
+  filePath: string,
+): Promise<FileLocalDiff> => {
+  const res = await fetchWithRetry(
+    `${API_BASE_URL}/projects/${projectId}/git/diff?file_path=${encodeURIComponent(filePath)}`,
+  );
+  if (!res.ok) throw new Error("Failed to fetch file diff");
+  return res.json();
+};
+
+export const revertFile = async (
+  projectId: string,
+  filePath: string,
+): Promise<{ status: string; action: string }> => {
+  const res = await fetchWithRetry(
+    `${API_BASE_URL}/projects/${projectId}/git/revert`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ file_path: filePath }),
+    },
+  );
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail || "Failed to revert file");
+  }
+  return res.json();
+};
+
+export interface GitDashboardKPIs {
+  total_files: number;
+  tracked: number;
+  untracked: number;
+  ignored: number;
+  modified: number;
+  last_commit_files: number;
+}
+
+export interface GitDashboardFileStatus {
+  status: string;
+  file_path: string;
+  timestamp?: number;
+}
+
+export interface GitDashboardBranch {
+  current_branch: string;
+  diff_with_main: { ahead: number | null; behind: number | null };
+}
+
+export interface GitDashboard {
+  kpis: GitDashboardKPIs;
+  lists: {
+    untracked_list: GitDashboardFileStatus[];
+    modified_list: GitDashboardFileStatus[];
+    staged_list: GitDashboardFileStatus[];
+    last_commit_list: GitDashboardFileStatus[];
+    penultimate_commit_list: GitDashboardFileStatus[];
+  };
+  branch: GitDashboardBranch;
+  commits: {
+    last_commit_message: string;
+    penultimate_commit_message: string;
+  };
+}
+
+export const getGitDashboard = async (projectId: string): Promise<GitDashboard> => {
+  const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/git/dashboard`);
+  if (!res.ok) throw new Error("Failed to fetch git dashboard");
+  return res.json();
+};
+
+export const stageFile = async (projectId: string, filePath: string) => {
+  const res = await fetchWithRetry(
+    `${API_BASE_URL}/projects/${projectId}/git/stage`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ file_path: filePath }),
+    },
+  );
+  if (!res.ok) throw new Error("Failed to stage file");
+};
+
+export const unstageFile = async (projectId: string, filePath: string) => {
+  const res = await fetchWithRetry(
+    `${API_BASE_URL}/projects/${projectId}/git/unstage`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ file_path: filePath }),
+    },
+  );
+  if (!res.ok) throw new Error("Failed to unstage file");
+};
+
+export const commitChanges = async (projectId: string, message: string) => {
+  const res = await fetchWithRetry(
+    `${API_BASE_URL}/projects/${projectId}/git/commit`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message }),
+    },
+  );
+  if (!res.ok) throw new Error("Failed to commit changes");
 };
 
 export interface KanbanColumn {

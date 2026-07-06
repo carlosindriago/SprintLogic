@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import Editor, { type OnMount } from '@monaco-editor/react';
 import type { editor as monacoEditor, Uri } from 'monaco-editor';
 import { getFileContent, saveFileContent, API_BASE_URL } from '@/lib/api';
@@ -22,11 +22,6 @@ const TOOLBAR_BUTTON =
 let markersListenerRegistered = false;
 
 function normalizeMonacoUri(uri: Uri): string {
-  // Monaco creates URIs from onMount's path prop.
-  // For absolute paths (e.g. /home/carlos/.../file.ts), uri.path IS
-  // the exact file path — keep it as-is so it matches node.file_path.
-  // For file:// scheme URIs, path also holds the correct absolute path.
-  // For inmemory:// models, extract the path from the string form.
   if (uri.scheme === 'file' || !uri.scheme) {
     return uri.path;
   }
@@ -59,10 +54,12 @@ export default function EditorTab({
   const editorRef = useRef<monacoEditor.IStandaloneCodeEditor | null>(null);
   const vimInstanceRef = useRef<{ dispose(): void } | null>(null);
   const vimObserverRef = useRef<MutationObserver | null>(null);
+  const vimPendingRef = useRef(false);
   const dirtyCheckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const backupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const handleSaveRef = useRef<() => Promise<void>>(async () => {});
+  const handleSaveRef = useRef<(saveAs?: string) => Promise<void>>(async () => {});
+  const isSavingRef = useRef(false);
 
   const markDirty = useTabsStore((s) => s.markDirty);
 
@@ -76,7 +73,6 @@ export default function EditorTab({
     const loadContent = async () => {
       if (isMounted) setLoading(true);
 
-      // Restore unsaved backup if it exists (survives crashes / restarts)
       const backupKey = node.file_path || node.id;
       const backup = useUnsavedStore.getState().getContent(backupKey);
 
@@ -91,7 +87,6 @@ export default function EditorTab({
       try {
         const data = await getFileContent(projectId, node.file_path);
         if (isMounted) {
-          // If there's a backup and it differs from disk, restore it
           const restored = backup && backup !== data ? backup : data;
           originalContentRef.current = restored;
           currentContentRef.current = restored;
@@ -123,6 +118,7 @@ export default function EditorTab({
         vimInstanceRef.current.dispose();
         vimInstanceRef.current = null;
       }
+      vimPendingRef.current = false;
     };
   }, [projectId, node.file_path, node.id]);
 
@@ -135,26 +131,34 @@ export default function EditorTab({
     setIsDirty(dirty);
   }, []);
 
-  const handleSave = useCallback(async () => {
-    if (saving || !editorRef.current) return;
+  const handleSave = useCallback(async (saveAs?: string) => {
+    if (isSavingRef.current || !editorRef.current) return;
+
     if (!node.file_path) {
       onSaveUntitled?.(editorRef.current.getValue());
       return;
     }
+
+    const targetPath = saveAs || node.file_path;
+
+    if (!targetPath) return;
+
+    isSavingRef.current = true;
     setSaving(true);
     try {
       const current = editorRef.current.getValue();
-      await saveFileContent(projectId, node.file_path, current);
+      await saveFileContent(projectId, targetPath, current);
       originalContentRef.current = current;
       currentContentRef.current = current;
       setIsDirty(false);
-      useUnsavedStore.getState().clearContent(node.file_path);
+      useUnsavedStore.getState().clearContent(targetPath);
     } catch {
       // silently fail
     } finally {
       setSaving(false);
+      isSavingRef.current = false;
     }
-  }, [projectId, node.file_path, saving, onSaveUntitled]);
+  }, [projectId, node.file_path, onSaveUntitled]);
 
   useEffect(() => {
     handleSaveRef.current = handleSave;
@@ -217,15 +221,24 @@ export default function EditorTab({
   }, []);
 
   const filePath = node?.file_path ?? '';
+  const isUntitled = !node.file_path;
   const fileName = node.file_path
     ? (filePath.split('/').pop() || 'untitled')
     : (node.name || 'Sin título');
   const fileMarkers = useMarkersStore((s) => s.files[filePath]);
 
+  const editorPath = node.file_path || node.id;
+
+  const editorOptions = useMemo(() => ({
+    minimap: { enabled: false },
+    fontSize: 13,
+    wordWrap: "on" as const,
+    padding: { top: 16 },
+  }), []);
+
   const handleEditorDidMount: OnMount = useCallback((editor, monaco) => {
     editorRef.current = editor;
 
-    // ── Monaco TypeScript compiler configuration ──
     monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
       jsx: monaco.languages.typescript.JsxEmit.ReactJSX,
       moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
@@ -251,7 +264,6 @@ export default function EditorTab({
       diagnosticCodesToIgnore: [2307, 2792, 7026, 2875, 2503],
     });
 
-    // ── Global markers telemetry ──
     if (!markersListenerRegistered) {
       markersListenerRegistered = true;
 
@@ -282,56 +294,76 @@ export default function EditorTab({
       }
     }
 
-    // ── Vim mode: always active for normal/visual/insert editing ──
-    import("monaco-vim").then(({ initVimMode }) => {
-      const statusNode = document.createElement('div');
-      statusNode.style.position = 'absolute';
-      statusNode.style.bottom = '0';
-      statusNode.style.left = '0';
-      statusNode.style.right = '0';
-      statusNode.style.width = '100%';
-      statusNode.style.padding = '2px 8px';
-      statusNode.style.fontSize = '12px';
-      statusNode.style.backgroundColor = '#1e1e1e';
-      statusNode.style.borderTop = '1px solid #333';
-      statusNode.style.color = '#fff';
-      statusNode.style.zIndex = '10';
-
-      const container = editor.getContainerDomNode();
-      if (container) {
-        container.style.position = 'relative';
-        container.style.overflow = 'hidden';
-        container.appendChild(statusNode);
+    if (vimMode) {
+      if (vimInstanceRef.current) {
+        vimInstanceRef.current.dispose();
+        vimInstanceRef.current = null;
       }
-      vimStatusRef.current = statusNode;
 
-      const vim = initVimMode(editor, statusNode);
-      vimInstanceRef.current = vim;
+      vimPendingRef.current = true;
+      import("monaco-vim").then(({ initVimMode, VimMode }) => {
+        if (!vimPendingRef.current) return;
 
-      // Sync vim mode → React state via MutationObserver on status bar
-      const modeLabels: Record<string, typeof editorModeRef.current> = {
-        'NORMAL': 'locked',
-        'VISUAL': 'visual',
-        'VISUAL LINE': 'visual',
-        'VISUAL BLOCK': 'visual',
-        'INSERT': 'editable',
-        'REPLACE': 'editable',
-      };
-      const observer = new MutationObserver(() => {
-        const text = statusNode.textContent?.trim().toUpperCase() || '';
-        for (const [label, mode] of Object.entries(modeLabels)) {
-          if (text.startsWith(label)) {
-            editorModeRef.current = mode;
-            setEditorMode(mode);
-            break;
-          }
+        const statusNode = document.createElement('div');
+        statusNode.style.position = 'absolute';
+        statusNode.style.bottom = '0';
+        statusNode.style.left = '0';
+        statusNode.style.right = '0';
+        statusNode.style.width = '100%';
+        statusNode.style.padding = '2px 8px';
+        statusNode.style.fontSize = '12px';
+        statusNode.style.backgroundColor = '#1e1e1e';
+        statusNode.style.borderTop = '1px solid #333';
+        statusNode.style.color = '#fff';
+        statusNode.style.zIndex = '10';
+
+        const container = editor.getContainerDomNode();
+        if (container) {
+          container.style.position = 'relative';
+          container.style.overflow = 'hidden';
+          container.appendChild(statusNode);
         }
+        vimStatusRef.current = statusNode;
+
+        const vim = initVimMode(editor, statusNode);
+        vimInstanceRef.current = vim;
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (VimMode as any).Vim.defineEx('write', 'w', (args: { args: string }) => {
+          const filename = args.args.trim();
+          if (filename) {
+            const dir = node.file_path ? node.file_path.substring(0, node.file_path.lastIndexOf('/')) : '';
+            const newPath = dir ? `${dir}/${filename}` : filename;
+            handleSaveRef.current(newPath);
+          } else {
+            handleSaveRef.current();
+          }
+        });
+
+        const modeLabels: Record<string, typeof editorModeRef.current> = {
+          'NORMAL': 'locked',
+          'VISUAL': 'visual',
+          'VISUAL LINE': 'visual',
+          'VISUAL BLOCK': 'visual',
+          'INSERT': 'editable',
+          'REPLACE': 'editable',
+        };
+        const observer = new MutationObserver(() => {
+          const text = statusNode.textContent?.trim().toUpperCase() || '';
+          for (const [label, mode] of Object.entries(modeLabels)) {
+            if (text.startsWith(label)) {
+              editorModeRef.current = mode;
+              setEditorMode(mode);
+              break;
+            }
+          }
+        });
+        observer.observe(statusNode, { characterData: true, subtree: true, childList: true });
+        vimObserverRef.current = observer;
+      }).catch(() => {
+        console.error("Vim initialization failed");
       });
-      observer.observe(statusNode, { characterData: true, subtree: true, childList: true });
-      vimObserverRef.current = observer;
-    }).catch(() => {
-      console.error("Vim initialization failed");
-    });
+    }
 
     if (node.metadata) {
       try {
@@ -356,7 +388,6 @@ export default function EditorTab({
         }
       }, 50);
 
-      // Auto-backup unsaved changes to localStorage (all files)
       if (backupTimerRef.current) clearTimeout(backupTimerRef.current);
       backupTimerRef.current = setTimeout(() => {
         const model = editor.getModel();
@@ -397,11 +428,6 @@ export default function EditorTab({
       }, 500);
     });
 
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
-      handleSaveRef.current();
-    });
-
-    // ── Sublime-style shortcuts for insert mode ──────────────────
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyD, () => {
       editor.getAction('editor.action.addSelectionToNextFindMatch')?.run();
     }, '!vimMode');
@@ -432,7 +458,7 @@ export default function EditorTab({
     });
 
     checkDirty();
-  }, [node.metadata, checkDirty, node.file_path, node.id]);
+  }, [node.metadata, checkDirty, node.file_path, node.id, vimMode]);
 
   if (loading) {
     return (
@@ -494,9 +520,9 @@ export default function EditorTab({
         <div className="flex items-center gap-0.5">
           <button
             className={TOOLBAR_BUTTON}
-            onClick={handleSave}
-            disabled={!isDirty || saving}
-            title="Guardar (Ctrl+S)"
+            onClick={() => handleSave()}
+            disabled={(!isDirty && !isUntitled) || saving}
+            title={isUntitled ? "Guardar como..." : "Guardar (Ctrl+S)"}
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
           </button>
@@ -598,17 +624,14 @@ export default function EditorTab({
 
       <div className="flex-1 relative overflow-hidden">
         <Editor
+          key={editorPath}
           height="100%"
           theme="vs-dark"
-          path={node.file_path || node.id}
+          path={editorPath}
           defaultValue={initialValue}
           onMount={handleEditorDidMount}
-          options={{
-            minimap: { enabled: false },
-            fontSize: 13,
-            wordWrap: "on",
-            padding: { top: 16 },
-          }}
+          options={editorOptions}
+          loading={null}
         />
       </div>
     </div>

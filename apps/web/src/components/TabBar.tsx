@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useTabsStore } from '@/store/tabsStore';
 import { useMarkersStore } from '@/store/markersStore';
-import { X, BarChart3, Layout, Network, GitBranch, FilePlus } from 'lucide-react';
+import { X, BarChart3, Layout, Network, GitBranch, FilePlus, FolderGit2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import FileIcon from './FileIcon';
 
@@ -11,6 +11,7 @@ const TAB_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   kanban: Layout,
   graph: Network,
   'git-graph': GitBranch,
+  audit: FolderGit2,
 };
 
 interface TabBarProps {

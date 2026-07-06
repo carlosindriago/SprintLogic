@@ -1,10 +1,20 @@
 # ruff: noqa: E402, E501
 import os
+import re
+import shutil
 from pathlib import Path
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+    Query,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,6 +37,15 @@ class ScanRequest(BaseModel):
 
 class FileContentUpdate(BaseModel):
     content: str
+
+
+class RenameRequest(BaseModel):
+    path: str
+    new_name: str
+
+
+class FileOperationRequest(BaseModel):
+    path: str
 
 
 @router.get("/projects")
@@ -505,6 +524,121 @@ async def create_project_file(
         raise HTTPException(status_code=500, detail=f"Failed to create file: {str(e)}")
 
 
+def _validate_and_resolve(project_path: str, file_path: str) -> Path:
+    project_root = Path(project_path).resolve()
+    target = Path(file_path)
+    candidate = (target if target.is_absolute() else project_root / target).resolve()
+
+    if not candidate.is_relative_to(project_root):
+        raise HTTPException(status_code=403, detail="Path is outside project directory")
+    return candidate
+
+
+@router.post("/projects/{project_id}/file/rename")
+async def rename_project_file(
+    project_id: str,
+    request: RenameRequest,
+    session: AsyncSession = Depends(get_db_session),
+):
+    try:
+        project_uuid = UUID(project_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+
+    repo = SQLAlchemyProjectRepository(session)
+    project = await repo.get_project(project_uuid)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    candidate = _validate_and_resolve(project.path, request.path)
+
+    if not candidate.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    if not re.match(r'^[^/\0]+$', request.new_name):
+        raise HTTPException(status_code=400, detail="Invalid file name")
+
+    new_path = candidate.parent / request.new_name
+    if not new_path.is_relative_to(Path(project.path).resolve()):
+        raise HTTPException(status_code=403, detail="Renamed path would be outside project directory")
+
+    if new_path.exists():
+        raise HTTPException(status_code=409, detail="A file with that name already exists")
+
+    try:
+        os.rename(str(candidate), str(new_path))
+        relative = str(new_path.relative_to(Path(project.path).resolve()))
+        return {"status": "renamed", "path": relative}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to rename file: {str(e)}")
+
+
+@router.post("/projects/{project_id}/file/duplicate")
+async def duplicate_project_file(
+    project_id: str,
+    request: FileOperationRequest,
+    session: AsyncSession = Depends(get_db_session),
+):
+    try:
+        project_uuid = UUID(project_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+
+    repo = SQLAlchemyProjectRepository(session)
+    project = await repo.get_project(project_uuid)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    candidate = _validate_and_resolve(project.path, request.path)
+
+    if not candidate.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    stem = candidate.stem
+    suffix = candidate.suffix
+    duplicate_path = candidate.parent / f"{stem}_copy{suffix}"
+
+    counter = 1
+    while duplicate_path.exists():
+        duplicate_path = candidate.parent / f"{stem}_copy{counter}{suffix}"
+        counter += 1
+
+    try:
+        shutil.copy2(str(candidate), str(duplicate_path))
+        relative = str(duplicate_path.relative_to(Path(project.path).resolve()))
+        return {"status": "duplicated", "path": relative}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to duplicate file: {str(e)}")
+
+
+@router.delete("/projects/{project_id}/file/delete")
+async def delete_project_file(
+    project_id: str,
+    path: str = Query(...),
+    session: AsyncSession = Depends(get_db_session),
+):
+    try:
+        project_uuid = UUID(project_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+
+    repo = SQLAlchemyProjectRepository(session)
+    project = await repo.get_project(project_uuid)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    candidate = _validate_and_resolve(project.path, path)
+
+    if not candidate.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    try:
+        os.remove(str(candidate))
+        return {"status": "deleted", "path": path}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete file: {str(e)}")
+
+
 IGNORE_DIRS = {
     "node_modules",
     ".git",
@@ -743,6 +877,7 @@ async def search_project_memory(
 
 
 import asyncio
+import contextlib
 
 from sse_starlette.sse import EventSourceResponse  # type: ignore[import-not-found]
 from watchfiles import Change
@@ -802,6 +937,87 @@ async def project_events(project_id: str, session: AsyncSession = Depends(get_db
                 await file_watcher.stop_watching(project_id)
 
     return EventSourceResponse(event_generator())
+
+
+@router.websocket("/projects/{project_id}/ws")
+async def project_ws(websocket: WebSocket, project_id: str):
+    await websocket.accept()
+
+    try:
+        project_uuid = UUID(project_id)
+    except ValueError:
+        await websocket.close(code=1008, reason="Invalid project ID")
+        return
+
+    async with AsyncSessionLocal() as session:
+        repo = SQLAlchemyProjectRepository(session)
+        project = await repo.get_project(project_uuid)
+
+    if not project:
+        await websocket.close(code=1008, reason="Project not found")
+        return
+
+    await file_watcher.start_watching(project_id, project.path)
+
+    q: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+    if project_id not in project_event_queues:
+        project_event_queues[project_id] = []
+    project_event_queues[project_id].append(q)
+
+    pending_paths: set[str] = set()
+    pending_lock = asyncio.Lock()
+
+    async def flush():
+        async with pending_lock:
+            if not pending_paths:
+                return
+            paths = sorted(pending_paths)
+            pending_paths.clear()
+            try:
+                await websocket.send_json({"type": "file_changed", "paths": paths})
+            except Exception:
+                pass
+
+    async def debounce_loop():
+        try:
+            while True:
+                await asyncio.sleep(0.5)
+                await flush()
+        except asyncio.CancelledError:
+            await flush()
+
+    async def queue_consumer():
+        try:
+            while True:
+                event = await q.get()
+                async with pending_lock:
+                    pending_paths.add(event["filepath"])
+        except asyncio.CancelledError:
+            pass
+
+    debounce_task = asyncio.create_task(debounce_loop())
+    consumer_task = asyncio.create_task(queue_consumer())
+
+    try:
+        while True:
+            try:
+                await websocket.receive_text()
+            except WebSocketDisconnect:
+                break
+    finally:
+        debounce_task.cancel()
+        consumer_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await debounce_task
+        with contextlib.suppress(asyncio.CancelledError):
+            await consumer_task
+
+        if project_id in project_event_queues:
+            if q in project_event_queues[project_id]:
+                project_event_queues[project_id].remove(q)
+            if not project_event_queues[project_id]:
+                del project_event_queues[project_id]
+                await file_watcher.stop_watching(project_id)
 
 
 @router.get("/projects/{project_id}/tasks")
@@ -889,7 +1105,6 @@ async def save_kanban_config(
 
 
 import asyncio
-import re
 
 
 async def run_workspace_tests(repo_path: str) -> bool:

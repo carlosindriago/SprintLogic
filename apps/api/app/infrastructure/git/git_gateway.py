@@ -411,3 +411,278 @@ class LocalGitGateway:
     async def is_merge_in_progress(self, repo_path: str) -> bool:
         merge_head_path = os.path.join(repo_path, ".git", "MERGE_HEAD")
         return os.path.exists(merge_head_path)
+
+    async def get_file_diff(self, repo_path: str, file_path: str) -> dict[str, Any]:
+        try:
+            diff_output = await self._run_command(repo_path, "diff", "HEAD", "--", file_path)
+            original = await self._run_command(repo_path, "show", f"HEAD:{file_path}")
+            full_path = os.path.join(repo_path, file_path)
+            with open(full_path, encoding="utf-8") as f:
+                modified = f.read()
+            return {
+                "diff": diff_output,
+                "original_content": original,
+                "modified_content": modified,
+                "status": "modified",
+            }
+        except RuntimeError:
+            try:
+                full_path = os.path.join(repo_path, file_path)
+                with open(full_path, encoding="utf-8") as f:
+                    modified = f.read()
+                return {
+                    "diff": "",
+                    "original_content": "",
+                    "modified_content": modified,
+                    "status": "untracked",
+                }
+            except (OSError, RuntimeError):
+                return {"error": f"Could not read file: {file_path}", "status": "error"}
+
+    async def get_diff_numstat(self, repo_path: str) -> list[dict[str, Any]]:
+        try:
+            output = await self._run_command(repo_path, "diff", "--numstat", "HEAD")
+            files: list[dict[str, Any]] = []
+            for line in output.split("\n"):
+                if not line:
+                    continue
+                parts = line.split("\t")
+                if len(parts) == 3:
+                    files.append({
+                        "added": int(parts[0]) if parts[0] != "-" else 0,
+                        "deleted": int(parts[1]) if parts[1] != "-" else 0,
+                        "file_path": parts[2],
+                    })
+            return files
+        except RuntimeError:
+            return []
+
+    async def get_changed_files(self, repo_path: str) -> list[dict[str, Any]]:
+        files: list[dict[str, Any]] = []
+        try:
+            output = await self._run_command(repo_path, "status", "--porcelain")
+            for line in output.split("\n"):
+                if not line:
+                    continue
+                code = line[:2].strip()
+                file_path = line[3:].strip()
+                if not file_path:
+                    continue
+                files.append({
+                    "status_code": code,
+                    "file_path": file_path,
+                    "is_untracked": code == "??",
+                    "is_modified": code in ("M", " M", "MM", "A", "AM", "D", "R"),
+                })
+        except RuntimeError:
+            pass
+        return files
+
+    async def revert_file_changes(self, repo_path: str, file_path: str) -> dict[str, Any]:
+        full_path = os.path.join(repo_path, file_path)
+
+        try:
+            status_output = await self._run_command(
+                repo_path, "status", "--porcelain", "--", file_path,
+            )
+        except RuntimeError:
+            status_output = ""
+
+        is_untracked = status_output.startswith("??")
+
+        if is_untracked:
+            try:
+                os.remove(full_path)
+                return {"status": "reverted", "action": "deleted", "file_path": file_path}
+            except OSError as e:
+                return {"status": "error", "message": f"Failed to delete file: {e}"}
+
+        try:
+            await self._run_command(repo_path, "restore", "--", file_path)
+            return {"status": "reverted", "action": "restored", "file_path": file_path}
+        except RuntimeError:
+            try:
+                await self._run_command(repo_path, "checkout", "HEAD", "--", file_path)
+                return {"status": "reverted", "action": "restored", "file_path": file_path}
+            except RuntimeError as e:
+                return {"status": "error", "message": str(e)}
+
+    @staticmethod
+    def _count_non_empty_lines(output: str | BaseException) -> int:
+        if isinstance(output, BaseException):
+            return 0
+        return len([line for line in output.split("\n") if line.strip()])
+
+    @staticmethod
+    def _parse_name_status(output: str | BaseException) -> list[dict[str, str]]:
+        if isinstance(output, BaseException):
+            return []
+        items: list[dict[str, str]] = []
+        for line in output.split("\n"):
+            if not line.strip():
+                continue
+            parts = line.split("\t")
+            if len(parts) >= 2:
+                items.append({"status": parts[0], "file_path": parts[1]})
+        return items
+
+    @staticmethod
+    def _parse_commit_files(output: str | BaseException) -> list[dict[str, Any]]:
+        if isinstance(output, BaseException):
+            return []
+        lines = output.split("\n")
+        if not lines or not lines[0].strip():
+            return []
+        timestamp_str = lines[0].strip()
+        try:
+            commit_ts = int(timestamp_str)
+        except ValueError:
+            commit_ts = None
+
+        items: list[dict[str, Any]] = []
+        for line in lines[1:]:
+            if not line.strip():
+                continue
+            parts = line.split("\t")
+            if len(parts) >= 2:
+                item: dict[str, Any] = {"status": parts[0], "file_path": parts[1]}
+                if commit_ts is not None:
+                    item["timestamp"] = commit_ts
+                items.append(item)
+        return items
+
+    async def _add_local_timestamps(
+        self, repo_path: str, items: list[dict[str, str]],
+    ) -> list[dict[str, Any]]:
+        if not items:
+            return []
+
+        async def get_one(item: dict[str, str]) -> dict[str, Any]:
+            full = os.path.join(repo_path, item["file_path"])
+            try:
+                loop = asyncio.get_running_loop()
+                mtime = await loop.run_in_executor(None, os.path.getmtime, full)
+                return {**item, "timestamp": int(mtime)}
+            except (FileNotFoundError, OSError):
+                return {**item, "timestamp": 0}
+
+        return list(await asyncio.gather(*(get_one(i) for i in items)))
+
+    async def get_git_dashboard(self, repo_path: str) -> dict[str, Any]:
+        tasks = {
+            "tracked_files": self._run_command(repo_path, "ls-files"),
+            "untracked_files": self._run_command(
+                repo_path, "ls-files", "--others", "--exclude-standard",
+            ),
+            "ignored_files": self._run_command(
+                repo_path, "ls-files", "--others", "--ignored", "--exclude-standard",
+            ),
+            "last_commit_files": self._run_command(
+                repo_path, "show", "--name-only", "--format=", "HEAD",
+            ),
+            "staged_status": self._run_command(
+                repo_path, "diff", "--name-status", "--cached",
+            ),
+            "last_commit_status": self._run_command(
+                repo_path, "show", "--name-status", "--format=%ct", "HEAD",
+            ),
+            "penultimate_commit_status": self._run_command(
+                repo_path, "show", "--name-status", "--format=%ct", "HEAD~1",
+            ),
+            "modified_files": self._run_command(
+                repo_path, "diff", "--name-only", "HEAD",
+            ),
+            "current_branch": self._run_command(repo_path, "branch", "--show-current"),
+            "last_commit_subject": self._run_command(
+                repo_path, "log", "-1", "--format=%s", "HEAD",
+            ),
+            "penultimate_commit_subject": self._run_command(
+                repo_path, "log", "-1", "--format=%s", "HEAD~1",
+            ),
+        }
+
+        results = await asyncio.gather(*tasks.values(), return_exceptions=True)
+        mapped = dict(zip(tasks.keys(), results))
+
+        diff_with_main: dict[str, int | None] = {"ahead": None, "behind": None}
+        try:
+            output = await self._run_command(
+                repo_path, "rev-list", "--left-right", "--count", "main...HEAD",
+            )
+            parts = output.split("\t")
+            if len(parts) == 2:
+                diff_with_main = {"ahead": int(parts[1]), "behind": int(parts[0])}
+        except RuntimeError:
+            pass
+
+        tracked_count = self._count_non_empty_lines(mapped["tracked_files"])
+
+        untracked_paths: list[str] = (
+            []
+            if isinstance(mapped["untracked_files"], BaseException)
+            else [p for p in mapped["untracked_files"].split("\n") if p]
+        )
+        untracked_items = [{"status": "??", "file_path": p} for p in untracked_paths]
+
+        modified_paths: list[str] = (
+            []
+            if isinstance(mapped["modified_files"], BaseException)
+            else [p for p in mapped["modified_files"].split("\n") if p]
+        )
+        modified_items = [{"status": "M", "file_path": p} for p in modified_paths]
+
+        staged_items = self._parse_name_status(mapped["staged_status"])
+
+        enriched_untracked = await self._add_local_timestamps(repo_path, untracked_items)
+        enriched_modified = await self._add_local_timestamps(repo_path, modified_items)
+        enriched_staged = await self._add_local_timestamps(repo_path, staged_items)
+
+        return {
+            "kpis": {
+                "total_files": tracked_count,
+                "tracked": tracked_count,
+                "untracked": len(enriched_untracked),
+                "ignored": self._count_non_empty_lines(mapped["ignored_files"]),
+                "modified": len(enriched_modified),
+                "last_commit_files": self._count_non_empty_lines(mapped["last_commit_files"]),
+            },
+            "lists": {
+                "untracked_list": enriched_untracked,
+                "modified_list": enriched_modified,
+                "staged_list": enriched_staged,
+                "last_commit_list": self._parse_commit_files(mapped["last_commit_status"]),
+                "penultimate_commit_list": self._parse_commit_files(mapped["penultimate_commit_status"]),
+            },
+            "branch": {
+                "current_branch": (
+                    "unknown"
+                    if isinstance(mapped["current_branch"], BaseException)
+                    else mapped["current_branch"] or "unknown"
+                ),
+                "diff_with_main": diff_with_main,
+            },
+            "commits": {
+                "last_commit_message": (
+                    ""
+                    if isinstance(mapped["last_commit_subject"], BaseException)
+                    else mapped["last_commit_subject"].strip()
+                ),
+                "penultimate_commit_message": (
+                    ""
+                    if isinstance(mapped["penultimate_commit_subject"], BaseException)
+                    else mapped["penultimate_commit_subject"].strip()
+                ),
+            },
+        }
+
+    async def stage_file(self, repo_path: str, file_path: str) -> dict[str, str]:
+        await self._run_command(repo_path, "add", "--", file_path)
+        return {"status": "staged", "file_path": file_path}
+
+    async def unstage_file(self, repo_path: str, file_path: str) -> dict[str, str]:
+        await self._run_command(repo_path, "restore", "--staged", "--", file_path)
+        return {"status": "unstaged", "file_path": file_path}
+
+    async def commit_changes(self, repo_path: str, message: str) -> dict[str, str]:
+        output = await self._run_command(repo_path, "commit", "-m", message)
+        return {"status": "committed", "message": message, "output": output.strip()}

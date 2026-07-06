@@ -217,10 +217,10 @@ CURATED_MODELS = {
         {"id": "openrouter/openai/gpt-4o", "name": "GPT-4o"},
     ],
     "opencode-zen": [
-        {"id": "opencode-zen/default", "name": "OpenCode Zen"},
+        {"id": "opencode-zen/gpt-4o", "name": "OpenCode Zen"},
     ],
     "opencode-go": [
-        {"id": "opencode-go/default", "name": "OpenCode Go"},
+        {"id": "opencode-go/deepseek-v4-flash", "name": "OpenCode Go"},
     ],
     "nvidia": [
         {"id": "nvidia_nim/meta/llama-3.1-70b-instruct", "name": "Llama 3.1 70B (NIM)"},

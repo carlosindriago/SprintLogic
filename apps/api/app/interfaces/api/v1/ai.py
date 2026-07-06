@@ -1,7 +1,8 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from app.interfaces.api.v1.settings import CURATED_MODELS
+from app.infrastructure.security.credential_manager import CredentialManager
+from app.interfaces.api.v1.settings import CURATED_MODELS, PROVIDER_LABELS
 
 router = APIRouter()
 
@@ -14,6 +15,27 @@ class APIKeysPayload(BaseModel):
     opencode_zen_key: str | None = None
     opencode_go_key: str | None = None
     nvidia_key: str | None = None
+
+
+@router.get("/models")
+async def get_ai_models():
+    """Returns the curated model catalog grouped by provider.
+
+    Each provider includes an is_configured flag indicating whether an
+    API key has been stored for it. No external APIs are queried.
+    """
+    results: list[dict] = []
+    for provider, models in CURATED_MODELS.items():
+        key = CredentialManager.get_api_key(provider)
+        results.append(
+            {
+                "provider": PROVIDER_LABELS.get(provider, provider),
+                "provider_id": provider,
+                "is_configured": key is not None and key != "",
+                "models": models,
+            }
+        )
+    return results
 
 
 @router.post("/active-models")
