@@ -375,6 +375,10 @@ export interface GitDashboard {
     penultimate_commit_list: GitDashboardFileStatus[];
   };
   branch: GitDashboardBranch;
+  commits: {
+    last_commit_message: string;
+    penultimate_commit_message: string;
+  };
 }
 
 export const getGitDashboard = async (projectId: string): Promise<GitDashboard> => {

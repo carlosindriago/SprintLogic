@@ -438,6 +438,7 @@ export default function AIAuditPanel({ projectId }: AIAuditPanelProps) {
                   items={dashboard.lists.last_commit_list}
                   onItemClick={handleFileClick}
                   statusBadge={statusBadge}
+                  subtitle={dashboard.commits?.last_commit_message}
                 />
                 <StatusColumn
                   title="Penúltimo commit"
@@ -446,6 +447,7 @@ export default function AIAuditPanel({ projectId }: AIAuditPanelProps) {
                   items={dashboard.lists.penultimate_commit_list}
                   onItemClick={handleFileClick}
                   statusBadge={statusBadge}
+                  subtitle={dashboard.commits?.penultimate_commit_message}
                 />
               </div>
             </div>
@@ -495,6 +497,7 @@ function StatusColumn({
   onActionAll,
   headerActionLabel,
   showActionAll,
+  subtitle,
 }: {
   title: string;
   icon: React.ReactNode;
@@ -506,15 +509,26 @@ function StatusColumn({
   onActionAll?: () => void;
   headerActionLabel?: string;
   showActionAll?: boolean;
+  subtitle?: string;
 }) {
   return (
     <div className="flex flex-col min-w-[200px] flex-1 bg-zinc-900/30 border border-zinc-800/50 rounded-lg overflow-hidden">
       <div className="flex items-center justify-between px-3 py-2 bg-zinc-900 border-b border-zinc-800/50 shrink-0">
-        <div className="flex items-center gap-2 text-xs font-medium text-zinc-300">
-          {icon}
-          {title}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 text-xs font-medium text-zinc-300">
+            {icon}
+            {title}
+          </div>
+          {subtitle && (
+            <p
+              className="text-[10px] text-zinc-500 italic truncate mt-0.5"
+              title={subtitle}
+            >
+              {subtitle}
+            </p>
+          )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <span className="text-[11px] text-zinc-500 font-mono">{count}</span>
           {showActionAll && onActionAll && count > 0 && (
             <button
