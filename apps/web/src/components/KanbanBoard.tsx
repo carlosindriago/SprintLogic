@@ -524,8 +524,8 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
                 <Settings className="w-5 h-5 text-blue-400" />
                 <h3 className="text-md font-bold text-zinc-100">Configurar Columnas Kanban</h3>
               </div>
-              <button onClick={() => setShowConfigModal(false)} className="text-zinc-400 hover:text-zinc-250">
-                <X className="w-5 h-5" />
+              <button aria-label="Cerrar configuración" onClick={() => setShowConfigModal(false)} className="text-zinc-400 hover:text-zinc-250">
+                <X aria-hidden="true" className="w-5 h-5" />
               </button>
             </div>
 
@@ -663,8 +663,8 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
                 <Brain className="w-5 h-5 text-blue-400" />
                 <h3 className="text-md font-bold text-zinc-100">Planificador de Tareas IA (WBS)</h3>
               </div>
-              <button onClick={() => setShowWbsModal(false)} className="text-zinc-400 hover:text-zinc-250">
-                <X className="w-5 h-5" />
+              <button aria-label="Cerrar planificador" onClick={() => setShowWbsModal(false)} className="text-zinc-400 hover:text-zinc-250">
+                <X aria-hidden="true" className="w-5 h-5" />
               </button>
             </div>
 
