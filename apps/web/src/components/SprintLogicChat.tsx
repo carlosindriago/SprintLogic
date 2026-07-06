@@ -356,7 +356,8 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
             />
           <button
             onClick={sendMessage}
-            disabled={loading || !input.trim()}
+            disabled={loading || !input.trim() || !currentModel}
+            title={currentModel ? "Enviar mensaje" : "Seleccioná un modelo para enviar mensajes"}
             className="text-zinc-400 hover:text-white disabled:opacity-30 shrink-0"
           >
             <Send className="w-3.5 h-3.5" />
