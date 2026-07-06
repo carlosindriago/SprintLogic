@@ -8,9 +8,9 @@ import litellm
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.infrastructure.ai.provider_adapter import ProviderAdapter
 from app.infrastructure.db.database import AsyncSessionLocal
 from app.infrastructure.db.models import AIMemoryModel, ContextSnippetModel, ProjectModel
-from app.infrastructure.ai.provider_adapter import ProviderAdapter
 from app.infrastructure.security.credential_manager import CredentialManager
 
 
@@ -306,7 +306,7 @@ class AIAgent:
                     m for m in messages if m.get("role") != "system"
                 ]
 
-            import os
+
 
             # Prepare LiteLLM call
             adapted = ProviderAdapter.adapt(model, api_key)

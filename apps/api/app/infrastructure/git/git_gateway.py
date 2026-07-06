@@ -417,7 +417,7 @@ class LocalGitGateway:
             diff_output = await self._run_command(repo_path, "diff", "HEAD", "--", file_path)
             original = await self._run_command(repo_path, "show", f"HEAD:{file_path}")
             full_path = os.path.join(repo_path, file_path)
-            with open(full_path, "r", encoding="utf-8") as f:
+            with open(full_path, encoding="utf-8") as f:
                 modified = f.read()
             return {
                 "diff": diff_output,
@@ -428,7 +428,7 @@ class LocalGitGateway:
         except RuntimeError:
             try:
                 full_path = os.path.join(repo_path, file_path)
-                with open(full_path, "r", encoding="utf-8") as f:
+                with open(full_path, encoding="utf-8") as f:
                     modified = f.read()
                 return {
                     "diff": "",
