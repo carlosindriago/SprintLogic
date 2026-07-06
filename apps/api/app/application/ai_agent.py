@@ -287,7 +287,7 @@ class AIAgent:
         return ProviderAdapter.get_provider(model)
 
     async def chat(
-        self, messages: list[dict[str, str]], model: str = "gemini/gemini-1.5-pro-latest"
+        self, messages: list[dict[str, str]], model: str
     ) -> str:
         """
         Processes a chat conversation and allows the AI to call tools before returning a final response.

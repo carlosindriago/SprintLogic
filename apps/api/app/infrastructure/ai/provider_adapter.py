@@ -64,6 +64,9 @@ class ProviderAdapter:
             - kwargs: extra kwargs to pass to completion/acompletion
         """
         provider, model_id = cls._split_model(model)
+        if not model_id or model_id.lower() == "default":
+            raise ValueError(f"Invalid or missing model name: {model}")
+
         config = cls.CUSTOM_PROVIDERS.get(provider, {})
 
         kwargs: dict[str, Any] = {}
