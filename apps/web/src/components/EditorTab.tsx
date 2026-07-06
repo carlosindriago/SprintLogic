@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import Editor, { type OnMount } from '@monaco-editor/react';
 import type { editor as monacoEditor, Uri } from 'monaco-editor';
-import { getFileContent, saveFileContent, API_BASE_URL } from '@/lib/api';
+import { getFileContent, saveFileContent, API_BASE_URL, fetchFimCompletion } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { useTabsStore } from '@/store/tabsStore';
 import { useMarkersStore } from '@/store/markersStore';
@@ -55,6 +55,7 @@ export default function EditorTab({
   const vimInstanceRef = useRef<{ dispose(): void } | null>(null);
   const vimObserverRef = useRef<MutationObserver | null>(null);
   const vimPendingRef = useRef(false);
+  const fimDisposeRef = useRef<monacoEditor.IDisposable | null>(null);
   const dirtyCheckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const backupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -119,6 +120,10 @@ export default function EditorTab({
         vimInstanceRef.current = null;
       }
       vimPendingRef.current = false;
+      if (fimDisposeRef.current) {
+        fimDisposeRef.current.dispose();
+        fimDisposeRef.current = null;
+      }
     };
   }, [projectId, node.file_path, node.id]);
 
@@ -456,6 +461,36 @@ export default function EditorTab({
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
       handleSaveRef.current();
     });
+
+    const language = node.file_path?.split('.').pop() || '';
+    let fimTimer: ReturnType<typeof setTimeout> | null = null;
+    const fimDispose = monaco.languages.registerInlineCompletionsProvider(
+      { language },
+      {
+        provideInlineCompletions: async (model, position, _context, token) => {
+          return new Promise((resolve) => {
+            if (fimTimer) clearTimeout(fimTimer);
+            fimTimer = setTimeout(async () => {
+              if (token.isCancellationRequested) return resolve({ items: [] });
+              try {
+                const offset = model.getOffsetAt(position);
+                const full = model.getValue();
+                const prefix = full.slice(0, offset);
+                const suffix = full.slice(offset);
+                if (prefix.length < 3) return resolve({ items: [] });
+
+                const result = await fetchFimCompletion(prefix, suffix, language);
+                if (token.isCancellationRequested || !result.code) return resolve({ items: [] });
+                resolve({ items: [{ insertText: result.code }] });
+              } catch {
+                resolve({ items: [] });
+              }
+            }, 800);
+          });
+        },
+      },
+    );
+    fimDisposeRef.current = fimDispose;
 
     checkDirty();
   }, [node.metadata, checkDirty, node.file_path, node.id, vimMode]);
