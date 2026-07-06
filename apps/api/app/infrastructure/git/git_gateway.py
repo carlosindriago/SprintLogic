@@ -593,6 +593,12 @@ class LocalGitGateway:
                 repo_path, "diff", "--name-only", "HEAD",
             ),
             "current_branch": self._run_command(repo_path, "branch", "--show-current"),
+            "last_commit_subject": self._run_command(
+                repo_path, "log", "-1", "--format=%s", "HEAD",
+            ),
+            "penultimate_commit_subject": self._run_command(
+                repo_path, "log", "-1", "--format=%s", "HEAD~1",
+            ),
         }
 
         results = await asyncio.gather(*tasks.values(), return_exceptions=True)
@@ -654,6 +660,18 @@ class LocalGitGateway:
                     else mapped["current_branch"] or "unknown"
                 ),
                 "diff_with_main": diff_with_main,
+            },
+            "commits": {
+                "last_commit_message": (
+                    ""
+                    if isinstance(mapped["last_commit_subject"], BaseException)
+                    else mapped["last_commit_subject"].strip()
+                ),
+                "penultimate_commit_message": (
+                    ""
+                    if isinstance(mapped["penultimate_commit_subject"], BaseException)
+                    else mapped["penultimate_commit_subject"].strip()
+                ),
             },
         }
 
