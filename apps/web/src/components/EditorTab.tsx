@@ -6,8 +6,10 @@ import { cn } from '@/lib/utils';
 import { useTabsStore } from '@/store/tabsStore';
 import { useMarkersStore } from '@/store/markersStore';
 import { useUnsavedStore } from '@/store/unsavedStore';
+import { useFimStore } from '@/store/fimStore';
 import type { GraphNode } from '@/types';
 import { Code2, ChevronRight, Pencil, Eye, MousePointer2, GraduationCap } from 'lucide-react';
+import FimHintBar from './FimHintBar';
 
 interface LintDiagnostic {
   line: number;
@@ -481,6 +483,9 @@ export default function EditorTab({
 
                 const result = await fetchFimCompletion(prefix, suffix, language);
                 if (token.isCancellationRequested || !result.code) return resolve({ items: [] });
+                if (result.explanation) {
+                  useFimStore.getState().setExplanation(result.explanation);
+                }
                 resolve({ items: [{ insertText: result.code }] });
               } catch {
                 resolve({ items: [] });
@@ -669,6 +674,7 @@ export default function EditorTab({
           loading={null}
         />
       </div>
+      <FimHintBar />
     </div>
   );
 }
