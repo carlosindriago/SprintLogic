@@ -8,6 +8,7 @@ import litellm
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.infrastructure.ai.context7_client import Context7Client
 from app.infrastructure.ai.provider_adapter import ProviderAdapter
 from app.infrastructure.db.database import AsyncSessionLocal
 from app.infrastructure.db.models import AIMemoryModel, ContextSnippetModel, ProjectModel
@@ -111,6 +112,23 @@ class AIAgent:
                             }
                         },
                         "required": ["file_path"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "context7_search",
+                    "description": "Search official documentation for libraries and frameworks using Context7. Use this for API references, configuration syntax, version-specific features, or library usage patterns.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "The technical query to search in library documentation",
+                            }
+                        },
+                        "required": ["query"],
                     },
                 },
             },
@@ -230,6 +248,14 @@ class AIAgent:
                     return f"Error: File not found — {file_path}"
                 except Exception as e:
                     return f"Error reading file: {str(e)}"
+
+            elif name == "context7_search":
+                query = args.get("query", "")
+                api_key = CredentialManager.get_api_key("context7")
+                if not api_key:
+                    return "Error: Context7 API key not configured."
+                docs = await Context7Client.search(query, api_key)
+                return docs if docs else "No documentation found for that query."
 
         return "Unknown tool."
 
