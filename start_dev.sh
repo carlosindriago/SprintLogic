@@ -110,6 +110,12 @@ CHILD_PIDS+=("$BACKEND_PID")
 cd ../..
 echo "[start_dev] Backend PID: ${BACKEND_PID}"
 
+echo "[start_dev] Waiting for backend to start listening on port 8000..."
+while ! bash -c 'true < /dev/tcp/127.0.0.1/8000' 2>/dev/null; do
+    sleep 2
+done
+echo "[start_dev] Backend is up and listening on port 8000!"
+
 # 4. Start Frontend (in background so this script can own the lifecycle) ---
 
 cd apps/web
