@@ -357,6 +357,7 @@ export interface GitDashboardKPIs {
 export interface GitDashboardFileStatus {
   status: string;
   file_path: string;
+  timestamp?: number;
 }
 
 export interface GitDashboardBranch {
@@ -367,7 +368,8 @@ export interface GitDashboardBranch {
 export interface GitDashboard {
   kpis: GitDashboardKPIs;
   lists: {
-    untracked_list: string[];
+    untracked_list: GitDashboardFileStatus[];
+    modified_list: GitDashboardFileStatus[];
     staged_list: GitDashboardFileStatus[];
     last_commit_list: GitDashboardFileStatus[];
     penultimate_commit_list: GitDashboardFileStatus[];

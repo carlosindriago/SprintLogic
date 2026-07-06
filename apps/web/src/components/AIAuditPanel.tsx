@@ -34,6 +34,7 @@ interface AIAuditPanelProps {
 interface DashboardFile {
   status: string;
   file_path: string;
+  timestamp?: number;
 }
 
 export default function AIAuditPanel({ projectId }: AIAuditPanelProps) {
@@ -407,10 +408,10 @@ export default function AIAuditPanel({ projectId }: AIAuditPanelProps) {
             <div className="flex-1 min-h-0 px-4 pb-4">
               <div className="flex gap-4 h-full min-h-[280px] overflow-x-auto">
                 <StatusColumn
-                  title="Sin seguimiento"
+                  title="Cambios locales (Unstaged)"
                   icon={<FileText className="w-3.5 h-3.5 text-zinc-400" />}
-                  count={dashboard.lists.untracked_list.length}
-                  items={dashboard.lists.untracked_list.map((path) => ({ status: '??', file_path: path }))}
+                  count={dashboard.lists.untracked_list.length + dashboard.lists.modified_list.length}
+                  items={[...dashboard.lists.untracked_list, ...dashboard.lists.modified_list]}
                   onItemClick={handleFileClick}
                   statusBadge={statusBadge}
                   onAction={handleStage}
@@ -563,7 +564,7 @@ function DashboardFileRow({
     ? item.file_path.substring(0, item.file_path.lastIndexOf('/'))
     : '';
 
-  const isStaged = item.status !== '??';
+  const isStaged = item.status !== '??' && item.status !== 'M';
 
   return (
     <button
@@ -577,6 +578,11 @@ function DashboardFileRow({
           <div className="text-[10px] text-zinc-600 truncate">{dirPath}</div>
         )}
       </div>
+      {item.timestamp && (
+        <span className="text-[10px] text-zinc-600 font-mono shrink-0 tabular-nums">
+          {formatRelativeTimestamp(item.timestamp)}
+        </span>
+      )}
       {onAction && (
         <span
           onClick={(e) => {
@@ -632,6 +638,19 @@ function ConfirmationModal({
       </div>
     </div>
   );
+}
+
+function formatRelativeTimestamp(ts: number | undefined): string {
+  if (!ts) return '';
+  const now = Math.floor(Date.now() / 1000);
+  const diff = now - ts;
+
+  if (diff < 60) return 'ahora';
+  if (diff < 3600) return `hace ${Math.floor(diff / 60)} min`;
+  if (diff < 86400) return `hace ${Math.floor(diff / 3600)} h`;
+
+  const date = new Date(ts * 1000);
+  return date.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
 }
 
 function formatDiffWithMain(diff: { ahead: number | null; behind: number | null } | undefined): string {
