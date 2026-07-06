@@ -1,4 +1,5 @@
 # ruff: noqa: E402, E501
+import logging
 import os
 import re
 import shutil
@@ -27,6 +28,8 @@ from app.infrastructure.db.project_repository import SQLAlchemyProjectRepository
 from app.infrastructure.git.git_gateway import LocalGitGateway
 from app.infrastructure.parser.ast_parser import ASTParserService
 from app.infrastructure.repositories.graph_repository import SQLAlchemyGraphRepository
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -64,11 +67,14 @@ async def scan_project(request: ScanRequest, session: AsyncSession = Depends(get
     try:
         saved_project = await scan_repo_usecase.execute(request.path)
     except PathBlockedError as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        logger.error("Project operation failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=403, detail="Access denied")
     except ScannerError as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        logger.error("Project operation failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=422, detail="Unprocessable Entity")
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error("Project operation failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=400, detail="Bad Request")
 
     parser = ASTParserService()
     graph_repo = SQLAlchemyGraphRepository(session)
@@ -339,7 +345,8 @@ Responde en formato Markdown limpio, directo y profesional. Usa títulos y lista
         analysis = llm_gateway.generate_completion(prompt=prompt, model=request.model)
         return {"analysis": analysis}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Fallo en la llamada a la IA: {str(e)}")
+        logger.error("Fallo en la llamada a la IA failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 from sqlalchemy import select
@@ -449,7 +456,8 @@ async def get_project_file_content(
             content = f.read()
         return {"content": content}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to read file: {str(e)}")
+        logger.error("Failed to read file failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.put("/projects/{project_id}/file/content")
@@ -485,7 +493,8 @@ async def update_project_file_content(
             f.write(payload.content)
         return {"status": "success"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to write file: {str(e)}")
+        logger.error("Failed to write file failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.post("/projects/{project_id}/file/create")
@@ -521,7 +530,8 @@ async def create_project_file(
             f.write(payload.content)
         return {"status": "created", "path": str(candidate.relative_to(project_root))}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to create file: {str(e)}")
+        logger.error("Failed to create file failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 def _validate_and_resolve(project_path: str, file_path: str) -> Path:
@@ -570,7 +580,8 @@ async def rename_project_file(
         relative = str(new_path.relative_to(Path(project.path).resolve()))
         return {"status": "renamed", "path": relative}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to rename file: {str(e)}")
+        logger.error("Failed to rename file failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.post("/projects/{project_id}/file/duplicate")
@@ -608,7 +619,8 @@ async def duplicate_project_file(
         relative = str(duplicate_path.relative_to(Path(project.path).resolve()))
         return {"status": "duplicated", "path": relative}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to duplicate file: {str(e)}")
+        logger.error("Failed to duplicate file failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.delete("/projects/{project_id}/file/delete")
@@ -636,7 +648,8 @@ async def delete_project_file(
         os.remove(str(candidate))
         return {"status": "deleted", "path": path}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to delete file: {str(e)}")
+        logger.error("Failed to delete file failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 IGNORE_DIRS = {
@@ -1285,8 +1298,9 @@ Debes responder ÚNICAMENTE con un objeto JSON válido con la siguiente estructu
         parsed_wbs = json.loads(clean_res)
         return parsed_wbs
     except Exception as e:
+        logger.error("WBS AI planning failed: %s", e, exc_info=True)
         raise HTTPException(
-            status_code=500, detail=f"Fallo en la planeación IA de la WBS: {str(e)}"
+            status_code=500, detail="An internal error occurred"
         )
 
 

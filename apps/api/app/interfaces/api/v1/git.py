@@ -1,5 +1,6 @@
 import hashlib
 import json
+import logging
 import time
 from typing import Any, Literal
 from uuid import UUID
@@ -12,6 +13,8 @@ from app.infrastructure.ai.llm_gateway import LiteLLMGateway
 from app.infrastructure.db.database import get_db_session
 from app.infrastructure.db.project_repository import SQLAlchemyProjectRepository
 from app.infrastructure.git.git_gateway import LocalGitGateway
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 git_gateway = LocalGitGateway()
@@ -189,7 +192,8 @@ async def generate_commit_message(
         # LLM Key missing or similar
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Git operation failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.get("/{project_id}/git/commits/{hash}")
@@ -294,7 +298,8 @@ async def add_remote(
             }
         return {"status": "success", "message": "Remoto vinculado correctamente."}
     except RuntimeError as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Git operation failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.post("/{project_id}/git/branches")
@@ -316,7 +321,8 @@ async def create_branch(
         out = await git_gateway.create_branch(project.path, request.name, request.start_point)
         return {"status": "success", "output": out}
     except RuntimeError as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Git operation failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.delete("/{project_id}/git/branches/{branch_name:path}")
@@ -343,7 +349,8 @@ async def delete_branch(
             status_code=409, detail={"message": str(e), "requires_force": e.requires_force}
         )
     except RuntimeError as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Git operation failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.put("/{project_id}/git/head")
@@ -363,7 +370,8 @@ async def checkout_head(
     except RuntimeError as e:
         if "Dirty working tree" in str(e):
             raise HTTPException(status_code=409, detail=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Git operation failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.post("/{project_id}/git/commits/{hash}/reset")
@@ -391,7 +399,8 @@ async def reset_commit(
         store_idempotent_response(idempotency_key, request.model_dump(), resp)
         return resp
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Git operation failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.post("/{project_id}/git/commits/{hash}/revert")
@@ -418,7 +427,8 @@ async def revert_commit(
         store_idempotent_response(idempotency_key, {}, resp)
         return resp
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Git operation failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.post("/{project_id}/git/commits/{hash}/cherry-pick")
@@ -445,7 +455,8 @@ async def cherry_pick_commit(
         store_idempotent_response(idempotency_key, {}, resp)
         return resp
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Git operation failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.post("/{project_id}/git/merge")
@@ -472,7 +483,8 @@ async def merge_branch(
         store_idempotent_response(idempotency_key, request.model_dump(), resp)
         return resp
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Git operation failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.get("/{project_id}/git/diff")
@@ -563,7 +575,8 @@ async def get_git_dashboard(
     try:
         dashboard = await git_gateway.get_git_dashboard(project.path)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Git operation failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
     return dashboard
 
@@ -592,7 +605,8 @@ async def stage_file(
     try:
         result = await git_gateway.stage_file(project.path, request.file_path)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Git operation failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
     return result
 
@@ -613,7 +627,8 @@ async def unstage_file(
     try:
         result = await git_gateway.unstage_file(project.path, request.file_path)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Git operation failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
     return result
 
@@ -634,6 +649,7 @@ async def commit_changes(
     try:
         result = await git_gateway.commit_changes(project.path, request.message)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Git operation failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
     return result
