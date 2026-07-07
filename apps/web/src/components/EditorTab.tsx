@@ -180,6 +180,88 @@ export default function EditorTab({
     return () => { disposer.dispose(); };
   }, [projectId, node.file_path]);
 
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor || !vimMode || vimInstanceRef.current) return;
+
+    vimPendingRef.current = true;
+    import("monaco-vim").then(({ initVimMode, VimMode }) => {
+      if (!vimPendingRef.current) return;
+
+      const statusNode = document.createElement('div');
+      statusNode.style.position = 'absolute';
+      statusNode.style.bottom = '0';
+      statusNode.style.left = '0';
+      statusNode.style.right = '0';
+      statusNode.style.width = '100%';
+      statusNode.style.padding = '2px 8px';
+      statusNode.style.fontSize = '12px';
+      statusNode.style.backgroundColor = '#1e1e1e';
+      statusNode.style.borderTop = '1px solid #333';
+      statusNode.style.color = '#fff';
+      statusNode.style.zIndex = '10';
+
+      const container = editor.getContainerDomNode();
+      if (container) {
+        container.style.position = 'relative';
+        container.style.overflow = 'hidden';
+        container.appendChild(statusNode);
+      }
+      vimStatusRef.current = statusNode;
+
+      const vim = initVimMode(editor, statusNode);
+      vimInstanceRef.current = vim;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (VimMode as any).Vim.defineEx('write', 'w', (args: { args: string }) => {
+        const filename = args.args.trim();
+        if (filename) {
+          const dir = node.file_path ? node.file_path.substring(0, node.file_path.lastIndexOf('/')) : '';
+          const newPath = dir ? `${dir}/${filename}` : filename;
+          handleSaveRef.current(newPath);
+        } else {
+          handleSaveRef.current();
+        }
+      });
+
+      const modeLabels: Record<string, typeof editorModeRef.current> = {
+        'NORMAL': 'locked',
+        'VISUAL': 'visual',
+        'VISUAL LINE': 'visual',
+        'VISUAL BLOCK': 'visual',
+        'INSERT': 'editable',
+        'REPLACE': 'editable',
+      };
+      const observer = new MutationObserver(() => {
+        const text = statusNode.textContent?.trim().toUpperCase() || '';
+        for (const [label, mode] of Object.entries(modeLabels)) {
+          if (text.startsWith(label)) {
+            editorModeRef.current = mode;
+            setEditorMode(mode);
+            break;
+          }
+        }
+      });
+      observer.observe(statusNode, { characterData: true, subtree: true, childList: true });
+      vimObserverRef.current = observer;
+    }).catch(() => {
+      console.error("Vim initialization failed");
+    });
+  }, [vimMode, node.file_path]);
+
+  useEffect(() => {
+    if (!vimMode) {
+      if (vimObserverRef.current) {
+        vimObserverRef.current.disconnect();
+        vimObserverRef.current = null;
+      }
+      if (vimInstanceRef.current) {
+        vimInstanceRef.current.dispose();
+        vimInstanceRef.current = null;
+      }
+    }
+  }, [vimMode]);
+
   const checkDirty = useCallback(() => {
     const editor = editorRef.current;
     if (!editor) return;
