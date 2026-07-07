@@ -15,7 +15,7 @@ SprintLogic is an open-source, **Local-First Desktop Application** built specifi
 - **Dependency-Aware RAG & Context7**: Deep integration with real-time official documentation. The Context7 MCP provides access to the latest docs for React, Next.js, Python, Tailwind, etc., preventing AI hallucinations.
 - **Git Perfection**: Frictionless control over your version history. Offers suggestions for branch names, atomic commits, and direct Kanban board synchronization.
 - **Codebase Memory Graph**: Maps local code using `tree-sitter`, stores nodes and edges in SQLite, and renders them in an interactive 2D graph.
-- **Persistent AI Memory (Engram)**: Long-term AI memory that automatically saves architectural decisions, conventions, and session summaries at the end of your work blocks.
+- **Persistent AI Memory**: Long-term AI memory that automatically saves architectural decisions, conventions, and session summaries at the end of your work blocks.
 
 ---
 
@@ -92,7 +92,7 @@ SprintLogic maps your workflow to a structured Kanban process:
 ### 4. SDD (Spec-Driven Development) Pipeline
 When undertaking large features, utilize the built-in SDD tools:
 - Allow SprintLogic AI to generate **Implementation Plans**, **Specs**, and **Walkthroughs** before writing code.
-- SprintLogic's persistent Engram memory will index these decisions and recall them in future sessions.
+- SprintLogic's persistent memory will index these decisions and recall them in future sessions.
 
 ---
 
