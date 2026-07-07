@@ -509,9 +509,19 @@ export default function EditorTab({
         )}
 
         {editorMode === 'editable' && (
-          <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-green-500/10 text-green-400 border border-green-500/20 shrink-0">
-            <Pencil className="w-3 h-3" />
-            Insert
+          <span className="flex items-center gap-1 shrink-0">
+            <span className="px-1.5 py-0.5 rounded text-[10px] bg-green-500/10 text-green-400 border border-green-500/20">
+              <Pencil className="w-3 h-3 inline mr-0.5" />
+              Insert
+            </span>
+            <button
+              onClick={() => editorRef.current?.trigger('keyboard', 'type', { text: '\x1b' })}
+              className="px-1.5 py-0.5 rounded text-[10px] transition-colors flex items-center gap-0.5 border text-zinc-500 border-transparent hover:bg-blue-500/10 hover:text-blue-400 hover:border-blue-500/20"
+              title="Modo Normal (ESC)"
+            >
+              <Eye className="w-3 h-3" />
+              ESC
+            </button>
           </span>
         )}
 
