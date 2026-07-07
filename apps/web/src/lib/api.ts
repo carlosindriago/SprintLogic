@@ -528,3 +528,17 @@ export const analyzeProject = async (projectId: string): Promise<AnalyzeResult> 
   if (!res.ok) throw new Error("Failed to analyze project");
   return res.json();
 };
+
+export const fetchFimCompletion = async (
+  prefix: string,
+  suffix: string,
+  language: string,
+): Promise<{ code: string; explanation: string }> => {
+  const res = await fetch(`${API_BASE_URL}/ai/fim-completion`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prefix, suffix, language }),
+  });
+  if (!res.ok) return { code: '', explanation: '' };
+  return res.json();
+};
