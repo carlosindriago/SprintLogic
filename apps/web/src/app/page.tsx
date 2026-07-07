@@ -36,6 +36,7 @@ import KanbanBoard from "@/components/KanbanBoard";
 import LLMSettingsPanel from "@/components/LLMSettingsPanel";
 import FileTree from "@/components/FileTree";
 import { useTabsStore } from '@/store/tabsStore';
+import { useSettingsStore } from '@/store/settingsStore';
 import { useProjectStore } from '@/store/projectStore';
 import TabBar from '@/components/TabBar';
 import { useThemeStore, AccentColor, UiScale } from '@/store/themeStore';
@@ -80,7 +81,8 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [addProjectOpen, setAddProjectOpen] = useState(false);
-  const [vimMode, setVimMode] = useState(false);
+  const isVimEnabled = useSettingsStore((s) => s.isVimEnabled);
+  const setVimEnabled = useSettingsStore((s) => s.setVimEnabled);
   
   const { tabs, activeTabId, addTab, switchProject } = useTabsStore();
   const { accentColor, setAccentColor, uiScale, setUiScale } = useThemeStore();
@@ -405,7 +407,7 @@ export default function Home() {
           <EditorTab
             projectId={projectId}
             node={activeTab.data.node}
-            vimMode={vimMode}
+            vimMode={isVimEnabled}
             onSaveUntitled={activeTab.data.node.file_path ? undefined : (content) => handleSaveUntitled(activeTab.id, content)}
             onMentor={handleOpenMentor}
           />
@@ -469,7 +471,7 @@ export default function Home() {
                         <>
                           <LLMSettingsPanel />
                           <div className="flex items-center space-x-2 pt-2 border-t border-zinc-800/50 mt-2">
-                            <Switch id="vim-mode" checked={vimMode} onCheckedChange={setVimMode} />
+                            <Switch id="vim-mode" checked={isVimEnabled} onCheckedChange={setVimEnabled} />
                             <Label htmlFor="vim-mode">Habilitar Modo Vim</Label>
                           </div>
                         </>
