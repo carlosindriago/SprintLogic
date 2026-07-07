@@ -260,7 +260,8 @@ export default function EditorTab({
           'REPLACE': 'editable',
         };
         const observer = new MutationObserver(() => {
-          const text = statusNode.textContent?.trim().toUpperCase() || '';
+          const raw = statusNode.textContent?.trim() || '';
+          const text = raw.replace(/^-+|-+$/g, '').toUpperCase();
           for (const [label, mode] of Object.entries(modeLabels)) {
             if (text.startsWith(label)) {
               editorModeRef.current = mode;
@@ -534,7 +535,8 @@ export default function EditorTab({
             'REPLACE': 'editable',
           };
           const observer = new MutationObserver(() => {
-            const text = statusNode.textContent?.trim().toUpperCase() || '';
+            const raw = statusNode.textContent?.trim() || '';
+            const text = raw.replace(/^-+|-+$/g, '').toUpperCase();
             for (const [label, mode] of Object.entries(modeLabels)) {
               if (text.startsWith(label)) {
                 editorModeRef.current = mode;
@@ -666,7 +668,7 @@ export default function EditorTab({
           {isDirty && <span className="text-yellow-400 ml-0.5">&bull;</span>}
         </span>
 
-        {vimMode && editorMode !== 'editable' && (
+        {vimMode && (
           <span className="flex items-center gap-0.5 shrink-0">
             <span className={cn(
               "px-1.5 py-0.5 rounded text-[10px] transition-colors flex items-center gap-0.5 border",
@@ -688,29 +690,27 @@ export default function EditorTab({
             </span>
             <button
               onClick={() => editorRef.current?.trigger('keyboard', 'type', { text: 'i' })}
-              className="px-1.5 py-0.5 rounded text-[10px] transition-colors flex items-center gap-0.5 border text-zinc-500 border-transparent hover:bg-green-500/10 hover:text-green-400 hover:border-green-500/20"
+              className={cn(
+                "px-1.5 py-0.5 rounded text-[10px] transition-colors flex items-center gap-0.5 border",
+                editorMode === 'editable'
+                  ? "bg-green-500/30 text-green-200 border-green-400/40"
+                  : "text-zinc-500 border-transparent hover:bg-green-500/10 hover:text-green-400 hover:border-green-500/20"
+              )}
               title="Modo Edición (i)"
             >
               <Pencil className="w-3 h-3" />
               Editar
             </button>
-          </span>
-        )}
-
-        {vimMode && editorMode === 'editable' && (
-          <span className="flex items-center gap-1 shrink-0">
-            <span className="px-1.5 py-0.5 rounded text-[10px] bg-green-500/30 text-green-200 border border-green-400/40">
-              <Pencil className="w-3 h-3 inline mr-0.5" />
-              Insert
-            </span>
-            <button
-              onClick={() => editorRef.current?.trigger('keyboard', 'type', { text: '\x1b' })}
-              className="px-1.5 py-0.5 rounded text-[10px] transition-colors flex items-center gap-0.5 border text-zinc-500 border-transparent hover:bg-blue-500/10 hover:text-blue-400 hover:border-blue-500/20"
-              title="Modo Normal (ESC)"
-            >
-              <Eye className="w-3 h-3" />
-              ESC
-            </button>
+            {editorMode === 'editable' && (
+              <button
+                onClick={() => editorRef.current?.trigger('keyboard', 'type', { text: '\x1b' })}
+                className="px-1.5 py-0.5 rounded text-[10px] transition-colors flex items-center gap-0.5 border text-zinc-500 border-transparent hover:bg-blue-500/10 hover:text-blue-400 hover:border-blue-500/20"
+                title="Volver a Modo Normal (ESC)"
+              >
+                <Eye className="w-3 h-3" />
+                ESC
+              </button>
+            )}
           </span>
         )}
 
