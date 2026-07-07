@@ -159,12 +159,20 @@ export default function EditorTab({
       const disposer = monaco.languages.registerInlineCompletionsProvider(
         { language },
         {
-          provideInlineCompletions: async (model, position, _context, token) => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          provideInlineCompletions: async (model: any, position: any, _context: any, token: any) => {
             if (!isFimEnabledRef.current) return { items: [] };
 
             return new Promise((resolve) => {
-              if (timer) clearTimeout(timer);
+              let timer: ReturnType<typeof setTimeout> | null = null;
+
+              const disposable = token.onCancellationRequested(() => {
+                if (timer) clearTimeout(timer);
+                resolve({ items: [] });
+              });
+
               timer = setTimeout(async () => {
+                disposable.dispose();
                 if (token.isCancellationRequested) return resolve({ items: [] });
                 try {
                   const offset = model.getOffsetAt(position);
