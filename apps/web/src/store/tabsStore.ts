@@ -126,15 +126,19 @@ export const useTabsStore = create<TabsState>()(
       },
     }),
     {
-      name: 'sprintlogic-tabs-storage',
+      name: 'sprintlogic-tabs',
       partialize: (state) => {
         const { tabs, activeTabId, currentProjectId, projectSessions } = state;
-        // Also save current session before persisting
         const sessions = { ...projectSessions };
         if (currentProjectId) {
           sessions[currentProjectId] = { tabs, activeTabId };
         }
-        return { currentProjectId, projectSessions: sessions };
+        return {
+          currentProjectId,
+          projectSessions: sessions,
+          tabs,
+          activeTabId,
+        };
       },
     }
   )
