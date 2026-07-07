@@ -152,7 +152,6 @@ export default function EditorTab({
     }
 
     const language = node.file_path?.split('.').pop() || '';
-    let timer: ReturnType<typeof setTimeout> | null = null;
 
     try {
       console.log('[MONACO BOOT] Registrando FIM Provider para lenguaje:', language || '(default)');
