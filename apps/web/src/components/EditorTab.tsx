@@ -7,6 +7,7 @@ import { useTabsStore } from '@/store/tabsStore';
 import { useMarkersStore } from '@/store/markersStore';
 import { useUnsavedStore } from '@/store/unsavedStore';
 import { useFimStore } from '@/store/fimStore';
+import { useFocusStore } from '@/store/focusStore';
 import type { GraphNode } from '@/types';
 import { Code2, ChevronRight, Pencil, Eye, MousePointer2, GraduationCap } from 'lucide-react';
 import FimHintBar from './FimHintBar';
@@ -55,6 +56,15 @@ export default function EditorTab({
   useEffect(() => {
     isFimEnabledRef.current = isFimEnabled;
   }, [isFimEnabled]);
+
+  const focusTarget = useFocusStore((s) => s.target);
+  const focusVersion = useFocusStore((s) => s.version);
+
+  useEffect(() => {
+    if (focusTarget === 'editor') {
+      editorRef.current?.focus();
+    }
+  }, [focusTarget, focusVersion]);
   const editorModeRef = useRef(editorMode);
   const vimStatusRef = useRef<HTMLDivElement | null>(null);
   const originalContentRef = useRef('');
@@ -291,6 +301,7 @@ export default function EditorTab({
   }), []);
 
   const handleEditorDidMount: OnMount = useCallback((editor, monaco) => {
+    // eslint-disable-next-line react-hooks/immutability
     editorRef.current = editor;
     monacoRef.current = monaco;
 

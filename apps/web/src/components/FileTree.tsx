@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ChevronRight, ChevronDown, Folder, FilePlus, FolderPlus, AlertCircle, AlertTriangle, Pencil, Copy, Trash2 } from 'lucide-react';
 import { getProjectFiles } from '@/lib/api';
 import { FileTreeNode } from '@/types';
@@ -6,6 +6,7 @@ import FileIcon from './FileIcon';
 import { useMarkersStore, type MarkerData } from '@/store/markersStore';
 import { cn } from '@/lib/utils';
 import { ContextMenu, ContextMenuItem, ContextMenuSeparator } from './ContextMenu';
+import { useFocusStore } from '@/store/focusStore';
 
 interface FileTreeProps {
   projectId: string;
@@ -260,6 +261,16 @@ export default function FileTree({ projectId, onFileSelect, onNewFile, refreshKe
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const allFiles = useMarkersStore((s) => s.files);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const focusTarget = useFocusStore((s) => s.target);
+  const focusVersion = useFocusStore((s) => s.version);
+
+  useEffect(() => {
+    if (focusTarget === 'explorer') {
+      containerRef.current?.focus();
+    }
+  }, [focusTarget, focusVersion]);
 
   useEffect(() => {
     const keys = Object.keys(allFiles);
@@ -302,7 +313,11 @@ export default function FileTree({ projectId, onFileSelect, onNewFile, refreshKe
   if (!tree) return null;
 
   return (
-    <div className="py-2 overflow-x-auto">
+    <div
+      ref={containerRef}
+      tabIndex={0}
+      className="py-2 overflow-x-auto outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500/50"
+    >
       {tree.children?.map((child, idx) => (
         <TreeNode key={idx} node={child} onSelect={onFileSelect} depth={0} onNewFile={onNewFile} allFiles={allFiles} onNavigateToMarker={onNavigateToMarker} onFileRename={onFileRename} onFileDuplicate={onFileDuplicate} onFileDelete={onFileDelete} />
       ))}

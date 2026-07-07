@@ -51,6 +51,7 @@ import CodeMentorPanel from "@/components/CodeMentorPanel";
 import { useProjectInsightsStore } from "@/store/projectInsightsStore";
 import { toast } from "sonner";
 import { useDoubleShift } from "@/hooks/useDoubleShift";
+import { useGlobalShortcuts } from "@/hooks/useGlobalShortcuts";
 
 // Monaco bundles are large and depend on `window`/`document`. They MUST
 // never enter the server bundle — that is what was pegging the CPU on
@@ -113,6 +114,7 @@ export default function Home() {
   }, []);
 
   useDoubleShift(() => setSearchOpen(true));
+  useGlobalShortcuts();
 
   useEffect(() => {
     switchProject(projectId);
