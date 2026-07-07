@@ -8,6 +8,8 @@ import { useMarkersStore } from '@/store/markersStore';
 import { useUnsavedStore } from '@/store/unsavedStore';
 import { useFocusStore } from '@/store/focusStore';
 import { useSettingsStore } from '@/store/settingsStore';
+import { useLLMConfigStore } from '@/store/llmConfigStore';
+import { useFimStore } from '@/store/fimStore';
 import type { GraphNode } from '@/types';
 import { Code2, ChevronRight, Pencil, Eye, MousePointer2, GraduationCap, Save, SaveAll, Sparkles } from 'lucide-react';
 import FimHintBar from './FimHintBar';
@@ -52,12 +54,29 @@ export default function EditorTab({
   const [editorMode, setEditorMode] = useState<'locked' | 'visual' | 'editable'>('locked');
   const isFimEnabled = useSettingsStore((s) => s.isFimEnabled);
   const setIsFimEnabled = useSettingsStore((s) => s.setFimEnabled);
+  const fimDefaultModel = useLLMConfigStore((s) => s.fimDefaultModel);
+  const fimFallbackModel = useLLMConfigStore((s) => s.fimFallbackModel);
+  const setIsLoading = useFimStore((s) => s.setIsLoading);
+  
   const isFimEnabledRef = useRef(true);
+  const fimDefaultModelRef = useRef(fimDefaultModel);
+  const fimFallbackModelRef = useRef(fimFallbackModel);
+  const setIsLoadingRef = useRef(setIsLoading);
+  
   const monacoRef = useRef<typeof import('monaco-editor') | null>(null);
 
   useEffect(() => {
     isFimEnabledRef.current = isFimEnabled;
   }, [isFimEnabled]);
+
+  useEffect(() => {
+    fimDefaultModelRef.current = fimDefaultModel;
+    fimFallbackModelRef.current = fimFallbackModel;
+  }, [fimDefaultModel, fimFallbackModel]);
+
+  useEffect(() => {
+    setIsLoadingRef.current = setIsLoading;
+  }, [setIsLoading]);
 
   const focusTarget = useFocusStore((s) => s.target);
   const focusVersion = useFocusStore((s) => s.version);
@@ -173,17 +192,27 @@ export default function EditorTab({
               timer = setTimeout(async () => {
                 disposable.dispose();
                 if (token.isCancellationRequested) return resolve({ items: [] });
+                setIsLoadingRef.current(true);
                 try {
                   const offset = model.getOffsetAt(position);
                   const full = model.getValue();
                   const prefix = full.slice(0, offset);
                   const suffix = full.slice(offset);
                   if (prefix.length < 3) return resolve({ items: [] });
-                  const result = await fetchFimCompletion(prefix, suffix, language);
+                  
+                  const result = await fetchFimCompletion(
+                    prefix, 
+                    suffix, 
+                    language, 
+                    fimDefaultModelRef.current, 
+                    fimFallbackModelRef.current
+                  );
                   if (token.isCancellationRequested || !result.code) return resolve({ items: [] });
                   resolve({ items: [{ insertText: result.code }] });
                 } catch {
                   resolve({ items: [] });
+                } finally {
+                  setIsLoadingRef.current(false);
                 }
               }, 800);
             });

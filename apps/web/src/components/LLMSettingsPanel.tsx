@@ -18,9 +18,12 @@ import {
   checkApiKeyStatus,
   deleteProviderKey,
   ModelResult,
+  getCuratedModels,
+  CuratedProvider,
+  fetchFimCompletion,
 } from "@/lib/api";
 import { useLLMConfigStore } from "@/store/llmConfigStore";
-import { Loader2, KeyRound, CheckCircle2, XCircle, Trash2, Brain } from "lucide-react";
+import { Loader2, KeyRound, CheckCircle2, XCircle, Trash2, Brain, Sparkles, Play } from "lucide-react";
 
 const PROVIDERS = [
   { id: "gemini", name: "Google Gemini" },
@@ -430,7 +433,138 @@ function Context7Section({
   );
 }
 
-type ActiveSection = string; // provider id or 'context7'
+type ActiveSection = string; // provider id, 'context7', or 'fim-config'
+
+function FimConfigSection() {
+  const fimDefaultModel = useLLMConfigStore((s) => s.fimDefaultModel);
+  const setFimDefaultModel = useLLMConfigStore((s) => s.setFimDefaultModel);
+  const fimFallbackModel = useLLMConfigStore((s) => s.fimFallbackModel);
+  const setFimFallbackModel = useLLMConfigStore((s) => s.setFimFallbackModel);
+  
+  const [providers, setProviders] = useState<CuratedProvider[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isTesting, setIsTesting] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    getCuratedModels().then((data) => {
+      if (cancelled) return;
+      setProviders(data);
+      setLoading(false);
+    }).catch(() => {
+      if (cancelled) return;
+      setLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  const handleTest = async () => {
+    setIsTesting(true);
+    try {
+      const res = await fetchFimCompletion("def add(a, b):\n  ", "\n", "python", fimDefaultModel, fimFallbackModel);
+      if (res.code) {
+        toast.success("FIM Engine test successful!");
+      } else {
+        toast.error("FIM Engine test failed: No completion returned.");
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      toast.error(`FIM Engine test failed: ${message}`);
+    } finally {
+      setIsTesting(false);
+    }
+  };
+
+  const allModels = providers.flatMap(p => p.models.map(m => ({ ...m, provider: p.provider_id })));
+
+  return (
+    <div className="flex flex-col gap-6 p-5">
+      <div className="flex flex-col gap-2">
+        <Label className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">
+          Primary FIM Model
+        </Label>
+        {loading ? (
+          <div className="flex flex-col gap-2" role="status" aria-label="Loading models">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="h-9 w-full rounded-md bg-zinc-950 border border-zinc-800/50 animate-pulse" />
+            ))}
+          </div>
+        ) : (
+          <Select value={fimDefaultModel} onValueChange={(val) => val && setFimDefaultModel(val)}>
+            <SelectTrigger className="bg-zinc-950 border-zinc-800 text-zinc-200 w-full">
+              <SelectValue placeholder="Selecciona el modelo principal..." />
+            </SelectTrigger>
+            <SelectContent className="bg-zinc-900 border-zinc-800 text-zinc-200 max-h-[200px]">
+              {allModels.map((m) => (
+                <SelectItem key={m.id} value={m.id} className="focus:bg-zinc-800 focus:text-zinc-100 cursor-pointer">
+                  {m.name} ({m.provider})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+        <p className="text-[11px] text-zinc-500 mt-1">
+          El modelo que se usará por defecto para autocompletar código.
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-2 mt-2">
+        <Label className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">
+          Fallback FIM Model (Optional)
+        </Label>
+        {loading ? (
+          <div className="flex flex-col gap-2" role="status" aria-label="Loading models">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="h-9 w-full rounded-md bg-zinc-950 border border-zinc-800/50 animate-pulse" />
+            ))}
+          </div>
+        ) : (
+          <Select value={fimFallbackModel} onValueChange={(val) => val && setFimFallbackModel(val)}>
+            <SelectTrigger className="bg-zinc-950 border-zinc-800 text-zinc-200 w-full">
+              <SelectValue placeholder="Selecciona un modelo de respaldo..." />
+            </SelectTrigger>
+            <SelectContent className="bg-zinc-900 border-zinc-800 text-zinc-200 max-h-[200px]">
+              <SelectItem value="none" className="focus:bg-zinc-800 focus:text-zinc-100 cursor-pointer text-zinc-400">
+                Ninguno
+              </SelectItem>
+              {allModels.map((m) => (
+                <SelectItem key={m.id} value={m.id} className="focus:bg-zinc-800 focus:text-zinc-100 cursor-pointer">
+                  {m.name} ({m.provider})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+        <p className="text-[11px] text-zinc-500 mt-1">
+          Modelo alternativo si el principal falla (ej: límites de tasa o llave no configurada).
+        </p>
+      </div>
+      
+      <div className="flex flex-col gap-2 mt-4 pt-4 border-t border-zinc-800/50">
+        <Label className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">
+          Testing
+        </Label>
+        <p className="text-[11px] text-zinc-500 mb-2">
+          Verifica que la configuración actual funcione enviando un fragmento de código de prueba al backend.
+        </p>
+        <Button
+          type="button"
+          disabled={isTesting || !fimDefaultModel}
+          onClick={handleTest}
+          variant="secondary"
+          className="w-fit bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700/50 h-9"
+        >
+          {isTesting ? (
+            <Loader2 className="w-4 h-4 mr-2 animate-spin text-emerald-400" />
+          ) : (
+            <Play className="w-4 h-4 mr-2 text-emerald-400" />
+          )}
+          {isTesting ? "Testeando..." : "Test FIM Engine"}
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 export default function LLMSettingsPanel() {
   const defaultModel = useLLMConfigStore((s) => s.defaultModel);
@@ -446,7 +580,7 @@ export default function LLMSettingsPanel() {
     [setDefaultModel],
   );
 
-  const isLLMProvider = activeSection !== 'context7';
+  const isLLMProvider = activeSection !== 'context7' && activeSection !== 'fim-config';
 
   return (
     <div className="flex h-[440px] border border-zinc-800/50 rounded-lg overflow-hidden">
@@ -482,6 +616,23 @@ export default function LLMSettingsPanel() {
 
         <div className="px-3 pt-4 pb-1 mt-1 border-t border-zinc-800/50">
           <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-widest">
+            FIM Autocomplete
+          </span>
+        </div>
+        <button
+          onClick={() => setActiveSection('fim-config')}
+          className={`text-left px-3 py-1.5 text-xs transition-colors flex items-center gap-2 ${
+            activeSection === 'fim-config'
+              ? "bg-blue-500/10 text-blue-300 border-l-2 border-blue-500 font-medium"
+              : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200 border-l-2 border-transparent"
+          }`}
+        >
+          <Sparkles className="w-3.5 h-3.5 shrink-0" />
+          FIM Engine
+        </button>
+
+        <div className="px-3 pt-4 pb-1 mt-1 border-t border-zinc-800/50">
+          <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-widest">
             Integraciones
           </span>
         </div>
@@ -507,11 +658,13 @@ export default function LLMSettingsPanel() {
             defaultModel={defaultModel}
             onSelectModel={handleSelectModel}
           />
-        ) : (
+        ) : activeSection === 'context7' ? (
           <Context7Section
             apiKey={context7ApiKey}
             onSave={setContext7ApiKey}
           />
+        ) : (
+          <FimConfigSection key="fim-config" />
         )}
       </div>
     </div>

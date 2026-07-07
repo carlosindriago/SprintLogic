@@ -25,6 +25,10 @@ interface LLMConfigState {
   apiKeys: Record<string, string>;
   setApiKey: (provider: string, key: string) => void;
   removeApiKey: (provider: string) => void;
+  fimDefaultModel: string;
+  setFimDefaultModel: (model: string) => void;
+  fimFallbackModel: string;
+  setFimFallbackModel: (model: string) => void;
 }
 
 export const useLLMConfigStore = create<LLMConfigState>()(
@@ -46,6 +50,10 @@ export const useLLMConfigStore = create<LLMConfigState>()(
         delete newKeys[provider];
         return { ...state, apiKeys: newKeys };
       }),
+      fimDefaultModel: DEFAULT_MODEL,
+      setFimDefaultModel: (model) => set({ fimDefaultModel: model }),
+      fimFallbackModel: '',
+      setFimFallbackModel: (model) => set({ fimFallbackModel: model }),
     }),
     {
       name: 'sprintlogic-llm-config',
@@ -53,6 +61,8 @@ export const useLLMConfigStore = create<LLMConfigState>()(
         defaultModel: state.defaultModel,
         context7ApiKey: state.context7ApiKey,
         apiKeys: state.apiKeys,
+        fimDefaultModel: state.fimDefaultModel,
+        fimFallbackModel: state.fimFallbackModel,
       }),
     },
   ),
