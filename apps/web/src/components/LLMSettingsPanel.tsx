@@ -131,7 +131,7 @@ function ProviderConfig({
     } finally {
       setIsValidating(false);
     }
-  }, [keyInput, provider, isValidating]);
+  }, [keyInput, provider, isValidating, setApiKey]);
 
   const handleModelSelect = useCallback(
     (modelId: string | null) => {
@@ -141,7 +141,6 @@ function ProviderConfig({
         description: `${provider}/${modelId}`,
       });
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [provider, onSelectModel],
   );
 

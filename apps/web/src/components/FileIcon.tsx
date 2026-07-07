@@ -30,6 +30,7 @@ export default function FileIcon({ fileName, className = "w-4 h-4 mr-2" }: FileI
 
   if (iconUrl && !error) {
     return (
+      // eslint-disable-next-line @next/next/no-img-element
       <img 
         src={iconUrl} 
         alt={ext} 

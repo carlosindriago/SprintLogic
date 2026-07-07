@@ -526,11 +526,13 @@ async def get_local_changes(
     files = []
     for cf in changed_files:
         metrics = numstat_map.get(cf["file_path"], {"added": 0, "deleted": 0})
-        files.append({
-            **cf,
-            "added": metrics["added"],
-            "deleted": metrics["deleted"],
-        })
+        files.append(
+            {
+                **cf,
+                "added": metrics["added"],
+                "deleted": metrics["deleted"],
+            }
+        )
 
     return {"files": files}
 

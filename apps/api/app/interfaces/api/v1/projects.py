@@ -565,12 +565,14 @@ async def rename_project_file(
     if not candidate.exists():
         raise HTTPException(status_code=404, detail="File not found")
 
-    if not re.match(r'^[^/\0]+$', request.new_name):
+    if not re.match(r"^[^/\0]+$", request.new_name):
         raise HTTPException(status_code=400, detail="Invalid file name")
 
     new_path = candidate.parent / request.new_name
     if not new_path.is_relative_to(Path(project.path).resolve()):
-        raise HTTPException(status_code=403, detail="Renamed path would be outside project directory")
+        raise HTTPException(
+            status_code=403, detail="Renamed path would be outside project directory"
+        )
 
     if new_path.exists():
         raise HTTPException(status_code=409, detail="A file with that name already exists")
@@ -1299,9 +1301,7 @@ Debes responder ÚNICAMENTE con un objeto JSON válido con la siguiente estructu
         return parsed_wbs
     except Exception as e:
         logger.error("WBS AI planning failed: %s", e, exc_info=True)
-        raise HTTPException(
-            status_code=500, detail="An internal error occurred"
-        )
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.get("/projects/{project_id}/insights")

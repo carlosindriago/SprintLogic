@@ -157,6 +157,7 @@ class KanbanSyncService:
 
         # Group tasks by column status
         from typing import Any
+
         tasks_by_column: dict[str, list[dict[str, Any]]] = {col_id: [] for col_id in column_ids}
         for task in tasks:
             status = task.get("status", "todo")

@@ -8,6 +8,7 @@ import litellm
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.infrastructure.ai.context7_client import Context7Client
 from app.infrastructure.ai.provider_adapter import ProviderAdapter
 from app.infrastructure.db.database import AsyncSessionLocal
 from app.infrastructure.db.models import AIMemoryModel, ContextSnippetModel, ProjectModel
@@ -114,6 +115,23 @@ class AIAgent:
                     },
                 },
             },
+            {
+                "type": "function",
+                "function": {
+                    "name": "context7_search",
+                    "description": "Search official documentation for libraries and frameworks using Context7. Use this for API references, configuration syntax, version-specific features, or library usage patterns.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "The technical query to search in library documentation",
+                            }
+                        },
+                        "required": ["query"],
+                    },
+                },
+            },
         ]
 
         self._project_root: str | None = None
@@ -163,12 +181,22 @@ class AIAgent:
                     ContextSnippetModel.content.icontains(query)
                 )
                 if self.project_id:
-                    snippet_stmt = snippet_stmt.where(ContextSnippetModel.project_id == self.project_id)
+                    snippet_stmt = snippet_stmt.where(
+                        ContextSnippetModel.project_id == self.project_id
+                    )
                 result = await session.execute(snippet_stmt)
                 snippets = result.scalars().all()
                 if not snippets:
                     return "No context found."
-                return json.dumps([{"type": s.label if hasattr(s, "label") else "snippet", "content": s.content} for s in snippets])
+                return json.dumps(
+                    [
+                        {
+                            "type": s.label if hasattr(s, "label") else "snippet",
+                            "content": s.content,
+                        }
+                        for s in snippets
+                    ]
+                )
 
             elif name == "search_codebase":
                 query = args.get("query", "").strip()
@@ -231,6 +259,14 @@ class AIAgent:
                 except Exception as e:
                     return f"Error reading file: {str(e)}"
 
+            elif name == "context7_search":
+                query = args.get("query", "")
+                api_key = CredentialManager.get_api_key("context7")
+                if not api_key:
+                    return "Error: Context7 API key not configured."
+                docs = await Context7Client.search(query, api_key)
+                return docs if docs else "No documentation found for that query."
+
         return "Unknown tool."
 
     async def _get_project_root(self) -> str | None:
@@ -286,9 +322,7 @@ class AIAgent:
     def _get_provider(self, model: str) -> str:
         return ProviderAdapter.get_provider(model)
 
-    async def chat(
-        self, messages: list[dict[str, str]], model: str
-    ) -> str:
+    async def chat(self, messages: list[dict[str, str]], model: str) -> str:
         """
         Processes a chat conversation and allows the AI to call tools before returning a final response.
         """
@@ -305,8 +339,6 @@ class AIAgent:
                 messages = [{"role": "system", "content": system_msg}] + [
                     m for m in messages if m.get("role") != "system"
                 ]
-
-
 
             # Prepare LiteLLM call
             adapted = ProviderAdapter.adapt(model, api_key)

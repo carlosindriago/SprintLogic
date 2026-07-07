@@ -252,7 +252,7 @@ export default function GitGraphTab({ projectId }: { projectId: string }) {
     try {
       const content = await getFileContent(projectId, '.gitignore');
       setGitIgnoreContent(content);
-    } catch (_e) {
+    } catch {
       setGitIgnoreContent(''); // File might not exist
     } finally {
       setGitIgnoreLoading(false);
@@ -265,7 +265,7 @@ export default function GitGraphTab({ projectId }: { projectId: string }) {
       await saveFileContent(projectId, '.gitignore', gitIgnoreContent);
       toast.success('.gitignore actualizado');
       setGitIgnoreDialog(false);
-    } catch (_e) {
+    } catch {
       toast.error('Error al guardar .gitignore');
     } finally {
       setGitIgnoreSaving(false);

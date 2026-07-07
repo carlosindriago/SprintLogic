@@ -1,13 +1,15 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import Editor, { type OnMount } from '@monaco-editor/react';
 import type { editor as monacoEditor, Uri } from 'monaco-editor';
-import { getFileContent, saveFileContent, API_BASE_URL } from '@/lib/api';
+import { getFileContent, saveFileContent, API_BASE_URL, fetchFimCompletion } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { useTabsStore } from '@/store/tabsStore';
 import { useMarkersStore } from '@/store/markersStore';
 import { useUnsavedStore } from '@/store/unsavedStore';
+import { useFimStore } from '@/store/fimStore';
 import type { GraphNode } from '@/types';
 import { Code2, ChevronRight, Pencil, Eye, MousePointer2, GraduationCap } from 'lucide-react';
+import FimHintBar from './FimHintBar';
 
 interface LintDiagnostic {
   line: number;
@@ -46,6 +48,13 @@ export default function EditorTab({
   const [saving, setSaving] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
   const [editorMode, setEditorMode] = useState<'locked' | 'visual' | 'editable'>('locked');
+  const [isFimEnabled, setIsFimEnabled] = useState(true);
+  const isFimEnabledRef = useRef(true);
+  const monacoRef = useRef<typeof import('monaco-editor') | null>(null);
+
+  useEffect(() => {
+    isFimEnabledRef.current = isFimEnabled;
+  }, [isFimEnabled]);
   const editorModeRef = useRef(editorMode);
   const vimStatusRef = useRef<HTMLDivElement | null>(null);
   const originalContentRef = useRef('');
@@ -55,6 +64,7 @@ export default function EditorTab({
   const vimInstanceRef = useRef<{ dispose(): void } | null>(null);
   const vimObserverRef = useRef<MutationObserver | null>(null);
   const vimPendingRef = useRef(false);
+  const fimDisposeRef = useRef<{ dispose(): void } | null>(null);
   const dirtyCheckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const backupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -119,8 +129,51 @@ export default function EditorTab({
         vimInstanceRef.current = null;
       }
       vimPendingRef.current = false;
+      if (fimDisposeRef.current) {
+        fimDisposeRef.current.dispose();
+        fimDisposeRef.current = null;
+      }
     };
   }, [projectId, node.file_path, node.id]);
+
+  useEffect(() => {
+    const monaco = monacoRef.current;
+    if (!monaco) return;
+
+    const language = node.file_path?.split('.').pop() || '';
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const disposer = monaco.languages.registerInlineCompletionsProvider(
+      { language },
+      {
+        provideInlineCompletions: async (model, position, _context, token) => {
+          if (!isFimEnabledRef.current) return { items: [] };
+
+          return new Promise((resolve) => {
+            if (timer) clearTimeout(timer);
+            timer = setTimeout(async () => {
+              if (token.isCancellationRequested) return resolve({ items: [] });
+              try {
+                const offset = model.getOffsetAt(position);
+                const full = model.getValue();
+                const prefix = full.slice(0, offset);
+                const suffix = full.slice(offset);
+                if (prefix.length < 3) return resolve({ items: [] });
+                const result = await fetchFimCompletion(prefix, suffix, language);
+                if (token.isCancellationRequested || !result.code) return resolve({ items: [] });
+                resolve({ items: [{ insertText: result.code }] });
+              } catch {
+                resolve({ items: [] });
+              }
+            }, 800);
+          });
+        },
+        disposeInlineCompletions: () => {},
+      },
+    );
+
+    return () => { disposer.dispose(); };
+  }, [projectId, node.file_path]);
 
   const checkDirty = useCallback(() => {
     const editor = editorRef.current;
@@ -234,10 +287,12 @@ export default function EditorTab({
     fontSize: 13,
     wordWrap: "on" as const,
     padding: { top: 16 },
+    inlineSuggest: { enabled: true },
   }), []);
 
   const handleEditorDidMount: OnMount = useCallback((editor, monaco) => {
     editorRef.current = editor;
+    monacoRef.current = monaco;
 
     monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
       jsx: monaco.languages.typescript.JsxEmit.ReactJSX,
@@ -253,13 +308,13 @@ export default function EditorTab({
     });
 
     monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
-      noSemanticValidation: false,
+      noSemanticValidation: true,
       noSyntaxValidation: false,
       diagnosticCodesToIgnore: [2307, 2792, 7026, 2875, 2503],
     });
 
     monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
-      noSemanticValidation: false,
+      noSemanticValidation: true,
       noSyntaxValidation: false,
       diagnosticCodesToIgnore: [2307, 2792, 7026, 2875, 2503],
     });
@@ -457,6 +512,40 @@ export default function EditorTab({
       handleSaveRef.current();
     });
 
+    const language = node.file_path?.split('.').pop() || '';
+    let fimTimer: ReturnType<typeof setTimeout> | null = null;
+    const fimDispose = monaco.languages.registerInlineCompletionsProvider(
+      { language },
+      {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        provideInlineCompletions: async (model: any, position: any, _context: any, token: any) => {
+          return new Promise((resolve) => {
+            if (fimTimer) clearTimeout(fimTimer);
+            fimTimer = setTimeout(async () => {
+              if (token.isCancellationRequested) return resolve({ items: [] });
+              try {
+                const offset = model.getOffsetAt(position);
+                const full = model.getValue();
+                const prefix = full.slice(0, offset);
+                const suffix = full.slice(offset);
+                if (prefix.length < 3) return resolve({ items: [] });
+
+                const result = await fetchFimCompletion(prefix, suffix, language);
+                if (token.isCancellationRequested || !result.code) return resolve({ items: [] });
+                if (result.explanation) {
+                  useFimStore.getState().setExplanation(result.explanation);
+                }
+                resolve({ items: [{ insertText: result.code }] });
+              } catch {
+                resolve({ items: [] });
+              }
+            }, 800);
+          });
+        },
+      },
+    );
+    fimDisposeRef.current = fimDispose;
+
     checkDirty();
   }, [node.metadata, checkDirty, node.file_path, node.id, vimMode]);
 
@@ -509,9 +598,19 @@ export default function EditorTab({
         )}
 
         {editorMode === 'editable' && (
-          <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-green-500/10 text-green-400 border border-green-500/20 shrink-0">
-            <Pencil className="w-3 h-3" />
-            Insert
+          <span className="flex items-center gap-1 shrink-0">
+            <span className="px-1.5 py-0.5 rounded text-[10px] bg-green-500/10 text-green-400 border border-green-500/20">
+              <Pencil className="w-3 h-3 inline mr-0.5" />
+              Insert
+            </span>
+            <button
+              onClick={() => editorRef.current?.trigger('keyboard', 'type', { text: '\x1b' })}
+              className="px-1.5 py-0.5 rounded text-[10px] transition-colors flex items-center gap-0.5 border text-zinc-500 border-transparent hover:bg-blue-500/10 hover:text-blue-400 hover:border-blue-500/20"
+              title="Modo Normal (ESC)"
+            >
+              <Eye className="w-3 h-3" />
+              ESC
+            </button>
           </span>
         )}
 
@@ -538,7 +637,15 @@ export default function EditorTab({
 
         {onMentor && (
           <>
-            <div className="w-px h-5 bg-zinc-700/50 mx-1" />
+        <div className="w-px h-5 bg-zinc-700/50 mx-1" />
+
+        <button
+          className={cn(TOOLBAR_BUTTON, isFimEnabled ? 'text-emerald-400' : 'text-zinc-500')}
+          onClick={() => setIsFimEnabled((v) => !v)}
+          title={isFimEnabled ? 'FIM Tutor activado' : 'FIM Tutor desactivado'}
+        >
+          <GraduationCap className="w-3.5 h-3.5" />
+        </button>
             <button
               className={TOOLBAR_BUTTON}
               onClick={() => onMentor(node.file_path || fileName, editorRef.current?.getValue() || '')}
@@ -634,6 +741,7 @@ export default function EditorTab({
           loading={null}
         />
       </div>
+      <FimHintBar />
     </div>
   );
 }
