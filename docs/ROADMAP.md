@@ -14,7 +14,7 @@
 - Exportación estructurada a formato JSON y guardado en disco del plan.
 - Volcado automático del JSON al Kanban (Backlog local).
 - **Fase 2.4**: Codebase Memory Graph (Conexión SDD -> AST Nodos).
-- **Fase 2.5**: Engram Persistent Memory (Tabla de decisiones y resúmenes).
+- **Fase 2.5**: SprintLogic Persistent Memory (Tabla de decisiones y resúmenes).
 - **Fase 2.6**: Context7 Dependency RAG (Parseo de dependencias y sqlite-vec).
 
 ## Fase 3 — Control de Git local y Commits Atómicos

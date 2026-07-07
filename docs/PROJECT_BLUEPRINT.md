@@ -19,7 +19,7 @@ El foco es el desarrollador solitario.
 - Asistente IA (SprintLogic AI) con Gemini local para la planificación de proyectos y asistencia en commits.
 - Control visual del historial de Git local.
 - **Visualización 2D del código**: Renderización del Codebase Memory Graph usando AST.
-- Memoria Persistente (Engram) y RAG de dependencias integrado.
+- Memoria Persistente y RAG de dependencias integrado.
 - Focus Timer integrado al log de la máquina.
 
 *Se eliminan explícitamente*: multi-tenancy, autenticación en la nube, Docker corporativo, infraestructura de red externa.
