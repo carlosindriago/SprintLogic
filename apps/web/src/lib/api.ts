@@ -529,11 +529,16 @@ export const analyzeProject = async (projectId: string): Promise<AnalyzeResult> 
   return res.json();
 };
 
+export interface FimResponse {
+  code: string;
+  explanation: string;
+}
+
 export const fetchFimCompletion = async (
   prefix: string,
   suffix: string,
   language: string,
-): Promise<{ code: string; explanation: string }> => {
+): Promise<FimResponse> => {
   const res = await fetch(`${API_BASE_URL}/ai/fim-completion`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

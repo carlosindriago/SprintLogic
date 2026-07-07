@@ -6,8 +6,10 @@ import { cn } from '@/lib/utils';
 import { useTabsStore } from '@/store/tabsStore';
 import { useMarkersStore } from '@/store/markersStore';
 import { useUnsavedStore } from '@/store/unsavedStore';
+import { useFimStore } from '@/store/fimStore';
 import type { GraphNode } from '@/types';
 import { Code2, ChevronRight, Pencil, Eye, MousePointer2, GraduationCap } from 'lucide-react';
+import FimHintBar from './FimHintBar';
 
 interface LintDiagnostic {
   line: number;
@@ -62,6 +64,7 @@ export default function EditorTab({
   const vimInstanceRef = useRef<{ dispose(): void } | null>(null);
   const vimObserverRef = useRef<MutationObserver | null>(null);
   const vimPendingRef = useRef(false);
+  const fimDisposeRef = useRef<{ dispose(): void } | null>(null);
   const dirtyCheckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const backupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -126,6 +129,10 @@ export default function EditorTab({
         vimInstanceRef.current = null;
       }
       vimPendingRef.current = false;
+      if (fimDisposeRef.current) {
+        fimDisposeRef.current.dispose();
+        fimDisposeRef.current = null;
+      }
     };
   }, [projectId, node.file_path, node.id]);
 
@@ -505,6 +512,39 @@ export default function EditorTab({
       handleSaveRef.current();
     });
 
+    const language = node.file_path?.split('.').pop() || '';
+    let fimTimer: ReturnType<typeof setTimeout> | null = null;
+    const fimDispose = monaco.languages.registerInlineCompletionsProvider(
+      { language },
+      {
+        provideInlineCompletions: async (model, position, _context, token) => {
+          return new Promise((resolve) => {
+            if (fimTimer) clearTimeout(fimTimer);
+            fimTimer = setTimeout(async () => {
+              if (token.isCancellationRequested) return resolve({ items: [] });
+              try {
+                const offset = model.getOffsetAt(position);
+                const full = model.getValue();
+                const prefix = full.slice(0, offset);
+                const suffix = full.slice(offset);
+                if (prefix.length < 3) return resolve({ items: [] });
+
+                const result = await fetchFimCompletion(prefix, suffix, language);
+                if (token.isCancellationRequested || !result.code) return resolve({ items: [] });
+                if (result.explanation) {
+                  useFimStore.getState().setExplanation(result.explanation);
+                }
+                resolve({ items: [{ insertText: result.code }] });
+              } catch {
+                resolve({ items: [] });
+              }
+            }, 800);
+          });
+        },
+      },
+    );
+    fimDisposeRef.current = fimDispose;
+
     checkDirty();
   }, [node.metadata, checkDirty, node.file_path, node.id, vimMode]);
 
@@ -700,6 +740,7 @@ export default function EditorTab({
           loading={null}
         />
       </div>
+      <FimHintBar />
     </div>
   );
 }
