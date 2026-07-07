@@ -13,7 +13,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  fetchProviderModels,
   verifyAndSaveProviderKey,
   checkApiKeyStatus,
   deleteProviderKey,
@@ -24,16 +23,6 @@ import {
 } from "@/lib/api";
 import { useLLMConfigStore } from "@/store/llmConfigStore";
 import { Loader2, KeyRound, CheckCircle2, XCircle, Trash2, Brain, Sparkles, Play } from "lucide-react";
-
-const PROVIDERS = [
-  { id: "gemini", name: "Google Gemini" },
-  { id: "openai", name: "OpenAI" },
-  { id: "anthropic", name: "Anthropic" },
-  { id: "openrouter", name: "OpenRouter" },
-  { id: "opencode-zen", name: "OpenCode Zen" },
-  { id: "opencode-go", name: "OpenCode Go" },
-  { id: "nvidia", name: "Nvidia NIM" },
-];
 
 const KEY_MIN_LENGTH = 8;
 
@@ -63,17 +52,17 @@ function ProviderConfig({
   provider,
   defaultModel,
   onSelectModel,
+  curatedModels,
 }: {
-  provider: string;
+  provider: CuratedProvider;
   defaultModel: string;
   onSelectModel: (provider: string, modelId: string) => void;
+  curatedModels: ModelResult[];
 }) {
   const [keyInput, setKeyInput] = useState("");
   const [isConfigured, setIsConfigured] = useState(false);
   const [storedKeyPreview, setStoredKeyPreview] = useState<string | null>(null);
-  const [models, setModels] = useState<ModelResult[]>([]);
   const [isValidating, setIsValidating] = useState(false);
-  const [isFetchingModels, setIsFetchingModels] = useState(true);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
 
@@ -81,35 +70,21 @@ function ProviderConfig({
   const removeApiKey = useLLMConfigStore((s) => s.removeApiKey);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      try {
-        const status = await checkApiKeyStatus(provider);
-        if (cancelled) return;
-        setIsConfigured(status.is_configured);
-        if (status.is_configured) {
-          const fetchedModels = await fetchProviderModels(provider);
-          if (cancelled) return;
-          setModels(fetchedModels);
-          setStoredKeyPreview(maskKey("x".repeat(32)));
-        } else {
-          setIsEditing(true);
-        }
-      } catch (err) {
-        if (cancelled) return;
-        const message = err instanceof Error ? err.message : String(err);
-        setValidationError(message);
-      } finally {
-        if (!cancelled) setIsFetchingModels(false);
+    checkApiKeyStatus(provider.provider_id).then((status) => {
+      if (cancelled) return;
+      setIsConfigured(status.is_configured);
+      if (status.is_configured) {
+        setStoredKeyPreview(maskKey("x".repeat(32)));
+      } else {
+        setIsEditing(true);
       }
-    })();
+    });
     return () => {
       cancelled = true;
     };
-  }, []);
-  /* eslint-enable react-hooks/exhaustive-deps */
+  }, [provider.provider_id]);
 
   const handleBlurValidation = useCallback(async () => {
     const trimmed = keyInput.trim();
@@ -118,15 +93,14 @@ function ProviderConfig({
     setIsValidating(true);
     setValidationError(null);
     try {
-      const fetchedModels = await verifyAndSaveProviderKey(provider, trimmed);
-      setModels(fetchedModels);
+      await verifyAndSaveProviderKey(provider.provider_id, trimmed);
       setIsConfigured(true);
       setKeyInput("");
       setIsEditing(false);
       setStoredKeyPreview(maskKey(trimmed));
-      setApiKey(provider, trimmed);
+      setApiKey(provider.provider_id, trimmed);
       toast.success("Llave validada y guardada", {
-        description: "Modelos cargados correctamente",
+        description: `API Key para ${provider.provider} configurada correctamente.`,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -134,17 +108,17 @@ function ProviderConfig({
     } finally {
       setIsValidating(false);
     }
-  }, [keyInput, provider, isValidating, setApiKey]);
+  }, [keyInput, provider.provider_id, provider.provider, isValidating, setApiKey]);
 
   const handleModelSelect = useCallback(
     (modelId: string | null) => {
       if (!modelId) return;
-      onSelectModel(provider, modelId);
+      onSelectModel(provider.provider_id, modelId);
       toast.success("Modelo predeterminado actualizado", {
-        description: `${provider}/${modelId}`,
+        description: `${provider.provider_id}/${modelId}`,
       });
     },
-    [provider, onSelectModel],
+    [provider.provider_id, onSelectModel],
   );
 
   const handleReplaceKey = useCallback(() => {
@@ -156,52 +130,50 @@ function ProviderConfig({
 
   const handleDeleteKey = useCallback(async () => {
     try {
-      await deleteProviderKey(provider);
+      await deleteProviderKey(provider.provider_id);
       setIsConfigured(false);
-      setModels([]);
       setStoredKeyPreview(null);
       setIsEditing(true);
       setValidationError(null);
-      removeApiKey(provider);
+      removeApiKey(provider.provider_id);
       toast.success("Llave eliminada", {
-        description: `La credencial de ${provider} fue removida.`,
+        description: `La credencial de ${provider.provider} fue removida.`,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       toast.error("No se pudo eliminar la llave", { description: message });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [provider]);
+  }, [provider.provider_id, provider.provider, removeApiKey]);
 
-  const isCurrentProviderDefault = defaultModel.startsWith(`${provider}/`);
+  const isCurrentProviderDefault = defaultModel.startsWith(`${provider.provider_id}/`);
   const activeModelId = isCurrentProviderDefault
     ? defaultModel.split("/").slice(1).join("/")
     : "";
 
   return (
-    <div className="flex flex-col gap-6 p-5">
-      <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-8 p-6 max-w-2xl">
+      <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
-          <Label className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">
-            API Key
+          <Label className="text-sm font-semibold text-zinc-200">
+            Credenciales API ({provider.provider})
           </Label>
           {isConfigured && !isEditing && (
-            <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wide text-emerald-400/90">
+            <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wide text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded-full">
               <CheckCircle2 className="w-3 h-3" /> configurada
             </span>
           )}
           {!isConfigured && isEditing && (
-            <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wide text-amber-400/90">
-              <XCircle className="w-3 h-3" /> faltante
+            <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wide text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full">
+              <XCircle className="w-3 h-3" /> requerida
             </span>
           )}
         </div>
 
         {isConfigured && !isEditing ? (
-          <div className="flex w-full items-center gap-2">
-            <div className="flex-1 bg-zinc-950 border border-zinc-800 rounded-md px-3 py-2 text-sm text-zinc-500 flex items-center gap-2 font-mono">
-              <KeyRound className="w-4 h-4 shrink-0" />
-              <span className="truncate" title="Llave almacenada en el keyring del sistema">
+          <div className="flex w-full items-center gap-3">
+            <div className="flex-1 bg-zinc-950/50 border border-zinc-800/80 rounded-md px-3 py-2 text-sm text-zinc-400 flex items-center gap-2 font-mono">
+              <KeyRound className="w-4 h-4 shrink-0 opacity-50" />
+              <span className="truncate">
                 {storedKeyPreview ?? maskKey(null)}
               </span>
             </div>
@@ -209,7 +181,7 @@ function ProviderConfig({
               type="button"
               variant="outline"
               size="sm"
-              className="bg-zinc-800 border-zinc-700/50 hover:bg-zinc-700 h-9"
+              className="bg-zinc-800/50 border-zinc-700/50 hover:bg-zinc-700 text-zinc-300 h-9 px-4"
               onClick={handleReplaceKey}
             >
               Reemplazar
@@ -218,11 +190,10 @@ function ProviderConfig({
               type="button"
               variant="outline"
               size="sm"
-              className="bg-zinc-800 border-zinc-700/50 hover:bg-red-950/40 hover:text-red-300 hover:border-red-900/60 h-9"
+              className="bg-zinc-800/50 border-zinc-700/50 hover:bg-red-950/40 hover:text-red-400 hover:border-red-900/60 h-9 px-3"
               onClick={handleDeleteKey}
-              aria-label="Eliminar llave almacenada"
             >
-              <Trash2 className="w-3.5 h-3.5" />
+              <Trash2 className="w-4 h-4" />
             </Button>
           </div>
         ) : (
@@ -233,7 +204,7 @@ function ProviderConfig({
               autoComplete="off"
               spellCheck={false}
               placeholder="Pega tu API Key aquí…"
-              className="bg-zinc-950 border-zinc-800 text-zinc-200 pr-10 font-mono px-3 py-2"
+              className="bg-zinc-950 border-zinc-800 focus-visible:border-blue-500/50 focus-visible:ring-blue-500/20 text-zinc-200 pr-10 font-mono h-10"
               value={keyInput}
               onChange={(e) => {
                 setKeyInput(e.target.value);
@@ -260,55 +231,40 @@ function ProviderConfig({
         )}
 
         {validationError && (
-          <p role="alert" className="text-xs text-red-400 flex items-center gap-1.5">
-            <XCircle className="w-3.5 h-3.5 shrink-0" />
-            <span className="truncate">{validationError}</span>
+          <p role="alert" className="text-xs text-red-400 flex items-start gap-1.5 mt-1 bg-red-400/10 p-2 rounded border border-red-400/20">
+            <XCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+            <span>{validationError}</span>
           </p>
         )}
-
-        <p className="text-xs text-zinc-500 mt-1">
-          {isConfigured && !isEditing
-            ? "La llave se almacena cifrada en el keyring del sistema. Nunca abandona tu máquina."
-            : "La llave se valida y guarda automáticamente al salir del campo."}
+        
+        <p className="text-xs text-zinc-500">
+          La llave se almacena cifrada localmente y se valida al salir del campo.
         </p>
       </div>
 
-      <div className="flex flex-col gap-2">
-        <Label className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">
-          Modelo predeterminado
+      <div className="flex flex-col gap-3">
+        <Label className="text-sm font-semibold text-zinc-200">
+          Modelo de Chat Predeterminado
         </Label>
-        {isFetchingModels ? (
-          <SkeletonModelList />
-        ) : models.length > 0 ? (
-          <Select value={activeModelId} onValueChange={handleModelSelect}>
-            <SelectTrigger className="bg-zinc-950 border-zinc-800 text-zinc-200 w-full">
-              <SelectValue placeholder="Selecciona un modelo…" />
-            </SelectTrigger>
-            <SelectContent className="bg-zinc-900 border-zinc-800 text-zinc-200 max-h-[200px]">
-              {models.map((m) => (
-                <SelectItem
-                  key={m.id}
-                  value={m.id}
-                  className="focus:bg-zinc-800 focus:text-zinc-100 cursor-pointer"
-                >
-                  {m.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        ) : (
-          <div className="text-sm text-zinc-500 bg-zinc-950 border border-zinc-800/50 rounded-md px-3 py-2">
-            {isConfigured
-              ? "No se encontraron modelos para esta llave."
-              : "Configura la llave para listar los modelos disponibles."}
-          </div>
-        )}
-        {isCurrentProviderDefault && models.length > 0 && (
-          <p className="text-[11px] text-zinc-500 mt-1">
-            El modelo seleccionado se usa como predeterminado global para chat,
-            generación de commits y demás funciones IA.
-          </p>
-        )}
+        <Select value={activeModelId} onValueChange={handleModelSelect}>
+          <SelectTrigger className="bg-zinc-950 border-zinc-800 text-zinc-200 w-full h-10">
+            <SelectValue placeholder="Selecciona un modelo…" />
+          </SelectTrigger>
+          <SelectContent className="bg-zinc-900 border-zinc-800 text-zinc-200 max-h-[300px]">
+            {curatedModels.map((m) => (
+              <SelectItem
+                key={m.id}
+                value={m.id}
+                className="focus:bg-zinc-800 focus:text-zinc-100 cursor-pointer py-2"
+              >
+                {m.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-zinc-500">
+          Este modelo se utilizará por defecto para el chat, generación de commits y herramientas interactivas.
+        </p>
       </div>
     </div>
   );
@@ -345,27 +301,27 @@ function Context7Section({
   };
 
   return (
-    <div className="flex flex-col gap-6 p-5">
-      <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-8 p-6 max-w-2xl">
+      <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
-          <Label className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">
-            API Key
+          <Label className="text-sm font-semibold text-zinc-200">
+            Credenciales de Búsqueda Contextual
           </Label>
           {saved ? (
-            <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wide text-emerald-400/90">
+            <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wide text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded-full">
               <CheckCircle2 className="w-3 h-3" /> configurada
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wide text-amber-400/90">
-              <XCircle className="w-3 h-3" /> faltante
+            <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wide text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full">
+              <XCircle className="w-3 h-3" /> requerida
             </span>
           )}
         </div>
 
         {saved ? (
-          <div className="flex w-full items-center gap-2">
-            <div className="flex-1 bg-zinc-950 border border-zinc-800 rounded-md px-3 py-2 text-sm text-zinc-500 flex items-center gap-2 font-mono">
-              <Brain className="w-4 h-4 shrink-0 text-blue-400" />
+          <div className="flex w-full items-center gap-3">
+            <div className="flex-1 bg-zinc-950/50 border border-zinc-800/80 rounded-md px-3 py-2 text-sm text-zinc-400 flex items-center gap-2 font-mono">
+              <Brain className="w-4 h-4 shrink-0 text-blue-400/70" />
               <span className="truncate">
                 {apiKey.slice(0, 6)}••••••••••{apiKey.slice(-4)}
               </span>
@@ -374,7 +330,7 @@ function Context7Section({
               type="button"
               variant="outline"
               size="sm"
-              className="bg-zinc-800 border-zinc-700/50 hover:bg-zinc-700 h-9"
+              className="bg-zinc-800/50 border-zinc-700/50 hover:bg-zinc-700 text-zinc-300 h-9 px-4"
               onClick={() => setSaved(false)}
             >
               Reemplazar
@@ -383,10 +339,10 @@ function Context7Section({
               type="button"
               variant="outline"
               size="sm"
-              className="bg-zinc-800 border-zinc-700/50 hover:bg-red-950/40 hover:text-red-300 hover:border-red-900/60 h-9"
+              className="bg-zinc-800/50 border-zinc-700/50 hover:bg-red-950/40 hover:text-red-400 hover:border-red-900/60 h-9 px-3"
               onClick={handleClear}
             >
-              <Trash2 className="w-3.5 h-3.5" />
+              <Trash2 className="w-4 h-4" />
             </Button>
           </div>
         ) : (
@@ -394,8 +350,8 @@ function Context7Section({
             <Input
               type="password"
               autoComplete="off"
-              placeholder="ctx7_..."
-              className="bg-zinc-950 border-zinc-800 text-zinc-200 flex-1 font-mono px-3 py-2"
+              placeholder="Pega tu token ctx7_..."
+              className="bg-zinc-950 border-zinc-800 focus-visible:border-blue-500/50 focus-visible:ring-blue-500/20 text-zinc-200 flex-1 font-mono h-10"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
@@ -403,9 +359,8 @@ function Context7Section({
               }}
             />
             <Button
-              variant="outline"
-              size="sm"
-              className="bg-zinc-800 border-zinc-700/50 hover:bg-zinc-700 h-9"
+              variant="secondary"
+              className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 h-10 px-6"
               onClick={handleSave}
               disabled={!input.trim()}
             >
@@ -414,152 +369,121 @@ function Context7Section({
           </div>
         )}
 
-        <p className="text-xs text-zinc-500 mt-1">
-          Permite al Modo Sensei leer la documentación oficial actualizada de tus librerías.
+        <p className="text-xs text-zinc-500">
+          Permite al Modo Sensei conectarse con la API de Context7 para leer documentación técnica actualizada.
         </p>
       </div>
 
-      <div className="flex flex-col gap-2">
-        <Label className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">
-          Acerca de Context7
+      <div className="flex flex-col gap-2 p-4 bg-blue-500/5 border border-blue-500/10 rounded-lg">
+        <Label className="text-sm font-semibold text-blue-200/90 flex items-center gap-2">
+          <Brain className="w-4 h-4" /> Acerca de Context7
         </Label>
-        <p className="text-xs text-zinc-500 leading-relaxed">
-          Context7 provee acceso en tiempo real a la documentación oficial de React, Next.js,
-          Tailwind, TypeScript, Python y cientos de librerías más. El Modo Sensei la consulta
-          automáticamente para fundamentar sus respuestas en la documentación vigente.
+        <p className="text-sm text-zinc-400 leading-relaxed">
+          Context7 provee acceso en tiempo real a la documentación oficial de React, Next.js, Tailwind, TypeScript, Python y cientos de librerías más. El asistente consulta automáticamente estas bases de conocimiento antes de responder.
         </p>
       </div>
     </div>
   );
 }
 
-type ActiveSection = string; // provider id, 'context7', or 'fim-config'
-
-function FimConfigSection() {
+function FimConfigSection({ providers }: { providers: CuratedProvider[] }) {
   const fimDefaultModel = useLLMConfigStore((s) => s.fimDefaultModel);
   const setFimDefaultModel = useLLMConfigStore((s) => s.setFimDefaultModel);
   const fimFallbackModel = useLLMConfigStore((s) => s.fimFallbackModel);
   const setFimFallbackModel = useLLMConfigStore((s) => s.setFimFallbackModel);
   
-  const [providers, setProviders] = useState<CuratedProvider[]>([]);
-  const [loading, setLoading] = useState(true);
   const [isTesting, setIsTesting] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    getCuratedModels().then((data) => {
-      if (cancelled) return;
-      setProviders(data);
-      setLoading(false);
-    }).catch(() => {
-      if (cancelled) return;
-      setLoading(false);
-    });
-    return () => { cancelled = true; };
-  }, []);
 
   const handleTest = async () => {
     setIsTesting(true);
     try {
       const res = await fetchFimCompletion("def add(a, b):\n  ", "\n", "python", fimDefaultModel, fimFallbackModel);
       if (res.code) {
-        toast.success("FIM Engine test successful!");
+        toast.success("FIM Engine respondió exitosamente", {
+          description: "La configuración actual de modelos para autocompletado es válida."
+        });
       } else {
-        toast.error("FIM Engine test failed: No completion returned.");
+        toast.error("El test FIM falló: No se devolvió ningún código.");
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      toast.error(`FIM Engine test failed: ${message}`);
+      toast.error(`Error en FIM Engine: ${message}`);
     } finally {
       setIsTesting(false);
     }
   };
 
-  const allModels = providers.flatMap(p => p.models.map(m => ({ ...m, provider: p.provider_id })));
+  const allModels = providers.flatMap(p => p.models.map(m => ({ ...m, provider: p.provider })));
 
   return (
-    <div className="flex flex-col gap-6 p-5">
-      <div className="flex flex-col gap-2">
-        <Label className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">
-          Primary FIM Model
+    <div className="flex flex-col gap-8 p-6 max-w-2xl">
+      <div className="flex flex-col gap-3">
+        <Label className="text-sm font-semibold text-zinc-200">
+          Modelo FIM Principal
         </Label>
-        {loading ? (
-          <div className="flex flex-col gap-2" role="status" aria-label="Loading models">
-            {[0, 1, 2].map((i) => (
-              <div key={i} className="h-9 w-full rounded-md bg-zinc-950 border border-zinc-800/50 animate-pulse" />
+        <Select value={fimDefaultModel} onValueChange={(val) => val && setFimDefaultModel(val)}>
+          <SelectTrigger className="bg-zinc-950 border-zinc-800 text-zinc-200 w-full h-10">
+            <SelectValue placeholder="Selecciona el modelo principal..." />
+          </SelectTrigger>
+          <SelectContent className="bg-zinc-900 border-zinc-800 text-zinc-200 max-h-[300px]">
+            {allModels.map((m) => (
+              <SelectItem key={m.id} value={m.id} className="focus:bg-zinc-800 focus:text-zinc-100 cursor-pointer py-2">
+                {m.name} <span className="text-zinc-500 text-xs ml-1">({m.provider})</span>
+              </SelectItem>
             ))}
-          </div>
-        ) : (
-          <Select value={fimDefaultModel} onValueChange={(val) => val && setFimDefaultModel(val)}>
-            <SelectTrigger className="bg-zinc-950 border-zinc-800 text-zinc-200 w-full">
-              <SelectValue placeholder="Selecciona el modelo principal..." />
-            </SelectTrigger>
-            <SelectContent className="bg-zinc-900 border-zinc-800 text-zinc-200 max-h-[200px]">
-              {allModels.map((m) => (
-                <SelectItem key={m.id} value={m.id} className="focus:bg-zinc-800 focus:text-zinc-100 cursor-pointer">
-                  {m.name} ({m.provider})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-        <p className="text-[11px] text-zinc-500 mt-1">
-          El modelo que se usará por defecto para autocompletar código.
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-zinc-500">
+          El modelo optimizado para tareas de Fill-In-the-Middle (ej: DeepSeek Coder, Llama 3) que te sugerirá código mientras escribes.
         </p>
       </div>
 
-      <div className="flex flex-col gap-2 mt-2">
-        <Label className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">
-          Fallback FIM Model (Optional)
+      <div className="flex flex-col gap-3">
+        <Label className="text-sm font-semibold text-zinc-200">
+          Modelo FIM de Respaldo (Fallback)
         </Label>
-        {loading ? (
-          <div className="flex flex-col gap-2" role="status" aria-label="Loading models">
-            {[0, 1, 2].map((i) => (
-              <div key={i} className="h-9 w-full rounded-md bg-zinc-950 border border-zinc-800/50 animate-pulse" />
-            ))}
-          </div>
-        ) : (
-          <Select value={fimFallbackModel} onValueChange={(val) => val && setFimFallbackModel(val)}>
-            <SelectTrigger className="bg-zinc-950 border-zinc-800 text-zinc-200 w-full">
-              <SelectValue placeholder="Selecciona un modelo de respaldo..." />
-            </SelectTrigger>
-            <SelectContent className="bg-zinc-900 border-zinc-800 text-zinc-200 max-h-[200px]">
-              <SelectItem value="none" className="focus:bg-zinc-800 focus:text-zinc-100 cursor-pointer text-zinc-400">
-                Ninguno
+        <Select value={fimFallbackModel} onValueChange={(val) => val && setFimFallbackModel(val)}>
+          <SelectTrigger className="bg-zinc-950 border-zinc-800 text-zinc-200 w-full h-10">
+            <SelectValue placeholder="Selecciona un modelo de respaldo..." />
+          </SelectTrigger>
+          <SelectContent className="bg-zinc-900 border-zinc-800 text-zinc-200 max-h-[300px]">
+            <SelectItem value="none" className="focus:bg-zinc-800 focus:text-zinc-100 cursor-pointer text-zinc-400 py-2">
+              Ninguno
+            </SelectItem>
+            {allModels.map((m) => (
+              <SelectItem key={m.id} value={m.id} className="focus:bg-zinc-800 focus:text-zinc-100 cursor-pointer py-2">
+                {m.name} <span className="text-zinc-500 text-xs ml-1">({m.provider})</span>
               </SelectItem>
-              {allModels.map((m) => (
-                <SelectItem key={m.id} value={m.id} className="focus:bg-zinc-800 focus:text-zinc-100 cursor-pointer">
-                  {m.name} ({m.provider})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-        <p className="text-[11px] text-zinc-500 mt-1">
-          Modelo alternativo si el principal falla (ej: límites de tasa o llave no configurada).
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-zinc-500">
+          Modelo alternativo en caso de que el proveedor principal falle o agotes la cuota de la API (rate limit).
         </p>
       </div>
       
-      <div className="flex flex-col gap-2 mt-4 pt-4 border-t border-zinc-800/50">
-        <Label className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">
-          Testing
-        </Label>
-        <p className="text-[11px] text-zinc-500 mb-2">
-          Verifica que la configuración actual funcione enviando un fragmento de código de prueba al backend.
-        </p>
+      <div className="flex flex-col gap-4 mt-2 p-5 bg-zinc-950/30 border border-zinc-800/60 rounded-lg">
+        <div>
+          <Label className="text-sm font-semibold text-zinc-200 flex items-center gap-2">
+            Diagnóstico de Conectividad
+          </Label>
+          <p className="text-xs text-zinc-400 mt-1">
+            Ejecuta una petición real de FIM hacia el backend para asegurarte de que las API Keys de los modelos seleccionados están vigentes.
+          </p>
+        </div>
         <Button
           type="button"
           disabled={isTesting || !fimDefaultModel}
           onClick={handleTest}
           variant="secondary"
-          className="w-fit bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700/50 h-9"
+          className="w-full sm:w-auto bg-zinc-100 hover:bg-white text-zinc-900 font-medium h-10"
         >
           {isTesting ? (
-            <Loader2 className="w-4 h-4 mr-2 animate-spin text-emerald-400" />
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
           ) : (
-            <Play className="w-4 h-4 mr-2 text-emerald-400" />
+            <Play className="w-4 h-4 mr-2 fill-current" />
           )}
-          {isTesting ? "Testeando..." : "Test FIM Engine"}
+          {isTesting ? "Procesando prueba FIM..." : "Testear Motor FIM"}
         </Button>
       </div>
     </div>
@@ -571,92 +495,121 @@ export default function LLMSettingsPanel() {
   const setDefaultModel = useLLMConfigStore((s) => s.setDefaultModel);
   const context7ApiKey = useLLMConfigStore((s) => s.context7ApiKey);
   const setContext7ApiKey = useLLMConfigStore((s) => s.setContext7ApiKey);
-  const [activeSection, setActiveSection] = useState<ActiveSection>("gemini");
+  
+  const [providers, setProviders] = useState<CuratedProvider[]>([]);
+  const [activeSection, setActiveSection] = useState<string>("gemini");
+  const [loadingProviders, setLoadingProviders] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    getCuratedModels().then((data) => {
+      if (cancelled) return;
+      setProviders(data);
+      setLoadingProviders(false);
+    }).catch(() => {
+      if (cancelled) return;
+      setLoadingProviders(false);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   const handleSelectModel = useCallback(
-    (provider: string, modelId: string) => {
-      setDefaultModel(`${provider}/${modelId}`);
+    (providerId: string, modelId: string) => {
+      setDefaultModel(`${providerId}/${modelId}`);
     },
     [setDefaultModel],
   );
 
   const isLLMProvider = activeSection !== 'context7' && activeSection !== 'fim-config';
+  const activeProviderData = providers.find(p => p.provider_id === activeSection);
 
   return (
-    <div className="flex h-[440px] border border-zinc-800/50 rounded-lg overflow-hidden">
+    <div className="flex h-[480px] bg-zinc-950/80 border border-zinc-800/60 rounded-xl shadow-2xl overflow-hidden backdrop-blur-xl">
       {/* Sidebar */}
-      <div className="w-[220px] bg-zinc-900/50 border-r border-zinc-800/50 flex flex-col overflow-y-auto shrink-0">
-        <div className="px-3 pt-4 pb-1">
-          <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-widest">
-            Modelos LLM
+      <div className="w-[240px] bg-zinc-900/40 border-r border-zinc-800/50 flex flex-col overflow-y-auto shrink-0">
+        <div className="px-4 pt-5 pb-2">
+          <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
+            Modelos de IA
           </span>
         </div>
-        {PROVIDERS.map((provider) => {
-          const isActive = activeSection === provider.id;
-          return (
-            <button
-              key={provider.id}
-              type="button"
-              onClick={() => setActiveSection(provider.id)}
-              className={`text-left px-3 py-1.5 text-xs transition-colors flex items-center justify-between ${
-                isActive
-                  ? "bg-blue-500/10 text-blue-300 border-l-2 border-blue-500 font-medium"
-                  : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200 border-l-2 border-transparent"
-              }`}
-            >
-              <span className="truncate">{provider.name}</span>
-              {provider.id === defaultModel.split("/")[0] && (
-                <span className="text-[9px] uppercase tracking-wide text-blue-400/80 ml-1 shrink-0">
-                  activo
-                </span>
-              )}
-            </button>
-          );
-        })}
+        
+        {loadingProviders ? (
+          <div className="px-4 py-2">
+            <SkeletonModelList />
+          </div>
+        ) : (
+          providers.map((provider) => {
+            const isActive = activeSection === provider.provider_id;
+            return (
+              <button
+                key={provider.provider_id}
+                type="button"
+                onClick={() => setActiveSection(provider.provider_id)}
+                className={`text-left px-4 py-2 text-sm transition-colors flex items-center justify-between ${
+                  isActive
+                    ? "bg-blue-500/10 text-blue-300 border-l-2 border-blue-500 font-medium"
+                    : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200 border-l-2 border-transparent"
+                }`}
+              >
+                <span className="truncate">{provider.provider}</span>
+                {provider.provider_id === defaultModel.split("/")[0] && (
+                  <span className="text-[9px] font-bold uppercase tracking-wide text-blue-400 bg-blue-400/10 px-1.5 py-0.5 rounded-sm ml-2 shrink-0">
+                    activo
+                  </span>
+                )}
+              </button>
+            );
+          })
+        )}
 
-        <div className="px-3 pt-4 pb-1 mt-1 border-t border-zinc-800/50">
-          <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-widest">
-            FIM Autocomplete
+        <div className="px-4 pt-6 pb-2 mt-2 border-t border-zinc-800/50">
+          <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
+            Autocompletado
           </span>
         </div>
         <button
           onClick={() => setActiveSection('fim-config')}
-          className={`text-left px-3 py-1.5 text-xs transition-colors flex items-center gap-2 ${
+          className={`text-left px-4 py-2 text-sm transition-colors flex items-center gap-2 ${
             activeSection === 'fim-config'
               ? "bg-blue-500/10 text-blue-300 border-l-2 border-blue-500 font-medium"
               : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200 border-l-2 border-transparent"
           }`}
         >
-          <Sparkles className="w-3.5 h-3.5 shrink-0" />
+          <Sparkles className="w-4 h-4 shrink-0" />
           FIM Engine
         </button>
 
-        <div className="px-3 pt-4 pb-1 mt-1 border-t border-zinc-800/50">
-          <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-widest">
+        <div className="px-4 pt-6 pb-2 mt-2 border-t border-zinc-800/50">
+          <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
             Integraciones
           </span>
         </div>
         <button
           onClick={() => setActiveSection('context7')}
-          className={`text-left px-3 py-1.5 text-xs transition-colors flex items-center gap-2 ${
+          className={`text-left px-4 py-2 text-sm transition-colors flex items-center gap-2 ${
             activeSection === 'context7'
               ? "bg-blue-500/10 text-blue-300 border-l-2 border-blue-500 font-medium"
               : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200 border-l-2 border-transparent"
           }`}
         >
-          <Brain className="w-3.5 h-3.5 shrink-0" />
+          <Brain className="w-4 h-4 shrink-0" />
           Context7 MCP
         </button>
       </div>
 
       {/* Content */}
-      <div className="flex-1 bg-zinc-900 overflow-y-auto custom-scrollbar">
-        {isLLMProvider ? (
+      <div className="flex-1 bg-zinc-900/20 overflow-y-auto custom-scrollbar">
+        {loadingProviders ? (
+          <div className="p-6">
+            <Loader2 className="w-6 h-6 text-zinc-600 animate-spin" />
+          </div>
+        ) : isLLMProvider && activeProviderData ? (
           <ProviderConfig
             key={activeSection}
-            provider={activeSection}
+            provider={activeProviderData}
             defaultModel={defaultModel}
             onSelectModel={handleSelectModel}
+            curatedModels={activeProviderData.models}
           />
         ) : activeSection === 'context7' ? (
           <Context7Section
@@ -664,7 +617,7 @@ export default function LLMSettingsPanel() {
             onSave={setContext7ApiKey}
           />
         ) : (
-          <FimConfigSection key="fim-config" />
+          <FimConfigSection key="fim-config" providers={providers} />
         )}
       </div>
     </div>

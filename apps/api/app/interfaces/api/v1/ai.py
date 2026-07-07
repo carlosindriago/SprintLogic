@@ -156,7 +156,7 @@ async def fim_completion(request: FimRequest):
 
     if not response:
         _logger.error("All FIM model attempts failed. Last error: %s", last_error)
-        return FimResponse()
+        raise HTTPException(status_code=500, detail=last_error or "All FIM model attempts failed.")
 
     raw = str(response.choices[0].message.content or "").strip()
     raw = raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
