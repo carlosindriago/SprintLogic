@@ -517,7 +517,7 @@ export default function EditorTab({
     const fimDispose = monaco.languages.registerInlineCompletionsProvider(
       { language },
       {
-        provideInlineCompletions: async (model, position, _context, token) => {
+        provideInlineCompletions: async (model: any, position: any, _context: any, token: any) => {
           return new Promise((resolve) => {
             if (fimTimer) clearTimeout(fimTimer);
             fimTimer = setTimeout(async () => {
