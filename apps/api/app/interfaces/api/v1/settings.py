@@ -1,7 +1,6 @@
-import logging
-
 import httpx
 from cachetools import TTLCache
+import logging
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
