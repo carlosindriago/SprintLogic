@@ -1,10 +1,9 @@
 import json
 import logging
 
+import litellm
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-
-import litellm
 
 from app.infrastructure.ai.context7_client import Context7Client
 from app.infrastructure.ai.provider_adapter import ProviderAdapter

@@ -181,12 +181,22 @@ class AIAgent:
                     ContextSnippetModel.content.icontains(query)
                 )
                 if self.project_id:
-                    snippet_stmt = snippet_stmt.where(ContextSnippetModel.project_id == self.project_id)
+                    snippet_stmt = snippet_stmt.where(
+                        ContextSnippetModel.project_id == self.project_id
+                    )
                 result = await session.execute(snippet_stmt)
                 snippets = result.scalars().all()
                 if not snippets:
                     return "No context found."
-                return json.dumps([{"type": s.label if hasattr(s, "label") else "snippet", "content": s.content} for s in snippets])
+                return json.dumps(
+                    [
+                        {
+                            "type": s.label if hasattr(s, "label") else "snippet",
+                            "content": s.content,
+                        }
+                        for s in snippets
+                    ]
+                )
 
             elif name == "search_codebase":
                 query = args.get("query", "").strip()
@@ -312,9 +322,7 @@ class AIAgent:
     def _get_provider(self, model: str) -> str:
         return ProviderAdapter.get_provider(model)
 
-    async def chat(
-        self, messages: list[dict[str, str]], model: str
-    ) -> str:
+    async def chat(self, messages: list[dict[str, str]], model: str) -> str:
         """
         Processes a chat conversation and allows the AI to call tools before returning a final response.
         """
@@ -331,8 +339,6 @@ class AIAgent:
                 messages = [{"role": "system", "content": system_msg}] + [
                     m for m in messages if m.get("role") != "system"
                 ]
-
-
 
             # Prepare LiteLLM call
             adapted = ProviderAdapter.adapt(model, api_key)

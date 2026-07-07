@@ -448,11 +448,13 @@ class LocalGitGateway:
                     continue
                 parts = line.split("\t")
                 if len(parts) == 3:
-                    files.append({
-                        "added": int(parts[0]) if parts[0] != "-" else 0,
-                        "deleted": int(parts[1]) if parts[1] != "-" else 0,
-                        "file_path": parts[2],
-                    })
+                    files.append(
+                        {
+                            "added": int(parts[0]) if parts[0] != "-" else 0,
+                            "deleted": int(parts[1]) if parts[1] != "-" else 0,
+                            "file_path": parts[2],
+                        }
+                    )
             return files
         except RuntimeError:
             return []
@@ -468,12 +470,14 @@ class LocalGitGateway:
                 file_path = line[3:].strip()
                 if not file_path:
                     continue
-                files.append({
-                    "status_code": code,
-                    "file_path": file_path,
-                    "is_untracked": code == "??",
-                    "is_modified": code in ("M", " M", "MM", "A", "AM", "D", "R"),
-                })
+                files.append(
+                    {
+                        "status_code": code,
+                        "file_path": file_path,
+                        "is_untracked": code == "??",
+                        "is_modified": code in ("M", " M", "MM", "A", "AM", "D", "R"),
+                    }
+                )
         except RuntimeError:
             pass
         return files
@@ -483,7 +487,11 @@ class LocalGitGateway:
 
         try:
             status_output = await self._run_command(
-                repo_path, "status", "--porcelain", "--", file_path,
+                repo_path,
+                "status",
+                "--porcelain",
+                "--",
+                file_path,
             )
         except RuntimeError:
             status_output = ""
@@ -552,7 +560,9 @@ class LocalGitGateway:
         return items
 
     async def _add_local_timestamps(
-        self, repo_path: str, items: list[dict[str, str]],
+        self,
+        repo_path: str,
+        items: list[dict[str, str]],
     ) -> list[dict[str, Any]]:
         if not items:
             return []
@@ -572,32 +582,65 @@ class LocalGitGateway:
         tasks = {
             "tracked_files": self._run_command(repo_path, "ls-files"),
             "untracked_files": self._run_command(
-                repo_path, "ls-files", "--others", "--exclude-standard",
+                repo_path,
+                "ls-files",
+                "--others",
+                "--exclude-standard",
             ),
             "ignored_files": self._run_command(
-                repo_path, "ls-files", "--others", "--ignored", "--exclude-standard",
+                repo_path,
+                "ls-files",
+                "--others",
+                "--ignored",
+                "--exclude-standard",
             ),
             "last_commit_files": self._run_command(
-                repo_path, "show", "--name-only", "--format=", "HEAD",
+                repo_path,
+                "show",
+                "--name-only",
+                "--format=",
+                "HEAD",
             ),
             "staged_status": self._run_command(
-                repo_path, "diff", "--name-status", "--cached",
+                repo_path,
+                "diff",
+                "--name-status",
+                "--cached",
             ),
             "last_commit_status": self._run_command(
-                repo_path, "show", "--name-status", "--format=%ct", "HEAD",
+                repo_path,
+                "show",
+                "--name-status",
+                "--format=%ct",
+                "HEAD",
             ),
             "penultimate_commit_status": self._run_command(
-                repo_path, "show", "--name-status", "--format=%ct", "HEAD~1",
+                repo_path,
+                "show",
+                "--name-status",
+                "--format=%ct",
+                "HEAD~1",
             ),
             "modified_files": self._run_command(
-                repo_path, "diff", "--name-only", "HEAD",
+                repo_path,
+                "diff",
+                "--name-only",
+                "HEAD",
             ),
             "current_branch": self._run_command(repo_path, "branch", "--show-current"),
             "last_commit_subject": self._run_command(
-                repo_path, "log", "-1", "--format=%s", "HEAD",
+                repo_path,
+                "log",
+                "-1",
+                "--format=%s",
+                "HEAD",
             ),
             "penultimate_commit_subject": self._run_command(
-                repo_path, "log", "-1", "--format=%s", "HEAD~1",
+                repo_path,
+                "log",
+                "-1",
+                "--format=%s",
+                "HEAD~1",
             ),
         }
 
@@ -607,7 +650,11 @@ class LocalGitGateway:
         diff_with_main: dict[str, int | None] = {"ahead": None, "behind": None}
         try:
             output = await self._run_command(
-                repo_path, "rev-list", "--left-right", "--count", "main...HEAD",
+                repo_path,
+                "rev-list",
+                "--left-right",
+                "--count",
+                "main...HEAD",
             )
             parts = output.split("\t")
             if len(parts) == 2:
@@ -651,7 +698,9 @@ class LocalGitGateway:
                 "modified_list": enriched_modified,
                 "staged_list": enriched_staged,
                 "last_commit_list": self._parse_commit_files(mapped["last_commit_status"]),
-                "penultimate_commit_list": self._parse_commit_files(mapped["penultimate_commit_status"]),
+                "penultimate_commit_list": self._parse_commit_files(
+                    mapped["penultimate_commit_status"]
+                ),
             },
             "branch": {
                 "current_branch": (

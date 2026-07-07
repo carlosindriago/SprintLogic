@@ -517,6 +517,7 @@ export default function EditorTab({
     const fimDispose = monaco.languages.registerInlineCompletionsProvider(
       { language },
       {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         provideInlineCompletions: async (model: any, position: any, _context: any, token: any) => {
           return new Promise((resolve) => {
             if (fimTimer) clearTimeout(fimTimer);

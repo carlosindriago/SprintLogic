@@ -86,9 +86,7 @@ class Context7Client:
         return [s for s in snippets if s]
 
     @classmethod
-    async def preload(
-        cls, file_extension: str, imports: list[str], api_key: str
-    ) -> None:
+    async def preload(cls, file_extension: str, imports: list[str], api_key: str) -> None:
         """Preload context for multiple tech stack entries."""
         if not api_key:
             return
