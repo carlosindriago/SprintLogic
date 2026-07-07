@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -22,7 +23,7 @@ import {
   fetchFimCompletion,
 } from "@/lib/api";
 import { useLLMConfigStore } from "@/store/llmConfigStore";
-import { Loader2, KeyRound, CheckCircle2, XCircle, Trash2, Brain, Sparkles, Play } from "lucide-react";
+import { Key, Loader2, CheckCircle2, XCircle, Trash2, Brain, Sparkles, Play } from "lucide-react";
 
 const KEY_MIN_LENGTH = 8;
 
@@ -67,6 +68,7 @@ function ProviderConfig({
   const [isValidating, setIsValidating] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [modelSearch, setModelSearch] = useState("");
 
   const setApiKey = useLLMConfigStore((s) => s.setApiKey);
   const removeApiKey = useLLMConfigStore((s) => s.removeApiKey);
@@ -157,46 +159,43 @@ function ProviderConfig({
     ? defaultModel.split("/").slice(1).join("/")
     : "";
 
+  const filteredModels = curatedModels.filter(m => 
+    m.name.toLowerCase().includes(modelSearch.toLowerCase()) || 
+    m.id.toLowerCase().includes(modelSearch.toLowerCase())
+  );
+
   return (
     <div className="flex flex-col gap-8 p-6 max-w-2xl">
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <Label className="text-sm font-semibold text-zinc-200">
+      <div className="flex flex-col gap-2 p-4 bg-zinc-900/50 border border-zinc-800/80 rounded-xl relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-1 h-full bg-blue-500/50"></div>
+        <div className="flex items-center justify-between mb-2">
+          <Label className="text-sm font-semibold text-zinc-100 flex items-center gap-2">
             Credenciales API ({provider.provider})
+            {isConfigured && (
+              <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-[10px] px-1.5 py-0 h-4">
+                <CheckCircle2 className="w-3 h-3 mr-1" />
+                CONFIGURADA
+              </Badge>
+            )}
           </Label>
-          {isConfigured && !isEditing && (
-            <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wide text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded-full">
-              <CheckCircle2 className="w-3 h-3" /> configurada
-            </span>
-          )}
-          {!isConfigured && isEditing && (
-            <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wide text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full">
-              <XCircle className="w-3 h-3" /> requerida
-            </span>
-          )}
         </div>
-
+        
         {isConfigured && !isEditing ? (
-          <div className="flex w-full items-center gap-3">
-            <div className="flex-1 bg-zinc-950/50 border border-zinc-800/80 rounded-md px-3 py-2 text-sm text-zinc-400 flex items-center gap-2 font-mono">
-              <KeyRound className="w-4 h-4 shrink-0 opacity-50" />
-              <span className="truncate">
-                {storedKeyPreview ?? maskKey(null)}
-              </span>
+          <div className="flex w-full items-center gap-2">
+            <div className="flex-1 bg-zinc-950 border border-zinc-800/80 rounded flex items-center px-3 h-9 text-zinc-400 font-mono text-sm opacity-80 cursor-not-allowed">
+              <Key className="w-3.5 h-3.5 mr-2 text-zinc-500" />
+              {storedKeyPreview}
             </div>
             <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="bg-zinc-800/50 border-zinc-700/50 hover:bg-zinc-700 text-zinc-300 h-9 px-4"
+              variant="secondary"
+              className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 h-9 px-4 text-xs font-medium"
               onClick={handleReplaceKey}
             >
               Reemplazar
             </Button>
             <Button
-              type="button"
-              variant="outline"
-              size="sm"
+              variant="destructive"
+              size="icon"
               className="bg-zinc-800/50 border-zinc-700/50 hover:bg-red-950/40 hover:text-red-400 hover:border-red-900/60 h-9 px-3"
               onClick={handleDeleteKey}
             >
@@ -244,7 +243,7 @@ function ProviderConfig({
           </p>
         )}
         
-        <p className="text-xs text-zinc-500">
+        <p className="text-xs text-zinc-500 mt-2">
           La llave se almacena cifrada localmente y se valida al salir del campo.
         </p>
       </div>
@@ -258,7 +257,17 @@ function ProviderConfig({
             <SelectValue placeholder="Selecciona un modelo…" />
           </SelectTrigger>
           <SelectContent className="bg-zinc-900 border-zinc-800 text-zinc-200 max-h-[300px]">
-            {curatedModels.map((m) => (
+            <div className="p-2 sticky top-0 bg-zinc-900 border-b border-zinc-800 z-10">
+              <Input
+                type="text"
+                placeholder="Buscar modelo..."
+                value={modelSearch}
+                onChange={(e) => setModelSearch(e.target.value)}
+                onKeyDown={(e) => e.stopPropagation()}
+                className="bg-zinc-950 border-zinc-800 h-8 text-xs text-zinc-200"
+              />
+            </div>
+            {filteredModels.map((m) => (
               <SelectItem
                 key={m.id}
                 value={m.id}
@@ -400,6 +409,8 @@ function FimConfigSection({ providers }: { providers: CuratedProvider[] }) {
   const setFimFallbackModel = useLLMConfigStore((s) => s.setFimFallbackModel);
   
   const [isTesting, setIsTesting] = useState(false);
+  const [modelSearchMain, setModelSearchMain] = useState("");
+  const [modelSearchFallback, setModelSearchFallback] = useState("");
 
   const handleTest = async () => {
     setIsTesting(true);
@@ -421,6 +432,16 @@ function FimConfigSection({ providers }: { providers: CuratedProvider[] }) {
   };
 
   const allModels = providers.flatMap(p => p.models.map(m => ({ ...m, provider: p.provider, provider_id: p.provider_id })));
+  
+  const filteredModelsMain = allModels.filter(m => 
+    m.name.toLowerCase().includes(modelSearchMain.toLowerCase()) || 
+    m.id.toLowerCase().includes(modelSearchMain.toLowerCase())
+  );
+  
+  const filteredModelsFallback = allModels.filter(m => 
+    m.name.toLowerCase().includes(modelSearchFallback.toLowerCase()) || 
+    m.id.toLowerCase().includes(modelSearchFallback.toLowerCase())
+  );
 
   return (
     <div className="flex flex-col gap-8 p-6 max-w-2xl">
@@ -433,7 +454,17 @@ function FimConfigSection({ providers }: { providers: CuratedProvider[] }) {
             <SelectValue placeholder="Selecciona el modelo principal..." />
           </SelectTrigger>
           <SelectContent className="bg-zinc-900 border-zinc-800 text-zinc-200 max-h-[300px]">
-            {allModels.map((m) => (
+            <div className="p-2 sticky top-0 bg-zinc-900 border-b border-zinc-800 z-10">
+              <Input
+                type="text"
+                placeholder="Buscar modelo..."
+                value={modelSearchMain}
+                onChange={(e) => setModelSearchMain(e.target.value)}
+                onKeyDown={(e) => e.stopPropagation()}
+                className="bg-zinc-950 border-zinc-800 h-8 text-xs text-zinc-200"
+              />
+            </div>
+            {filteredModelsMain.map((m) => (
               <SelectItem key={`${m.provider_id}/${m.id}`} value={`${m.provider_id}/${m.id}`} className="focus:bg-zinc-800 focus:text-zinc-100 cursor-pointer py-2">
                 {m.name} <span className="text-zinc-500 text-xs ml-1">({m.provider})</span>
               </SelectItem>
@@ -454,10 +485,20 @@ function FimConfigSection({ providers }: { providers: CuratedProvider[] }) {
             <SelectValue placeholder="Selecciona un modelo de respaldo..." />
           </SelectTrigger>
           <SelectContent className="bg-zinc-900 border-zinc-800 text-zinc-200 max-h-[300px]">
+            <div className="p-2 sticky top-0 bg-zinc-900 border-b border-zinc-800 z-10">
+              <Input
+                type="text"
+                placeholder="Buscar modelo..."
+                value={modelSearchFallback}
+                onChange={(e) => setModelSearchFallback(e.target.value)}
+                onKeyDown={(e) => e.stopPropagation()}
+                className="bg-zinc-950 border-zinc-800 h-8 text-xs text-zinc-200"
+              />
+            </div>
             <SelectItem value="none" className="focus:bg-zinc-800 focus:text-zinc-100 cursor-pointer text-zinc-400 py-2">
               Ninguno
             </SelectItem>
-            {allModels.map((m) => (
+            {filteredModelsFallback.map((m) => (
               <SelectItem key={`${m.provider_id}/${m.id}`} value={`${m.provider_id}/${m.id}`} className="focus:bg-zinc-800 focus:text-zinc-100 cursor-pointer py-2">
                 {m.name} <span className="text-zinc-500 text-xs ml-1">({m.provider})</span>
               </SelectItem>
