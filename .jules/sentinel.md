@@ -3,3 +3,4 @@
 **Learning:** This existed because the developer might not be familiar with passing a list of dictionaries to `session.execute(text("..."), list_of_dicts)` in SQLAlchemy to perform a bulk insert, and thus resorted to building the values string manually.
 **Prevention:** Use SQLAlchemy's built-in parameter binding with `session.execute` and a list of dictionaries for bulk operations. Avoid string concatenation for SQL statements whenever possible.
 - When semantic pull request CI checks fail due to an unknown release type (e.g., 'sec:'), ensure the PR title uses a valid Conventional Commits prefix like 'fix:', 'feat:', or 'refactor:'.
+- Run `ruff check . --fix` to resolve formatting errors that may break CI checks before submitting changes in the backend application.
