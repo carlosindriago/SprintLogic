@@ -666,7 +666,7 @@ export default function EditorTab({
           {isDirty && <span className="text-yellow-400 ml-0.5">&bull;</span>}
         </span>
 
-        {isVimEnabled && editorMode !== 'editable' && (
+        {vimMode && editorMode !== 'editable' && (
           <span className="flex items-center gap-0.5 shrink-0">
             <span className={cn(
               "px-1.5 py-0.5 rounded text-[10px] transition-colors flex items-center gap-0.5 border",
@@ -697,7 +697,7 @@ export default function EditorTab({
           </span>
         )}
 
-        {isVimEnabled && editorMode === 'editable' && (
+        {vimMode && editorMode === 'editable' && (
           <span className="flex items-center gap-1 shrink-0">
             <span className="px-1.5 py-0.5 rounded text-[10px] bg-green-500/30 text-green-200 border border-green-400/40">
               <Pencil className="w-3 h-3 inline mr-0.5" />
@@ -743,7 +743,7 @@ export default function EditorTab({
 
         <button
           className={cn(TOOLBAR_BUTTON, isFimEnabled ? 'text-emerald-400' : 'text-zinc-500')}
-          onClick={() => setIsFimEnabled((v) => !v)}
+          onClick={() => setIsFimEnabled(!isFimEnabled)}
           title={isFimEnabled ? 'FIM Tutor activado — autocompletado por IA' : 'FIM Tutor desactivado'}
           aria-label="Alternar autocompletado FIM Tutor"
         >
