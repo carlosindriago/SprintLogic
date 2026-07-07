@@ -9,7 +9,7 @@ import { useUnsavedStore } from '@/store/unsavedStore';
 import { useFocusStore } from '@/store/focusStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import type { GraphNode } from '@/types';
-import { Code2, ChevronRight, Pencil, Eye, MousePointer2, GraduationCap } from 'lucide-react';
+import { Code2, ChevronRight, Pencil, Eye, MousePointer2, GraduationCap, Save, SaveAll, Sparkles } from 'lucide-react';
 import FimHintBar from './FimHintBar';
 
 interface LintDiagnostic {
@@ -721,17 +721,19 @@ export default function EditorTab({
             className={TOOLBAR_BUTTON}
             onClick={() => handleSave()}
             disabled={(!isDirty && !isUntitled) || saving}
-            title={isUntitled ? "Guardar como..." : "Guardar (Ctrl+S)"}
+            title={isUntitled ? "Guardar como nuevo archivo" : "Guardar archivo actual (Ctrl+S)"}
+            aria-label="Guardar archivo actual"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            <Save className="w-3.5 h-3.5" />
           </button>
 
           <button
             className={TOOLBAR_BUTTON}
             onClick={handleSaveAll}
-            title="Guardar Todo"
+            title="Guardar todos los archivos modificados"
+            aria-label="Guardar todos los archivos"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/><line x1="9" y1="3" x2="18" y2="3"/><line x1="9" y1="8" x2="18" y2="8"/><path d="M4 21h16"/></svg>
+            <SaveAll className="w-3.5 h-3.5" />
           </button>
         </div>
 
@@ -742,14 +744,16 @@ export default function EditorTab({
         <button
           className={cn(TOOLBAR_BUTTON, isFimEnabled ? 'text-emerald-400' : 'text-zinc-500')}
           onClick={() => setIsFimEnabled((v) => !v)}
-          title={isFimEnabled ? 'FIM Tutor activado' : 'FIM Tutor desactivado'}
+          title={isFimEnabled ? 'FIM Tutor activado — autocompletado por IA' : 'FIM Tutor desactivado'}
+          aria-label="Alternar autocompletado FIM Tutor"
         >
-          <GraduationCap className="w-3.5 h-3.5" />
+          <Sparkles className="w-3.5 h-3.5" />
         </button>
             <button
               className={TOOLBAR_BUTTON}
               onClick={() => onMentor(node.file_path || fileName, editorRef.current?.getValue() || '')}
-              title="Modo Sensei"
+              title="Abrir chat con el Sensei (mentor IA)"
+              aria-label="Abrir chat con el Sensei"
             >
               <GraduationCap className="w-3.5 h-3.5" />
             </button>
