@@ -57,7 +57,7 @@ export default function EditorTab({
   const vimInstanceRef = useRef<{ dispose(): void } | null>(null);
   const vimObserverRef = useRef<MutationObserver | null>(null);
   const vimPendingRef = useRef(false);
-  const fimDisposeRef = useRef<monacoEditor.IDisposable | null>(null);
+  const fimDisposeRef = useRef<{ dispose(): void } | null>(null);
   const dirtyCheckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const backupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
