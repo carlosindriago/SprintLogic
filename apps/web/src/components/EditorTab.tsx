@@ -7,6 +7,7 @@ import { useTabsStore } from '@/store/tabsStore';
 import { useMarkersStore } from '@/store/markersStore';
 import { useUnsavedStore } from '@/store/unsavedStore';
 import { useFocusStore } from '@/store/focusStore';
+import { useSettingsStore } from '@/store/settingsStore';
 import type { GraphNode } from '@/types';
 import { Code2, ChevronRight, Pencil, Eye, MousePointer2, GraduationCap } from 'lucide-react';
 import FimHintBar from './FimHintBar';
@@ -48,7 +49,8 @@ export default function EditorTab({
   const [saving, setSaving] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
   const [editorMode, setEditorMode] = useState<'locked' | 'visual' | 'editable'>('locked');
-  const [isFimEnabled, setIsFimEnabled] = useState(true);
+  const isFimEnabled = useSettingsStore((s) => s.isFimEnabled);
+  const setIsFimEnabled = useSettingsStore((s) => s.setFimEnabled);
   const isFimEnabledRef = useRef(true);
   const monacoRef = useRef<typeof import('monaco-editor') | null>(null);
 
@@ -664,12 +666,12 @@ export default function EditorTab({
           {isDirty && <span className="text-yellow-400 ml-0.5">&bull;</span>}
         </span>
 
-        {editorMode !== 'editable' && (
+        {isVimEnabled && editorMode !== 'editable' && (
           <span className="flex items-center gap-0.5 shrink-0">
             <span className={cn(
               "px-1.5 py-0.5 rounded text-[10px] transition-colors flex items-center gap-0.5 border",
               editorMode === 'locked'
-                ? "bg-zinc-700/50 text-zinc-300 border-zinc-600"
+                ? "bg-white/20 text-white border-white/30"
                 : "text-zinc-500 border-transparent"
             )}>
               <Eye className="w-3 h-3" />
@@ -678,7 +680,7 @@ export default function EditorTab({
             <span className={cn(
               "px-1.5 py-0.5 rounded text-[10px] transition-colors flex items-center gap-0.5 border",
               editorMode === 'visual'
-                ? "bg-purple-500/10 text-purple-400 border-purple-500/20"
+                ? "bg-purple-500/30 text-purple-200 border-purple-400/40"
                 : "text-zinc-500 border-transparent"
             )}>
               <MousePointer2 className="w-3 h-3" />
@@ -695,9 +697,9 @@ export default function EditorTab({
           </span>
         )}
 
-        {editorMode === 'editable' && (
+        {isVimEnabled && editorMode === 'editable' && (
           <span className="flex items-center gap-1 shrink-0">
-            <span className="px-1.5 py-0.5 rounded text-[10px] bg-green-500/10 text-green-400 border border-green-500/20">
+            <span className="px-1.5 py-0.5 rounded text-[10px] bg-green-500/30 text-green-200 border border-green-400/40">
               <Pencil className="w-3 h-3 inline mr-0.5" />
               Insert
             </span>
