@@ -53,11 +53,13 @@ function ProviderConfig({
   defaultModel,
   onSelectModel,
   curatedModels,
+  onProviderConfigured,
 }: {
   provider: CuratedProvider;
   defaultModel: string;
   onSelectModel: (provider: string, modelId: string) => void;
   curatedModels: ModelResult[];
+  onProviderConfigured?: (providerId: string, models: ModelResult[]) => void;
 }) {
   const [keyInput, setKeyInput] = useState("");
   const [isConfigured, setIsConfigured] = useState(false);
@@ -93,12 +95,17 @@ function ProviderConfig({
     setIsValidating(true);
     setValidationError(null);
     try {
-      await verifyAndSaveProviderKey(provider.provider_id, trimmed);
+      const models = await verifyAndSaveProviderKey(provider.provider_id, trimmed);
       setIsConfigured(true);
       setKeyInput("");
       setIsEditing(false);
       setStoredKeyPreview(maskKey(trimmed));
       setApiKey(provider.provider_id, trimmed);
+      
+      if (onProviderConfigured) {
+        onProviderConfigured(provider.provider_id, models);
+      }
+
       toast.success("Llave validada y guardada", {
         description: `API Key para ${provider.provider} configurada correctamente.`,
       });
@@ -108,7 +115,7 @@ function ProviderConfig({
     } finally {
       setIsValidating(false);
     }
-  }, [keyInput, provider.provider_id, provider.provider, isValidating, setApiKey]);
+  }, [keyInput, provider.provider_id, provider.provider, isValidating, setApiKey, onProviderConfigured]);
 
   const handleModelSelect = useCallback(
     (modelId: string | null) => {
@@ -413,7 +420,7 @@ function FimConfigSection({ providers }: { providers: CuratedProvider[] }) {
     }
   };
 
-  const allModels = providers.flatMap(p => p.models.map(m => ({ ...m, provider: p.provider })));
+  const allModels = providers.flatMap(p => p.models.map(m => ({ ...m, provider: p.provider, provider_id: p.provider_id })));
 
   return (
     <div className="flex flex-col gap-8 p-6 max-w-2xl">
@@ -427,7 +434,7 @@ function FimConfigSection({ providers }: { providers: CuratedProvider[] }) {
           </SelectTrigger>
           <SelectContent className="bg-zinc-900 border-zinc-800 text-zinc-200 max-h-[300px]">
             {allModels.map((m) => (
-              <SelectItem key={m.id} value={m.id} className="focus:bg-zinc-800 focus:text-zinc-100 cursor-pointer py-2">
+              <SelectItem key={`${m.provider_id}/${m.id}`} value={`${m.provider_id}/${m.id}`} className="focus:bg-zinc-800 focus:text-zinc-100 cursor-pointer py-2">
                 {m.name} <span className="text-zinc-500 text-xs ml-1">({m.provider})</span>
               </SelectItem>
             ))}
@@ -451,7 +458,7 @@ function FimConfigSection({ providers }: { providers: CuratedProvider[] }) {
               Ninguno
             </SelectItem>
             {allModels.map((m) => (
-              <SelectItem key={m.id} value={m.id} className="focus:bg-zinc-800 focus:text-zinc-100 cursor-pointer py-2">
+              <SelectItem key={`${m.provider_id}/${m.id}`} value={`${m.provider_id}/${m.id}`} className="focus:bg-zinc-800 focus:text-zinc-100 cursor-pointer py-2">
                 {m.name} <span className="text-zinc-500 text-xs ml-1">({m.provider})</span>
               </SelectItem>
             ))}
@@ -502,15 +509,51 @@ export default function LLMSettingsPanel() {
 
   useEffect(() => {
     let cancelled = false;
-    getCuratedModels().then((data) => {
+    getCuratedModels().then(async (data) => {
       if (cancelled) return;
       setProviders(data);
       setLoadingProviders(false);
+      
+      const updatedProviders = [...data];
+      let hasUpdates = false;
+
+      await Promise.all(
+        updatedProviders.map(async (provider, index) => {
+          if (provider.is_configured) {
+            try {
+              const { fetchProviderModels } = await import('@/lib/api');
+              const dynamicModels = await fetchProviderModels(provider.provider_id);
+              if (!cancelled && dynamicModels.length > 0) {
+                updatedProviders[index] = {
+                  ...provider,
+                  models: dynamicModels,
+                };
+                hasUpdates = true;
+              }
+            } catch (err) {
+              console.error(`Failed to fetch dynamic models for ${provider.provider_id}`, err);
+            }
+          }
+        })
+      );
+
+      if (!cancelled && hasUpdates) {
+        setProviders([...updatedProviders]);
+      }
     }).catch(() => {
       if (cancelled) return;
       setLoadingProviders(false);
     });
     return () => { cancelled = true; };
+  }, []);
+
+  const handleProviderConfigured = useCallback((providerId: string, models: ModelResult[]) => {
+    setProviders(prev => prev.map(p => {
+      if (p.provider_id === providerId && models.length > 0) {
+        return { ...p, models, is_configured: true };
+      }
+      return p;
+    }));
   }, []);
 
   const handleSelectModel = useCallback(
@@ -610,6 +653,7 @@ export default function LLMSettingsPanel() {
             defaultModel={defaultModel}
             onSelectModel={handleSelectModel}
             curatedModels={activeProviderData.models}
+            onProviderConfigured={handleProviderConfigured}
           />
         ) : activeSection === 'context7' ? (
           <Context7Section
