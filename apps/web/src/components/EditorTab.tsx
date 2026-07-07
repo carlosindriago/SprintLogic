@@ -11,7 +11,7 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { useLLMConfigStore } from '@/store/llmConfigStore';
 import { useFimStore } from '@/store/fimStore';
 import type { GraphNode } from '@/types';
-import { Code2, ChevronRight, Pencil, Eye, MousePointer2, GraduationCap, Save, SaveAll, Sparkles } from 'lucide-react';
+import { Code2, ChevronRight, Pencil, Eye, MousePointer2, GraduationCap, Save, SaveAll, Sparkles, Loader2 } from 'lucide-react';
 import FimHintBar from './FimHintBar';
 import VimTutorHUD, { type VimTutorMode } from './VimTutorHUD';
 
@@ -33,6 +33,28 @@ function normalizeMonacoUri(uri: Uri): string {
   }
   const str = uri.toString();
   return str.replace(/^[a-z]+:\/\//, '');
+}
+
+function FimToggleButton({ isFimEnabled, onToggle }: { isFimEnabled: boolean; onToggle: () => void }) {
+  const isLoading = useFimStore((s) => s.isLoading);
+  
+  return (
+    <button
+      className={cn(TOOLBAR_BUTTON, isFimEnabled ? 'text-emerald-400' : 'text-zinc-500')}
+      onClick={onToggle}
+      title={
+        !isFimEnabled ? 'FIM Tutor desactivado' :
+        isLoading ? 'FIM Tutor pensando...' : 'FIM Tutor activado — autocompletado por IA'
+      }
+      aria-label="Alternar autocompletado FIM Tutor"
+    >
+      {isLoading ? (
+        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+      ) : (
+        <Sparkles className={cn("w-3.5 h-3.5", isFimEnabled && "animate-pulse")} style={{ animationDuration: '3s' }} />
+      )}
+    </button>
+  );
 }
 
 export default function EditorTab({
@@ -778,14 +800,7 @@ export default function EditorTab({
           <>
         <div className="w-px h-5 bg-zinc-700/50 mx-1" />
 
-        <button
-          className={cn(TOOLBAR_BUTTON, isFimEnabled ? 'text-emerald-400' : 'text-zinc-500')}
-          onClick={() => setIsFimEnabled(!isFimEnabled)}
-          title={isFimEnabled ? 'FIM Tutor activado — autocompletado por IA' : 'FIM Tutor desactivado'}
-          aria-label="Alternar autocompletado FIM Tutor"
-        >
-          <Sparkles className="w-3.5 h-3.5" />
-        </button>
+        <FimToggleButton isFimEnabled={isFimEnabled} onToggle={() => setIsFimEnabled(!isFimEnabled)} />
             <button
               className={TOOLBAR_BUTTON}
               onClick={() => onMentor(node.file_path || fileName, editorRef.current?.getValue() || '')}
