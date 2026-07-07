@@ -190,7 +190,8 @@ async def generate_commit_message(
         return {"status": "success", "message": message}
     except ValueError as e:
         # LLM Key missing or similar
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error("Invalid request: %s", e)
+        raise HTTPException(status_code=400, detail="Invalid request")
     except Exception as e:
         logger.error("Git operation failed: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="An internal error occurred")
@@ -369,7 +370,8 @@ async def checkout_head(
         return {"status": "success", "output": out}
     except RuntimeError as e:
         if "Dirty working tree" in str(e):
-            raise HTTPException(status_code=409, detail=str(e))
+            logger.error("Dirty working tree error: %s", e)
+            raise HTTPException(status_code=409, detail="Dirty working tree prevents checkout")
         logger.error("Git operation failed: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="An internal error occurred")
 

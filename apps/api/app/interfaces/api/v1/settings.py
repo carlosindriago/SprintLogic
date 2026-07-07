@@ -1,3 +1,5 @@
+import logging
+
 import httpx
 from cachetools import TTLCache
 from fastapi import APIRouter, HTTPException
@@ -5,6 +7,8 @@ from pydantic import BaseModel
 
 from app.infrastructure.ai.llm_gateway import LiteLLMGateway
 from app.infrastructure.security.credential_manager import CredentialManager
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 llm_gateway = LiteLLMGateway()
@@ -159,7 +163,8 @@ async def get_provider_models(provider: str):
     try:
         return await fetch_provider_models(provider, api_key)
     except ProviderFetchError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+        logger.error("Provider fetch error: %s", exc, exc_info=True)
+        raise HTTPException(status_code=exc.status_code, detail="An error occurred while communicating with the provider") from exc
 
 
 @router.post("/providers/{provider}/keys", response_model=list[ModelResult])
@@ -176,7 +181,8 @@ async def save_and_verify_provider_key(provider: str, request: APIKeyRequest):
     try:
         models = await fetch_provider_models(provider, request.api_key.strip())
     except ProviderFetchError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+        logger.error("Provider fetch error: %s", exc, exc_info=True)
+        raise HTTPException(status_code=exc.status_code, detail="An error occurred while communicating with the provider") from exc
 
     CredentialManager.save_api_key(provider, request.api_key.strip())
     return models
