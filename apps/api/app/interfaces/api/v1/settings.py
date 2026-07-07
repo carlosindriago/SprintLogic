@@ -82,7 +82,7 @@ async def fetch_provider_models(provider: str, api_key: str) -> list[dict]:
                 models = [
                     {"id": m["id"], "name": m["id"]}
                     for m in data.get("data", [])
-                    if "gpt" in m["id"] or "o1" in m["id"]
+                    if "gpt" in m["id"] or "o1" in m["id"] or "o3" in m["id"] or "codex" in m["id"] or "ft:" in m["id"]
                 ]
 
             elif provider == "anthropic":

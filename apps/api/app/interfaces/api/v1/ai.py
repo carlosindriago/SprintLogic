@@ -159,13 +159,17 @@ async def fim_completion(request: FimRequest):
         raise HTTPException(status_code=500, detail=last_error or "All FIM model attempts failed.")
 
     raw = str(response.choices[0].message.content or "").strip()
-    raw = raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+    raw_clean = raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
 
     try:
-        parsed = json.loads(raw)
+        parsed = json.loads(raw_clean)
         return FimResponse(
             code=str(parsed.get("code", "")),
             explanation=str(parsed.get("explanation", "")),
         )
     except (json.JSONDecodeError, TypeError):
-        return FimResponse(code=raw[:200])
+        _logger.error("Failed to parse JSON from FIM model. Raw output: %s", raw)
+        raise HTTPException(
+            status_code=500,
+            detail=f"FIM Model returned invalid JSON format. Raw output: {raw[:200]}..."
+        )
