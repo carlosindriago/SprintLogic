@@ -11,6 +11,7 @@ import { useSettingsStore } from '@/store/settingsStore';
 import type { GraphNode } from '@/types';
 import { Code2, ChevronRight, Pencil, Eye, MousePointer2, GraduationCap, Save, SaveAll, Sparkles } from 'lucide-react';
 import FimHintBar from './FimHintBar';
+import VimTutorHUD, { type VimTutorMode } from './VimTutorHUD';
 
 interface LintDiagnostic {
   line: number;
@@ -845,6 +846,11 @@ export default function EditorTab({
           loading={null}
         />
       </div>
+      <VimTutorHUD
+        editorRef={editorRef}
+        mode={editorMode as VimTutorMode}
+        vimEnabled={!!vimMode}
+      />
       <FimHintBar />
     </div>
   );
