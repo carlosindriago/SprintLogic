@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { ChevronRight, ChevronDown, Folder, FilePlus, FolderPlus, AlertCircle, AlertTriangle, Pencil, Copy, Trash2 } from 'lucide-react';
 import { getProjectFiles } from '@/lib/api';
 import { FileTreeNode } from '@/types';
@@ -29,6 +29,7 @@ const TreeNode: React.FC<{
   onFileDuplicate?: (path: string) => void;
   onFileDelete?: (path: string) => void;
 }> = ({ node, onSelect, depth, onNewFile, allFiles, onNavigateToMarker, onFileRename, onFileDuplicate, onFileDelete }) => {
+  const dirMarkers = useMemo(() => node.type === 'directory' ? sumDescendantMarkers(node, allFiles) : { errors: 0, warnings: 0 }, [node, allFiles]);
   const [isOpen, setIsOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [showMarkers, setShowMarkers] = useState(false);
@@ -50,7 +51,6 @@ const TreeNode: React.FC<{
   }, [contextMenu]);
 
   if (node.type === 'directory') {
-    const dirMarkers = sumDescendantMarkers(node, allFiles);
 
     return (
       <div>
