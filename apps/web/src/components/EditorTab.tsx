@@ -161,6 +161,7 @@ export default function EditorTab({
             }, 800);
           });
         },
+        disposeInlineCompletions: () => {},
       },
     );
 
