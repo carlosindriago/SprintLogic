@@ -71,7 +71,8 @@ export default function EditorTab({
   const currentContentRef = useRef('');
   const [initialValue, setInitialValue] = useState('');
   const editorRef = useRef<monacoEditor.IStandaloneCodeEditor | null>(null);
-  const vimInstanceRef = useRef<{ dispose(): void } | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const vimInstanceRef = useRef<any>(null);
   const vimObserverRef = useRef<MutationObserver | null>(null);
   const vimPendingRef = useRef(false);
   const fimDisposeRef = useRef<{ dispose(): void } | null>(null);
