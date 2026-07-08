@@ -197,10 +197,12 @@ export default function EditorTab({
     try {
       console.log('[MONACO BOOT] Registrando FIM Provider para lenguaje:', language || '(default)');
       const disposer = monaco.languages.registerInlineCompletionsProvider(
-        { language },
+        '*',
         {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           provideInlineCompletions: async (model: any, position: any, _context: any, token: any) => {
+            const targetPath = node.file_path || node.id;
+            if (targetPath && !model.uri.path.endsWith(targetPath)) return { items: [] };
             if (!isFimEnabledRef.current) return { items: [] };
 
             return new Promise((resolve) => {
@@ -249,7 +251,7 @@ export default function EditorTab({
       console.error('[MONACO BOOT FATAL ERROR] FIM Provider falló al registrar:', error);
       return undefined;
     }
-  }, [projectId, node.file_path]);
+  }, [projectId, node.file_path, node.id]);
 
   useEffect(() => {
     const editor = editorRef.current;
