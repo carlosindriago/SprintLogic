@@ -246,7 +246,9 @@ async def tech_scan(request: TechScanRequest):
     except Exception as e:
         _logger.error(f"[TECH SCAN ERROR] {str(e)}")
         error_str = str(e).lower()
-        if "429" in error_str or "rate limit" in error_str:
+        if "400" in error_str or "bad request" in error_str or "invalid model" in error_str:
+            fallback_msg = "Error 400: Modelo IA Inválido. El ID del modelo configurado no existe o no es soportado por el proveedor. Por favor, cámbialo en la configuración."
+        elif "429" in error_str or "rate limit" in error_str:
             fallback_msg = "Error 429: Límite de peticiones excedido. El proveedor de IA (Rate Limit) ha bloqueado la conexión. Por favor, verifica tus cuotas, cambia a tu modelo de respaldo, o espera un minuto."
         elif "401" in error_str or "authentication" in error_str:
             fallback_msg = "Error 401: Credenciales inválidas. Verifica tu API Key en la configuración."
@@ -388,7 +390,9 @@ async def code_coach(request: CodeCoachRequest):
         _logger.error(f"Code Coach Fallback triggered: {str(e)}")
         
         error_str = str(e).lower()
-        if "429" in error_str or "rate limit" in error_str:
+        if "400" in error_str or "bad request" in error_str or "invalid model" in error_str:
+            fallback_msg = "Error 400: Modelo IA Inválido. El ID del modelo configurado no existe o no es soportado por el proveedor. Por favor, cámbialo en la configuración."
+        elif "429" in error_str or "rate limit" in error_str:
             fallback_msg = "Error 429: Límite de peticiones excedido. El proveedor de IA (Rate Limit) ha bloqueado la conexión. Por favor, verifica tus cuotas, cambia a tu modelo de respaldo, o espera un minuto."
         elif "401" in error_str or "authentication" in error_str:
             fallback_msg = "Error 401: Credenciales inválidas. Verifica tu API Key en la configuración."
