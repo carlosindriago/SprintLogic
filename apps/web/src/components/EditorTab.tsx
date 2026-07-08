@@ -239,7 +239,7 @@ export default function EditorTab({
                 } finally {
                   setIsLoadingRef.current(false);
                 }
-              }, 800);
+              }, 350);
             });
           },
           disposeInlineCompletions: () => {},

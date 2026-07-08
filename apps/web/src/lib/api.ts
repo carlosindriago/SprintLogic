@@ -550,6 +550,9 @@ export interface FimResponse {
   explanation: string;
 }
 
+const fimCache = new Map<string, FimResponse>();
+const FIM_CACHE_MAX_SIZE = 20;
+
 export const fetchFimCompletion = async (
   prefix: string,
   suffix: string,
@@ -557,6 +560,14 @@ export const fetchFimCompletion = async (
   fimModel?: string,
   fimFallbackModel?: string
 ): Promise<FimResponse> => {
+  const cacheKey = JSON.stringify({ prefix, suffix, language, fimModel, fimFallbackModel });
+  if (fimCache.has(cacheKey)) {
+    const cached = fimCache.get(cacheKey)!;
+    fimCache.delete(cacheKey);
+    fimCache.set(cacheKey, cached);
+    return cached;
+  }
+
   const res = await fetch(`${API_BASE_URL}/ai/fim-completion`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -572,5 +583,14 @@ export const fetchFimCompletion = async (
     const errorText = await res.text().catch(() => '');
     throw new Error(`FIM request failed: ${res.status} ${errorText}`);
   }
-  return res.json();
+  const data = await res.json();
+  
+  fimCache.set(cacheKey, data);
+  if (fimCache.size > FIM_CACHE_MAX_SIZE) {
+    // delete oldest
+    const firstKey = fimCache.keys().next().value;
+    if (firstKey !== undefined) fimCache.delete(firstKey);
+  }
+  
+  return data;
 };
