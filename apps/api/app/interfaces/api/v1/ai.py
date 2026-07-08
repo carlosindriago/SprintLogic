@@ -194,6 +194,7 @@ async def tech_scan(request: TechScanRequest):
                         api_key=adapted["api_key"],
                         max_tokens=1500,
                         temperature=0.1,
+                        timeout=15,
                         **adapted["kwargs"],
                     ),
                     timeout=15.0
@@ -293,6 +294,7 @@ async def code_coach(request: CodeCoachRequest):
                             api_key=adapted["api_key"],
                             max_tokens=2500,
                             temperature=0.2,
+                            timeout=15,
                             **adapted["kwargs"],
                         ),
                         timeout=25.0
