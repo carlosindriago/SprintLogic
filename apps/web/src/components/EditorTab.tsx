@@ -617,13 +617,10 @@ export default function EditorTab({
 
     editor.onDidChangeModelContent(() => {
       const model = editor.getModel();
-      if (model && !model.isDisposed()) {
-        // Inmediate clear of previous coach markers
-        monaco.editor.setModelMarkers(model, 'ai-coach', []);
-      }
-      setCoachExplanation(null);
-      setCurrentCursorAdvice(null);
-
+      
+      // We do NOT clear markers or states here to maintain the Stale-While-Revalidate pattern.
+      // The old markers will remain until the new ones arrive.
+      
       if (coachTimerRef.current) clearTimeout(coachTimerRef.current);
       if (isCoachEnabledRef.current && model && !model.isDisposed()) {
         coachTimerRef.current = setTimeout(() => {
