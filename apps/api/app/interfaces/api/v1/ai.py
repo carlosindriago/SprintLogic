@@ -1,5 +1,7 @@
 import json
 import logging
+import re
+import logging
 
 import litellm
 from fastapi import APIRouter, HTTPException
@@ -28,6 +30,25 @@ def _normalize_model_name(model_str: str) -> str:
         
     return model_str
 
+def _extract_json(text: str) -> str:
+    """Robust two-stage JSON extractor to safely parse conversational LLM outputs."""
+    if not text:
+        return ""
+    
+    # Phase 1: RegEx no codiciosa para capturar el contenido dentro de bloques de código Markdown
+    match = re.search(r"```(?:json)?(.*?)```", text, re.DOTALL | re.IGNORECASE)
+    if match:
+        extracted = match.group(1).strip()
+        if extracted:
+            return extracted
+            
+    # Phase 2: Fallback usando índices absolutos ignorando texto introductorio
+    start = text.find('{')
+    end = text.rfind('}')
+    if start != -1 and end != -1 and end > start:
+        return text[start:end+1]
+        
+    return text.strip()
 
 class APIKeysPayload(BaseModel):
     gemini_key: str | None = None
@@ -208,10 +229,7 @@ async def tech_scan(request: TechScanRequest):
             raise ValueError(f"All models failed or timed out. Last error: {last_error}")
 
         raw_text = str(response.choices[0].message.content or "").strip()
-        cleaned_text = raw_text.strip()
-        if cleaned_text.startswith("```"):
-            # Remueve la primera línea (ej. ```json) y la última (```)
-            cleaned_text = "\n".join(cleaned_text.split("\n")[1:-1]).strip()
+        cleaned_text = _extract_json(raw_text)
             
         _logger.info(f"[TECH SCAN RAW] {cleaned_text}")
         parsed = json.loads(cleaned_text)
@@ -301,7 +319,7 @@ async def code_coach(request: CodeCoachRequest):
                     )
                     
                     raw_content = str(response.choices[0].message.content or "").strip()
-                    raw_clean = raw_content.strip().strip('`').strip('json').strip('\n').strip()
+                    raw_clean = _extract_json(raw_content)
 
                     if not raw_clean:
                         raise ValueError("Empty response from LLM")
