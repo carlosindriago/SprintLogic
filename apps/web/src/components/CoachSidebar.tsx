@@ -1,6 +1,17 @@
 import { CodeCoachOverview, CodeCoachMarker } from "@/lib/api";
 import { RefreshCw, ShieldAlert, FileCode2, Activity, Lightbulb, Loader2, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useState, useEffect } from "react";
+
+const SENSEI_QUOTES = [
+  "El código se lee mucho más a menudo de lo que se escribe. Escribe para humanos.",
+  "La simplicidad es prerrequisito de la fiabilidad.",
+  "Siempre codifica como si el que mantendrá tu código fuera un psicópata violento que sabe dónde vives.",
+  "Hay dos cosas difíciles en programación: la invalidación de caché y nombrar las cosas.",
+  "Medir el progreso por líneas de código es como medir la construcción de aviones por el peso.",
+  "No te preocupes si no funciona bien. Si todo estuviera bien, no tendrías trabajo.",
+  "Cualquier tonto puede escribir código que un ordenador entienda. Los buenos programadores escriben código que los humanos pueden entender."
+];
 
 interface CoachSidebarProps {
   techData?: any;
@@ -25,6 +36,17 @@ export function CoachSidebar({
   fileMetadata,
   availableAdviceLines,
 }: CoachSidebarProps) {
+  const [quoteIndex, setQuoteIndex] = useState(0);
+
+  useEffect(() => {
+    if (!isAnalyzingCode) return;
+    
+    const interval = setInterval(() => {
+      setQuoteIndex((prev) => (prev + 1) % SENSEI_QUOTES.length);
+    }, 6000);
+    
+    return () => clearInterval(interval);
+  }, [isAnalyzingCode]);
 
   return (
     <div className="h-full w-full min-w-[250px] bg-[#0a0a0a] border-l border-zinc-800 flex flex-col overflow-y-auto custom-scrollbar p-3 space-y-4">
