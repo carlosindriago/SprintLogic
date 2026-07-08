@@ -147,17 +147,13 @@ async def tech_scan(request: TechScanRequest):
         last_error = None
 
         system = (
-            "Eres un analizador técnico experto (Tech Scanner). Tu tarea es identificar las tecnologías, "
-            "frameworks, lenguajes o librerías principales en este código, así como deducir o sugerir sus "
-            "versiones recientes y proveer las URLs oficiales de documentación.\n\n"
-            "Devuelve EXCLUSIVAMENTE un JSON con la siguiente estructura exacta:\n"
-            '{"technologies": [{"name": "React", "version": "18.x", "doc_url": "https://react.dev"}]}'
+            'Eres un analizador de código estático ultrarrápido. Lee el código provisto y devuelve ÚNICAMENTE un JSON válido con la siguiente estructura: {"technologies": [{"name": "nombre de la librería/lenguaje", "version": "versión aproximada o actual", "doc_url": "URL oficial de la documentación"}]}. No uses markdown, no uses bloques de código, devuelve el JSON crudo.'
         )
 
         user = (
             f"Analiza este código en {request.language or 'código'}:\n\n"
-            f"```\n{request.file_content}\n```\n\n"
-            "Devuelve únicamente el objeto JSON."
+            f"{request.file_content}\n\n"
+            "Devuelve únicamente el objeto JSON crudo."
         )
 
         messages = [
@@ -183,6 +179,7 @@ async def tech_scan(request: TechScanRequest):
                         api_key=adapted["api_key"],
                         max_tokens=500,
                         temperature=0.1,
+                        response_format={ "type": "json_object" },
                         **adapted["kwargs"],
                     ),
                     timeout=15.0
@@ -209,7 +206,7 @@ async def tech_scan(request: TechScanRequest):
         return TechScanResponse(technologies=techs)
 
     except Exception as e:
-        _logger.error(f"Tech Scan Fallback triggered: {str(e)}")
+        _logger.error(f"[TECH SCAN ERROR] {str(e)}")
         lang_str = request.language if getattr(request, 'language', None) else "Desconocido"
         return {"technologies": [{"name": f"Análisis Básico ({lang_str})", "version": "N/A", "doc_url": "#"}]}
 
