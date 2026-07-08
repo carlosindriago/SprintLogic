@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from app.infrastructure.ai.context7_client import Context7Client
 from app.infrastructure.ai.provider_adapter import ProviderAdapter
 from app.infrastructure.security.credential_manager import CredentialManager
-from app.interfaces.api.v1.settings import CURATED_MODELS, PROVIDER_LABELS
+from app.interfaces.api.v1.settings import CURATED_MODELS, PROVIDER_LABELS, fetch_provider_models, ProviderFetchError
 
 router = APIRouter()
 
@@ -40,8 +40,32 @@ class CodeCoachMarker(BaseModel):
     explanation: str
 
 
+class CodeCoachOverview(BaseModel):
+    structure: str
+    critical_security: str
+    clean_code_score: int
+
+
 class CodeCoachResponse(BaseModel):
-    markers: list[CodeCoachMarker]
+    overview: CodeCoachOverview
+    contextual_advice: list[CodeCoachMarker]
+
+
+class TechScanRequest(BaseModel):
+    file_content: str
+    language: str = ""
+    model: str | None = None
+    fallback_model: str | None = None
+
+
+class TechInfo(BaseModel):
+    name: str
+    version: str
+    doc_url: str
+
+
+class TechScanResponse(BaseModel):
+    technologies: list[TechInfo]
 
 
 @router.get("/models")
@@ -52,13 +76,22 @@ async def get_ai_models():
     API key has been stored for it. No external APIs are queried.
     """
     results: list[dict] = []
-    for provider, models in CURATED_MODELS.items():
+    for provider, fallback_models in CURATED_MODELS.items():
         key = CredentialManager.get_api_key(provider)
+        is_configured = key is not None and key != ""
+        
+        models = fallback_models
+        if is_configured:
+            try:
+                models = await fetch_provider_models(provider, key)
+            except ProviderFetchError:
+                pass
+
         results.append(
             {
                 "provider": PROVIDER_LABELS.get(provider, provider),
                 "provider_id": provider,
-                "is_configured": key is not None and key != "",
+                "is_configured": is_configured,
                 "models": models,
             }
         )
@@ -80,9 +113,14 @@ async def get_active_models(payload: APIKeysPayload):
         "nvidia": payload.nvidia_key,
     }
 
-    for provider, models in CURATED_MODELS.items():
+    for provider, fallback_models in CURATED_MODELS.items():
         key = key_mapping.get(provider)
         if key:
+            try:
+                models = await fetch_provider_models(provider, key)
+            except ProviderFetchError:
+                models = fallback_models
+                
             results.append(
                 {
                     "provider": provider.upper(),
@@ -90,6 +128,82 @@ async def get_active_models(payload: APIKeysPayload):
                 }
             )
     return results
+
+
+@router.post("/tech-scan", response_model=TechScanResponse)
+async def tech_scan(request: TechScanRequest):
+    """Escaner estático de tecnologías en el archivo."""
+    if not request.model:
+        raise HTTPException(status_code=400, detail="No model specified in request")
+
+    models_to_try = [request.model]
+    if request.fallback_model and request.fallback_model != request.model:
+        models_to_try.append(request.fallback_model)
+
+    response = None
+    last_error = None
+
+    system = (
+        "Eres un analizador técnico experto (Tech Scanner). Tu tarea es identificar las tecnologías, "
+        "frameworks, lenguajes o librerías principales en este código, así como deducir o sugerir sus "
+        "versiones recientes y proveer las URLs oficiales de documentación.\n\n"
+        "Devuelve EXCLUSIVAMENTE un JSON con la siguiente estructura exacta:\n"
+        '{"technologies": [{"name": "React", "version": "18.x", "doc_url": "https://react.dev"}]}'
+    )
+
+    user = (
+        f"Analiza este código en {request.language or 'código'}:\n\n"
+        f"```\n{request.file_content}\n```\n\n"
+        "Devuelve únicamente el objeto JSON."
+    )
+
+    messages = [
+        {"role": "system", "content": system},
+        {"role": "user", "content": user},
+    ]
+
+    for current_model in models_to_try:
+        provider = ProviderAdapter.get_provider(current_model)
+        api_key = CredentialManager.get_api_key(provider)
+        if not api_key:
+            last_error = f"API key not configured for {current_model}"
+            continue
+
+        adapted = ProviderAdapter.adapt(current_model, api_key)
+
+        try:
+            response = await litellm.acompletion(
+                model=adapted["model"],
+                messages=messages,
+                api_key=adapted["api_key"],
+                max_tokens=500,
+                temperature=0.1,
+                **adapted["kwargs"],
+            )
+            break
+        except Exception as e:
+            last_error = str(e)
+            continue
+
+    if not response:
+        raise HTTPException(status_code=500, detail=last_error or "All tech-scan model attempts failed.")
+
+    raw = str(response.choices[0].message.content or "").strip()
+    raw_clean = raw.strip().strip('`').strip('json').strip('\n').strip()
+
+    try:
+        parsed = json.loads(raw_clean)
+        techs = []
+        for item in parsed.get("technologies", []):
+            techs.append(TechInfo(
+                name=str(item.get("name", "Unknown")),
+                version=str(item.get("version", "latest")),
+                doc_url=str(item.get("doc_url", "#"))
+            ))
+        return TechScanResponse(technologies=techs)
+    except Exception as e:
+        _logger.error("Failed to parse JSON for tech-scan. Raw output: %s", raw)
+        return TechScanResponse(technologies=[])
 
 
 @router.post("/code-coach", response_model=CodeCoachResponse)
@@ -110,17 +224,22 @@ async def code_coach(request: CodeCoachRequest):
 
     system = (
         "Eres un Mentor Senior de programación. Analiza el código proporcionado. "
-        "Si hay vulnerabilidades de seguridad, ineficiencias o una oportunidad clara de enseñar un concepto mejor, "
-        "devuelve un arreglo JSON estricto con los diagnósticos. Si el código es perfecto o está incompleto, devuelve un arreglo vacío [].\n\n"
-        "El formato JSON esperado DEBE ser un arreglo de objetos exacto:\n"
-        '[\n  { "line": 12, "severity": "hint" | "warning" | "error", "message": "Consejo breve", "explanation": "Explicación detallada de por qué" }\n]\n'
-        "No incluyas markdown, explicaciones previas ni texto fuera del arreglo JSON."
+        "Devuelve EXCLUSIVAMENTE un objeto JSON estricto con dos partes: un 'overview' general "
+        "y 'contextual_advice' que es un arreglo de consejos pedagógicos mapeados a las líneas del código.\n\n"
+        "Estructura EXACTA requerida:\n"
+        "{\n"
+        '  "overview": { "structure": "Breve descripción", "critical_security": "Advertencias si las hay, o None", "clean_code_score": 85 },\n'
+        '  "contextual_advice": [\n'
+        '    { "line": 12, "severity": "hint" | "warning" | "error", "message": "Consejo breve", "explanation": "Explicación" }\n'
+        "  ]\n"
+        "}\n"
+        "No incluyas markdown, explicaciones previas ni texto fuera del objeto JSON."
     )
 
     user = (
         f"Analiza este código en {request.language or 'código'}. El cursor del usuario está cerca de la línea {request.cursor_line}:\n\n"
         f"```\n{request.file_content}\n```\n\n"
-        "Devuelve únicamente el arreglo JSON."
+        "Devuelve únicamente el objeto JSON."
     )
 
     messages = [
@@ -160,18 +279,26 @@ async def code_coach(request: CodeCoachRequest):
         raise HTTPException(status_code=500, detail=last_error or "All Code Coach model attempts failed.")
 
     raw = str(response.choices[0].message.content or "").strip()
-    raw_clean = raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+    raw_clean = raw.strip().strip('`').strip('json').strip('\n').strip()
 
     if not raw_clean:
-        return CodeCoachResponse(markers=[])
+        return CodeCoachResponse(
+            overview=CodeCoachOverview(structure="", critical_security="", clean_code_score=100),
+            contextual_advice=[]
+        )
 
     try:
         parsed = json.loads(raw_clean)
-        if not isinstance(parsed, list):
-            parsed = []
+        
+        overview_data = parsed.get("overview", {})
+        overview = CodeCoachOverview(
+            structure=str(overview_data.get("structure", "")),
+            critical_security=str(overview_data.get("critical_security", "")),
+            clean_code_score=int(overview_data.get("clean_code_score", 100))
+        )
             
         markers = []
-        for item in parsed:
+        for item in parsed.get("contextual_advice", []):
             if isinstance(item, dict) and "line" in item and "severity" in item and "message" in item and "explanation" in item:
                 markers.append(CodeCoachMarker(
                     line=int(item["line"]),
@@ -180,10 +307,11 @@ async def code_coach(request: CodeCoachRequest):
                     explanation=str(item["explanation"]),
                 ))
 
-        return CodeCoachResponse(markers=markers)
+        return CodeCoachResponse(overview=overview, contextual_advice=markers)
     except (json.JSONDecodeError, TypeError, ValueError):
         _logger.error("Failed to parse JSON from Code Coach model. Raw output: %s", raw)
-        raise HTTPException(
-            status_code=500,
-            detail=f"Code Coach Model returned invalid JSON format. Raw output: {raw[:200]}..."
+        # Retornar un esqueleto por defecto para que la UI no crashee.
+        return CodeCoachResponse(
+            overview=CodeCoachOverview(structure="Error parsing response", critical_security="N/A", clean_code_score=0),
+            contextual_advice=[]
         )
