@@ -1,5 +1,5 @@
 import { CodeCoachOverview, CodeCoachMarker } from "@/lib/api";
-import { RefreshCw, ShieldAlert, FileCode2, Medal, Lightbulb } from "lucide-react";
+import { RefreshCw, ShieldAlert, FileCode2, Medal, Lightbulb, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface CoachSidebarProps {
@@ -78,15 +78,16 @@ export function CoachSidebar({
         <h3 className="text-sm font-semibold text-zinc-200 flex items-center gap-2 mb-3">
           <Medal className="w-4 h-4 text-emerald-400" />
           Health & Overview
+          {isAnalyzingCode && overview && <Loader2 className="w-3 h-3 animate-spin text-zinc-500 ml-auto" />}
         </h3>
-        {isAnalyzingCode ? (
+        {isAnalyzingCode && !overview ? (
            <div>
              <div className="animate-pulse bg-zinc-700/50 rounded h-4 w-3/4 mb-2"></div>
              <div className="animate-pulse bg-zinc-700/50 rounded h-4 w-5/6 mb-2"></div>
              <div className="animate-pulse bg-zinc-700/50 rounded h-4 w-2/3 mb-2"></div>
            </div>
         ) : overview ? (
-          <div className="flex flex-col gap-3 text-xs">
+          <div className={`flex flex-col gap-3 text-xs ${isAnalyzingCode ? 'opacity-60 transition-opacity' : ''}`}>
             <div className="flex items-center justify-between bg-[#1a1a1a] p-2 rounded border border-zinc-800/50">
               <span className="text-zinc-400">Clean Code Score</span>
               <span className={`font-bold ${overview.clean_code_score >= 80 ? 'text-emerald-400' : overview.clean_code_score >= 60 ? 'text-amber-400' : 'text-rose-400'}`}>
@@ -115,9 +116,10 @@ export function CoachSidebar({
         <h3 className="text-sm font-semibold text-zinc-200 flex items-center gap-2 mb-3">
           <Lightbulb className="w-4 h-4 text-amber-400" />
           Mentoría Contextual
+          {isAnalyzingCode && cursorAdvice && <Loader2 className="w-3 h-3 animate-spin text-zinc-500 ml-auto" />}
         </h3>
         
-        {isAnalyzingCode ? (
+        {isAnalyzingCode && !cursorAdvice && !overview ? (
            <div>
              <div className="animate-pulse bg-zinc-700/50 rounded h-4 w-3/4 mb-2"></div>
              <div className="animate-pulse bg-zinc-700/50 rounded h-4 w-5/6 mb-2"></div>
@@ -126,7 +128,8 @@ export function CoachSidebar({
           <div className={`flex flex-col gap-2 p-3 rounded border text-xs 
             ${cursorAdvice.severity === 'error' ? 'bg-rose-500/10 border-rose-500/30' : 
               cursorAdvice.severity === 'warning' ? 'bg-amber-500/10 border-amber-500/30' : 
-              'bg-blue-500/10 border-blue-500/30'}`}
+              'bg-blue-500/10 border-blue-500/30'}
+            ${isAnalyzingCode ? 'opacity-60 transition-opacity' : ''}`}
           >
             <span className={`font-bold ${cursorAdvice.severity === 'error' ? 'text-rose-400' : cursorAdvice.severity === 'warning' ? 'text-amber-400' : 'text-blue-400'}`}>
               Línea {cursorAdvice.line}: {cursorAdvice.message}
