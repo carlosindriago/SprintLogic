@@ -99,6 +99,7 @@ class TechInfo(BaseModel):
     name: str
     version: str
     doc_url: str
+    icon: str | None = None
 
 
 class TechScanResponse(BaseModel):
@@ -167,96 +168,53 @@ async def get_active_models(payload: APIKeysPayload):
     return results
 
 
+import re
+
+STACK_MAP = {
+    "react": {"regex": r"from 'react'|import React", "name": "React", "icon": "SiReact", "url": "https://react.dev"},
+    "python": {"regex": r"def |import |class ", "name": "Python", "icon": "SiPython", "url": "https://docs.python.org/3/"},
+    "typescript": {"regex": r"interface |type |: string|: number", "name": "TypeScript", "icon": "SiTypescript", "url": "https://www.typescriptlang.org/"},
+    "fastapi": {"regex": r"from fastapi|import FastAPI|APIRouter", "name": "FastAPI", "icon": "SiFastapi", "url": "https://fastapi.tiangolo.com/"},
+    "tailwindcss": {"regex": r"className=.*flex|className=.*text-|className=.*bg-", "name": "Tailwind CSS", "icon": "SiTailwindcss", "url": "https://tailwindcss.com/"},
+    "nextjs": {"regex": r"next/link|next/image|next/router", "name": "Next.js", "icon": "SiNextdotjs", "url": "https://nextjs.org/"},
+    "nodejs": {"regex": r"require\(|module.exports|process\.env", "name": "Node.js", "icon": "SiNodedotjs", "url": "https://nodejs.org/"},
+    "docker": {"regex": r"FROM |RUN |WORKDIR |CMD |ENTRYPOINT", "name": "Docker", "icon": "SiDocker", "url": "https://docs.docker.com/"},
+    "sql": {"regex": r"SELECT |INSERT |UPDATE |DELETE |FROM ", "name": "SQL", "icon": "SiPostgresql", "url": "https://dev.mysql.com/doc/"},
+    "html": {"regex": r"<div|<span|<html|<body", "name": "HTML5", "icon": "SiHtml5", "url": "https://developer.mozilla.org/es/docs/Web/HTML"},
+    "css": {"regex": r"margin:|padding:|color:|background:", "name": "CSS3", "icon": "SiCss3", "url": "https://developer.mozilla.org/es/docs/Web/CSS"},
+}
+
 @router.post("/tech-scan", response_model=TechScanResponse)
 async def tech_scan(request: TechScanRequest):
-    """Escaner estático de tecnologías en el archivo."""
+    """Analizador estático de stack técnico usando regex."""
     try:
-        if not request.model:
-            raise ValueError("No model specified in request")
-
-        models_to_try = [request.model]
-        if request.fallback_model and request.fallback_model != request.model:
-            models_to_try.append(request.fallback_model)
-
-        response = None
-        last_error = None
-
-        system = (
-            'Eres un analizador de código estático ultrarrápido. Lee el código provisto y devuelve ÚNICAMENTE un JSON válido con la siguiente estructura: {"technologies": [{"name": "nombre de la librería/lenguaje", "version": "versión aproximada o actual", "doc_url": "URL oficial de la documentación"}]}. No uses markdown, no uses bloques de código, devuelve el JSON crudo. '
-            'CRÍTICO: TIENES PROHIBIDO PENSAR EN VOZ ALTA. NO expliques tu razonamiento. NO uses frases introductorias como "Analicemos el código". Tu respuesta DEBE empezar estrictamente con el carácter "{" y terminar con el carácter "}". Si escribes una sola palabra fuera del JSON, el sistema explotará.'
-        )
-
-        user = (
-            f"Analiza este código en {request.language or 'código'}:\n\n"
-            f"{request.file_content}\n\n"
-            "Devuelve únicamente el objeto JSON crudo."
-        )
-
-        messages = [
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ]
-
-        for current_model in models_to_try:
-            provider = ProviderAdapter.get_provider(current_model)
-            api_key = CredentialManager.get_api_key(provider)
-            if not api_key:
-                last_error = f"API key not configured for {current_model}"
-                continue
-
-            adapted = ProviderAdapter.adapt(current_model, api_key)
-
-            try:
-                import asyncio
-                response = await asyncio.wait_for(
-                    litellm.acompletion(
-                        model=_normalize_model_name(adapted["model"]),
-                        messages=messages,
-                        api_key=adapted["api_key"],
-                        max_tokens=1500,
-                        temperature=0.1,
-                        timeout=15,
-                        **adapted["kwargs"],
-                    ),
-                    timeout=15.0
-                )
-                break
-            except Exception as e:
-                last_error = str(e)
-                continue
-
-        if not response:
-            raise ValueError(f"All models failed or timed out. Last error: {last_error}")
-
-        raw_text = str(response.choices[0].message.content or "").strip()
-        cleaned_text = _extract_json(raw_text)
-            
-        _logger.info(f"[TECH SCAN RAW] {cleaned_text}")
-        parsed = json.loads(cleaned_text)
-        
+        content = request.file_content or ""
         techs = []
-        for item in parsed.get("technologies", []):
+        
+        for key, tech_data in STACK_MAP.items():
+            if re.search(tech_data["regex"], content):
+                techs.append(TechInfo(
+                    name=tech_data["name"],
+                    version="N/A",
+                    doc_url=tech_data["url"],
+                    icon=tech_data["icon"]
+                ))
+                
+        if not techs:
+            lang_str = request.language if getattr(request, 'language', None) else "Desconocido"
             techs.append(TechInfo(
-                name=str(item.get("name", "Unknown")),
-                version=str(item.get("version", "latest")),
-                doc_url=str(item.get("doc_url", "#"))
+                name=f"Código Básico ({lang_str})",
+                version="N/A",
+                doc_url="#",
+                icon="SiGnubash"
             ))
+            
         return TechScanResponse(technologies=techs)
-
+        
     except Exception as e:
         _logger.error(f"[TECH SCAN ERROR] {str(e)}")
-        error_str = str(e).lower()
-        if "400" in error_str or "bad request" in error_str or "invalid model" in error_str:
-            fallback_msg = "Error 400: Modelo IA Inválido. El ID del modelo configurado no existe o no es soportado por el proveedor. Por favor, cámbialo en la configuración."
-        elif "429" in error_str or "rate limit" in error_str:
-            fallback_msg = "Error 429: Límite de peticiones excedido. El proveedor de IA (Rate Limit) ha bloqueado la conexión. Por favor, verifica tus cuotas, cambia a tu modelo de respaldo, o espera un minuto."
-        elif "401" in error_str or "authentication" in error_str:
-            fallback_msg = "Error 401: Credenciales inválidas. Verifica tu API Key en la configuración."
-        else:
-            lang_str = request.language if getattr(request, 'language', None) else "Desconocido"
-            fallback_msg = f"Análisis Básico ({lang_str})"
-            
-        return {"technologies": [{"name": fallback_msg, "version": "N/A", "doc_url": "#"}]}
+        lang_str = request.language if getattr(request, 'language', None) else "Desconocido"
+        return {"technologies": [{"name": f"Error Analizador ({lang_str})", "version": "N/A", "doc_url": "#", "icon": "SiGnubash"}]}
 
 
 @router.post("/code-coach", response_model=CodeCoachResponse)
