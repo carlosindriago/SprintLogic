@@ -17,17 +17,13 @@ export default function FimHintBar() {
     return () => clearTimeout(t);
   }, [explanation, setExplanation]);
 
-  if (!explanation && !isLoading) return null;
+  if (!explanation) return null;
 
   return (
     <div className="flex items-center gap-2 px-3 py-1 bg-[#0d0d0d] border-t border-emerald-500/20 text-xs text-emerald-300/90 shrink-0">
-      {isLoading ? (
-        <Loader2 className="w-3 h-3 animate-spin text-emerald-500" />
-      ) : (
-        <span className="text-[10px]" aria-hidden>✨</span>
-      )}
+      <span className="text-[10px]" aria-hidden>✨</span>
       <span className="truncate">
-        {isLoading ? "Generando autocompletado..." : explanation}
+        {explanation}
       </span>
       <button
         onClick={() => setExplanation(null)}
