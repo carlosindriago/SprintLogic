@@ -134,6 +134,11 @@ export function CoachSidebar({
             <span className="text-zinc-300 leading-relaxed">
               {cursorAdvice.explanation}
             </span>
+            {cursorAdvice.suggested_code && cursorAdvice.suggested_code !== "null" && (
+              <pre className="bg-zinc-950 p-2 rounded text-sm overflow-x-auto mt-1 border border-zinc-800">
+                <code>{cursorAdvice.suggested_code}</code>
+              </pre>
+            )}
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-center p-4">

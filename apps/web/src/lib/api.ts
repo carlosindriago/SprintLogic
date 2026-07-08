@@ -550,10 +550,18 @@ export interface CodeCoachMarker {
   severity: string;
   message: string;
   explanation: string;
+  suggested_code?: string;
+}
+
+export interface CodeCoachOverview {
+  structure: string;
+  critical_security: string;
+  clean_code_score: number;
 }
 
 export interface CodeCoachResponse {
-  markers: CodeCoachMarker[];
+  overview: CodeCoachOverview;
+  contextual_advice: CodeCoachMarker[];
 }
 
 export const fetchCodeCoachAnalysis = async (
@@ -578,6 +586,42 @@ export const fetchCodeCoachAnalysis = async (
   if (!res.ok) {
     const errorText = await res.text().catch(() => '');
     throw new Error(`Code Coach request failed: ${res.status} ${errorText}`);
+  }
+  
+  return res.json();
+};
+
+export interface TechInfo {
+  name: string;
+  version: string;
+  doc_url: string;
+}
+
+export interface TechScanResponse {
+  technologies: TechInfo[];
+}
+
+export const fetchTechScan = async (
+  fileContent: string,
+  language: string,
+  model?: string,
+  fallbackModel?: string
+): Promise<TechScanResponse> => {
+  const res = await fetch(`${API_BASE_URL}/ai/tech-scan`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ 
+      file_content: fileContent, 
+      language,
+      model,
+      fallback_model: fallbackModel
+    }),
+    signal: AbortSignal.timeout(20000),
+  });
+  
+  if (!res.ok) {
+    const errorText = await res.text().catch(() => '');
+    throw new Error(`Tech Scan request failed: ${res.status} ${errorText}`);
   }
   
   return res.json();

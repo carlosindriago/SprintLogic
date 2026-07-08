@@ -94,6 +94,7 @@ export default function EditorTab({
     queryKey: ['tech-scan', node.file_path],
     queryFn: () => fetchTechScan(editorRef.current?.getValue() || initialValue, node.metadata?.language || node.file_path?.split('.').pop() || 'typescript', llmConfig.fimDefaultModel, llmConfig.chatDefaultModel),
     staleTime: Infinity,
+    retry: 1,
     enabled: !!node.file_path && isCoachEnabled && !!(editorRef.current?.getValue() || initialValue) && (editorRef.current?.getValue() || initialValue).length > 5,
   });
   const fimDefaultModel = useLLMConfigStore((s) => s.fimDefaultModel);
