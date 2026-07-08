@@ -221,6 +221,22 @@ export const getCommitFileDiff = async (
   return res.json();
 };
 
+export interface CuratedProvider {
+  provider: string;
+  provider_id: string;
+  is_configured?: boolean;
+  models: ModelResult[];
+}
+
+export const getCuratedModels = async (): Promise<CuratedProvider[]> => {
+  const response = await fetchWithRetry(`${API_BASE_URL}/ai/models`);
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => null);
+    throw new Error(errorData?.detail || `Failed to fetch curated models`);
+  }
+  return response.json();
+};
+
 export const fetchProviderModels = async (provider: string): Promise<ModelResult[]> => {
   const response = await fetchWithRetry(`${API_BASE_URL}/settings/providers/${provider}/models`);
   if (!response.ok) {
@@ -538,12 +554,23 @@ export const fetchFimCompletion = async (
   prefix: string,
   suffix: string,
   language: string,
+  fimModel?: string,
+  fimFallbackModel?: string
 ): Promise<FimResponse> => {
   const res = await fetch(`${API_BASE_URL}/ai/fim-completion`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prefix, suffix, language }),
+    body: JSON.stringify({ 
+      prefix, 
+      suffix, 
+      language,
+      fim_model: fimModel,
+      fim_fallback_model: fimFallbackModel
+    }),
   });
-  if (!res.ok) return { code: '', explanation: '' };
+  if (!res.ok) {
+    const errorText = await res.text().catch(() => '');
+    throw new Error(`FIM request failed: ${res.status} ${errorText}`);
+  }
   return res.json();
 };

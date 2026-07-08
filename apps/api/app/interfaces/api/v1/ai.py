@@ -14,8 +14,6 @@ router = APIRouter()
 
 _logger = logging.getLogger("sprintlogic.fim")
 
-FIM_MODEL = "gemini/gemini-2.5-flash"
-
 
 class APIKeysPayload(BaseModel):
     gemini_key: str | None = None
@@ -31,6 +29,8 @@ class FimRequest(BaseModel):
     prefix: str
     suffix: str
     language: str = ""
+    fim_model: str | None = None
+    fim_fallback_model: str | None = None
 
 
 class FimResponse(BaseModel):
@@ -92,10 +92,15 @@ async def fim_completion(request: FimRequest):
 
     Returns a JSON object with the suggested code and a 1-line explanation.
     """
-    provider = ProviderAdapter.get_provider(FIM_MODEL)
-    api_key = CredentialManager.get_api_key(provider)
-    if not api_key:
-        raise HTTPException(status_code=400, detail="FIM model API key not configured")
+    if not request.fim_model:
+        raise HTTPException(status_code=400, detail="No FIM model specified in request")
+
+    models_to_try = [request.fim_model]
+    if request.fim_fallback_model and request.fim_fallback_model != request.fim_model:
+        models_to_try.append(request.fim_fallback_model)
+
+    response = None
+    last_error = None
 
     cached_context = ""
     context7_api_key = CredentialManager.get_api_key("context7")
@@ -124,20 +129,34 @@ async def fim_completion(request: FimRequest):
         {"role": "user", "content": user},
     ]
 
-    adapted = ProviderAdapter.adapt(FIM_MODEL, api_key)
+    for current_model in models_to_try:
+        provider = ProviderAdapter.get_provider(current_model)
+        api_key = CredentialManager.get_api_key(provider)
+        if not api_key:
+            _logger.warning("API key not configured for FIM model %s", current_model)
+            last_error = f"API key not configured for {current_model}"
+            continue
 
-    try:
-        response = await litellm.acompletion(
-            model=adapted["model"],
-            messages=messages,
-            api_key=adapted["api_key"],
-            max_tokens=256,
-            temperature=0.2,
-            **adapted["kwargs"],
-        )
-    except Exception as e:
-        _logger.warning("FIM completion failed: %s", e)
-        return FimResponse()
+        adapted = ProviderAdapter.adapt(current_model, api_key)
+
+        try:
+            response = await litellm.acompletion(
+                model=adapted["model"],
+                messages=messages,
+                api_key=adapted["api_key"],
+                max_tokens=256,
+                temperature=0.2,
+                **adapted["kwargs"],
+            )
+            break  # Success, exit the loop
+        except Exception as e:
+            _logger.warning("FIM completion failed with model %s: %s", current_model, e)
+            last_error = str(e)
+            continue
+
+    if not response:
+        _logger.error("All FIM model attempts failed. Last error: %s", last_error)
+        raise HTTPException(status_code=500, detail=last_error or "All FIM model attempts failed.")
 
     raw = str(response.choices[0].message.content or "").strip()
     raw = raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
