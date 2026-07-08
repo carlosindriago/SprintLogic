@@ -129,10 +129,10 @@ export function CoachSidebar({
           {isAnalyzingCode && overview && <Loader2 className="w-3 h-3 animate-spin text-zinc-500 ml-auto" />}
         </h3>
         {isAnalyzingCode && !overview ? (
-           <div>
-             <div className="animate-pulse bg-zinc-700/50 rounded h-4 w-3/4 mb-2"></div>
-             <div className="animate-pulse bg-zinc-700/50 rounded h-4 w-5/6 mb-2"></div>
-             <div className="animate-pulse bg-zinc-700/50 rounded h-4 w-2/3 mb-2"></div>
+           <div className="flex flex-col items-center justify-center p-4 text-center border border-dashed border-zinc-800 rounded-lg bg-zinc-900/50">
+             <Loader2 className="w-6 h-6 animate-spin text-amber-500 mb-2" />
+             <p className="text-xs font-medium text-zinc-300">El Sensei está leyendo tu código. Ten paciencia...</p>
+             <p key={quoteIndex} className="text-zinc-400 italic text-xs mt-3 animate-in fade-in duration-1000">"{SENSEI_QUOTES[quoteIndex]}"</p>
            </div>
         ) : overview ? (
           <div className={`flex flex-col gap-3 text-xs ${isAnalyzingCode ? 'opacity-60 transition-opacity' : ''}`}>
@@ -170,9 +170,10 @@ export function CoachSidebar({
         </h3>
         
         {isAnalyzingCode && !cursorAdvice && !overview ? (
-           <div>
-             <div className="animate-pulse bg-zinc-700/50 rounded h-4 w-3/4 mb-2"></div>
-             <div className="animate-pulse bg-zinc-700/50 rounded h-4 w-5/6 mb-2"></div>
+           <div className="flex flex-col items-center justify-center p-4 text-center border border-dashed border-zinc-800 rounded-lg bg-zinc-900/50">
+             <Loader2 className="w-6 h-6 animate-spin text-amber-500 mb-2" />
+             <p className="text-xs font-medium text-zinc-300">El Sensei está leyendo tu código. Ten paciencia...</p>
+             <p key={quoteIndex} className="text-zinc-400 italic text-xs mt-3 animate-in fade-in duration-1000">"{SENSEI_QUOTES[quoteIndex]}"</p>
            </div>
         ) : cursorAdvice ? (
           <div className={`flex flex-col gap-2 p-3 rounded border text-xs 
