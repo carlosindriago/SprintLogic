@@ -74,9 +74,9 @@ export function CoachSidebar({
       </div>
 
       {/* Celda 2: Overview */}
-      <div className="bg-[#121212] border border-zinc-800 rounded-lg p-4 flex flex-col shadow-sm">
-        <h3 className="text-sm font-semibold text-zinc-200 flex items-center gap-2 mb-3">
-          <Medal className="w-4 h-4 text-emerald-400" />
+      <div className={`bg-[#121212] border ${overview?.is_degraded ? 'border-rose-500/50' : 'border-zinc-800'} rounded-lg p-4 flex flex-col shadow-sm mb-4`}>
+        <h3 className={`text-sm font-semibold flex items-center gap-2 mb-3 ${overview?.is_degraded ? 'text-rose-400' : 'text-zinc-200'}`}>
+          <Activity className={`w-4 h-4 ${overview?.is_degraded ? 'text-rose-500' : 'text-emerald-400'}`} />
           Health & Overview
           {isAnalyzingCode && overview && <Loader2 className="w-3 h-3 animate-spin text-zinc-500 ml-auto" />}
         </h3>
@@ -88,12 +88,14 @@ export function CoachSidebar({
            </div>
         ) : overview ? (
           <div className={`flex flex-col gap-3 text-xs ${isAnalyzingCode ? 'opacity-60 transition-opacity' : ''}`}>
-            <div className="flex items-center justify-between bg-[#1a1a1a] p-2 rounded border border-zinc-800/50">
-              <span className="text-zinc-400">Clean Code Score</span>
-              <span className={`font-bold ${overview.clean_code_score >= 80 ? 'text-emerald-400' : overview.clean_code_score >= 60 ? 'text-amber-400' : 'text-rose-400'}`}>
-                {overview.clean_code_score}/100
-              </span>
-            </div>
+            {!overview.is_degraded && (
+              <div className="flex items-center justify-between bg-[#1a1a1a] p-2 rounded border border-zinc-800/50">
+                <span className="text-zinc-400">Clean Code Score</span>
+                <span className={`font-bold ${overview.clean_code_score >= 80 ? 'text-emerald-400' : overview.clean_code_score >= 60 ? 'text-amber-400' : 'text-rose-400'}`}>
+                  {overview.clean_code_score}/100
+                </span>
+              </div>
+            )}
             {overview.critical_security && overview.critical_security !== "None" && overview.critical_security !== "N/A" && overview.critical_security !== "" && (
               <div className="flex flex-col gap-1 bg-rose-500/10 border border-rose-500/20 p-2 rounded">
                 <span className="text-rose-400 font-semibold flex items-center gap-1">
@@ -102,7 +104,7 @@ export function CoachSidebar({
                 <span className="text-rose-200/80">{overview.critical_security}</span>
               </div>
             )}
-            <div className="text-zinc-300 leading-relaxed bg-[#1a1a1a] p-2 rounded border border-zinc-800/50">
+            <div className={`leading-relaxed bg-[#1a1a1a] p-2 rounded border ${overview.is_degraded ? 'text-rose-300 border-rose-500/30' : 'text-zinc-300 border-zinc-800/50'}`}>
               {overview.structure}
             </div>
           </div>

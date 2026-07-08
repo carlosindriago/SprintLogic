@@ -92,7 +92,12 @@ export default function EditorTab({
 
   const { data: techData, isFetching: isScanningTech, refetch: handleRescan, isError: isTechError } = useQuery({
     queryKey: ['tech-scan', node.file_path],
-    queryFn: () => fetchTechScan(editorRef.current?.getValue() || initialValue, node.metadata?.language || node.file_path?.split('.').pop() || 'typescript', llmConfig.fimDefaultModel, llmConfig.chatDefaultModel),
+    queryFn: () => {
+      const content = editorRef.current?.getValue() || initialValue;
+      const lang = node.metadata?.language || node.file_path?.split('.').pop() || 'typescript';
+      console.log('[Tech Scan] Firing with args:', { model: fimDefaultModel, fallback: fimFallbackModel, lang, contentLen: content?.length });
+      return fetchTechScan(content, lang, fimDefaultModel, fimFallbackModel);
+    },
     staleTime: Infinity,
     retry: 1,
     enabled: !!node.file_path && isCoachEnabled && !!(editorRef.current?.getValue() || initialValue) && (editorRef.current?.getValue() || initialValue).length > 5,

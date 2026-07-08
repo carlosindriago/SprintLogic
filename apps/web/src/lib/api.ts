@@ -557,6 +557,7 @@ export interface CodeCoachOverview {
   structure: string;
   critical_security: string;
   clean_code_score: number;
+  is_degraded?: boolean;
 }
 
 export interface CodeCoachResponse {

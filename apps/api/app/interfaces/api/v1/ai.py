@@ -45,6 +45,7 @@ class CodeCoachOverview(BaseModel):
     structure: str
     critical_security: str
     clean_code_score: int
+    is_degraded: bool = False
 
 
 class CodeCoachResponse(BaseModel):
@@ -296,7 +297,8 @@ async def code_coach(request: CodeCoachRequest):
         overview = CodeCoachOverview(
             structure=str(overview_data.get("structure", "")),
             critical_security=str(overview_data.get("critical_security", "")),
-            clean_code_score=int(overview_data.get("clean_code_score", 100))
+            clean_code_score=int(overview_data.get("clean_code_score", 100)),
+            is_degraded=False
         )
             
         markers = []
@@ -318,7 +320,8 @@ async def code_coach(request: CodeCoachRequest):
             "overview": {
                 "structure": "Análisis no disponible debido a un error de conexión con el proveedor de IA.",
                 "critical_security": "N/A",
-                "clean_code_score": 100
+                "clean_code_score": 0,
+                "is_degraded": True
             },
             "contextual_advice": []
         }
