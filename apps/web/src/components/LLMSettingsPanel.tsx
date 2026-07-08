@@ -647,7 +647,7 @@ export default function LLMSettingsPanel() {
 
         <div className="px-4 pt-6 pb-2 mt-2 border-t border-zinc-800/50">
           <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
-            Autocompletado
+            Tools
           </span>
         </div>
         <button
