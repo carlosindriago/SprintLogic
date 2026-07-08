@@ -1,5 +1,5 @@
 import { CodeCoachOverview, CodeCoachMarker } from "@/lib/api";
-import { RefreshCw, ShieldAlert, FileCode2, Medal, Lightbulb, Loader2 } from "lucide-react";
+import { RefreshCw, ShieldAlert, FileCode2, Activity, Lightbulb, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface CoachSidebarProps {
