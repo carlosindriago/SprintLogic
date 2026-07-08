@@ -14,6 +14,20 @@ router = APIRouter()
 
 _logger = logging.getLogger("sprintlogic.fim")
 
+def _normalize_model_name(model_str: str) -> str:
+    """Normalizes model IDs to ensure LiteLLM routing compatibility."""
+    if not model_str:
+        return ""
+        
+    if "nvidia_nim/" in model_str:
+        return "nvidia_nim/" + model_str.split("nvidia_nim/")[-1]
+        
+    import os
+    if os.getenv("DEFAULT_LLM_PROVIDER") == "openrouter" and not model_str.startswith("openrouter/"):
+        return f"openrouter/{model_str}"
+        
+    return model_str
+
 
 class APIKeysPayload(BaseModel):
     gemini_key: str | None = None
@@ -174,7 +188,7 @@ async def tech_scan(request: TechScanRequest):
                 import asyncio
                 response = await asyncio.wait_for(
                     litellm.acompletion(
-                        model=adapted["model"],
+                        model=_normalize_model_name(adapted["model"]),
                         messages=messages,
                         api_key=adapted["api_key"],
                         max_tokens=500,
@@ -272,7 +286,7 @@ async def code_coach(request: CodeCoachRequest):
                     import asyncio
                     response = await asyncio.wait_for(
                         litellm.acompletion(
-                            model=adapted["model"],
+                            model=_normalize_model_name(adapted["model"]),
                             messages=model_messages,
                             api_key=adapted["api_key"],
                             max_tokens=1000,
