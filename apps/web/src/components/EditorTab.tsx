@@ -3,7 +3,7 @@ import Editor, { type OnMount } from '@monaco-editor/react';
 import type { editor as monacoEditor, Uri } from 'monaco-editor';
 import { getFileContent, saveFileContent, API_BASE_URL, fetchCodeCoachAnalysis, fetchTechScan } from '@/lib/api';
 import { useQuery } from '@tanstack/react-query';
-import { cn } from '@/lib/utils';
+import { cn, hashString } from '@/lib/utils';
 import { useTabsStore } from '@/store/tabsStore';
 import { useMarkersStore } from '@/store/markersStore';
 import { useUnsavedStore } from '@/store/unsavedStore';
@@ -151,12 +151,37 @@ export default function EditorTab({
   }, [focusTarget, focusVersion]);
   const editorModeRef = useRef(editorMode);
 
+  const coachCacheRef = useRef<Record<string, any>>({});
+
   const runCoachAnalysis = useCallback(async (model: monacoEditor.ITextModel, editor: monacoEditor.IStandaloneCodeEditor) => {
     if (model.isDisposed()) return;
+    
+    const content = model.getValue();
+    const currentHash = hashString(content);
+    
+    if (coachCacheRef.current[currentHash]) {
+      const response = coachCacheRef.current[currentHash];
+      setCoachOverview(response.overview);
+      
+      const monacoMarkers = response.contextual_advice.map((m: any) => ({
+        severity: m.severity === 'error' ? monacoRef.current!.MarkerSeverity.Error : 
+                  m.severity === 'warning' ? monacoRef.current!.MarkerSeverity.Warning : 
+                  monacoRef.current!.MarkerSeverity.Hint,
+        message: m.message,
+        startLineNumber: m.line,
+        startColumn: 1,
+        endLineNumber: m.line,
+        endColumn: model.getLineMaxColumn(m.line),
+        explanation: m.explanation
+      }));
+      
+      monacoRef.current!.editor.setModelMarkers(model, 'ai-coach', monacoMarkers as any);
+      return;
+    }
+    
     setIsLoadingRef.current(true);
     setIsAnalyzing(true);
     try {
-      const content = model.getValue();
       const language = node.file_path?.split('.').pop() || '';
       const position = editor.getPosition();
       
@@ -169,6 +194,8 @@ export default function EditorTab({
       );
       
       if (model.isDisposed()) return;
+      
+      coachCacheRef.current[currentHash] = response;
       
       setCoachOverview(response.overview);
       
