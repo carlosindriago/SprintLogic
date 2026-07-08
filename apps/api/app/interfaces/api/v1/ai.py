@@ -25,17 +25,23 @@ class APIKeysPayload(BaseModel):
     nvidia_key: str | None = None
 
 
-class FimRequest(BaseModel):
-    prefix: str
-    suffix: str
+class CodeCoachRequest(BaseModel):
+    file_content: str
     language: str = ""
-    fim_model: str | None = None
-    fim_fallback_model: str | None = None
+    cursor_line: int = 1
+    model: str | None = None
+    fallback_model: str | None = None
 
 
-class FimResponse(BaseModel):
-    code: str = ""
-    explanation: str = ""
+class CodeCoachMarker(BaseModel):
+    line: int
+    severity: str
+    message: str
+    explanation: str
+
+
+class CodeCoachResponse(BaseModel):
+    markers: list[CodeCoachMarker]
 
 
 @router.get("/models")
@@ -86,42 +92,35 @@ async def get_active_models(payload: APIKeysPayload):
     return results
 
 
-@router.post("/fim-completion", response_model=FimResponse)
-async def fim_completion(request: FimRequest):
-    """Fill-In-the-Middle completion with cached Context7 documentation.
+@router.post("/code-coach", response_model=CodeCoachResponse)
+async def code_coach(request: CodeCoachRequest):
+    """Asynchronous pedagogical analysis.
 
-    Returns a JSON object with the suggested code and a 1-line explanation.
+    Returns a JSON object with a list of markers.
     """
-    if not request.fim_model:
-        raise HTTPException(status_code=400, detail="No FIM model specified in request")
+    if not request.model:
+        raise HTTPException(status_code=400, detail="No model specified in request")
 
-    models_to_try = [request.fim_model]
-    if request.fim_fallback_model and request.fim_fallback_model != request.fim_model:
-        models_to_try.append(request.fim_fallback_model)
+    models_to_try = [request.model]
+    if request.fallback_model and request.fallback_model != request.model:
+        models_to_try.append(request.fallback_model)
 
     response = None
     last_error = None
 
-    cached_context = ""
-    context7_api_key = CredentialManager.get_api_key("context7")
-    if context7_api_key and request.language:
-        cached_context = await Context7Client.search(request.language, context7_api_key)
-
     system = (
-        "You are a code completion assistant. Given a code prefix and suffix, "
-        "complete the missing code in the middle. Return ONLY valid JSON with "
-        'exactly two keys: "code" (the completed code that fits between prefix '
-        'and suffix) and "explanation" (a single short line explaining the completion). '
-        "Do NOT include backticks, markdown, or extra text.\n\n"
+        "Eres un Mentor Senior de programación. Analiza el código proporcionado. "
+        "Si hay vulnerabilidades de seguridad, ineficiencias o una oportunidad clara de enseñar un concepto mejor, "
+        "devuelve un arreglo JSON estricto con los diagnósticos. Si el código es perfecto o está incompleto, devuelve un arreglo vacío [].\n\n"
+        "El formato JSON esperado DEBE ser un arreglo de objetos exacto:\n"
+        '[\n  { "line": 12, "severity": "hint" | "warning" | "error", "message": "Consejo breve", "explanation": "Explicación detallada de por qué" }\n]\n'
+        "No incluyas markdown, explicaciones previas ni texto fuera del arreglo JSON."
     )
-    if cached_context:
-        system += f"Relevant documentation:\n{cached_context}\n\n"
 
     user = (
-        f"Complete the code between PREFIX and SUFFIX for {request.language or 'code'}:\n"
-        f"PREFIX:\n{request.prefix[-2000:]}\n\n"
-        f"SUFFIX:\n{request.suffix[:500]}\n\n"
-        f'Return JSON: {{"code": "...", "explanation": "short explanation"}}'
+        f"Analiza este código en {request.language or 'código'}. El cursor del usuario está cerca de la línea {request.cursor_line}:\n\n"
+        f"```\n{request.file_content}\n```\n\n"
+        "Devuelve únicamente el arreglo JSON."
     )
 
     messages = [
@@ -133,43 +132,58 @@ async def fim_completion(request: FimRequest):
         provider = ProviderAdapter.get_provider(current_model)
         api_key = CredentialManager.get_api_key(provider)
         if not api_key:
-            _logger.warning("API key not configured for FIM model %s", current_model)
+            _logger.warning("API key not configured for Code Coach model %s", current_model)
             last_error = f"API key not configured for {current_model}"
             continue
 
         adapted = ProviderAdapter.adapt(current_model, api_key)
 
         try:
+            # Note: We can enable JSON mode if the provider supports it, but for compatibility
+            # we rely on the prompt to enforce the JSON array format.
             response = await litellm.acompletion(
                 model=adapted["model"],
                 messages=messages,
                 api_key=adapted["api_key"],
-                max_tokens=256,
+                max_tokens=1000,
                 temperature=0.2,
                 **adapted["kwargs"],
             )
             break  # Success, exit the loop
         except Exception as e:
-            _logger.warning("FIM completion failed with model %s: %s", current_model, e)
+            _logger.warning("Code Coach analysis failed with model %s: %s", current_model, e)
             last_error = str(e)
             continue
 
     if not response:
-        _logger.error("All FIM model attempts failed. Last error: %s", last_error)
-        raise HTTPException(status_code=500, detail=last_error or "All FIM model attempts failed.")
+        _logger.error("All Code Coach model attempts failed. Last error: %s", last_error)
+        raise HTTPException(status_code=500, detail=last_error or "All Code Coach model attempts failed.")
 
     raw = str(response.choices[0].message.content or "").strip()
     raw_clean = raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
 
+    if not raw_clean:
+        return CodeCoachResponse(markers=[])
+
     try:
         parsed = json.loads(raw_clean)
-        return FimResponse(
-            code=str(parsed.get("code", "")),
-            explanation=str(parsed.get("explanation", "")),
-        )
-    except (json.JSONDecodeError, TypeError):
-        _logger.error("Failed to parse JSON from FIM model. Raw output: %s", raw)
+        if not isinstance(parsed, list):
+            parsed = []
+            
+        markers = []
+        for item in parsed:
+            if isinstance(item, dict) and "line" in item and "severity" in item and "message" in item and "explanation" in item:
+                markers.append(CodeCoachMarker(
+                    line=int(item["line"]),
+                    severity=str(item["severity"]),
+                    message=str(item["message"]),
+                    explanation=str(item["explanation"]),
+                ))
+
+        return CodeCoachResponse(markers=markers)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        _logger.error("Failed to parse JSON from Code Coach model. Raw output: %s", raw)
         raise HTTPException(
             status_code=500,
-            detail=f"FIM Model returned invalid JSON format. Raw output: {raw[:200]}..."
+            detail=f"Code Coach Model returned invalid JSON format. Raw output: {raw[:200]}..."
         )
