@@ -245,8 +245,16 @@ async def tech_scan(request: TechScanRequest):
 
     except Exception as e:
         _logger.error(f"[TECH SCAN ERROR] {str(e)}")
-        lang_str = request.language if getattr(request, 'language', None) else "Desconocido"
-        return {"technologies": [{"name": f"Análisis Básico ({lang_str})", "version": "N/A", "doc_url": "#"}]}
+        error_str = str(e).lower()
+        if "429" in error_str or "rate limit" in error_str:
+            fallback_msg = "Error 429: Límite de peticiones excedido. El proveedor de IA (Rate Limit) ha bloqueado la conexión. Por favor, verifica tus cuotas, cambia a tu modelo de respaldo, o espera un minuto."
+        elif "401" in error_str or "authentication" in error_str:
+            fallback_msg = "Error 401: Credenciales inválidas. Verifica tu API Key en la configuración."
+        else:
+            lang_str = request.language if getattr(request, 'language', None) else "Desconocido"
+            fallback_msg = f"Análisis Básico ({lang_str})"
+            
+        return {"technologies": [{"name": fallback_msg, "version": "N/A", "doc_url": "#"}]}
 
 
 @router.post("/code-coach", response_model=CodeCoachResponse)
@@ -378,9 +386,18 @@ async def code_coach(request: CodeCoachRequest):
 
     except Exception as e:
         _logger.error(f"Code Coach Fallback triggered: {str(e)}")
+        
+        error_str = str(e).lower()
+        if "429" in error_str or "rate limit" in error_str:
+            fallback_msg = "Error 429: Límite de peticiones excedido. El proveedor de IA (Rate Limit) ha bloqueado la conexión. Por favor, verifica tus cuotas, cambia a tu modelo de respaldo, o espera un minuto."
+        elif "401" in error_str or "authentication" in error_str:
+            fallback_msg = "Error 401: Credenciales inválidas. Verifica tu API Key en la configuración."
+        else:
+            fallback_msg = "Análisis pedagógico temporalmente degradado debido a inestabilidad en el formato del proveedor de IA. Por favor, realiza una pequeña modificación en el código o presiona Re-escanear para forzar una nueva evaluación."
+            
         return {
             "overview": {
-                "structure": "Análisis pedagógico temporalmente degradado debido a inestabilidad en el formato del proveedor de IA. Por favor, realiza una pequeña modificación en el código o presiona Re-escanear para forzar una nueva evaluación.",
+                "structure": fallback_msg,
                 "critical_security": "N/A",
                 "clean_code_score": 0,
                 "is_degraded": True
