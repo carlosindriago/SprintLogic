@@ -6,6 +6,7 @@ interface CoachSidebarProps {
   techData?: any;
   onRescan?: () => void;
   isScanningTech: boolean;
+  isTechError?: boolean;
   isAnalyzingCode: boolean;
   overview: CodeCoachOverview | null;
   cursorAdvice: CodeCoachMarker | null;
@@ -15,6 +16,7 @@ export function CoachSidebar({
   techData,
   onRescan,
   isScanningTech,
+  isTechError,
   isAnalyzingCode,
   overview,
   cursorAdvice,
@@ -46,6 +48,10 @@ export function CoachSidebar({
             <div className="animate-pulse bg-zinc-700/50 rounded h-4 w-1/2 mb-2"></div>
             <div className="animate-pulse bg-zinc-700/50 rounded h-4 w-5/6 mb-2"></div>
           </div>
+        ) : isTechError ? (
+          <p className="text-xs text-rose-400 p-2 bg-rose-500/10 border border-rose-500/20 rounded">
+            El escaneo técnico falló o caducó.
+          </p>
         ) : techData?.technologies && techData.technologies.length > 0 ? (
           <div className="flex flex-col gap-2">
             {techData.technologies.map((tech, idx) => (
