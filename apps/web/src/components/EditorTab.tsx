@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import Editor, { type OnMount } from '@monaco-editor/react';
 import type { editor as monacoEditor, Uri } from 'monaco-editor';
-import { getFileContent, saveFileContent, API_BASE_URL, fetchCodeCoachAnalysis, fetchTechScan } from '@/lib/api';
+import { getFileContent, saveFileContent, API_BASE_URL, fetchCodeCoachAnalysis, fetchTechScan, getGitStatus } from '@/lib/api';
 import { useQuery } from '@tanstack/react-query';
 import { cn, hashString } from '@/lib/utils';
 import { useTabsStore } from '@/store/tabsStore';
@@ -113,6 +113,28 @@ export default function EditorTab({
   const fimDefaultModelRef = useRef(fimDefaultModel);
   const fimFallbackModelRef = useRef(fimFallbackModel);
   const setIsLoadingRef = useRef(setIsLoading);
+  
+  const { data: gitStatusData } = useQuery({
+    queryKey: ['git-status', projectId],
+    queryFn: () => getGitStatus(projectId),
+    refetchInterval: 5000,
+    enabled: !!projectId
+  });
+  
+  const fileContent = editorRef.current?.getValue() || initialValue;
+  const lineCount = fileContent ? fileContent.split('\n').length : 0;
+  
+  let gitStatusLabel = 'clean';
+  if (gitStatusData?.raw_output && node.file_path) {
+    const lines = gitStatusData.raw_output.split('\n');
+    const fileLine = lines.find((line: string) => line.endsWith(node.file_path!));
+    if (fileLine) {
+      const code = fileLine.substring(0, 2);
+      if (code === '??') gitStatusLabel = 'untracked';
+      else if (code[0] !== ' ' && code[0] !== '?') gitStatusLabel = 'staged';
+      else gitStatusLabel = 'modified';
+    }
+  }
   
   const monacoRef = useRef<typeof import('monaco-editor') | null>(null);
 
@@ -942,6 +964,7 @@ export default function EditorTab({
                 overview={coachOverview}
                 cursorAdvice={currentCursorAdvice}
                 isAnalyzingCode={isAnalyzing}
+                fileMetadata={{ lineCount, gitStatus: gitStatusLabel }}
               />
             </div>
           </div>
