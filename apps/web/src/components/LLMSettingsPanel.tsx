@@ -415,17 +415,16 @@ function FimConfigSection({ providers }: { providers: CuratedProvider[] }) {
   const handleTest = async () => {
     setIsTesting(true);
     try {
-      const res = await fetchCodeCoachAnalysis("def add(a, b):\n  return a + b\n", "python", 1, fimDefaultModel, fimFallbackModel);
-      if (res && res.markers) {
-        toast.success("Code Coach Engine respondió exitosamente", {
+      const res = await fetchCodeCoachAnalysis("def bad_loop():\n    while True:\n        pass\n", "python", 1, fimDefaultModel, fimFallbackModel);
+      if (res && res.overview && res.contextual_advice) {
+        toast.success("AI Code Coach respondió exitosamente", {
           description: "La configuración actual de modelos para análisis es válida."
         });
       } else {
-        toast.error("El test Code Coach falló: Respuesta inválida.");
+        toast.error("El modelo seleccionado no pudo generar el formato JSON requerido por el Coach. Intenta con un modelo de mayor capacidad de razonamiento.");
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      toast.error(`Error en Code Coach Engine: ${message}`);
+      toast.error("El modelo seleccionado no pudo generar el formato JSON requerido por el Coach. Intenta con un modelo de mayor capacidad de razonamiento.");
     } finally {
       setIsTesting(false);
     }
@@ -447,7 +446,7 @@ function FimConfigSection({ providers }: { providers: CuratedProvider[] }) {
     <div className="flex flex-col gap-8 p-6 max-w-2xl">
       <div className="flex flex-col gap-3">
         <Label className="text-sm font-semibold text-zinc-200">
-          Modelo FIM Principal
+          Modelo Coach Principal
         </Label>
         <Select value={fimDefaultModel} onValueChange={(val) => val && setFimDefaultModel(val)}>
           <SelectTrigger className="bg-zinc-950 border-zinc-800 text-zinc-200 w-full h-10">
@@ -472,13 +471,13 @@ function FimConfigSection({ providers }: { providers: CuratedProvider[] }) {
           </SelectContent>
         </Select>
         <p className="text-xs text-zinc-500">
-          El modelo optimizado para tareas de Fill-In-the-Middle (ej: DeepSeek Coder, Llama 3) que te sugerirá código mientras escribes.
+          El motor pedagógico que analizará tu código en segundo plano para ofrecerte mentoría, detectar vulnerabilidades y sugerir refactorizaciones.
         </p>
       </div>
 
       <div className="flex flex-col gap-3">
         <Label className="text-sm font-semibold text-zinc-200">
-          Modelo FIM de Respaldo (Fallback)
+          Modelo Coach de Respaldo (Fallback)
         </Label>
         <Select value={fimFallbackModel} onValueChange={(val) => val && setFimFallbackModel(val)}>
           <SelectTrigger className="bg-zinc-950 border-zinc-800 text-zinc-200 w-full h-10">
@@ -516,7 +515,7 @@ function FimConfigSection({ providers }: { providers: CuratedProvider[] }) {
             Diagnóstico de Conectividad
           </Label>
           <p className="text-xs text-zinc-400 mt-1">
-            Ejecuta una petición real de FIM hacia el backend para asegurarte de que las API Keys de los modelos seleccionados están vigentes.
+            Ejecuta una petición real hacia el backend para asegurarte de que el modelo seleccionado soporta el esquema JSON requerido por el Coach.
           </p>
         </div>
         <Button
@@ -531,7 +530,7 @@ function FimConfigSection({ providers }: { providers: CuratedProvider[] }) {
           ) : (
             <Play className="w-4 h-4 mr-2 fill-current" />
           )}
-          {isTesting ? "Procesando prueba FIM..." : "Testear Motor FIM"}
+          {isTesting ? "Procesando prueba Coach..." : "Testear AI Coach"}
         </Button>
       </div>
     </div>
@@ -660,7 +659,7 @@ export default function LLMSettingsPanel() {
           }`}
         >
           <Sparkles className="w-4 h-4 shrink-0" />
-          FIM Engine
+          AI Code Coach
         </button>
 
         <div className="px-4 pt-6 pb-2 mt-2 border-t border-zinc-800/50">
