@@ -168,21 +168,19 @@ async def get_active_models(payload: APIKeysPayload):
     return results
 
 
-import re
-
-STACK_MAP = {
-    "react": {"regex": r"from 'react'|import React", "name": "React", "icon": "SiReact", "url": "https://react.dev"},
-    "python": {"regex": r"def |import |class ", "name": "Python", "icon": "SiPython", "url": "https://docs.python.org/3/"},
-    "typescript": {"regex": r"interface |type |: string|: number", "name": "TypeScript", "icon": "SiTypescript", "url": "https://www.typescriptlang.org/"},
-    "fastapi": {"regex": r"from fastapi|import FastAPI|APIRouter", "name": "FastAPI", "icon": "SiFastapi", "url": "https://fastapi.tiangolo.com/"},
-    "tailwindcss": {"regex": r"className=.*flex|className=.*text-|className=.*bg-", "name": "Tailwind CSS", "icon": "SiTailwindcss", "url": "https://tailwindcss.com/"},
-    "nextjs": {"regex": r"next/link|next/image|next/router", "name": "Next.js", "icon": "SiNextdotjs", "url": "https://nextjs.org/"},
-    "nodejs": {"regex": r"require\(|module.exports|process\.env", "name": "Node.js", "icon": "SiNodedotjs", "url": "https://nodejs.org/"},
-    "docker": {"regex": r"FROM |RUN |WORKDIR |CMD |ENTRYPOINT", "name": "Docker", "icon": "SiDocker", "url": "https://docs.docker.com/"},
-    "sql": {"regex": r"SELECT |INSERT |UPDATE |DELETE |FROM ", "name": "SQL", "icon": "SiPostgresql", "url": "https://dev.mysql.com/doc/"},
-    "html": {"regex": r"<div|<span|<html|<body", "name": "HTML5", "icon": "SiHtml5", "url": "https://developer.mozilla.org/es/docs/Web/HTML"},
-    "css": {"regex": r"margin:|padding:|color:|background:", "name": "CSS3", "icon": "SiCss3", "url": "https://developer.mozilla.org/es/docs/Web/CSS"},
-}
+TECH_RULES = [
+    {"name": "TypeScript", "icon": "SiTypescript", "regex": r"interface |type |: string|: number", "doc_url": "https://www.typescriptlang.org/docs/"},
+    {"name": "React", "icon": "SiReact", "regex": r"from 'react'|useState|useEffect", "doc_url": "https://react.dev/"},
+    {"name": "Python", "icon": "SiPython", "regex": r"def |import |class |asyncio", "doc_url": "https://docs.python.org/3/"},
+    {"name": "Next.js", "icon": "SiNextdotjs", "regex": r"next/|NEXT_PUBLIC", "doc_url": "https://nextjs.org/docs"},
+    {"name": "FastAPI", "icon": "SiFastapi", "regex": r"from fastapi|import FastAPI|APIRouter", "doc_url": "https://fastapi.tiangolo.com/"},
+    {"name": "Tailwind CSS", "icon": "SiTailwindcss", "regex": r"className=.*flex|className=.*text-|className=.*bg-", "doc_url": "https://tailwindcss.com/"},
+    {"name": "Node.js", "icon": "SiNodedotjs", "regex": r"require\(|module.exports|process\.env", "doc_url": "https://nodejs.org/"},
+    {"name": "Docker", "icon": "SiDocker", "regex": r"FROM |RUN |WORKDIR |CMD |ENTRYPOINT", "doc_url": "https://docs.docker.com/"},
+    {"name": "SQL", "icon": "SiPostgresql", "regex": r"SELECT |INSERT |UPDATE |DELETE |FROM ", "doc_url": "https://dev.mysql.com/doc/"},
+    {"name": "HTML5", "icon": "SiHtml5", "regex": r"<div|<span|<html|<body", "doc_url": "https://developer.mozilla.org/es/docs/Web/HTML"},
+    {"name": "CSS3", "icon": "SiCss3", "regex": r"margin:|padding:|color:|background:", "doc_url": "https://developer.mozilla.org/es/docs/Web/CSS"},
+]
 
 @router.post("/tech-scan", response_model=TechScanResponse)
 async def tech_scan(request: TechScanRequest):
@@ -191,12 +189,12 @@ async def tech_scan(request: TechScanRequest):
         content = request.file_content or ""
         techs = []
         
-        for key, tech_data in STACK_MAP.items():
+        for tech_data in TECH_RULES:
             if re.search(tech_data["regex"], content):
                 techs.append(TechInfo(
                     name=tech_data["name"],
                     version="N/A",
-                    doc_url=tech_data["url"],
+                    doc_url=tech_data["doc_url"],
                     icon=tech_data["icon"]
                 ))
                 

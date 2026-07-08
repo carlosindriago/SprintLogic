@@ -1,8 +1,11 @@
 import { CodeCoachOverview, CodeCoachMarker } from "@/lib/api";
 import { RefreshCw, ShieldAlert, FileCode2, Activity, Lightbulb, Loader2, FileText } from "lucide-react";
-import * as SiIcons from 'react-icons/si';
+import { SiTypescript, SiReact, SiPython, SiNextdotjs, SiFastapi, SiTailwindcss, SiNodedotjs, SiDocker, SiPostgresql, SiHtml5, SiCss3, SiGnubash } from 'react-icons/si';
+import { VscCode } from 'react-icons/vsc';
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
+
+const IconMap: Record<string, any> = { SiTypescript, SiReact, SiPython, SiNextdotjs, SiFastapi, SiTailwindcss, SiNodedotjs, SiDocker, SiPostgresql, SiHtml5, SiCss3, SiGnubash };
 
 const SENSEI_QUOTES = [
   "El código se lee mucho más a menudo de lo que se escribe. Escribe para humanos.",
@@ -102,19 +105,19 @@ export function CoachSidebar({
             El escaneo técnico falló o caducó.
           </p>
         ) : techData?.technologies && techData.technologies.length > 0 ? (
-          <div className="flex flex-wrap gap-3 mt-2">
-            {techData.technologies.map((tech: any, idx: number) => {
-              const IconComponent = tech.icon && (SiIcons as any)[tech.icon] ? (SiIcons as any)[tech.icon] : FileCode2;
+          <div className="flex flex-wrap gap-4 mt-2">
+            {techData.technologies.map((tech: any) => {
+              const Icon = IconMap[tech.icon] || VscCode;
               return (
                 <a 
-                  key={idx}
+                  key={tech.name}
                   href={tech.doc_url !== '#' ? tech.doc_url : undefined} 
                   target="_blank" 
-                  rel="noreferrer noopener" 
-                  className="flex items-center justify-center w-10 h-10 bg-[#1a1a1a] rounded border border-zinc-800/50 hover:bg-zinc-800 hover:border-zinc-700 transition-colors"
+                  rel="noopener noreferrer" 
                   title={tech.name}
+                  className="text-3xl text-zinc-400 hover:text-white transition-colors cursor-pointer"
                 >
-                  <IconComponent className="w-5 h-5 text-zinc-300" />
+                  <Icon />
                 </a>
               );
             })}
