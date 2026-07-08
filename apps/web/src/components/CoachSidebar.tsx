@@ -11,6 +11,7 @@ interface CoachSidebarProps {
   overview: CodeCoachOverview | null;
   cursorAdvice: CodeCoachMarker | null;
   fileMetadata?: { lineCount: number; gitStatus: string };
+  availableAdviceLines?: number[];
 }
 
 export function CoachSidebar({
@@ -22,6 +23,7 @@ export function CoachSidebar({
   overview,
   cursorAdvice,
   fileMetadata,
+  availableAdviceLines,
 }: CoachSidebarProps) {
 
   return (
