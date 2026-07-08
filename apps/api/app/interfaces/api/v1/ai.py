@@ -215,86 +215,81 @@ async def tech_scan(request: TechScanRequest):
 
 @router.post("/code-coach", response_model=CodeCoachResponse)
 async def code_coach(request: CodeCoachRequest):
-    """Asynchronous pedagogical analysis.
+    """Analizador de código que detecta antipatrones y sugiere mejoras."""
+    try:
+        if not request.model:
+            raise ValueError("No model specified in request")
 
-    Returns a JSON object with a list of markers.
-    """
-    if not request.model:
-        raise HTTPException(status_code=400, detail="No model specified in request")
+        models_to_try = [request.model]
+        if request.fallback_model and request.fallback_model != request.model:
+            models_to_try.append(request.fallback_model)
 
-    models_to_try = [request.model]
-    if request.fallback_model and request.fallback_model != request.model:
-        models_to_try.append(request.fallback_model)
+        response = None
+        last_error = None
 
-    response = None
-    last_error = None
-
-    system = (
-        "Eres un Mentor Senior de programación. Analiza el código proporcionado. "
-        "Devuelve EXCLUSIVAMENTE un objeto JSON estricto con dos partes: un 'overview' general "
-        "y 'contextual_advice' que es un arreglo de consejos pedagógicos mapeados a las líneas del código.\n\n"
-        "Estructura EXACTA requerida:\n"
-        "{\n"
-        '  "overview": { "structure": "Breve descripción", "critical_security": "Advertencias si las hay, o None", "clean_code_score": 85 },\n'
-        '  "contextual_advice": [\n'
-        '    { "line": 12, "severity": "hint" | "warning" | "error", "message": "Consejo breve", "explanation": "Explicación", "suggested_code": "fragmento de código con la solución correcta, o null si no aplica" }\n'
-        "  ]\n"
-        "}\n"
-        "No incluyas markdown, explicaciones previas ni texto fuera del objeto JSON."
-    )
-
-    user = (
-        f"Analiza este código en {request.language or 'código'}. El cursor del usuario está cerca de la línea {request.cursor_line}:\n\n"
-        f"```\n{request.file_content}\n```\n\n"
-        "Devuelve únicamente el objeto JSON."
-    )
-
-    messages = [
-        {"role": "system", "content": system},
-        {"role": "user", "content": user},
-    ]
-
-    for current_model in models_to_try:
-        provider = ProviderAdapter.get_provider(current_model)
-        api_key = CredentialManager.get_api_key(provider)
-        if not api_key:
-            _logger.warning("API key not configured for Code Coach model %s", current_model)
-            last_error = f"API key not configured for {current_model}"
-            continue
-
-        adapted = ProviderAdapter.adapt(current_model, api_key)
-
-        try:
-            # Note: We can enable JSON mode if the provider supports it, but for compatibility
-            # we rely on the prompt to enforce the JSON array format.
-            response = await litellm.acompletion(
-                model=adapted["model"],
-                messages=messages,
-                api_key=adapted["api_key"],
-                max_tokens=1000,
-                temperature=0.2,
-                **adapted["kwargs"],
-            )
-            break  # Success, exit the loop
-        except Exception as e:
-            _logger.warning("Code Coach analysis failed with model %s: %s", current_model, e)
-            last_error = str(e)
-            continue
-
-    if not response:
-        _logger.error("All Code Coach model attempts failed. Last error: %s", last_error)
-        raise HTTPException(status_code=500, detail=last_error or "All Code Coach model attempts failed.")
-
-    raw = str(response.choices[0].message.content or "").strip()
-    raw_clean = raw.strip().strip('`').strip('json').strip('\n').strip()
-
-    if not raw_clean:
-        return CodeCoachResponse(
-            overview=CodeCoachOverview(structure="", critical_security="", clean_code_score=100),
-            contextual_advice=[]
+        system = (
+            "Eres un Mentor Senior de programación. Analiza el código proporcionado. "
+            "Devuelve EXCLUSIVAMENTE un objeto JSON estricto con dos partes: un 'overview' general "
+            "y 'contextual_advice' que es un arreglo de consejos pedagógicos mapeados a las líneas del código.\n\n"
+            "Estructura EXACTA requerida:\n"
+            "{\n"
+            '  "overview": { "structure": "Breve descripción", "critical_security": "Advertencias si las hay, o None", "clean_code_score": 85 },\n'
+            '  "contextual_advice": [\n'
+            '    { "line": 12, "severity": "hint" | "warning" | "error", "message": "Consejo breve", "explanation": "Explicación", "suggested_code": "fragmento de código con la solución correcta, o null si no aplica" }\n'
+            "  ]\n"
+            "}\n"
+            "No incluyas markdown, explicaciones previas ni texto fuera del objeto JSON."
         )
 
-    try:
+        user = (
+            f"Analiza este código en {request.language or 'código'}. El cursor del usuario está cerca de la línea {request.cursor_line}:\n\n"
+            f"```\n{request.file_content}\n```\n\n"
+            "Devuelve únicamente el objeto JSON."
+        )
+
+        messages = [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ]
+
+        for current_model in models_to_try:
+            provider = ProviderAdapter.get_provider(current_model)
+            api_key = CredentialManager.get_api_key(provider)
+            if not api_key:
+                _logger.warning("API key not configured for Code Coach model %s", current_model)
+                last_error = f"API key not configured for {current_model}"
+                continue
+
+            adapted = ProviderAdapter.adapt(current_model, api_key)
+
+            try:
+                import asyncio
+                response = await asyncio.wait_for(
+                    litellm.acompletion(
+                        model=adapted["model"],
+                        messages=messages,
+                        api_key=adapted["api_key"],
+                        max_tokens=1000,
+                        temperature=0.2,
+                        **adapted["kwargs"],
+                    ),
+                    timeout=25.0
+                )
+                break  # Success, exit the loop
+            except Exception as e:
+                _logger.warning("Code Coach analysis failed with model %s: %s", current_model, e)
+                last_error = str(e)
+                continue
+
+        if not response:
+            raise ValueError(f"All Code Coach model attempts failed. Last error: {last_error}")
+
+        raw = str(response.choices[0].message.content or "").strip()
+        raw_clean = raw.strip().strip('`').strip('json').strip('\n').strip()
+
+        if not raw_clean:
+            raise ValueError("Empty response from LLM")
+
         parsed = json.loads(raw_clean)
         
         overview_data = parsed.get("overview", {})
@@ -312,13 +307,18 @@ async def code_coach(request: CodeCoachRequest):
                     severity=str(item["severity"]),
                     message=str(item["message"]),
                     explanation=str(item["explanation"]),
+                    suggested_code=item.get("suggested_code")
                 ))
 
         return CodeCoachResponse(overview=overview, contextual_advice=markers)
-    except (json.JSONDecodeError, TypeError, ValueError):
-        _logger.error("Failed to parse JSON from Code Coach model. Raw output: %s", raw)
-        # Retornar un esqueleto por defecto para que la UI no crashee.
-        return CodeCoachResponse(
-            overview=CodeCoachOverview(structure="Error parsing response", critical_security="N/A", clean_code_score=0),
-            contextual_advice=[]
-        )
+
+    except Exception as e:
+        _logger.error(f"Code Coach Fallback triggered: {str(e)}")
+        return {
+            "overview": {
+                "structure": "Análisis no disponible debido a un error de conexión con el proveedor de IA.",
+                "critical_security": "N/A",
+                "clean_code_score": 100
+            },
+            "contextual_advice": []
+        }
