@@ -272,6 +272,11 @@ export default function EditorTab({
       }
 
       try {
+        if (!editor || !editor.getModel() || editor.getModel()?.isDisposed()) {
+          console.warn('[MONACO BOOT] Vim init cancelado: editor descartado');
+          return;
+        }
+
         const statusNode = document.createElement('div');
         statusNode.id = 'vim-statusbar';
         statusNode.style.position = 'absolute';
