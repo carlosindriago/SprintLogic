@@ -161,7 +161,8 @@ async def tech_scan(request: TechScanRequest):
         last_error = None
 
         system = (
-            'Eres un analizador de código estático ultrarrápido. Lee el código provisto y devuelve ÚNICAMENTE un JSON válido con la siguiente estructura: {"technologies": [{"name": "nombre de la librería/lenguaje", "version": "versión aproximada o actual", "doc_url": "URL oficial de la documentación"}]}. No uses markdown, no uses bloques de código, devuelve el JSON crudo.'
+            'Eres un analizador de código estático ultrarrápido. Lee el código provisto y devuelve ÚNICAMENTE un JSON válido con la siguiente estructura: {"technologies": [{"name": "nombre de la librería/lenguaje", "version": "versión aproximada o actual", "doc_url": "URL oficial de la documentación"}]}. No uses markdown, no uses bloques de código, devuelve el JSON crudo. '
+            'CRÍTICO: TIENES PROHIBIDO PENSAR EN VOZ ALTA. NO expliques tu razonamiento. NO uses frases introductorias como "Analicemos el código". Tu respuesta DEBE empezar estrictamente con el carácter "{" y terminar con el carácter "}". Si escribes una sola palabra fuera del JSON, el sistema explotará.'
         )
 
         user = (
@@ -254,7 +255,8 @@ async def code_coach(request: CodeCoachRequest):
             '    { "line": 12, "severity": "hint" | "warning" | "error", "message": "Consejo breve", "explanation": "Explicación", "suggested_code": "fragmento de código con la solución correcta, o null si no aplica" }\n'
             "  ]\n"
             "}\n"
-            "No incluyas markdown, explicaciones previas ni texto fuera del objeto JSON."
+            "No incluyas markdown, explicaciones previas ni texto fuera del objeto JSON. "
+            'CRÍTICO: TIENES PROHIBIDO PENSAR EN VOZ ALTA. NO expliques tu razonamiento. NO uses frases introductorias como "Analicemos el código". Tu respuesta DEBE empezar estrictamente con el carácter "{" y terminar con el carácter "}". Si escribes una sola palabra fuera del JSON, el sistema explotará.'
         )
 
         user = (
