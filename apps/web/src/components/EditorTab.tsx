@@ -84,15 +84,15 @@ export default function EditorTab({
   const [currentCursorAdvice, setCurrentCursorAdvice] = useState<CodeCoachMarker | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   
-  const { data: techData, isFetching: isScanningTech, refetch: handleRescan } = useQuery({
+  const isCoachEnabled = useSettingsStore((s) => s.isFimEnabled);
+  const setIsCoachEnabled = useSettingsStore((s) => s.setFimEnabled);
+
+  const { data: techData, isFetching: isScanningTech, refetch: handleRescan, isError: isTechError } = useQuery({
     queryKey: ['tech-scan', node.file_path],
     queryFn: () => fetchTechScan(editorRef.current?.getValue() || initialValue, node.metadata?.language || node.file_path?.split('.').pop() || 'typescript', llmConfig.fimDefaultModel, llmConfig.chatDefaultModel),
     staleTime: Infinity,
-    enabled: !!node.file_path && isCoachEnabled,
+    enabled: !!node.file_path && isCoachEnabled && !!(editorRef.current?.getValue() || initialValue) && (editorRef.current?.getValue() || initialValue).length > 5,
   });
-
-  const isCoachEnabled = useSettingsStore((s) => s.isFimEnabled);
-  const setIsCoachEnabled = useSettingsStore((s) => s.setFimEnabled);
   const fimDefaultModel = useLLMConfigStore((s) => s.fimDefaultModel);
   const fimFallbackModel = useLLMConfigStore((s) => s.fimFallbackModel);
   const setIsLoading = useFimStore((s) => s.setIsLoading);
@@ -107,6 +107,18 @@ export default function EditorTab({
   useEffect(() => {
     isCoachEnabledRef.current = isCoachEnabled;
   }, [isCoachEnabled]);
+
+  useEffect(() => {
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      // Monaco frequently throws unhandled "Canceled" rejections when disposing models 
+      // during active tokenization/language-service processing. We silence it to prevent Next.js overlay.
+      if (event.reason && (event.reason.name === 'Canceled' || event.reason.message === 'Canceled' || event.reason === 'Canceled')) {
+        event.preventDefault();
+      }
+    };
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+    return () => window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+  }, []);
 
   useEffect(() => {
     fimDefaultModelRef.current = fimDefaultModel;
@@ -126,6 +138,66 @@ export default function EditorTab({
     }
   }, [focusTarget, focusVersion]);
   const editorModeRef = useRef(editorMode);
+
+  const runCoachAnalysis = useCallback(async (model: monacoEditor.ITextModel, editor: monacoEditor.IStandaloneCodeEditor) => {
+    if (model.isDisposed()) return;
+    setIsLoadingRef.current(true);
+    setIsAnalyzing(true);
+    try {
+      const content = model.getValue();
+      const language = node.file_path?.split('.').pop() || '';
+      const position = editor.getPosition();
+      
+      const response = await fetchCodeCoachAnalysis(
+        content,
+        language,
+        position?.lineNumber || 1,
+        fimDefaultModelRef.current,
+        fimFallbackModelRef.current
+      );
+      
+      if (model.isDisposed()) return;
+      
+      setCoachOverview(response.overview);
+      
+      const monacoMarkers = response.contextual_advice.map(m => ({
+        severity: m.severity === 'error' ? monacoRef.current!.MarkerSeverity.Error : 
+                  m.severity === 'warning' ? monacoRef.current!.MarkerSeverity.Warning : 
+                  monacoRef.current!.MarkerSeverity.Hint,
+        message: m.message,
+        startLineNumber: m.line,
+        startColumn: 1,
+        endLineNumber: m.line,
+        endColumn: model.getLineMaxColumn(m.line),
+        explanation: m.explanation
+      }));
+      
+      monacoRef.current!.editor.setModelMarkers(model, 'ai-coach', monacoMarkers as any);
+    } catch (error) {
+      console.error('[Code Coach] Error:', error);
+      setCoachOverview({
+        structure: "Error de red o conexión fallida al analizar el código.",
+        critical_security: "N/A",
+        clean_code_score: 0
+      });
+    } finally {
+      setIsLoadingRef.current(false);
+      setIsAnalyzing(false);
+    }
+  }, [node.file_path]);
+
+  useEffect(() => {
+    if (isEditorReady && isCoachEnabled && editorRef.current) {
+      const model = editorRef.current.getModel();
+      if (model && !model.isDisposed() && model.getValue().length > 5) {
+        const timeout = setTimeout(() => {
+          runCoachAnalysis(model, editorRef.current!);
+        }, 500);
+        return () => clearTimeout(timeout);
+      }
+    }
+  }, [isEditorReady, isCoachEnabled, runCoachAnalysis]);
+
   const vimStatusRef = useRef<HTMLDivElement | null>(null);
   const originalContentRef = useRef('');
   const currentContentRef = useRef('');
@@ -550,46 +622,8 @@ export default function EditorTab({
 
       if (coachTimerRef.current) clearTimeout(coachTimerRef.current);
       if (isCoachEnabledRef.current && model && !model.isDisposed()) {
-        coachTimerRef.current = setTimeout(async () => {
-          if (model.isDisposed()) return;
-          setIsLoadingRef.current(true);
-          setIsAnalyzing(true);
-          try {
-            const content = model.getValue();
-            const language = node.file_path?.split('.').pop() || '';
-            const position = editor.getPosition();
-            
-            const response = await fetchCodeCoachAnalysis(
-              content,
-              language,
-              position?.lineNumber || 1,
-              fimDefaultModelRef.current,
-              fimFallbackModelRef.current
-            );
-            
-            if (model.isDisposed()) return;
-            
-            setCoachOverview(response.overview);
-            
-            const monacoMarkers = response.contextual_advice.map(m => ({
-              severity: m.severity === 'error' ? monaco.MarkerSeverity.Error : 
-                        m.severity === 'warning' ? monaco.MarkerSeverity.Warning : 
-                        monaco.MarkerSeverity.Hint,
-              message: m.message,
-              startLineNumber: m.line,
-              startColumn: 1,
-              endLineNumber: m.line,
-              endColumn: model.getLineMaxColumn(m.line),
-              explanation: m.explanation // stored for cursor position check
-            }));
-            
-            monaco.editor.setModelMarkers(model, 'ai-coach', monacoMarkers as any);
-          } catch (error) {
-            console.error('[Code Coach] Error:', error);
-          } finally {
-            setIsLoadingRef.current(false);
-            setIsAnalyzing(false);
-          }
+        coachTimerRef.current = setTimeout(() => {
+          runCoachAnalysis(model, editor);
         }, 3500);
       }
 
@@ -868,6 +902,7 @@ export default function EditorTab({
                 techData={techData}
                 onRescan={() => handleRescan()}
                 isScanningTech={isScanningTech}
+                isTechError={isTechError}
                 overview={coachOverview}
                 cursorAdvice={currentCursorAdvice}
                 isAnalyzingCode={isAnalyzing}
