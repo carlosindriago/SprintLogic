@@ -545,52 +545,40 @@ export const analyzeProject = async (projectId: string): Promise<AnalyzeResult> 
   return res.json();
 };
 
-export interface FimResponse {
-  code: string;
+export interface CodeCoachMarker {
+  line: number;
+  severity: string;
+  message: string;
   explanation: string;
 }
 
-const fimCache = new Map<string, FimResponse>();
-const FIM_CACHE_MAX_SIZE = 20;
+export interface CodeCoachResponse {
+  markers: CodeCoachMarker[];
+}
 
-export const fetchFimCompletion = async (
-  prefix: string,
-  suffix: string,
+export const fetchCodeCoachAnalysis = async (
+  fileContent: string,
   language: string,
-  fimModel?: string,
-  fimFallbackModel?: string
-): Promise<FimResponse> => {
-  const cacheKey = JSON.stringify({ prefix, suffix, language, fimModel, fimFallbackModel });
-  if (fimCache.has(cacheKey)) {
-    const cached = fimCache.get(cacheKey)!;
-    fimCache.delete(cacheKey);
-    fimCache.set(cacheKey, cached);
-    return cached;
-  }
-
-  const res = await fetch(`${API_BASE_URL}/ai/fim-completion`, {
+  cursorLine: number,
+  model?: string,
+  fallbackModel?: string
+): Promise<CodeCoachResponse> => {
+  const res = await fetch(`${API_BASE_URL}/ai/code-coach`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ 
-      prefix, 
-      suffix, 
+      file_content: fileContent, 
       language,
-      fim_model: fimModel,
-      fim_fallback_model: fimFallbackModel
+      cursor_line: cursorLine,
+      model,
+      fallback_model: fallbackModel
     }),
   });
+  
   if (!res.ok) {
     const errorText = await res.text().catch(() => '');
-    throw new Error(`FIM request failed: ${res.status} ${errorText}`);
-  }
-  const data = await res.json();
-  
-  fimCache.set(cacheKey, data);
-  if (fimCache.size > FIM_CACHE_MAX_SIZE) {
-    // delete oldest
-    const firstKey = fimCache.keys().next().value;
-    if (firstKey !== undefined) fimCache.delete(firstKey);
+    throw new Error(`Code Coach request failed: ${res.status} ${errorText}`);
   }
   
-  return data;
+  return res.json();
 };

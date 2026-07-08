@@ -20,7 +20,7 @@ import {
   ModelResult,
   getCuratedModels,
   CuratedProvider,
-  fetchFimCompletion,
+  fetchCodeCoachAnalysis,
 } from "@/lib/api";
 import { useLLMConfigStore } from "@/store/llmConfigStore";
 import { Key, Loader2, CheckCircle2, XCircle, Trash2, Brain, Sparkles, Play } from "lucide-react";
@@ -415,17 +415,17 @@ function FimConfigSection({ providers }: { providers: CuratedProvider[] }) {
   const handleTest = async () => {
     setIsTesting(true);
     try {
-      const res = await fetchFimCompletion("def add(a, b):\n  ", "\n", "python", fimDefaultModel, fimFallbackModel);
-      if (res.code) {
-        toast.success("FIM Engine respondió exitosamente", {
-          description: "La configuración actual de modelos para autocompletado es válida."
+      const res = await fetchCodeCoachAnalysis("def add(a, b):\n  return a + b\n", "python", 1, fimDefaultModel, fimFallbackModel);
+      if (res && res.markers) {
+        toast.success("Code Coach Engine respondió exitosamente", {
+          description: "La configuración actual de modelos para análisis es válida."
         });
       } else {
-        toast.error("El test FIM falló: No se devolvió ningún código.");
+        toast.error("El test Code Coach falló: Respuesta inválida.");
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      toast.error(`Error en FIM Engine: ${message}`);
+      toast.error(`Error en Code Coach Engine: ${message}`);
     } finally {
       setIsTesting(false);
     }

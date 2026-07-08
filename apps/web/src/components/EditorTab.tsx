@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import Editor, { type OnMount } from '@monaco-editor/react';
 import type { editor as monacoEditor, Uri } from 'monaco-editor';
-import { getFileContent, saveFileContent, API_BASE_URL, fetchFimCompletion } from '@/lib/api';
+import { getFileContent, saveFileContent, API_BASE_URL, fetchCodeCoachAnalysis } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { useTabsStore } from '@/store/tabsStore';
 import { useMarkersStore } from '@/store/markersStore';
@@ -13,7 +13,7 @@ import { useFimStore } from '@/store/fimStore';
 import type { GraphNode } from '@/types';
 import { Code2, ChevronRight, Pencil, Eye, MousePointer2, GraduationCap, Save, SaveAll, Sparkles, Loader2 } from 'lucide-react';
 import FimHintBar from './FimHintBar';
-import VimTutorHUD, { type VimTutorMode } from './VimTutorHUD';
+import ContextHUD, { type VimTutorMode } from './ContextHUD';
 
 interface LintDiagnostic {
   line: number;
@@ -35,23 +35,23 @@ function normalizeMonacoUri(uri: Uri): string {
   return str.replace(/^[a-z]+:\/\//, '');
 }
 
-function FimToggleButton({ isFimEnabled, onToggle }: { isFimEnabled: boolean; onToggle: () => void }) {
+function CoachToggleButton({ isCoachEnabled, onToggle }: { isCoachEnabled: boolean; onToggle: () => void }) {
   const isLoading = useFimStore((s) => s.isLoading);
   
   return (
     <button
-      className={cn(TOOLBAR_BUTTON, isFimEnabled ? 'text-emerald-400' : 'text-zinc-500')}
+      className={cn(TOOLBAR_BUTTON, isCoachEnabled ? 'text-emerald-400' : 'text-zinc-500')}
       onClick={onToggle}
       title={
-        !isFimEnabled ? 'FIM Tutor desactivado' :
-        isLoading ? 'FIM Tutor pensando...' : 'FIM Tutor activado — autocompletado por IA'
+        !isCoachEnabled ? 'Code Coach desactivado' :
+        isLoading ? 'Code Coach analizando...' : 'Code Coach activado — análisis pedagógico en segundo plano'
       }
-      aria-label="Alternar autocompletado FIM Tutor"
+      aria-label="Alternar AI Code Coach"
     >
       {isLoading ? (
         <Loader2 className="w-3.5 h-3.5 animate-spin" />
       ) : (
-        <Sparkles className={cn("w-3.5 h-3.5", isFimEnabled && "animate-pulse")} style={{ animationDuration: '3s' }} />
+        <Sparkles className={cn("w-3.5 h-3.5", isCoachEnabled && "animate-pulse")} style={{ animationDuration: '3s' }} />
       )}
     </button>
   );
@@ -74,13 +74,14 @@ export default function EditorTab({
   const [saving, setSaving] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
   const [editorMode, setEditorMode] = useState<'locked' | 'visual' | 'editable'>('locked');
-  const isFimEnabled = useSettingsStore((s) => s.isFimEnabled);
-  const setIsFimEnabled = useSettingsStore((s) => s.setFimEnabled);
+  const [coachExplanation, setCoachExplanation] = useState<string | null>(null);
+  const isCoachEnabled = useSettingsStore((s) => s.isFimEnabled);
+  const setIsCoachEnabled = useSettingsStore((s) => s.setFimEnabled);
   const fimDefaultModel = useLLMConfigStore((s) => s.fimDefaultModel);
   const fimFallbackModel = useLLMConfigStore((s) => s.fimFallbackModel);
   const setIsLoading = useFimStore((s) => s.setIsLoading);
   
-  const isFimEnabledRef = useRef(true);
+  const isCoachEnabledRef = useRef(true);
   const fimDefaultModelRef = useRef(fimDefaultModel);
   const fimFallbackModelRef = useRef(fimFallbackModel);
   const setIsLoadingRef = useRef(setIsLoading);
@@ -88,8 +89,8 @@ export default function EditorTab({
   const monacoRef = useRef<typeof import('monaco-editor') | null>(null);
 
   useEffect(() => {
-    isFimEnabledRef.current = isFimEnabled;
-  }, [isFimEnabled]);
+    isCoachEnabledRef.current = isCoachEnabled;
+  }, [isCoachEnabled]);
 
   useEffect(() => {
     fimDefaultModelRef.current = fimDefaultModel;
@@ -123,6 +124,7 @@ export default function EditorTab({
   const backupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleSaveRef = useRef<(saveAs?: string) => Promise<void>>(async () => {});
   const isSavingRef = useRef(false);
+  const coachTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const markDirty = useTabsStore((s) => s.markDirty);
 
@@ -173,6 +175,7 @@ export default function EditorTab({
       if (lintTimerRef.current) clearTimeout(lintTimerRef.current);
       if (backupTimerRef.current) clearTimeout(backupTimerRef.current);
       if (dirtyCheckTimerRef.current) clearTimeout(dirtyCheckTimerRef.current);
+      if (coachTimerRef.current) clearTimeout(coachTimerRef.current);
       if (vimObserverRef.current) {
         vimObserverRef.current.disconnect();
         vimObserverRef.current = null;
@@ -185,74 +188,7 @@ export default function EditorTab({
     };
   }, [projectId, node.file_path, node.id]);
 
-  useEffect(() => {
-    const monaco = monacoRef.current;
-    if (!monaco) {
-      console.warn('[MONACO BOOT] FIM Provider omitido: monacoRef no inicializado');
-      return;
-    }
-
-    const language = node.file_path?.split('.').pop() || '';
-
-    try {
-      console.log('[MONACO BOOT] Registrando FIM Provider para lenguaje:', language || '(default)');
-      const disposer = monaco.languages.registerInlineCompletionsProvider(
-        '*',
-        {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          provideInlineCompletions: async (model: any, position: any, _context: any, token: any) => {
-            const targetPath = node.file_path || node.id;
-            if (targetPath && !model.uri.path.endsWith(targetPath)) return { items: [] };
-            if (!isFimEnabledRef.current) return { items: [] };
-
-            return new Promise((resolve) => {
-              let timer: ReturnType<typeof setTimeout> | null = null;
-
-              const disposable = token.onCancellationRequested(() => {
-                if (timer) clearTimeout(timer);
-                resolve({ items: [] });
-              });
-
-              timer = setTimeout(async () => {
-                disposable.dispose();
-                if (token.isCancellationRequested) return resolve({ items: [] });
-                if (model.isDisposed()) return resolve({ items: [] });
-                setIsLoadingRef.current(true);
-                try {
-                  const offset = model.getOffsetAt(position);
-                  const full = model.getValue();
-                  const prefix = full.slice(0, offset);
-                  const suffix = full.slice(offset);
-                  if (prefix.length < 3) return resolve({ items: [] });
-                  
-                  const result = await fetchFimCompletion(
-                    prefix, 
-                    suffix, 
-                    language, 
-                    fimDefaultModelRef.current, 
-                    fimFallbackModelRef.current
-                  );
-                  if (token.isCancellationRequested || !result.code) return resolve({ items: [] });
-                  resolve({ items: [{ insertText: result.code }] });
-                } catch {
-                  resolve({ items: [] });
-                } finally {
-                  setIsLoadingRef.current(false);
-                }
-              }, 350);
-            });
-          },
-          disposeInlineCompletions: () => {},
-        },
-      );
-      console.log('[MONACO BOOT] FIM Provider registrado correctamente. Disposer listo.');
-
-      return () => { disposer.dispose(); };
-    } catch (error) {
-      console.error('[MONACO BOOT FATAL ERROR] FIM Provider falló al registrar:', error);
-      return undefined;
-    }
-  }, [projectId, node.file_path, node.id]);
+  // El Code Coach se inicia en handleEditorDidMount
 
   useEffect(() => {
     const editor = editorRef.current;
@@ -638,7 +574,67 @@ export default function EditorTab({
       } catch { /* ignore */ }
     }
 
+    editor.onDidChangeCursorPosition((e) => {
+      const model = editor.getModel();
+      if (!model) return;
+      const markers = monaco.editor.getModelMarkers({ owner: 'ai-coach', resource: model.uri });
+      const currentMarker = markers.find((m: monacoEditor.IMarker) => m.startLineNumber === e.position.lineNumber);
+      if (currentMarker && (currentMarker as any).explanation) {
+        setCoachExplanation((currentMarker as any).explanation);
+      } else {
+        setCoachExplanation(null);
+      }
+    });
+
     editor.onDidChangeModelContent(() => {
+      const model = editor.getModel();
+      if (model && !model.isDisposed()) {
+        // Inmediate clear of previous coach markers
+        monaco.editor.setModelMarkers(model, 'ai-coach', []);
+      }
+      setCoachExplanation(null);
+
+      if (coachTimerRef.current) clearTimeout(coachTimerRef.current);
+      if (isCoachEnabledRef.current && model && !model.isDisposed()) {
+        coachTimerRef.current = setTimeout(async () => {
+          if (model.isDisposed()) return;
+          setIsLoadingRef.current(true);
+          try {
+            const content = model.getValue();
+            const language = node.file_path?.split('.').pop() || '';
+            const position = editor.getPosition();
+            
+            const response = await fetchCodeCoachAnalysis(
+              content,
+              language,
+              position?.lineNumber || 1,
+              fimDefaultModelRef.current,
+              fimFallbackModelRef.current
+            );
+            
+            if (model.isDisposed()) return;
+            
+            const monacoMarkers = response.markers.map(m => ({
+              severity: m.severity === 'error' ? monaco.MarkerSeverity.Error : 
+                        m.severity === 'warning' ? monaco.MarkerSeverity.Warning : 
+                        monaco.MarkerSeverity.Hint,
+              message: m.message,
+              startLineNumber: m.line,
+              startColumn: 1,
+              endLineNumber: m.line,
+              endColumn: model.getLineMaxColumn(m.line),
+              explanation: m.explanation // stored for cursor position check
+            }));
+            
+            monaco.editor.setModelMarkers(model, 'ai-coach', monacoMarkers as any);
+          } catch (error) {
+            console.error('[Code Coach] Error:', error);
+          } finally {
+            setIsLoadingRef.current(false);
+          }
+        }, 3500);
+      }
+
       if (dirtyCheckTimerRef.current) clearTimeout(dirtyCheckTimerRef.current);
       dirtyCheckTimerRef.current = setTimeout(() => {
         if (editor.getModel() && !editor.getModel()?.isDisposed()) {
@@ -808,7 +804,7 @@ export default function EditorTab({
           <>
         <div className="w-px h-5 bg-zinc-700/50 mx-1" />
 
-        <FimToggleButton isFimEnabled={isFimEnabled} onToggle={() => setIsFimEnabled(!isFimEnabled)} />
+        <CoachToggleButton isCoachEnabled={isCoachEnabled} onToggle={() => setIsCoachEnabled(!isCoachEnabled)} />
             <button
               className={TOOLBAR_BUTTON}
               onClick={() => onMentor(node.file_path || fileName, editorRef.current?.getValue() || '')}
@@ -905,10 +901,11 @@ export default function EditorTab({
           loading={null}
         />
       </div>
-      <VimTutorHUD
+      <ContextHUD
         editorRef={editorRef}
         mode={editorMode as VimTutorMode}
         vimEnabled={!!vimMode}
+        coachExplanation={coachExplanation}
       />
       <FimHintBar />
     </div>
