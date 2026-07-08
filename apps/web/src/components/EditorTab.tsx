@@ -87,6 +87,8 @@ export default function EditorTab({
   const isCoachEnabled = useSettingsStore((s) => s.isFimEnabled);
   const setIsCoachEnabled = useSettingsStore((s) => s.setFimEnabled);
 
+  const editorRef = useRef<typeof import('monaco-editor').editor.IStandaloneCodeEditor | null>(null);
+
   const { data: techData, isFetching: isScanningTech, refetch: handleRescan, isError: isTechError } = useQuery({
     queryKey: ['tech-scan', node.file_path],
     queryFn: () => fetchTechScan(editorRef.current?.getValue() || initialValue, node.metadata?.language || node.file_path?.split('.').pop() || 'typescript', llmConfig.fimDefaultModel, llmConfig.chatDefaultModel),
@@ -202,7 +204,7 @@ export default function EditorTab({
   const originalContentRef = useRef('');
   const currentContentRef = useRef('');
   const [initialValue, setInitialValue] = useState('');
-  const editorRef = useRef<monacoEditor.IStandaloneCodeEditor | null>(null);
+  // editorRef moved to top of component
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const vimInstanceRef = useRef<any>(null);
   const vimObserverRef = useRef<MutationObserver | null>(null);
