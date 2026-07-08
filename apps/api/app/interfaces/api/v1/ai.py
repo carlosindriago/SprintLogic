@@ -179,7 +179,7 @@ TECH_RULES = [
     {"name": "Docker", "icon": "SiDocker", "regex": r"FROM |RUN |WORKDIR |CMD |ENTRYPOINT", "doc_url": "https://docs.docker.com/"},
     {"name": "SQL", "icon": "SiPostgresql", "regex": r"SELECT |INSERT |UPDATE |DELETE |FROM ", "doc_url": "https://dev.mysql.com/doc/"},
     {"name": "HTML5", "icon": "SiHtml5", "regex": r"<div|<span|<html|<body", "doc_url": "https://developer.mozilla.org/es/docs/Web/HTML"},
-    {"name": "CSS3", "icon": "SiCss3", "regex": r"margin:|padding:|color:|background:", "doc_url": "https://developer.mozilla.org/es/docs/Web/CSS"},
+    {"name": "CSS3", "icon": "SiCss", "regex": r"margin:|padding:|color:|background:", "doc_url": "https://developer.mozilla.org/es/docs/Web/CSS"},
 ]
 
 @router.post("/tech-scan", response_model=TechScanResponse)
