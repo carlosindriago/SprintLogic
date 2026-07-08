@@ -100,6 +100,9 @@ export default function EditorTab({
     },
     staleTime: Infinity,
     retry: 1,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchOnMount: false,
     enabled: !!node.file_path && isCoachEnabled && !!(editorRef.current?.getValue() || initialValue) && (editorRef.current?.getValue() || initialValue).length > 5,
   });
   const fimDefaultModel = useLLMConfigStore((s) => s.fimDefaultModel);
