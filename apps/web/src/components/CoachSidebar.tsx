@@ -1,5 +1,6 @@
 import { CodeCoachOverview, CodeCoachMarker } from "@/lib/api";
 import { RefreshCw, ShieldAlert, FileCode2, Activity, Lightbulb, Loader2, FileText } from "lucide-react";
+import * as SiIcons from 'react-icons/si';
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
 
@@ -101,20 +102,22 @@ export function CoachSidebar({
             El escaneo técnico falló o caducó.
           </p>
         ) : techData?.technologies && techData.technologies.length > 0 ? (
-          <div className="flex flex-col gap-2">
-            {techData.technologies.map((tech, idx) => (
-              <div key={idx} className="flex flex-col text-xs bg-[#1a1a1a] p-2 rounded border border-zinc-800/50">
-                <span className="font-medium text-zinc-200">{tech.name} <span className="text-zinc-500 text-[10px]">v{tech.version}</span></span>
+          <div className="flex flex-wrap gap-3 mt-2">
+            {techData.technologies.map((tech: any, idx: number) => {
+              const IconComponent = tech.icon && (SiIcons as any)[tech.icon] ? (SiIcons as any)[tech.icon] : FileCode2;
+              return (
                 <a 
-                  href={tech.doc_url} 
+                  key={idx}
+                  href={tech.doc_url !== '#' ? tech.doc_url : undefined} 
                   target="_blank" 
-                  rel="noreferrer" 
-                  className="text-blue-400 hover:underline mt-1 break-all"
+                  rel="noreferrer noopener" 
+                  className="flex items-center justify-center w-10 h-10 bg-[#1a1a1a] rounded border border-zinc-800/50 hover:bg-zinc-800 hover:border-zinc-700 transition-colors"
+                  title={tech.name}
                 >
-                  {tech.doc_url !== '#' ? tech.doc_url : 'Sin doc'}
+                  <IconComponent className="w-5 h-5 text-zinc-300" />
                 </a>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <p className="text-xs text-zinc-500">No se detectaron tecnologías específicas.</p>
