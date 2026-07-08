@@ -319,6 +319,7 @@ async def code_coach(request: CodeCoachRequest):
                     )
                     
                     raw_content = str(response.choices[0].message.content or "").strip()
+                    _logger.info(f"[CODE COACH RAW] {raw_content}")
                     raw_clean = _extract_json(raw_content)
 
                     if not raw_clean:
