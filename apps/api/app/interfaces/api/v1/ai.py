@@ -293,7 +293,7 @@ async def code_coach(request: CodeCoachRequest):
                             messages=model_messages,
                             api_key=adapted["api_key"],
                             max_tokens=2500,
-                            temperature=0.2,
+                            temperature=0.1,
                             timeout=15,
                             **adapted["kwargs"],
                         ),
