@@ -179,7 +179,6 @@ async def tech_scan(request: TechScanRequest):
                         api_key=adapted["api_key"],
                         max_tokens=500,
                         temperature=0.1,
-                        response_format={ "type": "json_object" },
                         **adapted["kwargs"],
                     ),
                     timeout=15.0
@@ -192,9 +191,14 @@ async def tech_scan(request: TechScanRequest):
         if not response:
             raise ValueError(f"All models failed or timed out. Last error: {last_error}")
 
-        raw = str(response.choices[0].message.content or "").strip()
-        raw_clean = raw.strip().strip('`').strip('json').strip('\n').strip()
-        parsed = json.loads(raw_clean)
+        raw_text = str(response.choices[0].message.content or "").strip()
+        cleaned_text = raw_text.strip()
+        if cleaned_text.startswith("```"):
+            # Remueve la primera línea (ej. ```json) y la última (```)
+            cleaned_text = "\n".join(cleaned_text.split("\n")[1:-1]).strip()
+            
+        _logger.info(f"[TECH SCAN RAW] {cleaned_text}")
+        parsed = json.loads(cleaned_text)
         
         techs = []
         for item in parsed.get("technologies", []):
