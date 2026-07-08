@@ -1,5 +1,5 @@
 import { CodeCoachOverview, CodeCoachMarker } from "@/lib/api";
-import { RefreshCw, ShieldAlert, FileCode2, Activity, Lightbulb, Loader2, FileText } from "lucide-react";
+import { RefreshCw, ShieldAlert, FileCode2, Activity, Lightbulb, Loader2, FileText, Keyboard } from "lucide-react";
 import { SiTypescript, SiReact, SiPython, SiNextdotjs, SiFastapi, SiTailwindcss, SiNodedotjs, SiDocker, SiPostgresql, SiHtml5, SiCss, SiGnubash } from 'react-icons/si';
 import { VscCode } from 'react-icons/vsc';
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,7 @@ interface CoachSidebarProps {
   cursorAdvice: CodeCoachMarker | null;
   fileMetadata?: { lineCount: number; gitStatus: string };
   availableAdviceLines?: number[];
+  isEditorDirty?: boolean;
 }
 
 export function CoachSidebar({
@@ -39,6 +40,7 @@ export function CoachSidebar({
   cursorAdvice,
   fileMetadata,
   availableAdviceLines,
+  isEditorDirty,
 }: CoachSidebarProps) {
   const [quoteIndex, setQuoteIndex] = useState(0);
 
@@ -180,7 +182,15 @@ export function CoachSidebar({
           {isAnalyzingCode && cursorAdvice && <Loader2 className="w-3 h-3 animate-spin text-zinc-500 ml-auto" />}
         </h3>
         
-        {isAnalyzingCode && !cursorAdvice && !overview ? (
+        {!isEditorDirty && !overview ? (
+          <div className="flex flex-col items-center justify-center p-6 text-center border border-dashed border-zinc-800/80 rounded-lg bg-zinc-900/30">
+            <Keyboard className="w-8 h-8 text-zinc-600/50 mb-3" />
+            <p className="text-sm font-medium text-zinc-400">Modo Lectura Activo.</p>
+            <p className="text-xs text-zinc-500 mt-2 leading-relaxed max-w-[250px]">
+              El Sensei está en reposo. Escribe código, selecciona un bloque o añade un comentario sobre lo que vas a hacer para despertar la mentoría contextual.
+            </p>
+          </div>
+        ) : isAnalyzingCode && !cursorAdvice && !overview ? (
            <div className="flex flex-col items-center justify-center p-4 text-center border border-dashed border-zinc-800 rounded-lg bg-zinc-900/50">
              <Loader2 className="w-6 h-6 animate-spin text-amber-500 mb-2" />
              <p className="text-xs font-medium text-zinc-300">El Sensei está leyendo tu código. Ten paciencia...</p>
