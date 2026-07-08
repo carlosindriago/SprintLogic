@@ -83,6 +83,7 @@ export default function EditorTab({
   const [coachOverview, setCoachOverview] = useState<CodeCoachOverview | null>(null);
   const [currentCursorAdvice, setCurrentCursorAdvice] = useState<CodeCoachMarker | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [initialValue, setInitialValue] = useState('');
   
   const isCoachEnabled = useSettingsStore((s) => s.isFimEnabled);
   const setIsCoachEnabled = useSettingsStore((s) => s.setFimEnabled);
@@ -203,7 +204,7 @@ export default function EditorTab({
   const vimStatusRef = useRef<HTMLDivElement | null>(null);
   const originalContentRef = useRef('');
   const currentContentRef = useRef('');
-  const [initialValue, setInitialValue] = useState('');
+  // initialValue moved to top of component
   // editorRef moved to top of component
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const vimInstanceRef = useRef<any>(null);
