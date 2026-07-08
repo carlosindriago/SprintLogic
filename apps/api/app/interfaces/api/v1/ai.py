@@ -248,11 +248,7 @@ async def code_coach(request: CodeCoachRequest):
             "Devuelve únicamente el objeto JSON."
         )
 
-        messages = [
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ]
-
+        MAX_RETRIES = 2
         for current_model in models_to_try:
             provider = ProviderAdapter.get_provider(current_model)
             api_key = CredentialManager.get_api_key(provider)
@@ -263,62 +259,90 @@ async def code_coach(request: CodeCoachRequest):
 
             adapted = ProviderAdapter.adapt(current_model, api_key)
 
-            try:
-                import asyncio
-                response = await asyncio.wait_for(
-                    litellm.acompletion(
-                        model=adapted["model"],
-                        messages=messages,
-                        api_key=adapted["api_key"],
-                        max_tokens=1000,
-                        temperature=0.2,
-                        **adapted["kwargs"],
-                    ),
-                    timeout=25.0
-                )
-                break  # Success, exit the loop
-            except Exception as e:
-                _logger.warning("Code Coach analysis failed with model %s: %s", current_model, e)
-                last_error = str(e)
-                continue
+            model_messages = [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ]
 
-        if not response:
+            success = False
+            for attempt in range(MAX_RETRIES + 1):
+                raw_content = ""
+                try:
+                    import asyncio
+                    response = await asyncio.wait_for(
+                        litellm.acompletion(
+                            model=adapted["model"],
+                            messages=model_messages,
+                            api_key=adapted["api_key"],
+                            max_tokens=1000,
+                            temperature=0.2,
+                            **adapted["kwargs"],
+                        ),
+                        timeout=25.0
+                    )
+                    
+                    raw_content = str(response.choices[0].message.content or "").strip()
+                    raw_clean = raw_content.strip().strip('`').strip('json').strip('\n').strip()
+
+                    if not raw_clean:
+                        raise ValueError("Empty response from LLM")
+
+                    parsed = json.loads(raw_clean)
+                    
+                    overview_data = parsed.get("overview", {})
+                    overview = CodeCoachOverview(
+                        structure=str(overview_data.get("structure", "")),
+                        critical_security=str(overview_data.get("critical_security", "")),
+                        clean_code_score=int(overview_data.get("clean_code_score", 100)),
+                        is_degraded=False
+                    )
+                        
+                    markers = []
+                    for item in parsed.get("contextual_advice", []):
+                        if isinstance(item, dict) and "line" in item and "severity" in item and "message" in item and "explanation" in item:
+                            markers.append(CodeCoachMarker(
+                                line=int(item["line"]),
+                                severity=str(item["severity"]),
+                                message=str(item["message"]),
+                                explanation=str(item["explanation"]),
+                                suggested_code=item.get("suggested_code")
+                            ))
+
+                    success = True
+                    break  # Exit retry loop
+                    
+                except Exception as e:
+                    # If raw_content is empty, it means the API call itself failed (e.g. network, auth)
+                    if not raw_content:
+                        _logger.warning("Code Coach API call failed with model %s: %s", current_model, e)
+                        last_error = str(e)
+                        break  # Move to fallback model
+                    
+                    # If raw_content exists, LLM responded but JSON parsing/validation failed
+                    if attempt < MAX_RETRIES:
+                        _logger.warning(f"[AI COACH] Intento {attempt + 1} falló por JSON corrupto. Lanzando auto-sanación...")
+                        model_messages.append({"role": "assistant", "content": raw_content})
+                        model_messages.append({
+                            "role": "user",
+                            "content": f"ERROR DE PARSEO: Tu respuesta previa no es un JSON válido o viola el esquema estricto de Pydantic. Error detectado: {str(e)}. Por favor, re-analiza el código y devuelve ÚNICAMENTE un objeto JSON puro, perfectamente cerrado, sin bloques de código markdown (```) ni explicaciones de texto plano fuera del esquema."
+                        })
+                        continue
+                    else:
+                        _logger.warning(f"[AI COACH] Auto-sanación agotó los reintentos (MAX_RETRIES={MAX_RETRIES}).")
+                        last_error = f"JSON Parse Error after retries: {str(e)}"
+                        break  # Move to fallback model
+
+            if success:
+                return CodeCoachResponse(overview=overview, contextual_advice=markers)
+
+        if not success:
             raise ValueError(f"All Code Coach model attempts failed. Last error: {last_error}")
-
-        raw = str(response.choices[0].message.content or "").strip()
-        raw_clean = raw.strip().strip('`').strip('json').strip('\n').strip()
-
-        if not raw_clean:
-            raise ValueError("Empty response from LLM")
-
-        parsed = json.loads(raw_clean)
-        
-        overview_data = parsed.get("overview", {})
-        overview = CodeCoachOverview(
-            structure=str(overview_data.get("structure", "")),
-            critical_security=str(overview_data.get("critical_security", "")),
-            clean_code_score=int(overview_data.get("clean_code_score", 100)),
-            is_degraded=False
-        )
-            
-        markers = []
-        for item in parsed.get("contextual_advice", []):
-            if isinstance(item, dict) and "line" in item and "severity" in item and "message" in item and "explanation" in item:
-                markers.append(CodeCoachMarker(
-                    line=int(item["line"]),
-                    severity=str(item["severity"]),
-                    message=str(item["message"]),
-                    explanation=str(item["explanation"]),
-                    suggested_code=item.get("suggested_code")
-                ))
-
-        return CodeCoachResponse(overview=overview, contextual_advice=markers)
 
     except Exception as e:
         _logger.error(f"Code Coach Fallback triggered: {str(e)}")
         return {
             "overview": {
-                "structure": "Análisis no disponible debido a un error de conexión con el proveedor de IA.",
+                "structure": "Análisis pedagógico temporalmente degradado debido a inestabilidad en el formato del proveedor de IA. Por favor, realiza una pequeña modificación en el código o presiona Re-escanear para forzar una nueva evaluación.",
                 "critical_security": "N/A",
                 "clean_code_score": 0,
                 "is_degraded": True
