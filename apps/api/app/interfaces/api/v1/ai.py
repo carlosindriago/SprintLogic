@@ -275,7 +275,7 @@ async def code_coach(request: CodeCoachRequest):
             "  ]\n"
             "}\n"
             "No incluyas markdown, explicaciones previas ni texto fuera del objeto JSON. "
-            'CRÍTICO: TIENES PROHIBIDO PENSAR EN VOZ ALTA. NO expliques tu razonamiento. NO uses frases introductorias como "Analicemos el código". Tu respuesta DEBE empezar estrictamente con el carácter "{" y terminar con el carácter "}". Si escribes una sola palabra fuera del JSON, el sistema explotará.'
+            'CRÍTICO: TIENES PROHIBIDO PENSAR EN VOZ ALTA. NO expliques tu razonamiento fuera del JSON. Devuelve ÚNICAMENTE un objeto JSON válido que empiece con "{" y termine con "}". Cualquier texto adicional causará un fallo crítico en el sistema.'
         )
 
         user = (
@@ -310,7 +310,7 @@ async def code_coach(request: CodeCoachRequest):
                             model=_normalize_model_name(adapted["model"]),
                             messages=model_messages,
                             api_key=adapted["api_key"],
-                            max_tokens=2500,
+                            max_tokens=4000,
                             temperature=0.1,
                             timeout=15,
                             **adapted["kwargs"],
