@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import Editor, { type OnMount } from '@monaco-editor/react';
 import type { editor as monacoEditor, Uri } from 'monaco-editor';
-import { getFileContent, saveFileContent, API_BASE_URL, fetchCodeCoachAnalysis } from '@/lib/api';
+import { getFileContent, saveFileContent, API_BASE_URL, fetchCodeCoachAnalysis, fetchTechScan } from '@/lib/api';
+import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 import { useTabsStore } from '@/store/tabsStore';
 import { useMarkersStore } from '@/store/markersStore';
@@ -14,6 +15,9 @@ import type { GraphNode } from '@/types';
 import { Code2, ChevronRight, Pencil, Eye, MousePointer2, GraduationCap, Save, SaveAll, Sparkles, Loader2 } from 'lucide-react';
 import FimHintBar from './FimHintBar';
 import ContextHUD, { type VimTutorMode } from './ContextHUD';
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
+import { CoachSidebar } from "./CoachSidebar";
+import { CodeCoachOverview, CodeCoachMarker } from "@/lib/api";
 
 interface LintDiagnostic {
   line: number;
@@ -22,8 +26,7 @@ interface LintDiagnostic {
   severity: string;
 }
 
-const TOOLBAR_BUTTON =
-  "h-7 w-7 flex items-center justify-center rounded text-zinc-400 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed";
+const TOOLBAR_BUTTON = "p-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:opacity-50 disabled:pointer-events-none";
 
 let markersListenerRegistered = false;
 
@@ -73,8 +76,21 @@ export default function EditorTab({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
+  const [isEditorReady, setIsEditorReady] = useState(false);
   const [editorMode, setEditorMode] = useState<'locked' | 'visual' | 'editable'>('locked');
   const [coachExplanation, setCoachExplanation] = useState<string | null>(null);
+  
+  const [coachOverview, setCoachOverview] = useState<CodeCoachOverview | null>(null);
+  const [currentCursorAdvice, setCurrentCursorAdvice] = useState<CodeCoachMarker | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  
+  const { data: techData, isFetching: isScanningTech, refetch: handleRescan } = useQuery({
+    queryKey: ['tech-scan', node.file_path],
+    queryFn: () => fetchTechScan(editorRef.current?.getValue() || initialValue, node.metadata?.language || node.file_path?.split('.').pop() || 'typescript', llmConfig.fimDefaultModel, llmConfig.chatDefaultModel),
+    staleTime: Infinity,
+    enabled: !!node.file_path && isCoachEnabled,
+  });
+
   const isCoachEnabled = useSettingsStore((s) => s.isFimEnabled);
   const setIsCoachEnabled = useSettingsStore((s) => s.setFimEnabled);
   const fimDefaultModel = useLLMConfigStore((s) => s.fimDefaultModel);
@@ -188,11 +204,21 @@ export default function EditorTab({
     };
   }, [projectId, node.file_path, node.id]);
 
+  useEffect(() => {
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      if (event.reason && event.reason.name === 'Canceled') {
+        event.preventDefault(); // Suppress benign Monaco Editor Canceled errors
+      }
+    };
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+    return () => window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+  }, []);
+
   // El Code Coach se inicia en handleEditorDidMount
 
   useEffect(() => {
     const editor = editorRef.current;
-    if (!editor || !vimMode || vimInstanceRef.current) {
+    if (!editor || !vimMode || vimInstanceRef.current || vimPendingRef.current) {
       if (!editor) console.warn('[MONACO BOOT] Vim init reactivo omitido: editorRef vacío');
       else if (!vimMode) console.log('[MONACO BOOT] Vim init reactivo omitido: vimMode=false');
       else if (vimInstanceRef.current) console.log('[MONACO BOOT] Vim init reactivo omitido: instancia previa existe');
@@ -281,8 +307,9 @@ export default function EditorTab({
       }
     }).catch((error) => {
       console.error('[MONACO BOOT FATAL ERROR] Falló la importación de monaco-vim (reactivo):', error);
+      vimPendingRef.current = false;
     });
-  }, [vimMode, node.file_path]);
+  }, [vimMode, node.file_path, isEditorReady]);
 
   useEffect(() => {
     if (!vimMode) {
@@ -294,6 +321,7 @@ export default function EditorTab({
         vimInstanceRef.current.dispose();
         vimInstanceRef.current = null;
       }
+      vimPendingRef.current = false;
     }
   }, [vimMode]);
 
@@ -417,6 +445,7 @@ export default function EditorTab({
     // eslint-disable-next-line react-hooks/immutability
     editorRef.current = editor;
     monacoRef.current = monaco;
+    setIsEditorReady(true);
 
     monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
       jsx: monaco.languages.typescript.JsxEmit.ReactJSX,
@@ -473,92 +502,8 @@ export default function EditorTab({
       }
     }
 
-    if (vimMode) {
-      if (vimInstanceRef.current) {
-        vimInstanceRef.current.dispose();
-        vimInstanceRef.current = null;
-      }
-
-      vimPendingRef.current = true;
-      console.log('[MONACO BOOT] Editor montado. Intentando iniciar Vim (onMount)...');
-      import("monaco-vim").then(({ initVimMode, VimMode }) => {
-        if (!vimPendingRef.current) {
-          console.warn('[MONACO BOOT] Vim init (onMount) cancelado: vimPendingRef desactivo');
-          return;
-        }
-
-        try {
-          const statusNode = document.createElement('div');
-          statusNode.id = 'vim-statusbar';
-          statusNode.style.position = 'absolute';
-          statusNode.style.bottom = '0';
-          statusNode.style.left = '0';
-          statusNode.style.right = '0';
-          statusNode.style.width = '100%';
-          statusNode.style.padding = '2px 8px';
-          statusNode.style.fontSize = '12px';
-          statusNode.style.backgroundColor = '#1e1e1e';
-          statusNode.style.borderTop = '1px solid #333';
-          statusNode.style.color = '#fff';
-          statusNode.style.zIndex = '10';
-
-          const container = editor.getContainerDomNode();
-          if (!container) {
-            throw new Error('No se obtuvo el container DOM del editor (onMount)');
-          }
-          container.style.position = 'relative';
-          container.style.overflow = 'hidden';
-          container.appendChild(statusNode);
-          vimStatusRef.current = statusNode;
-          console.log('[MONACO BOOT] Statusbar DOM creado y anexado al editor (onMount)');
-
-          const vim = initVimMode(editor, statusNode);
-          vimInstanceRef.current = vim;
-          console.log('[MONACO BOOT] Vim iniciado con éxito. Adaptador:', vim);
-
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (VimMode as any).Vim.defineEx('write', 'w', (args: { args: string }) => {
-            const filename = args.args.trim();
-            if (filename) {
-              const dir = node.file_path ? node.file_path.substring(0, node.file_path.lastIndexOf('/')) : '';
-              const newPath = dir ? `${dir}/${filename}` : filename;
-              handleSaveRef.current(newPath);
-            } else {
-              handleSaveRef.current();
-            }
-          });
-          console.log('[MONACO BOOT] Comando ex :w registrado');
-
-          const modeLabels: Record<string, typeof editorModeRef.current> = {
-            'NORMAL': 'locked',
-            'VISUAL': 'visual',
-            'VISUAL LINE': 'visual',
-            'VISUAL BLOCK': 'visual',
-            'INSERT': 'editable',
-            'REPLACE': 'editable',
-          };
-          const observer = new MutationObserver(() => {
-            const raw = statusNode.textContent?.trim() || '';
-            const text = raw.replace(/^-+|-+$/g, '').toUpperCase();
-            for (const [label, mode] of Object.entries(modeLabels)) {
-              if (text.startsWith(label)) {
-                editorModeRef.current = mode;
-                setEditorMode(mode);
-                break;
-              }
-            }
-          });
-          observer.observe(statusNode, { characterData: true, subtree: true, childList: true });
-          vimObserverRef.current = observer;
-          console.log('[MONACO BOOT] Observer de modo Vim instalado (onMount)');
-        } catch (error) {
-          console.error('[MONACO BOOT FATAL ERROR] Vim init (onMount) lanzó excepción:', error);
-        }
-      }).catch((error) => {
-        console.error('[MONACO BOOT FATAL ERROR] Falló la importación de monaco-vim (onMount):', error);
-      });
-    }
-
+    // El Code Coach y configuraciones continuan abajo
+    
     if (node.metadata) {
       try {
         const metadataStr = typeof node.metadata === "string" ? node.metadata : JSON.stringify(node.metadata);
@@ -581,8 +526,16 @@ export default function EditorTab({
       const currentMarker = markers.find((m: monacoEditor.IMarker) => m.startLineNumber === e.position.lineNumber);
       if (currentMarker && (currentMarker as any).explanation) {
         setCoachExplanation((currentMarker as any).explanation);
+        setCurrentCursorAdvice({
+          line: currentMarker.startLineNumber,
+          severity: currentMarker.severity === monaco.MarkerSeverity.Error ? 'error' : 
+                    currentMarker.severity === monaco.MarkerSeverity.Warning ? 'warning' : 'hint',
+          message: currentMarker.message,
+          explanation: (currentMarker as any).explanation
+        });
       } else {
         setCoachExplanation(null);
+        setCurrentCursorAdvice(null);
       }
     });
 
@@ -593,12 +546,14 @@ export default function EditorTab({
         monaco.editor.setModelMarkers(model, 'ai-coach', []);
       }
       setCoachExplanation(null);
+      setCurrentCursorAdvice(null);
 
       if (coachTimerRef.current) clearTimeout(coachTimerRef.current);
       if (isCoachEnabledRef.current && model && !model.isDisposed()) {
         coachTimerRef.current = setTimeout(async () => {
           if (model.isDisposed()) return;
           setIsLoadingRef.current(true);
+          setIsAnalyzing(true);
           try {
             const content = model.getValue();
             const language = node.file_path?.split('.').pop() || '';
@@ -614,7 +569,9 @@ export default function EditorTab({
             
             if (model.isDisposed()) return;
             
-            const monacoMarkers = response.markers.map(m => ({
+            setCoachOverview(response.overview);
+            
+            const monacoMarkers = response.contextual_advice.map(m => ({
               severity: m.severity === 'error' ? monaco.MarkerSeverity.Error : 
                         m.severity === 'warning' ? monaco.MarkerSeverity.Warning : 
                         monaco.MarkerSeverity.Hint,
@@ -631,6 +588,7 @@ export default function EditorTab({
             console.error('[Code Coach] Error:', error);
           } finally {
             setIsLoadingRef.current(false);
+            setIsAnalyzing(false);
           }
         }, 3500);
       }
@@ -889,17 +847,47 @@ export default function EditorTab({
         </div>
       )}
 
-      <div className="flex-1 relative overflow-hidden">
-        <Editor
-          key={editorPath}
-          height="100%"
-          theme="vs-dark"
-          path={editorPath}
-          defaultValue={initialValue}
-          onMount={handleEditorDidMount}
-          options={editorOptions}
-          loading={null}
-        />
+      <div className="flex-1 relative overflow-hidden min-h-0 min-w-0">
+        {isCoachEnabled ? (
+          <div className="absolute inset-0 flex flex-row w-full h-full">
+            <div className="flex-1 relative h-full overflow-hidden">
+              <Editor
+                key={editorPath}
+                height="100%"
+                theme="vs-dark"
+                path={editorPath}
+                defaultValue={initialValue}
+                onMount={handleEditorDidMount}
+                options={editorOptions}
+                loading={null}
+              />
+            </div>
+            <div className="w-1.5 shrink-0 bg-[#1a1a1a] border-l border-r border-zinc-800 z-10" />
+            <div className="w-[350px] shrink-0 h-full relative overflow-hidden">
+              <CoachSidebar 
+                techData={techData}
+                onRescan={() => handleRescan()}
+                isScanningTech={isScanningTech}
+                overview={coachOverview}
+                cursorAdvice={currentCursorAdvice}
+                isAnalyzingCode={isAnalyzing}
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="absolute inset-0">
+            <Editor
+              key={editorPath}
+              height="100%"
+              theme="vs-dark"
+              path={editorPath}
+              defaultValue={initialValue}
+              onMount={handleEditorDidMount}
+              options={editorOptions}
+              loading={null}
+            />
+          </div>
+        )}
       </div>
       <ContextHUD
         editorRef={editorRef}
