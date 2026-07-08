@@ -1,5 +1,5 @@
 import { CodeCoachOverview, CodeCoachMarker } from "@/lib/api";
-import { RefreshCw, ShieldAlert, FileCode2, Activity, Lightbulb, Loader2 } from "lucide-react";
+import { RefreshCw, ShieldAlert, FileCode2, Activity, Lightbulb, Loader2, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface CoachSidebarProps {
@@ -10,6 +10,7 @@ interface CoachSidebarProps {
   isAnalyzingCode: boolean;
   overview: CodeCoachOverview | null;
   cursorAdvice: CodeCoachMarker | null;
+  fileMetadata?: { lineCount: number; gitStatus: string };
 }
 
 export function CoachSidebar({
@@ -20,6 +21,7 @@ export function CoachSidebar({
   isAnalyzingCode,
   overview,
   cursorAdvice,
+  fileMetadata,
 }: CoachSidebarProps) {
 
   return (
@@ -42,6 +44,28 @@ export function CoachSidebar({
             <RefreshCw className={`w-3.5 h-3.5 ${isScanningTech ? 'animate-spin' : ''}`} />
           </Button>
         </div>
+        
+        {fileMetadata && (
+          <div className="text-xs text-zinc-400 flex items-center gap-3 mb-4">
+            <span className="flex items-center gap-1.5" title="Líneas de código">
+              <FileText className="w-3.5 h-3.5" />
+              {fileMetadata.lineCount} líneas
+            </span>
+            <span className="flex items-center gap-1.5" title="Estado en Git">
+              <span className={`w-2 h-2 rounded-full ${
+                fileMetadata.gitStatus === 'untracked' ? 'bg-zinc-500' :
+                fileMetadata.gitStatus === 'staged' ? 'bg-emerald-500' :
+                fileMetadata.gitStatus === 'modified' ? 'bg-amber-500' :
+                'bg-zinc-700'
+              }`} />
+              {fileMetadata.gitStatus === 'untracked' ? 'Sin rastrear' :
+               fileMetadata.gitStatus === 'staged' ? 'Staged' :
+               fileMetadata.gitStatus === 'modified' ? 'Modificado' :
+               'Sincronizado'}
+            </span>
+          </div>
+        )}
+
         {isScanningTech ? (
           <div>
             <div className="animate-pulse bg-zinc-700/50 rounded h-4 w-3/4 mb-2"></div>
