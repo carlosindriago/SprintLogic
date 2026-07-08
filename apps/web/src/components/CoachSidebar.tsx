@@ -1,0 +1,141 @@
+import { CodeCoachOverview, CodeCoachMarker } from "@/lib/api";
+import { RefreshCw, ShieldAlert, FileCode2, Medal, Lightbulb } from "lucide-react";
+import { Button } from "@/components/ui/button";
+
+interface CoachSidebarProps {
+  techData?: any;
+  onRescan?: () => void;
+  isScanningTech: boolean;
+  isAnalyzingCode: boolean;
+  overview: CodeCoachOverview | null;
+  cursorAdvice: CodeCoachMarker | null;
+}
+
+export function CoachSidebar({
+  techData,
+  onRescan,
+  isScanningTech,
+  isAnalyzingCode,
+  overview,
+  cursorAdvice,
+}: CoachSidebarProps) {
+
+  return (
+    <div className="h-full w-full min-w-[250px] bg-[#0a0a0a] border-l border-zinc-800 flex flex-col overflow-y-auto custom-scrollbar p-3 space-y-4">
+      {/* Celda 1: Ficha Técnica */}
+      <div className="bg-[#121212] border border-zinc-800 rounded-lg p-4 flex flex-col shadow-sm">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-zinc-200 flex items-center gap-2">
+            <FileCode2 className="w-4 h-4 text-blue-400" />
+            Stack Técnico
+          </h3>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="w-6 h-6 text-zinc-400 hover:text-white" 
+            onClick={onRescan}
+            disabled={isScanningTech}
+            title="Re-escanear tecnologías"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isScanningTech ? 'animate-spin' : ''}`} />
+          </Button>
+        </div>
+        {isScanningTech ? (
+          <div>
+            <div className="animate-pulse bg-zinc-700/50 rounded h-4 w-3/4 mb-2"></div>
+            <div className="animate-pulse bg-zinc-700/50 rounded h-4 w-1/2 mb-2"></div>
+            <div className="animate-pulse bg-zinc-700/50 rounded h-4 w-5/6 mb-2"></div>
+          </div>
+        ) : techData?.technologies && techData.technologies.length > 0 ? (
+          <div className="flex flex-col gap-2">
+            {techData.technologies.map((tech, idx) => (
+              <div key={idx} className="flex flex-col text-xs bg-[#1a1a1a] p-2 rounded border border-zinc-800/50">
+                <span className="font-medium text-zinc-200">{tech.name} <span className="text-zinc-500 text-[10px]">v{tech.version}</span></span>
+                <a 
+                  href={tech.doc_url} 
+                  target="_blank" 
+                  rel="noreferrer" 
+                  className="text-blue-400 hover:underline mt-1 break-all"
+                >
+                  {tech.doc_url !== '#' ? tech.doc_url : 'Sin doc'}
+                </a>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-zinc-500">No se detectaron tecnologías específicas.</p>
+        )}
+      </div>
+
+      {/* Celda 2: Overview */}
+      <div className="bg-[#121212] border border-zinc-800 rounded-lg p-4 flex flex-col shadow-sm">
+        <h3 className="text-sm font-semibold text-zinc-200 flex items-center gap-2 mb-3">
+          <Medal className="w-4 h-4 text-emerald-400" />
+          Health & Overview
+        </h3>
+        {isAnalyzingCode ? (
+           <div>
+             <div className="animate-pulse bg-zinc-700/50 rounded h-4 w-3/4 mb-2"></div>
+             <div className="animate-pulse bg-zinc-700/50 rounded h-4 w-5/6 mb-2"></div>
+             <div className="animate-pulse bg-zinc-700/50 rounded h-4 w-2/3 mb-2"></div>
+           </div>
+        ) : overview ? (
+          <div className="flex flex-col gap-3 text-xs">
+            <div className="flex items-center justify-between bg-[#1a1a1a] p-2 rounded border border-zinc-800/50">
+              <span className="text-zinc-400">Clean Code Score</span>
+              <span className={`font-bold ${overview.clean_code_score >= 80 ? 'text-emerald-400' : overview.clean_code_score >= 60 ? 'text-amber-400' : 'text-rose-400'}`}>
+                {overview.clean_code_score}/100
+              </span>
+            </div>
+            {overview.critical_security && overview.critical_security !== "None" && overview.critical_security !== "N/A" && overview.critical_security !== "" && (
+              <div className="flex flex-col gap-1 bg-rose-500/10 border border-rose-500/20 p-2 rounded">
+                <span className="text-rose-400 font-semibold flex items-center gap-1">
+                  <ShieldAlert className="w-3.5 h-3.5" /> Seguridad
+                </span>
+                <span className="text-rose-200/80">{overview.critical_security}</span>
+              </div>
+            )}
+            <div className="text-zinc-300 leading-relaxed bg-[#1a1a1a] p-2 rounded border border-zinc-800/50">
+              {overview.structure}
+            </div>
+          </div>
+        ) : (
+          <p className="text-xs text-zinc-500">Esperando análisis dinámico del Coach...</p>
+        )}
+      </div>
+
+      {/* Celda 3: Mentoría Contextual */}
+      <div className="bg-[#121212] border border-zinc-800 rounded-lg p-4 flex flex-col shadow-sm flex-1">
+        <h3 className="text-sm font-semibold text-zinc-200 flex items-center gap-2 mb-3">
+          <Lightbulb className="w-4 h-4 text-amber-400" />
+          Mentoría Contextual
+        </h3>
+        
+        {isAnalyzingCode ? (
+           <div>
+             <div className="animate-pulse bg-zinc-700/50 rounded h-4 w-3/4 mb-2"></div>
+             <div className="animate-pulse bg-zinc-700/50 rounded h-4 w-5/6 mb-2"></div>
+           </div>
+        ) : cursorAdvice ? (
+          <div className={`flex flex-col gap-2 p-3 rounded border text-xs 
+            ${cursorAdvice.severity === 'error' ? 'bg-rose-500/10 border-rose-500/30' : 
+              cursorAdvice.severity === 'warning' ? 'bg-amber-500/10 border-amber-500/30' : 
+              'bg-blue-500/10 border-blue-500/30'}`}
+          >
+            <span className={`font-bold ${cursorAdvice.severity === 'error' ? 'text-rose-400' : cursorAdvice.severity === 'warning' ? 'text-amber-400' : 'text-blue-400'}`}>
+              Línea {cursorAdvice.line}: {cursorAdvice.message}
+            </span>
+            <span className="text-zinc-300 leading-relaxed">
+              {cursorAdvice.explanation}
+            </span>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center h-full text-center p-4">
+            <Lightbulb className="w-8 h-8 text-zinc-700 mb-2" />
+            <p className="text-xs text-zinc-500">Código limpio.<br/>Selecciona un bloque complejo o con subrayado para recibir mentoría.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
