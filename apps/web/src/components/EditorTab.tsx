@@ -83,6 +83,7 @@ export default function EditorTab({
   const [coachOverview, setCoachOverview] = useState<CodeCoachOverview | null>(null);
   const [currentCursorAdvice, setCurrentCursorAdvice] = useState<CodeCoachMarker | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [availableAdviceLines, setAvailableAdviceLines] = useState<number[]>([]);
   const [initialValue, setInitialValue] = useState('');
   
   const isCoachEnabled = useSettingsStore((s) => s.isFimEnabled);
@@ -99,7 +100,8 @@ export default function EditorTab({
       return fetchTechScan(content, lang, fimDefaultModel, fimFallbackModel);
     },
     staleTime: Infinity,
-    retry: 1,
+    retry: 2,
+    retryDelay: 2000,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     refetchOnMount: false,
@@ -219,9 +221,14 @@ export default function EditorTab({
       
       coachCacheRef.current[currentHash] = response;
       
-      setCoachOverview(response.overview);
+      setCoachOverview(prev => {
+        if (response.overview.is_degraded && prev && prev.clean_code_score > 0) {
+          return prev;
+        }
+        return response.overview;
+      });
       
-      const monacoMarkers = response.contextual_advice.map(m => ({
+      const monacoMarkers = response.contextual_advice.map((m: any) => ({
         severity: m.severity === 'error' ? monacoRef.current!.MarkerSeverity.Error : 
                   m.severity === 'warning' ? monacoRef.current!.MarkerSeverity.Warning : 
                   monacoRef.current!.MarkerSeverity.Hint,
@@ -234,6 +241,9 @@ export default function EditorTab({
       }));
       
       monacoRef.current!.editor.setModelMarkers(model, 'ai-coach', monacoMarkers as any);
+      
+      const lines = response.contextual_advice.map((m: any) => m.line);
+      setAvailableAdviceLines(lines);
     } catch (error) {
       console.error('[Code Coach] Error:', error);
       setCoachOverview({
@@ -965,6 +975,7 @@ export default function EditorTab({
                 cursorAdvice={currentCursorAdvice}
                 isAnalyzingCode={isAnalyzing}
                 fileMetadata={{ lineCount, gitStatus: gitStatusLabel }}
+                availableAdviceLines={availableAdviceLines}
               />
             </div>
           </div>
