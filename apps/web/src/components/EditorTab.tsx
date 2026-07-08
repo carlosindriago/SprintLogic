@@ -688,11 +688,18 @@ export default function EditorTab({
       // We do NOT clear markers or states here to maintain the Stale-While-Revalidate pattern.
       // The old markers will remain until the new ones arrive.
       
+      if (!isDirtyRef.current) {
+        isDirtyRef.current = true;
+        setIsDirty(true);
+      }
+
       if (coachTimerRef.current) clearTimeout(coachTimerRef.current);
       if (isCoachEnabledRef.current && model && !model.isDisposed()) {
         // Strict 3.5s debounce to prevent API spam and protect LLM rate limits
         coachTimerRef.current = setTimeout(() => {
-          runCoachAnalysis(model, editor);
+          if (isDirtyRef.current) {
+            runCoachAnalysis(model, editor);
+          }
         }, 3500);
       }
 
@@ -977,6 +984,7 @@ export default function EditorTab({
                 isAnalyzingCode={isAnalyzing}
                 fileMetadata={{ lineCount, gitStatus: gitStatusLabel }}
                 availableAdviceLines={availableAdviceLines}
+                isEditorDirty={isDirty}
               />
             </div>
           </div>
