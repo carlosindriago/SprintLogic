@@ -111,7 +111,7 @@ export function CoachSidebar({
               return (
                 <a 
                   key={tech.name}
-                  href={tech.doc_url !== '#' ? tech.doc_url : undefined} 
+                  href={`https://devdocs.io/#q=${encodeURIComponent(tech.name.toLowerCase())}`} 
                   target="_blank" 
                   rel="noopener noreferrer" 
                   title={tech.name}
