@@ -690,6 +690,7 @@ export default function EditorTab({
       
       if (coachTimerRef.current) clearTimeout(coachTimerRef.current);
       if (isCoachEnabledRef.current && model && !model.isDisposed()) {
+        // Strict 3.5s debounce to prevent API spam and protect LLM rate limits
         coachTimerRef.current = setTimeout(() => {
           runCoachAnalysis(model, editor);
         }, 3500);
