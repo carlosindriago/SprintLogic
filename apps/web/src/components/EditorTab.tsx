@@ -216,6 +216,7 @@ export default function EditorTab({
               timer = setTimeout(async () => {
                 disposable.dispose();
                 if (token.isCancellationRequested) return resolve({ items: [] });
+                if (model.isDisposed()) return resolve({ items: [] });
                 setIsLoadingRef.current(true);
                 try {
                   const offset = model.getOffsetAt(position);
