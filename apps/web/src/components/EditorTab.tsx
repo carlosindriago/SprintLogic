@@ -60,6 +60,8 @@ function CoachToggleButton({ isCoachEnabled, onToggle }: { isCoachEnabled: boole
   );
 }
 
+const globalCoachCache = new Map<string, any>();
+
 export default function EditorTab({
   projectId,
   node,
@@ -175,16 +177,14 @@ export default function EditorTab({
   }, [focusTarget, focusVersion]);
   const editorModeRef = useRef(editorMode);
 
-  const coachCacheRef = useRef<Record<string, any>>({});
-
   const runCoachAnalysis = useCallback(async (model: monacoEditor.ITextModel, editor: monacoEditor.IStandaloneCodeEditor) => {
     if (model.isDisposed()) return;
     
     const content = model.getValue();
     const currentHash = hashString(content);
     
-    if (coachCacheRef.current[currentHash]) {
-      const response = coachCacheRef.current[currentHash];
+    if (globalCoachCache.has(currentHash)) {
+      const response = globalCoachCache.get(currentHash);
       setCoachOverview(response.overview);
       
       const monacoMarkers = response.contextual_advice.map((m: any) => ({
@@ -219,7 +219,7 @@ export default function EditorTab({
       
       if (model.isDisposed()) return;
       
-      coachCacheRef.current[currentHash] = response;
+      globalCoachCache.set(currentHash, response);
       
       setCoachOverview(prev => {
         if (response.overview.is_degraded && prev && prev.clean_code_score > 0) {
