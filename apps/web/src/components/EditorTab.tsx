@@ -1169,6 +1169,7 @@ export default function EditorTab({
                 fileMetadata={{ lineCount, gitStatus: gitStatusLabel }}
                 availableAdviceLines={availableAdviceLines}
                 isEditorDirty={isDirty}
+                isConflictMode={isConflictMode}
               />
             </div>
           </div>
