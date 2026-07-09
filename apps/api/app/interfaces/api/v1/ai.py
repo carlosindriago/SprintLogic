@@ -43,10 +43,23 @@ def _extract_json(text: str) -> str:
             return extracted
             
     # Phase 2: Fallback usando índices absolutos ignorando texto introductorio
-    start = text.find('{')
-    end = text.rfind('}')
-    if start != -1 and end != -1 and end > start:
-        return text[start:end+1]
+    start_dict = text.find('{')
+    end_dict = text.rfind('}')
+    start_list = text.find('[')
+    end_list = text.rfind(']')
+
+    has_dict = start_dict != -1 and end_dict != -1 and end_dict > start_dict
+    has_list = start_list != -1 and end_list != -1 and end_list > start_list
+
+    if has_dict and has_list:
+        if start_dict < start_list:
+            return text[start_dict:end_dict+1]
+        else:
+            return text[start_list:end_list+1]
+    elif has_list:
+        return text[start_list:end_list+1]
+    elif has_dict:
+        return text[start_dict:end_dict+1]
         
     return text.strip()
 
