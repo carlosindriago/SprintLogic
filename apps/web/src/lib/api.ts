@@ -13,6 +13,13 @@ export interface ModelResult {
   name: string;
 }
 
+export interface CuratedProvider {
+  provider: string;
+  provider_id: string;
+  is_configured: boolean;
+  models: ModelResult[];
+}
+
 export const API_BASE_URL: string =
   process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000/api/v1";
 
@@ -165,6 +172,7 @@ export const verifyAndSaveProviderKey = (provider: string, apiKey: string) =>
   api.post<ModelResult[]>(`/settings/providers/${provider}/keys`, { api_key: apiKey });
 export const checkApiKeyStatus = (provider: string) => api.get<{ is_configured: boolean }>(`/settings/api-key/${provider}`);
 export const deleteProviderKey = (provider: string) => api.delete<{ status: string }>(`/settings/api-key/${provider}`);
+export const getCuratedModels = () => api.get<CuratedProvider[]>('/ai/models');
 
 // --- AI / Analysis ---
 export const getProjectInsights = (projectId: string) => api.get<ProjectInsights>(`/projects/${projectId}/insights`);
