@@ -378,6 +378,7 @@ async def contextual_mentorship(request: CodeCoachRequest):
         system = (
             "Eres un Mentor Senior de programación. Analiza el código proporcionado. "
             "Devuelve EXCLUSIVAMENTE un arreglo JSON de consejos pedagógicos mapeados a las líneas del código.\n\n"
+            "El código proporcionado tiene números de línea explícitos al inicio de cada renglón (ej. [Line 45]). NUNCA adivines ni cuentes las líneas. Cuando reportes un error, extrae EXACTAMENTE el número que aparece entre corchetes en esa línea de código y ponlo en el campo line_number del JSON.\n\n"
             "Estructura EXACTA requerida:\n"
             "[\n"
             '  { "line": 12, "severity": "hint" | "warning" | "error", "message": "Consejo", "explanation": "Explica", "suggested_code": "código o null" }\n'
