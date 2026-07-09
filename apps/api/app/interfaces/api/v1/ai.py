@@ -81,6 +81,7 @@ class CodeCoachOverview(BaseModel):
     critical_security: str
     clean_code_score: int
     is_degraded: bool = False
+    error_detail: str | None = None
 
 
 class CodeCoachResponse(BaseModel):
@@ -215,9 +216,9 @@ async def tech_scan(request: TechScanRequest):
         return {"technologies": [{"name": f"Error Analizador ({lang_str})", "version": "N/A", "doc_url": "#", "icon": "SiGnubash"}]}
 
 
-@router.post("/code-coach", response_model=CodeCoachResponse)
-async def code_coach(request: CodeCoachRequest):
-    """Analizador de código que detecta antipatrones y sugiere mejoras."""
+@router.post("/health-overview", response_model=CodeCoachOverview)
+async def health_overview(request: CodeCoachRequest):
+    """Analizador de código que devuelve una vista general (Health & Overview)."""
     try:
         if not request.model:
             raise ValueError("No model specified in request")
@@ -226,26 +227,23 @@ async def code_coach(request: CodeCoachRequest):
         if request.fallback_model and request.fallback_model != request.model:
             models_to_try.append(request.fallback_model)
 
-        response = None
         last_error = None
 
         system = (
-            "Eres un Mentor Senior de programación. Analiza el código proporcionado. "
-            "Devuelve EXCLUSIVAMENTE un objeto JSON estricto con dos partes: un 'overview' general "
-            "y 'contextual_advice' que es un arreglo de consejos pedagógicos mapeados a las líneas del código.\n\n"
+            "Eres un Arquitecto de Software. Analiza el código proporcionado. "
+            "Devuelve EXCLUSIVAMENTE un objeto JSON estricto con un 'overview' general.\n\n"
             "Estructura EXACTA requerida:\n"
             "{\n"
-            '  "overview": { "structure": "Breve descripción", "critical_security": "Advertencias si las hay, o None", "clean_code_score": 85 },\n'
-            '  "contextual_advice": [\n'
-            '    { "line": 12, "severity": "hint" | "warning" | "error", "message": "Consejo breve", "explanation": "Explicación", "suggested_code": "fragmento de código con la solución correcta, o null si no aplica" }\n'
-            "  ]\n"
+            '  "structure": "Breve descripción",\n'
+            '  "critical_security": "Advertencias si las hay, o None",\n'
+            '  "clean_code_score": 85\n'
             "}\n"
             "No incluyas markdown, explicaciones previas ni texto fuera del objeto JSON. "
-            'CRÍTICO: TIENES PROHIBIDO PENSAR EN VOZ ALTA. NO expliques tu razonamiento fuera del JSON. Devuelve ÚNICAMENTE un objeto JSON válido que empiece con "{" y termine con "}". Cualquier texto adicional causará un fallo crítico en el sistema.'
+            "CRÍTICO: TIENES PROHIBIDO PENSAR EN VOZ ALTA. NO expliques tu razonamiento fuera del JSON."
         )
 
         user = (
-            f"Analiza este código en {request.language or 'código'}. El cursor del usuario está cerca de la línea {request.cursor_line}:\n\n"
+            f"Analiza este código en {request.language or 'código'}:\n\n"
             f"```\n{request.file_content}\n```\n\n"
             "Devuelve únicamente el objeto JSON."
         )
@@ -276,7 +274,7 @@ async def code_coach(request: CodeCoachRequest):
                             model=_normalize_model_name(adapted["model"]),
                             messages=model_messages,
                             api_key=adapted["api_key"],
-                            max_tokens=4000,
+                            max_tokens=1000,
                             temperature=0.1,
                             timeout=15,
                             **adapted["kwargs"],
@@ -285,24 +283,130 @@ async def code_coach(request: CodeCoachRequest):
                     )
                     
                     raw_content = str(response.choices[0].message.content or "").strip()
-                    _logger.info(f"[CODE COACH RAW] {raw_content}")
                     raw_clean = _extract_json(raw_content)
 
                     if not raw_clean:
                         raise ValueError("Empty response from LLM")
 
+                    import json
                     parsed = json.loads(raw_clean)
                     
-                    overview_data = parsed.get("overview", {})
                     overview = CodeCoachOverview(
-                        structure=str(overview_data.get("structure", "")),
-                        critical_security=str(overview_data.get("critical_security", "")),
-                        clean_code_score=int(overview_data.get("clean_code_score", 100)),
+                        structure=str(parsed.get("structure", "")),
+                        critical_security=str(parsed.get("critical_security", "")),
+                        clean_code_score=int(parsed.get("clean_code_score", 100)),
                         is_degraded=False
                     )
+
+                    return overview
+                    
+                except Exception as e:
+                    if not raw_content:
+                        _logger.warning("Health Overview API call failed with model %s: %s", current_model, e)
+                        last_error = str(e)
+                        break
+                    
+                    if attempt < MAX_RETRIES:
+                        model_messages.append({"role": "assistant", "content": raw_content})
+                        model_messages.append({
+                            "role": "user",
+                            "content": f"ERROR DE PARSEO: {str(e)}. Devuelve JSON puro sin formato extra."
+                        })
+                        continue
+                    else:
+                        last_error = f"JSON Parse Error after retries: {str(e)}"
+                        break
+
+        raise ValueError(f"All model attempts failed. Last error: {last_error}")
+
+    except Exception as e:
+        error_msg = str(e)
+        _logger.error(f"Health Overview Fallback triggered: {error_msg}")
+        
+        return CodeCoachOverview(
+            structure="Fallo del proveedor IA",
+            critical_security="N/A",
+            clean_code_score=0,
+            is_degraded=True,
+            error_detail=f"Fallo del proveedor IA: {error_msg}"
+        )
+
+
+@router.post("/contextual-mentorship", response_model=list[CodeCoachMarker])
+async def contextual_mentorship(request: CodeCoachRequest):
+    """Analizador de código que detecta antipatrones (Mentoría Contextual)."""
+    try:
+        if not request.model:
+            raise ValueError("No model specified in request")
+
+        models_to_try = [request.model]
+        if request.fallback_model and request.fallback_model != request.model:
+            models_to_try.append(request.fallback_model)
+
+        last_error = None
+
+        system = (
+            "Eres un Mentor Senior de programación. Analiza el código proporcionado. "
+            "Devuelve EXCLUSIVAMENTE un arreglo JSON de consejos pedagógicos mapeados a las líneas del código.\n\n"
+            "Estructura EXACTA requerida:\n"
+            "[\n"
+            '  { "line": 12, "severity": "hint" | "warning" | "error", "message": "Consejo", "explanation": "Explica", "suggested_code": "código o null" }\n'
+            "]\n"
+            "No incluyas markdown, explicaciones previas ni texto fuera del arreglo JSON. "
+            "CRÍTICO: TIENES PROHIBIDO PENSAR EN VOZ ALTA. NO expliques tu razonamiento fuera del JSON."
+        )
+
+        user = (
+            f"Analiza este código en {request.language or 'código'}. El cursor del usuario está cerca de la línea {request.cursor_line}:\n\n"
+            f"```\n{request.file_content}\n```\n\n"
+            "Devuelve únicamente el arreglo JSON."
+        )
+
+        MAX_RETRIES = 2
+        for current_model in models_to_try:
+            provider = ProviderAdapter.get_provider(current_model)
+            api_key = CredentialManager.get_api_key(provider)
+            if not api_key:
+                last_error = f"API key not configured for {current_model}"
+                continue
+
+            adapted = ProviderAdapter.adapt(current_model, api_key)
+
+            model_messages = [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ]
+
+            for attempt in range(MAX_RETRIES + 1):
+                raw_content = ""
+                try:
+                    import asyncio
+                    response = await asyncio.wait_for(
+                        litellm.acompletion(
+                            model=_normalize_model_name(adapted["model"]),
+                            messages=model_messages,
+                            api_key=adapted["api_key"],
+                            max_tokens=2500,
+                            temperature=0.1,
+                            timeout=15,
+                            **adapted["kwargs"],
+                        ),
+                        timeout=25.0
+                    )
+                    
+                    raw_content = str(response.choices[0].message.content or "").strip()
+                    raw_clean = _extract_json(raw_content)
+
+                    if not raw_clean:
+                        raise ValueError("Empty response from LLM")
+
+                    import json
+                    parsed = json.loads(raw_clean)
+                    if not isinstance(parsed, list):
+                        raise ValueError("Root JSON must be a list")
                         
                     markers = []
-                    for item in parsed.get("contextual_advice", []):
+                    for item in parsed:
                         if isinstance(item, dict) and "line" in item and "severity" in item and "message" in item and "explanation" in item:
                             markers.append(CodeCoachMarker(
                                 line=int(item["line"]),
@@ -312,55 +416,34 @@ async def code_coach(request: CodeCoachRequest):
                                 suggested_code=item.get("suggested_code")
                             ))
 
-                    success = True
-                    break  # Exit retry loop
+                    return markers
                     
                 except Exception as e:
-                    # If raw_content is empty, it means the API call itself failed (e.g. network, auth)
                     if not raw_content:
-                        _logger.warning("Code Coach API call failed with model %s: %s", current_model, e)
                         last_error = str(e)
-                        break  # Move to fallback model
+                        break
                     
-                    # If raw_content exists, LLM responded but JSON parsing/validation failed
                     if attempt < MAX_RETRIES:
-                        _logger.warning(f"[AI COACH] Intento {attempt + 1} falló por JSON corrupto. Lanzando auto-sanación...")
                         model_messages.append({"role": "assistant", "content": raw_content})
                         model_messages.append({
                             "role": "user",
-                            "content": f"ERROR DE PARSEO: Tu respuesta previa no es un JSON válido o viola el esquema estricto de Pydantic. Error detectado: {str(e)}. Por favor, re-analiza el código y devuelve ÚNICAMENTE un objeto JSON puro, perfectamente cerrado, sin bloques de código markdown (```) ni explicaciones de texto plano fuera del esquema."
+                            "content": f"ERROR DE PARSEO: {str(e)}. Devuelve JSON puro sin formato extra."
                         })
                         continue
                     else:
-                        _logger.warning(f"[AI COACH] Auto-sanación agotó los reintentos (MAX_RETRIES={MAX_RETRIES}).")
                         last_error = f"JSON Parse Error after retries: {str(e)}"
-                        break  # Move to fallback model
+                        break
 
-            if success:
-                return CodeCoachResponse(overview=overview, contextual_advice=markers)
-
-        if not success:
-            raise ValueError(f"All Code Coach model attempts failed. Last error: {last_error}")
+        raise ValueError(f"All model attempts failed. Last error: {last_error}")
 
     except Exception as e:
-        _logger.error(f"Code Coach Fallback triggered: {str(e)}")
+        error_msg = str(e)
+        _logger.error(f"Contextual Mentorship Fallback triggered: {error_msg}")
         
-        error_str = str(e).lower()
-        if "400" in error_str or "bad request" in error_str or "invalid model" in error_str:
-            fallback_msg = "Error 400: Modelo IA Inválido. El ID del modelo configurado no existe o no es soportado por el proveedor. Por favor, cámbialo en la configuración."
-        elif "429" in error_str or "rate limit" in error_str:
-            fallback_msg = "Error 429: Límite de peticiones excedido. El proveedor de IA (Rate Limit) ha bloqueado la conexión. Por favor, verifica tus cuotas, cambia a tu modelo de respaldo, o espera un minuto."
-        elif "401" in error_str or "authentication" in error_str:
-            fallback_msg = "Error 401: Credenciales inválidas. Verifica tu API Key en la configuración."
-        else:
-            fallback_msg = "Análisis pedagógico temporalmente degradado debido a inestabilidad en el formato del proveedor de IA. Por favor, realiza una pequeña modificación en el código o presiona Re-escanear para forzar una nueva evaluación."
-            
-        return {
-            "overview": {
-                "structure": fallback_msg,
-                "critical_security": "N/A",
-                "clean_code_score": 0,
-                "is_degraded": True
-            },
-            "contextual_advice": []
-        }
+        return [CodeCoachMarker(
+            line=1,
+            severity="error",
+            message="Fallo del proveedor IA",
+            explanation=f"Error_detail: {error_msg}",
+            suggested_code=None
+        )]
