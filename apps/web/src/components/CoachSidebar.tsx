@@ -334,7 +334,15 @@ export function CoachSidebar({
           {isAnalyzingCode && cursorAdvice && <Loader2 className="w-3 h-3 animate-spin text-zinc-500 ml-auto" />}
         </h3>
         
-        {isEditorDirty ? (
+        {allMentorshipAdvice && allMentorshipAdvice.some(m => m.is_degraded || String(m.message || '').toLowerCase().includes('fallo del proveedor ia') || String(m.message || '').toLowerCase().includes('all model attempts failed')) ? (
+          <div className="flex flex-col items-center justify-center p-4 text-center border border-dashed border-rose-900/50 rounded-lg bg-rose-500/10">
+            <ShieldAlert className="w-6 h-6 text-rose-500/50 mb-2" />
+            <p className="text-sm font-medium text-rose-400">Error del Sensei</p>
+            <p className="text-xs text-rose-300/80 mt-1 leading-relaxed max-w-[250px] break-all">
+              {allMentorshipAdvice.find(m => m.is_degraded || String(m.message || '').toLowerCase().includes('fallo del proveedor ia') || String(m.message || '').toLowerCase().includes('all model attempts failed'))?.explanation || 'El Sensei no pudo analizar este bloque por un fallo de red o del proveedor de IA.'}
+            </p>
+          </div>
+        ) : isEditorDirty ? (
           <div className="flex flex-col items-center justify-center p-4 text-center border border-dashed border-zinc-800/80 rounded-lg bg-zinc-900/30">
             <Keyboard className="w-6 h-6 text-zinc-600/50 mb-2" />
             <p className="text-sm font-medium text-zinc-400">Modo Lectura Activo.</p>
