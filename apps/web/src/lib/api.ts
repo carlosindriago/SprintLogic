@@ -157,13 +157,32 @@ export interface GitDashboardFileStatus {
   status: string;
 }
 
+export interface GitDashboardBranch {
+  current_branch: string;
+  ahead?: number;
+  behind?: number;
+}
+
+export interface GitDashboardKPIs {
+  total_files: number;
+  untracked: number;
+  ignored: number;
+  modified: number;
+}
+
+export interface GitDashboardLists {
+  staged_list: GitDashboardFileStatus[];
+  unstaged_list: GitDashboardFileStatus[];
+  untracked_list: GitDashboardFileStatus[];
+  modified_list: GitDashboardFileStatus[];
+  last_commit_list: GitDashboardFileStatus[];
+  penultimate_commit_list: GitDashboardFileStatus[];
+}
+
 export interface GitDashboard {
-  branch: string;
-  ahead: number;
-  behind: number;
-  staged: GitDashboardFileStatus[];
-  unstaged: GitDashboardFileStatus[];
-  untracked: GitDashboardFileStatus[];
+  branch: GitDashboardBranch;
+  kpis: GitDashboardKPIs;
+  lists: GitDashboardLists;
 }
 
 export interface FileLocalDiff {
