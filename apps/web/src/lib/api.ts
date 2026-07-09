@@ -155,6 +155,7 @@ export const revertFile = (projectId: string, filePath: string) =>
 export interface GitDashboardFileStatus {
   file_path: string;
   status: string;
+  timestamp?: number;
 }
 
 export interface GitDashboardBranch {
