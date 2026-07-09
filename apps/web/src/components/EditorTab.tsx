@@ -506,8 +506,8 @@ export default function EditorTab({
         console.log('[MONACO BOOT] Vim iniciado con éxito. Adaptador:', vim);
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (VimMode as any).Vim.defineEx('write', 'w', (args: { args: string }) => {
-          const filename = args.args.trim();
+        (VimMode as any).Vim.defineEx('write', 'w', (args: { args?: string }) => {
+          const filename = args?.args?.trim() || '';
           if (filename) {
             const dir = node.file_path ? node.file_path.substring(0, node.file_path.lastIndexOf('/')) : '';
             const newPath = dir ? `${dir}/${filename}` : filename;
