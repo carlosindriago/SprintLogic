@@ -839,7 +839,7 @@ export default function Home() {
             </div>
           ) : (
             <>
-              <TabBar onToggleAi={toggleRightSidebar} aiOpen={rightSidebarOpen} onNewFile={handleNewUntitled} />
+              <TabBar onToggleAi={toggleRightSidebar} aiOpen={rightSidebarOpen} onNewFile={handleNewUntitled} projectId={projectId ?? undefined} />
               <div className="flex-1 relative overflow-hidden bg-[#151515]" key={activeTabId}>
                 {renderActiveTabContent()}
               </div>

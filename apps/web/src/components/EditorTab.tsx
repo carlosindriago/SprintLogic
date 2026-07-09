@@ -338,6 +338,21 @@ export default function EditorTab({
     return () => window.removeEventListener("trigger-sensei", handler as any);
   }, [forceSenseiAnalysis]);
 
+  // Hot Exit: allow TabBar modal to programmatically save this tab
+  useEffect(() => {
+    const eventName = `save-request-${node.id}`;
+    const handler = async () => {
+      try {
+        await handleSaveRef.current();
+      } finally {
+        window.dispatchEvent(new CustomEvent(`save-done-${node.id}`));
+      }
+    };
+    window.addEventListener(eventName, handler);
+    return () => window.removeEventListener(eventName, handler);
+  }, [node.id]);
+
+
   useEffect(() => {
     if (isEditorReady && isCoachEnabled && editorRef.current) {
       const model = editorRef.current.getModel();
