@@ -248,14 +248,31 @@ export default function EditorTab({
       console.error('[Code Coach] Error:', error);
       setCoachOverview({
         structure: "Error de red o conexión fallida al analizar el código.",
-        critical_security: "N/A",
-        clean_code_score: 0
+        clean_code_score: 0,
+        is_degraded: true,
       });
+      setAvailableAdviceLines([]);
     } finally {
       setIsLoadingRef.current(false);
       setIsAnalyzing(false);
     }
-  }, [node.file_path]);
+  }, [fimDefaultModelRef, fimFallbackModelRef, node.file_path]);
+
+  const forceSenseiAnalysis = useCallback(() => {
+    isDirtyRef.current = true;
+    setIsDirty(true);
+    if (coachTimerRef.current) clearTimeout(coachTimerRef.current);
+    const model = editorRef.current?.getModel();
+    if (model && !model.isDisposed()) {
+      runCoachAnalysis(model, editorRef.current as monacoEditor.IStandaloneCodeEditor);
+    }
+  }, [runCoachAnalysis]);
+
+  useEffect(() => {
+    const handler = () => forceSenseiAnalysis();
+    window.addEventListener("trigger-sensei", handler);
+    return () => window.removeEventListener("trigger-sensei", handler as any);
+  }, [forceSenseiAnalysis]);
 
   useEffect(() => {
     if (isEditorReady && isCoachEnabled && editorRef.current) {
@@ -645,8 +662,10 @@ export default function EditorTab({
       }
     }
 
-    // El Code Coach y configuraciones continuan abajo
-    
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyS, () => {
+      forceSenseiAnalysis();
+    });
+
     if (node.metadata) {
       try {
         const metadataStr = typeof node.metadata === "string" ? node.metadata : JSON.stringify(node.metadata);
