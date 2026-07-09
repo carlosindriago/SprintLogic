@@ -85,7 +85,8 @@ export default function EditorTab({
   const [coachExplanation, setCoachExplanation] = useState<string | null>(null);
   
   const [coachOverview, setCoachOverview] = useState<CodeCoachOverview | null>(null);
-  const [currentCursorAdvice, setCurrentCursorAdvice] = useState<CodeCoachMarker | null>(null);
+  const [allMentorshipAdvice, setAllMentorshipAdvice] = useState<CodeCoachMarker[]>([]);
+  const [activeLineNumber, setActiveLineNumber] = useState<number | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [availableAdviceLines, setAvailableAdviceLines] = useState<number[]>([]);
   const [initialValue, setInitialValue] = useState('');
@@ -247,6 +248,7 @@ export default function EditorTab({
         }));
         monacoRef.current!.editor.setModelMarkers(model, 'ai-coach', monacoMarkers as any);
         setAvailableAdviceLines(parsedMentorship.map((m: any) => m.line));
+        setAllMentorshipAdvice(parsedMentorship);
         return;
       } catch {}
     }
@@ -278,6 +280,7 @@ export default function EditorTab({
       }));
       monacoRef.current!.editor.setModelMarkers(model, 'ai-coach', monacoMarkers as any);
       setAvailableAdviceLines(mentorshipResponse.map((m: any) => m.line));
+      setAllMentorshipAdvice(mentorshipResponse);
     } catch (error: any) {
       console.error('[Code Coach Mentorship] Error:', error);
       setAvailableAdviceLines([]);
@@ -733,24 +736,12 @@ export default function EditorTab({
       } catch { /* ignore */ }
     }
 
-    editor.onDidChangeCursorPosition((e) => {
-      const model = editor.getModel();
-      if (!model) return;
-      const markers = monaco.editor.getModelMarkers({ owner: 'ai-coach', resource: model.uri });
-      const currentMarker = markers.find((m: monacoEditor.IMarker) => m.startLineNumber === e.position.lineNumber);
-      if (currentMarker && (currentMarker as any).explanation) {
-        setCoachExplanation((currentMarker as any).explanation);
-        setCurrentCursorAdvice({
-          line: currentMarker.startLineNumber,
-          severity: currentMarker.severity === monaco.MarkerSeverity.Error ? 'error' : 
-                    currentMarker.severity === monaco.MarkerSeverity.Warning ? 'warning' : 'hint',
-          message: currentMarker.message,
-          explanation: (currentMarker as any).explanation
-        });
-      } else {
-        setCoachExplanation(null);
-        setCurrentCursorAdvice(null);
-      }
+    let cursorTimeout: ReturnType<typeof setTimeout>;
+    const cursorDisposable = editor.onDidChangeCursorPosition((e) => {
+      if (cursorTimeout) clearTimeout(cursorTimeout);
+      cursorTimeout = setTimeout(() => {
+        setActiveLineNumber(e.position.lineNumber);
+      }, 100);
     });
 
     editor.onDidChangeModelContent(() => {
@@ -850,6 +841,8 @@ export default function EditorTab({
       handleSaveRef.current();
     });
 
+    // No cleanup required here since handleEditorDidMount manages the disposables?
+    // Wait, let's keep the checkDirty logic untouched.
     checkDirty();
   }, [node.metadata, checkDirty, node.file_path, node.id, vimMode, forceSenseiAnalysis, runMentorshipAnalysis]);
 
@@ -1057,9 +1050,10 @@ export default function EditorTab({
                 onRescan={() => handleRescan()}
                 isScanningTech={isScanningTech}
                 isTechError={isTechError}
-                overview={coachOverview}
-                cursorAdvice={currentCursorAdvice}
                 isAnalyzingCode={isAnalyzing}
+                overview={coachOverview}
+                allMentorshipAdvice={allMentorshipAdvice}
+                activeLineNumber={activeLineNumber}
                 fileMetadata={{ lineCount, gitStatus: gitStatusLabel }}
                 availableAdviceLines={availableAdviceLines}
                 isEditorDirty={isDirty}
