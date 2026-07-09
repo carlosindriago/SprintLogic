@@ -223,6 +223,7 @@ export interface WBSTask {
 
 export interface WBSResponse {
   tasks: WBSTask[];
+  explanation?: string;
 }
 
 export const getProjectTasks = (projectId: string) => api.get<{ tasks: Task[] }>(`/projects/${projectId}/tasks`);
