@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import Editor, { type OnMount } from '@monaco-editor/react';
 import type { editor as monacoEditor, Uri } from 'monaco-editor';
 import { getFileContent, saveFileContent, API_BASE_URL, fetchHealthOverview, fetchContextualMentorship, fetchTechScan, getGitStatus } from '@/lib/api';
+import { draftStore } from '@/lib/draftStore';
 import { useQuery } from '@tanstack/react-query';
 import { cn, hashString } from '@/lib/utils';
 import { useTabsStore } from '@/store/tabsStore';
@@ -400,7 +401,11 @@ export default function EditorTab({
       try {
         const data = await getFileContent(projectId, node.file_path);
         if (isMounted) {
-          const restored = backup && backup !== data ? backup : data;
+          // Hot Exit: prefer project-scoped draft, then legacy unsavedStore backup
+          const draft = draftStore.load(projectId, node.file_path);
+          const restored = (draft && draft !== data)
+            ? draft
+            : (backup && backup !== data ? backup : data);
           originalContentRef.current = data;
           currentContentRef.current = restored;
           setInitialValue(restored);
@@ -593,6 +598,8 @@ export default function EditorTab({
       currentContentRef.current = current;
       setIsDirty(false);
       useUnsavedStore.getState().clearContent(targetPath);
+      // Hot Exit: clear draft on successful save
+      if (node.file_path) draftStore.clear(projectId, node.file_path);
       // Disparar Health Overview después de guardar
       if (isCoachEnabled && editorRef.current) {
         const model = editorRef.current.getModel();
@@ -806,8 +813,13 @@ export default function EditorTab({
       backupTimerRef.current = setTimeout(() => {
         const model = editor.getModel();
         if (!model || model.isDisposed()) return;
+        const content = editor.getValue();
         const backupKey = node.file_path || node.id;
-        useUnsavedStore.getState().setContent(backupKey, editor.getValue());
+        useUnsavedStore.getState().setContent(backupKey, content);
+        // Hot Exit: persist project-scoped draft
+        if (node.file_path) {
+          draftStore.save(projectId, node.file_path, content);
+        }
       }, 1000);
       
       // Endpoint /editor/lint disabled to prevent rate limit collisions with Code Coach
