@@ -255,7 +255,9 @@ export function CoachSidebar({
             )}
           </div>
         </div>
-        {isAnalyzingCode && !overview ? (
+        {isHealthOpen && (
+          <div className="animate-in fade-in slide-in-from-top-2 mt-3 flex flex-col flex-1">
+            {isAnalyzingCode && !overview ? (
            <div className="flex flex-col items-center justify-center p-4 text-center border border-dashed border-zinc-800 rounded-lg bg-zinc-900/50">
              <Loader2 className="w-6 h-6 animate-spin text-amber-500 mb-2" />
              <p className="text-xs font-medium text-zinc-300">El Sensei está leyendo tu código. Ten paciencia...</p>
