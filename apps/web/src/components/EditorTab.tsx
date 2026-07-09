@@ -93,6 +93,16 @@ export default function EditorTab({
   const [availableAdviceLines, setAvailableAdviceLines] = useState<number[]>([]);
   const [initialValue, setInitialValue] = useState('');
   const [draftModifiedLines, setDraftModifiedLines] = useState<number[]>([]);
+  const [isConflictMode, setIsConflictMode] = useState(false);
+  const aiAbortControllerRef = useRef<AbortController | null>(null);
+
+  // Initialize AbortController
+  useEffect(() => {
+    aiAbortControllerRef.current = new AbortController();
+    return () => {
+      aiAbortControllerRef.current?.abort();
+    };
+  }, []);
 
   const isCoachEnabled = useSettingsStore((s) => s.isFimEnabled);
   const setIsCoachEnabled = useSettingsStore((s) => s.setFimEnabled);
@@ -206,7 +216,8 @@ export default function EditorTab({
         content,
         language,
         fimDefaultModelRef.current,
-        fimFallbackModelRef.current
+        fimFallbackModelRef.current,
+        aiAbortControllerRef.current?.signal
       );
       if (model.isDisposed()) return;
       setCoachOverview(healthResponse);
@@ -290,7 +301,8 @@ export default function EditorTab({
         language,
         position?.lineNumber || 1,
         fimDefaultModelRef.current,
-        fimFallbackModelRef.current
+        fimFallbackModelRef.current,
+        aiAbortControllerRef.current?.signal
       );
       if (model.isDisposed()) return;
       const validMentorshipResponse = sanitizeMarkers(mentorshipResponse);
@@ -356,6 +368,7 @@ export default function EditorTab({
 
 
   useEffect(() => {
+    if (isConflictMode) return;
     if (isEditorReady && isCoachEnabled && editorRef.current) {
       const model = editorRef.current.getModel();
       if (model && !model.isDisposed() && model.getValue().length > 5) {
@@ -365,16 +378,17 @@ export default function EditorTab({
         return () => clearTimeout(timeout);
       }
     }
-  }, [isEditorReady, isCoachEnabled, runCoachAnalysis]);
+  }, [isEditorReady, isCoachEnabled, runCoachAnalysis, isConflictMode]);
 
   useEffect(() => {
+    if (isConflictMode) return;
     if (isEditorReady && isCoachEnabled && editorRef.current) {
       const model = editorRef.current.getModel();
       if (model && !model.isDisposed()) {
         runHealthAnalysis(model, false);
       }
     }
-  }, [isEditorReady, isCoachEnabled, node.file_path, runHealthAnalysis]);
+  }, [isEditorReady, isCoachEnabled, node.file_path, runHealthAnalysis, isConflictMode]);
 
   // Hot Exit: apply amber gutter decorations on draft-modified lines
   useEffect(() => {
@@ -679,6 +693,11 @@ export default function EditorTab({
       }
     } catch (error: any) {
       if (error?.status === 409) {
+        setIsConflictMode(true);
+        if (aiAbortControllerRef.current) {
+          aiAbortControllerRef.current.abort();
+          aiAbortControllerRef.current = new AbortController();
+        }
         toast.error("Conflicto de Edición", { 
           description: "El archivo fue modificado externamente (ej. por git pull). Tus cambios locales no se guardaron para evitar sobrescribir. Copia tus cambios, refresca y vuelve a aplicarlos.",
           duration: 10000 

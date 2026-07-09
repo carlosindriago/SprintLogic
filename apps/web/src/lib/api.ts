@@ -277,14 +277,15 @@ export const fetchHealthOverview = async (
   fileContent: string,
   language: string,
   model?: string,
-  fallbackModel?: string
+  fallbackModel?: string,
+  signal?: AbortSignal
 ): Promise<CodeCoachOverview> => {
   return await api.post<CodeCoachOverview>(`/ai/health-overview`, {
     file_content: fileContent,
     language,
     model,
     fallback_model: fallbackModel
-  });
+  }, { signal });
 };
 
 export const fetchContextualMentorship = async (
@@ -292,7 +293,8 @@ export const fetchContextualMentorship = async (
   language: string,
   cursorLine: number,
   model?: string,
-  fallbackModel?: string
+  fallbackModel?: string,
+  signal?: AbortSignal
 ): Promise<CodeCoachMarker[]> => {
   return await api.post<CodeCoachMarker[]>(`/ai/contextual-mentorship`, {
     file_content: fileContent,
@@ -300,7 +302,7 @@ export const fetchContextualMentorship = async (
     cursor_line: cursorLine,
     model,
     fallback_model: fallbackModel
-  });
+  }, { signal });
 };
 
 export const fetchTechScan = async (
