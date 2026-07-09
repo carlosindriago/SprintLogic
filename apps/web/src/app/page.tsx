@@ -54,6 +54,7 @@ import { toast } from "sonner";
 import { useDoubleShift } from "@/hooks/useDoubleShift";
 import { useGlobalShortcuts } from "@/hooks/useGlobalShortcuts";
 import { HelpModal } from "@/components/HelpModal";
+import { CheatSheetModal } from "@/components/CheatSheetModal";
 
 // Monaco bundles are large and depend on `window`/`document`. They MUST
 // never enter the server bundle — that is what was pegging the CPU on
@@ -82,6 +83,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [cheatSheetOpen, setCheatSheetOpen] = useState(false);
   const [addProjectOpen, setAddProjectOpen] = useState(false);
   const isVimEnabled = useSettingsStore((s) => s.isVimEnabled);
   const setVimEnabled = useSettingsStore((s) => s.setVimEnabled);
@@ -130,6 +132,16 @@ export default function Home() {
     const handleToggleHelp = () => setHelpOpen((prev) => !prev);
     window.addEventListener("toggle-help", handleToggleHelp);
     return () => window.removeEventListener("toggle-help", handleToggleHelp);
+  }, []);
+
+  useEffect(() => {
+    const handleToggleCheatSheet = () => {
+      setCheatSheetOpen((prev) => !prev);
+    };
+    window.addEventListener("toggle-cheat-sheet", handleToggleCheatSheet);
+    return () => {
+      window.removeEventListener("toggle-cheat-sheet", handleToggleCheatSheet);
+    };
   }, []);
 
   const handleSearchSelect = (result: { path: string; line?: number | null }) => {
@@ -972,6 +984,7 @@ export default function Home() {
           />
         )}
         <HelpModal isOpen={helpOpen} onClose={() => setHelpOpen(false)} />
+        <CheatSheetModal isOpen={cheatSheetOpen} onClose={() => setCheatSheetOpen(false)} />
     </div>
   );
 }
