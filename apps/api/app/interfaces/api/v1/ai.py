@@ -388,11 +388,14 @@ async def contextual_mentorship(request: CodeCoachRequest):
             "CRÍTICO: TIENES PROHIBIDO PENSAR EN VOZ ALTA. NO expliques tu razonamiento fuera del JSON."
         )
 
-        lines = request.file_content.split('\n')
+        original_lines = request.file_content.split('\n')
+        # Inyectar números de línea absolutos
+        lines = [f"[Line {i+1}] {line}" for i, line in enumerate(original_lines)]
+        
         if len(lines) > 300:
             truncated_content = '\n'.join(lines[:150]) + '\n\n... [CÓDIGO TRUNCADO POR TAMAÑO] ...\n\n' + '\n'.join(lines[-150:])
         else:
-            truncated_content = request.file_content
+            truncated_content = '\n'.join(lines)
 
         user = (
             f"Analiza este código en {request.language or 'código'}. El cursor del usuario está cerca de la línea {request.cursor_line}:\n\n"
