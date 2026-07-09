@@ -210,7 +210,7 @@ export const commitChanges = (projectId: string, message: string) => api.post(`/
 export interface KanbanColumn {
   id: string;
   title: string;
-  color?: string;
+  color: string;
   rule?: 'manual' | 'pomodoro' | 'auto-on-test-fail' | 'auto-on-test-pass';
 }
 
