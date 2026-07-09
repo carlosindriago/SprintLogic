@@ -237,7 +237,9 @@ async def health_overview(request: CodeCoachRequest):
             '  "structure": "Breve descripción",\n'
             '  "critical_security": "Advertencias si las hay, o None",\n'
             '  "clean_code_score": 85\n'
-            "}\n"
+            "}\n\n"
+            "EJEMPLO DE SALIDA ESPERADA:\n"
+            '{"clean_code_score": 85, "structure": "El código es modular pero carece de tipado estricto.", "critical_security": "None"}\n\n'
             "No incluyas markdown, explicaciones previas ni texto fuera del objeto JSON. "
             "CRÍTICO: TIENES PROHIBIDO PENSAR EN VOZ ALTA. NO expliques tu razonamiento fuera del JSON."
         )
@@ -281,7 +283,7 @@ async def health_overview(request: CodeCoachRequest):
                             messages=model_messages,
                             api_key=adapted["api_key"],
                             max_tokens=1000,
-                            temperature=0.1,
+                            temperature=0.0,
                             timeout=60,
                             **adapted["kwargs"],
                         ),
@@ -357,7 +359,9 @@ async def contextual_mentorship(request: CodeCoachRequest):
             "Estructura EXACTA requerida:\n"
             "[\n"
             '  { "line": 12, "severity": "hint" | "warning" | "error", "message": "Consejo", "explanation": "Explica", "suggested_code": "código o null" }\n'
-            "]\n"
+            "]\n\n"
+            "EJEMPLO DE SALIDA ESPERADA:\n"
+            '[{"line": 12, "message": "Usa const en lugar de let.", "explanation": "Inmutabilidad previene errores de reasignación.", "severity": "warning", "suggested_code": "const config = {}"}]\n\n'
             "No incluyas markdown, explicaciones previas ni texto fuera del arreglo JSON. "
             "CRÍTICO: TIENES PROHIBIDO PENSAR EN VOZ ALTA. NO expliques tu razonamiento fuera del JSON."
         )
@@ -399,7 +403,7 @@ async def contextual_mentorship(request: CodeCoachRequest):
                             messages=model_messages,
                             api_key=adapted["api_key"],
                             max_tokens=2500,
-                            temperature=0.1,
+                            temperature=0.0,
                             timeout=120,
                             **adapted["kwargs"],
                         ),
