@@ -216,7 +216,7 @@ export interface KanbanColumn {
 
 export interface WBSTask {
   title: string;
-  priority: string;
+  priority: 'Low' | 'Medium' | 'High' | undefined;
   tags: string[];
 }
 
