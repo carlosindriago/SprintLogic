@@ -33,6 +33,7 @@ interface CoachSidebarProps {
   fileMetadata?: { lineCount: number; gitStatus: string };
   availableAdviceLines?: number[];
   isEditorDirty?: boolean;
+  isConflictMode?: boolean;
 }
 
 export function CoachSidebar({
@@ -48,6 +49,7 @@ export function CoachSidebar({
   fileMetadata,
   availableAdviceLines,
   isEditorDirty,
+  isConflictMode,
 }: CoachSidebarProps) {
   const [quoteIndex, setQuoteIndex] = useState(0);
   const [isCopied, setIsCopied] = useState(false);
@@ -217,7 +219,17 @@ export function CoachSidebar({
         )}
       </div>
 
-      {/* Celda 2: Overview */}
+      {isConflictMode ? (
+        <div className="flex-1 flex flex-col items-center justify-center text-center p-6 bg-[#121212] border border-rose-500/30 rounded-lg shadow-sm mb-4">
+          <ShieldAlert className="w-12 h-12 text-rose-500 mb-4 opacity-80" />
+          <h3 className="text-sm font-semibold text-rose-400 mb-2">Análisis Suspendido</h3>
+          <p className="text-xs text-zinc-400">
+            Resuelve el conflicto en el editor para reanudar la mentoría.
+          </p>
+        </div>
+      ) : (
+        <>
+          {/* Celda 2: Overview */}
       <div className={`bg-[#121212] border ${overview?.is_degraded ? 'border-rose-500/50' : 'border-zinc-800'} rounded-lg p-4 flex flex-col shadow-sm mb-4`}>
         <div 
           className="flex items-center justify-between cursor-pointer"
@@ -390,6 +402,8 @@ export function CoachSidebar({
           </div>
         )}
       </div>
+        </>
+      )}
     </div>
   );
 }
