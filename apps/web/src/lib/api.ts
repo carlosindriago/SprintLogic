@@ -183,10 +183,16 @@ export interface GitDashboardLists {
   penultimate_commit_list: GitDashboardFileStatus[];
 }
 
+export interface GitDashboardCommits {
+  last_commit_message?: string;
+  penultimate_commit_message?: string;
+}
+
 export interface GitDashboard {
   branch: GitDashboardBranch;
   kpis: GitDashboardKPIs;
   lists: GitDashboardLists;
+  commits?: GitDashboardCommits;
 }
 
 export interface FileLocalDiff {
