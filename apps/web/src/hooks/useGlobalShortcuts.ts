@@ -55,6 +55,13 @@ export function useGlobalShortcuts() {
         window.dispatchEvent(new CustomEvent("trigger-sensei"));
         return;
       }
+
+      if (mod && e.key === "/") {
+        e.preventDefault();
+        e.stopPropagation();
+        window.dispatchEvent(new CustomEvent("toggle-help"));
+        return;
+      }
     };
 
     window.addEventListener("keydown", handler, { capture: true });
