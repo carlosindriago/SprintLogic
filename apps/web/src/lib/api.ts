@@ -152,7 +152,26 @@ export const getFileLocalDiff = (projectId: string, filePath: string) =>
   api.get<any>(`/projects/${projectId}/git/diff?file_path=${encodeURIComponent(filePath)}`);
 export const revertFile = (projectId: string, filePath: string) => 
   api.post<{ status: string; action: string }>(`/projects/${projectId}/git/revert`, { file_path: filePath });
-export const getGitDashboard = (projectId: string) => api.get<any>(`/projects/${projectId}/git/dashboard`);
+export interface GitDashboardFileStatus {
+  path: string;
+  status: string;
+}
+
+export interface GitDashboard {
+  branch: string;
+  ahead: number;
+  behind: number;
+  staged: GitDashboardFileStatus[];
+  unstaged: GitDashboardFileStatus[];
+  untracked: GitDashboardFileStatus[];
+}
+
+export interface FileLocalDiff {
+  original: string;
+  modified: string;
+}
+
+export const getGitDashboard = (projectId: string) => api.get<GitDashboard>(`/projects/${projectId}/git/dashboard`);
 export const stageFile = (projectId: string, filePath: string) => api.post(`/projects/${projectId}/git/stage`, { file_path: filePath });
 export const unstageFile = (projectId: string, filePath: string) => api.post(`/projects/${projectId}/git/unstage`, { file_path: filePath });
 export const commitChanges = (projectId: string, message: string) => api.post(`/projects/${projectId}/git/commit`, { message });
