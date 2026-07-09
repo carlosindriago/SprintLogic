@@ -451,10 +451,13 @@ async def get_project_file_content(
     if not candidate.is_file():
         raise HTTPException(status_code=404, detail="File not found")
 
+    import hashlib
     try:
-        with open(candidate, encoding="utf-8") as f:
-            content = f.read()
-        return {"content": content}
+        with open(candidate, "rb") as f:
+            raw_content = f.read()
+        content = raw_content.decode("utf-8")
+        file_hash = hashlib.sha256(raw_content).hexdigest()
+        return {"content": content, "original_hash": file_hash}
     except Exception as e:
         logger.error("Failed to read file failed: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="An internal error occurred")
