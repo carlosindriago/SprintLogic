@@ -276,10 +276,10 @@ async def health_overview(request: CodeCoachRequest):
                             api_key=adapted["api_key"],
                             max_tokens=1000,
                             temperature=0.1,
-                            timeout=15,
+                            timeout=60,
                             **adapted["kwargs"],
                         ),
-                        timeout=25.0
+                        timeout=65.0
                     )
                     
                     raw_content = str(response.choices[0].message.content or "").strip()
@@ -303,7 +303,7 @@ async def health_overview(request: CodeCoachRequest):
                 except Exception as e:
                     if not raw_content:
                         _logger.warning("Health Overview API call failed with model %s: %s", current_model, e)
-                        last_error = str(e)
+                        last_error = repr(e)
                         break
                     
                     if attempt < MAX_RETRIES:
@@ -320,7 +320,7 @@ async def health_overview(request: CodeCoachRequest):
         raise ValueError(f"All model attempts failed. Last error: {last_error}")
 
     except Exception as e:
-        error_msg = str(e)
+        error_msg = repr(e)
         _logger.error(f"Health Overview Fallback triggered: {error_msg}")
         
         return CodeCoachOverview(
@@ -388,10 +388,10 @@ async def contextual_mentorship(request: CodeCoachRequest):
                             api_key=adapted["api_key"],
                             max_tokens=2500,
                             temperature=0.1,
-                            timeout=15,
+                            timeout=120,
                             **adapted["kwargs"],
                         ),
-                        timeout=25.0
+                        timeout=125.0
                     )
                     
                     raw_content = str(response.choices[0].message.content or "").strip()
@@ -420,7 +420,7 @@ async def contextual_mentorship(request: CodeCoachRequest):
                     
                 except Exception as e:
                     if not raw_content:
-                        last_error = str(e)
+                        last_error = repr(e)
                         break
                     
                     if attempt < MAX_RETRIES:
@@ -437,7 +437,7 @@ async def contextual_mentorship(request: CodeCoachRequest):
         raise ValueError(f"All model attempts failed. Last error: {last_error}")
 
     except Exception as e:
-        error_msg = str(e)
+        error_msg = repr(e)
         _logger.error(f"Contextual Mentorship Fallback triggered: {error_msg}")
         
         return [CodeCoachMarker(
