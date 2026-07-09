@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable react/no-unescaped-entities */
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { CodeCoachOverview, CodeCoachMarker } from "@/lib/api";
 import { RefreshCw, ShieldAlert, FileCode2, Activity, Lightbulb, Loader2, FileText, Keyboard } from "lucide-react";
 import { SiTypescript, SiReact, SiPython, SiNextdotjs, SiFastapi, SiTailwindcss, SiNodedotjs, SiDocker, SiPostgresql, SiHtml5, SiCss, SiGnubash } from 'react-icons/si';
@@ -120,8 +123,12 @@ export function CoachSidebar({
                     e.preventDefault();
                     e.stopPropagation();
                     const url = e.currentTarget.href;
-                    const { open } = await import('@tauri-apps/plugin-shell');
-                    await open(url);
+                    try {
+                      const { open } = await import('@tauri-apps/plugin-shell');
+                      await open(url);
+                    } catch (err) {
+                      window.open(url, '_blank');
+                    }
                   }}
                 >
                   <Icon />
@@ -168,6 +175,12 @@ export function CoachSidebar({
             <div className={`leading-relaxed bg-[#1a1a1a] p-2 rounded border ${overview.is_degraded ? 'text-rose-300 border-rose-500/30' : 'text-zinc-300 border-zinc-800/50'}`}>
               {overview.structure}
             </div>
+            {overview.is_degraded && (overview as any).error_detail && (
+              <div className="mt-2 text-[10px] font-mono bg-black/50 p-2 rounded border border-rose-900/50 text-rose-400 break-all">
+                RAW ERROR:<br/>
+                {(overview as any).error_detail}
+              </div>
+            )}
           </div>
         ) : (
           <p className="text-xs text-zinc-500">Esperando análisis dinámico del Coach...</p>

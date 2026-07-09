@@ -7,6 +7,7 @@ import { useMarkersStore, type MarkerData } from '@/store/markersStore';
 import { cn } from '@/lib/utils';
 import { ContextMenu, ContextMenuItem, ContextMenuSeparator } from './ContextMenu';
 import { useFocusStore } from '@/store/focusStore';
+import { useUnsavedStore } from '@/store/unsavedStore';
 
 interface FileTreeProps {
   projectId: string;
@@ -33,6 +34,7 @@ const TreeNode: React.FC<{
   const [isOpen, setIsOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [showMarkers, setShowMarkers] = useState(false);
+  const isDirty = useUnsavedStore((s) => s.files[node.path] !== undefined);
   const paddingLeft = `${depth * 12 + 8}px`;
 
   const handleContextMenu = (e: React.MouseEvent) => {
@@ -111,6 +113,7 @@ const TreeNode: React.FC<{
       >
         <FileIcon fileName={node.name} className="w-4 h-4 mr-2 shrink-0" />
         <span className="text-sm truncate">{node.name}</span>
+        {isDirty && <div className="w-2 h-2 rounded-full bg-blue-500 ml-2" title="Sin guardar" />}
         <FileMarkerBadge
           filePath={node.path}
           onToggle={() => setShowMarkers((v) => !v)}

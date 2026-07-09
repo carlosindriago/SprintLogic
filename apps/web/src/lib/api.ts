@@ -558,21 +558,42 @@ export interface CodeCoachOverview {
   critical_security: string;
   clean_code_score: number;
   is_degraded?: boolean;
+  error_detail?: string;
 }
 
-export interface CodeCoachResponse {
-  overview: CodeCoachOverview;
-  contextual_advice: CodeCoachMarker[];
-}
+export const fetchHealthOverview = async (
+  fileContent: string,
+  language: string,
+  model?: string,
+  fallbackModel?: string
+): Promise<CodeCoachOverview> => {
+  const res = await fetch(`${API_BASE_URL}/ai/health-overview`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ 
+      file_content: fileContent, 
+      language,
+      model,
+      fallback_model: fallbackModel
+    }),
+  });
+  
+  if (!res.ok) {
+    const errorText = await res.text().catch(() => '');
+    throw new Error(`Health Overview request failed: ${res.status} ${errorText}`);
+  }
+  
+  return res.json();
+};
 
-export const fetchCodeCoachAnalysis = async (
+export const fetchContextualMentorship = async (
   fileContent: string,
   language: string,
   cursorLine: number,
   model?: string,
   fallbackModel?: string
-): Promise<CodeCoachResponse> => {
-  const res = await fetch(`${API_BASE_URL}/ai/code-coach`, {
+): Promise<CodeCoachMarker[]> => {
+  const res = await fetch(`${API_BASE_URL}/ai/contextual-mentorship`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ 
@@ -586,7 +607,7 @@ export const fetchCodeCoachAnalysis = async (
   
   if (!res.ok) {
     const errorText = await res.text().catch(() => '');
-    throw new Error(`Code Coach request failed: ${res.status} ${errorText}`);
+    throw new Error(`Contextual Mentorship request failed: ${res.status} ${errorText}`);
   }
   
   return res.json();

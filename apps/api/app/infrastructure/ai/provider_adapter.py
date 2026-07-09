@@ -39,6 +39,8 @@ class ProviderAdapter:
         """Infer the provider key used for credential lookup."""
         provider, _ = cls._split_model(model)
         if provider:
+            if provider == "nvidia_nim":
+                return "nvidia"
             return provider
 
         model_lower = model.lower()
@@ -67,7 +69,8 @@ class ProviderAdapter:
         if not model_id or model_id.lower() == "default":
             raise ValueError(f"Invalid or missing model name: {model}")
 
-        config = cls.CUSTOM_PROVIDERS.get(provider, {})
+        internal_provider = "nvidia" if provider == "nvidia_nim" else provider
+        config = cls.CUSTOM_PROVIDERS.get(internal_provider, {})
 
         kwargs: dict[str, Any] = {}
 
@@ -80,7 +83,7 @@ class ProviderAdapter:
             kwargs["api_base"] = config["api_base"]
 
         # NVIDIA NIM expects its key via an environment variable.
-        if provider == "nvidia" and api_key:
+        if internal_provider == "nvidia" and api_key:
             os.environ["NVIDIA_NIM_API_KEY"] = api_key
 
         return {

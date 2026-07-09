@@ -1,8 +1,9 @@
 "use client";
 
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { useEffect } from "react";
 import { useFimStore } from "@/store/fimStore";
-import { Loader2 } from "lucide-react";
+import { Brain, Sparkles, Loader2, Bot, Network } from "lucide-react";
 
 export default function FimHintBar() {
   const explanation = useFimStore((s) => s.explanation);

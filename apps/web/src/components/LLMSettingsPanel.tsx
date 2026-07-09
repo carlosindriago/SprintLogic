@@ -20,7 +20,7 @@ import {
   ModelResult,
   getCuratedModels,
   CuratedProvider,
-  fetchCodeCoachAnalysis,
+  fetchHealthOverview,
 } from "@/lib/api";
 import { useLLMConfigStore } from "@/store/llmConfigStore";
 import { Key, Loader2, CheckCircle2, XCircle, Trash2, Brain, Sparkles, Play } from "lucide-react";
@@ -415,15 +415,15 @@ function FimConfigSection({ providers }: { providers: CuratedProvider[] }) {
   const handleTest = async () => {
     setIsTesting(true);
     try {
-      const res = await fetchCodeCoachAnalysis("def bad_loop():\n    while True:\n        pass\n", "python", 1, fimDefaultModel, fimFallbackModel);
-      if (res && res.overview && res.contextual_advice) {
+      const res = await fetchHealthOverview("def bad_loop():\n    while True:\n        pass\n", "python", fimDefaultModel, fimFallbackModel);
+      if (res && res.clean_code_score !== undefined) {
         toast.success("AI Code Coach respondió exitosamente", {
           description: "La configuración actual de modelos para análisis es válida."
         });
       } else {
         toast.error("El modelo seleccionado no pudo generar el formato JSON requerido por el Coach. Intenta con un modelo de mayor capacidad de razonamiento.");
       }
-    } catch (err) {
+    } catch {
       toast.error("El modelo seleccionado no pudo generar el formato JSON requerido por el Coach. Intenta con un modelo de mayor capacidad de razonamiento.");
     } finally {
       setIsTesting(false);

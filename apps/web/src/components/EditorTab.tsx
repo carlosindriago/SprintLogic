@@ -1,7 +1,9 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import Editor, { type OnMount } from '@monaco-editor/react';
 import type { editor as monacoEditor, Uri } from 'monaco-editor';
-import { getFileContent, saveFileContent, API_BASE_URL, fetchCodeCoachAnalysis, fetchTechScan, getGitStatus } from '@/lib/api';
+import { getFileContent, saveFileContent, API_BASE_URL, fetchHealthOverview, fetchContextualMentorship, fetchTechScan, getGitStatus } from '@/lib/api';
 import { useQuery } from '@tanstack/react-query';
 import { cn, hashString } from '@/lib/utils';
 import { useTabsStore } from '@/store/tabsStore';
@@ -60,7 +62,7 @@ function CoachToggleButton({ isCoachEnabled, onToggle }: { isCoachEnabled: boole
   );
 }
 
-const globalCoachCache = new Map<string, any>();
+// globalCoachCache replaced by localStorage
 
 export default function EditorTab({
   projectId,
@@ -91,13 +93,13 @@ export default function EditorTab({
   const isCoachEnabled = useSettingsStore((s) => s.isFimEnabled);
   const setIsCoachEnabled = useSettingsStore((s) => s.setFimEnabled);
 
-  const editorRef = useRef<typeof import('monaco-editor').editor.IStandaloneCodeEditor | null>(null);
-
+  const editorRef = useRef<monacoEditor.IStandaloneCodeEditor | null>(null);
+  const isDirtyRef = useRef(false);
   const { data: techData, isFetching: isScanningTech, refetch: handleRescan, isError: isTechError } = useQuery({
     queryKey: ['tech-scan', node.file_path],
     queryFn: () => {
       const content = editorRef.current?.getValue() || initialValue;
-      const lang = node.metadata?.language || node.file_path?.split('.').pop() || 'typescript';
+      const lang = (node.metadata?.language as string) || node.file_path?.split('.').pop() || 'typescript';
       console.log('[Tech Scan] Firing with args:', { model: fimDefaultModel, fallback: fimFallbackModel, lang, contentLen: content?.length });
       return fetchTechScan(content, lang, fimDefaultModel, fimFallbackModel);
     },
@@ -107,7 +109,7 @@ export default function EditorTab({
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     refetchOnMount: false,
-    enabled: !!node.file_path && isCoachEnabled && !!(editorRef.current?.getValue() || initialValue) && (editorRef.current?.getValue() || initialValue).length > 5,
+    enabled: !!node.file_path && isCoachEnabled && !!initialValue && initialValue.length > 5,
   });
   const fimDefaultModel = useLLMConfigStore((s) => s.fimDefaultModel);
   const fimFallbackModel = useLLMConfigStore((s) => s.fimFallbackModel);
@@ -125,7 +127,7 @@ export default function EditorTab({
     enabled: !!projectId
   });
   
-  const fileContent = editorRef.current?.getValue() || initialValue;
+  const fileContent = initialValue;
   const lineCount = fileContent ? fileContent.split('\n').length : 0;
   
   let gitStatusLabel = 'clean';
@@ -183,24 +185,35 @@ export default function EditorTab({
     const content = model.getValue();
     const currentHash = hashString(content);
     
-    if (globalCoachCache.has(currentHash)) {
-      const response = globalCoachCache.get(currentHash);
-      setCoachOverview(response.overview);
-      
-      const monacoMarkers = response.contextual_advice.map((m: any) => ({
-        severity: m.severity === 'error' ? monacoRef.current!.MarkerSeverity.Error : 
-                  m.severity === 'warning' ? monacoRef.current!.MarkerSeverity.Warning : 
-                  monacoRef.current!.MarkerSeverity.Hint,
-        message: m.message,
-        startLineNumber: m.line,
-        startColumn: 1,
-        endLineNumber: m.line,
-        endColumn: model.getLineMaxColumn(m.line),
-        explanation: m.explanation
-      }));
-      
-      monacoRef.current!.editor.setModelMarkers(model, 'ai-coach', monacoMarkers as any);
-      return;
+    const cachedHealth = localStorage.getItem(`coach_health_${currentHash}`);
+    const cachedMentorship = localStorage.getItem(`coach_mentorship_${currentHash}`);
+    
+    if (cachedHealth && cachedMentorship) {
+      try {
+        const parsedHealth = JSON.parse(cachedHealth);
+        const parsedMentorship = JSON.parse(cachedMentorship);
+        
+        setCoachOverview(parsedHealth);
+        
+        const monacoMarkers = parsedMentorship.map((m: any) => ({
+          severity: m.severity === 'error' ? monacoRef.current!.MarkerSeverity.Error : 
+                    m.severity === 'warning' ? monacoRef.current!.MarkerSeverity.Warning : 
+                    monacoRef.current!.MarkerSeverity.Hint,
+          message: m.message,
+          startLineNumber: m.line,
+          startColumn: 1,
+          endLineNumber: m.line,
+          endColumn: model.getLineMaxColumn(m.line),
+          explanation: m.explanation
+        }));
+        
+        monacoRef.current!.editor.setModelMarkers(model, 'ai-coach', monacoMarkers as any);
+        const lines = parsedMentorship.map((m: any) => m.line);
+        setAvailableAdviceLines(lines);
+        return;
+      } catch {
+        // Fallback to fetch if parse fails
+      }
     }
     
     setIsLoadingRef.current(true);
@@ -209,26 +222,35 @@ export default function EditorTab({
       const language = node.file_path?.split('.').pop() || '';
       const position = editor.getPosition();
       
-      const response = await fetchCodeCoachAnalysis(
-        content,
-        language,
-        position?.lineNumber || 1,
-        fimDefaultModelRef.current,
-        fimFallbackModelRef.current
-      );
+      const [healthResponse, mentorshipResponse] = await Promise.all([
+        fetchHealthOverview(
+          content,
+          language,
+          fimDefaultModelRef.current,
+          fimFallbackModelRef.current
+        ),
+        fetchContextualMentorship(
+          content,
+          language,
+          position?.lineNumber || 1,
+          fimDefaultModelRef.current,
+          fimFallbackModelRef.current
+        )
+      ]);
       
       if (model.isDisposed()) return;
       
-      globalCoachCache.set(currentHash, response);
+      localStorage.setItem(`coach_health_${currentHash}`, JSON.stringify(healthResponse));
+      localStorage.setItem(`coach_mentorship_${currentHash}`, JSON.stringify(mentorshipResponse));
       
       setCoachOverview(prev => {
-        if (response.overview.is_degraded && prev && prev.clean_code_score > 0) {
+        if (healthResponse.is_degraded && prev && prev.clean_code_score > 0) {
           return prev;
         }
-        return response.overview;
+        return healthResponse;
       });
       
-      const monacoMarkers = response.contextual_advice.map((m: any) => ({
+      const monacoMarkers = mentorshipResponse.map((m: any) => ({
         severity: m.severity === 'error' ? monacoRef.current!.MarkerSeverity.Error : 
                   m.severity === 'warning' ? monacoRef.current!.MarkerSeverity.Warning : 
                   monacoRef.current!.MarkerSeverity.Hint,
@@ -242,14 +264,17 @@ export default function EditorTab({
       
       monacoRef.current!.editor.setModelMarkers(model, 'ai-coach', monacoMarkers as any);
       
-      const lines = response.contextual_advice.map((m: any) => m.line);
+      const lines = mentorshipResponse.map((m: any) => m.line);
       setAvailableAdviceLines(lines);
-    } catch (error) {
+    } catch (error: any) {
       console.error('[Code Coach] Error:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
       setCoachOverview({
         structure: "Error de red o conexión fallida al analizar el código.",
+        critical_security: "N/A",
         clean_code_score: 0,
         is_degraded: true,
+        error_detail: errorMessage,
       });
       setAvailableAdviceLines([]);
     } finally {
@@ -805,7 +830,7 @@ export default function EditorTab({
     });
 
     checkDirty();
-  }, [node.metadata, checkDirty, node.file_path, node.id, vimMode]);
+  }, [node.metadata, checkDirty, node.file_path, node.id, vimMode, forceSenseiAnalysis, runCoachAnalysis]);
 
   if (loading) {
     return (
