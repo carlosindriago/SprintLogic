@@ -153,7 +153,7 @@ export const getFileLocalDiff = (projectId: string, filePath: string) =>
 export const revertFile = (projectId: string, filePath: string) => 
   api.post<{ status: string; action: string }>(`/projects/${projectId}/git/revert`, { file_path: filePath });
 export interface GitDashboardFileStatus {
-  path: string;
+  file_path: string;
   status: string;
 }
 
