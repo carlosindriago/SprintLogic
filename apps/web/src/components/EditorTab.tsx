@@ -226,6 +226,21 @@ export default function EditorTab({
     }
   }, [fimDefaultModelRef, fimFallbackModelRef, node.file_path]);
 
+  const sanitizeMarkers = (mentorshipArray: any[]) => {
+  if (!Array.isArray(mentorshipArray)) return [];
+  const hasError = mentorshipArray.some((m: any) => {
+    if (m.is_degraded) return true;
+    const msg = String(m.message || '').toLowerCase();
+    return msg.includes('fallo del proveedor ia') || 
+           msg.includes('error 429') || 
+           msg.includes('error 400') || 
+           msg.includes('error 500') || 
+           msg.includes('all model attempts failed');
+  });
+  if (hasError) return [];
+  return mentorshipArray.filter((m: any) => m.line && m.line > 0);
+};
+
   const runMentorshipAnalysis = useCallback(async (model: monacoEditor.ITextModel, editor: monacoEditor.IStandaloneCodeEditor) => {
     if (model.isDisposed()) return;
     const content = model.getValue();
@@ -234,7 +249,8 @@ export default function EditorTab({
     const cachedMentorship = localStorage.getItem(`coach_mentorship_${currentHash}`);
     if (cachedMentorship) {
       try {
-        const parsedMentorship = JSON.parse(cachedMentorship);
+        const rawMentorship = JSON.parse(cachedMentorship);
+        const parsedMentorship = sanitizeMarkers(rawMentorship);
         const monacoMarkers = parsedMentorship.map((m: any) => ({
           severity: m.severity === 'error' ? monacoRef.current!.MarkerSeverity.Error : 
                     m.severity === 'warning' ? monacoRef.current!.MarkerSeverity.Warning : 
@@ -266,8 +282,9 @@ export default function EditorTab({
         fimFallbackModelRef.current
       );
       if (model.isDisposed()) return;
-      localStorage.setItem(`coach_mentorship_${currentHash}`, JSON.stringify(mentorshipResponse));
-      const monacoMarkers = mentorshipResponse.map((m: any) => ({
+      const validMentorshipResponse = sanitizeMarkers(mentorshipResponse);
+      localStorage.setItem(`coach_mentorship_${currentHash}`, JSON.stringify(validMentorshipResponse));
+      const monacoMarkers = validMentorshipResponse.map((m: any) => ({
         severity: m.severity === 'error' ? monacoRef.current!.MarkerSeverity.Error : 
                   m.severity === 'warning' ? monacoRef.current!.MarkerSeverity.Warning : 
                   monacoRef.current!.MarkerSeverity.Hint,
@@ -279,8 +296,8 @@ export default function EditorTab({
         explanation: m.explanation
       }));
       monacoRef.current!.editor.setModelMarkers(model, 'ai-coach', monacoMarkers as any);
-      setAvailableAdviceLines(mentorshipResponse.map((m: any) => m.line));
-      setAllMentorshipAdvice(mentorshipResponse);
+      setAvailableAdviceLines(validMentorshipResponse.map((m: any) => m.line));
+      setAllMentorshipAdvice(validMentorshipResponse);
     } catch (error: any) {
       console.error('[Code Coach Mentorship] Error:', error);
       setAvailableAdviceLines([]);
