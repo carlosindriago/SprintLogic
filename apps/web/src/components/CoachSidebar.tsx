@@ -119,8 +119,9 @@ export function CoachSidebar({
                   onClick={async (e) => {
                     e.preventDefault();
                     e.stopPropagation();
+                    const url = e.currentTarget.href;
                     const { open } = await import('@tauri-apps/plugin-shell');
-                    await open(e.currentTarget.href);
+                    await open(url);
                   }}
                 >
                   <Icon />
