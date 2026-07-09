@@ -74,6 +74,7 @@ class CodeCoachMarker(BaseModel):
     message: str
     explanation: str
     suggested_code: str | None = None
+    is_degraded: bool = False
 
 
 class CodeCoachOverview(BaseModel):
@@ -443,19 +444,16 @@ async def contextual_mentorship(request: CodeCoachRequest):
                     return markers
                     
                 except Exception as e:
-                    if not raw_content:
-                        last_error = repr(e)
-                        break
-                    
                     if attempt < MAX_RETRIES:
-                        model_messages.append({"role": "assistant", "content": raw_content})
+                        if raw_content:
+                            model_messages.append({"role": "assistant", "content": raw_content})
                         model_messages.append({
                             "role": "user",
-                            "content": f"ERROR DE PARSEO: {str(e)}. Devuelve JSON puro sin formato extra."
+                            "content": f"ERROR: {str(e)}. Devuelve JSON puro sin formato extra."
                         })
                         continue
                     else:
-                        last_error = f"JSON Parse Error after retries: {str(e)}"
+                        last_error = f"Error after retries: {str(e)}"
                         break
 
         raise ValueError(f"All model attempts failed. Last error: {last_error}")
@@ -469,5 +467,6 @@ async def contextual_mentorship(request: CodeCoachRequest):
             severity="error",
             message="Fallo del proveedor IA",
             explanation=f"Error_detail: {error_msg}",
-            suggested_code=None
+            suggested_code=None,
+            is_degraded=True
         )]
