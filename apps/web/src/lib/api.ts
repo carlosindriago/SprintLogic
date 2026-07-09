@@ -218,6 +218,7 @@ export interface WBSTask {
   title: string;
   priority: 'Low' | 'Medium' | 'High' | undefined;
   tags: string[];
+  estimated_mins: number;
 }
 
 export interface WBSResponse {
