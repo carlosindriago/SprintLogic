@@ -329,7 +329,7 @@ export default function EditorTab({
         const data = await getFileContent(projectId, node.file_path);
         if (isMounted) {
           const restored = backup && backup !== data ? backup : data;
-          originalContentRef.current = restored;
+          originalContentRef.current = data;
           currentContentRef.current = restored;
           setInitialValue(restored);
           if (restored !== data) setIsDirty(true);
@@ -349,7 +349,13 @@ export default function EditorTab({
     return () => {
       isMounted = false;
       if (lintTimerRef.current) clearTimeout(lintTimerRef.current);
-      if (backupTimerRef.current) clearTimeout(backupTimerRef.current);
+      if (backupTimerRef.current) {
+        clearTimeout(backupTimerRef.current);
+        if (editorRef.current) {
+          const backupKey = node.file_path || node.id;
+          useUnsavedStore.getState().setContent(backupKey, editorRef.current.getValue());
+        }
+      }
       if (dirtyCheckTimerRef.current) clearTimeout(dirtyCheckTimerRef.current);
       if (coachTimerRef.current) clearTimeout(coachTimerRef.current);
       if (vimObserverRef.current) {
