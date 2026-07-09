@@ -114,10 +114,14 @@ export function CoachSidebar({
                 <a 
                   key={tech.name}
                   href={`https://devdocs.io/#q=${encodeURIComponent(tech.name.toLowerCase())}`} 
-                  target="_blank" 
-                  rel="noopener noreferrer" 
                   title={tech.name}
                   className="text-3xl text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                  onClick={async (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const { open } = await import('@tauri-apps/plugin-shell');
+                    await open(e.currentTarget.href);
+                  }}
                 >
                   <Icon />
                 </a>
