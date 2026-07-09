@@ -242,9 +242,15 @@ async def health_overview(request: CodeCoachRequest):
             "CRÍTICO: TIENES PROHIBIDO PENSAR EN VOZ ALTA. NO expliques tu razonamiento fuera del JSON."
         )
 
+        lines = request.file_content.split('\n')
+        if len(lines) > 300:
+            truncated_content = '\n'.join(lines[:150]) + '\n\n... [CÓDIGO TRUNCADO POR TAMAÑO] ...\n\n' + '\n'.join(lines[-150:])
+        else:
+            truncated_content = request.file_content
+
         user = (
             f"Analiza este código en {request.language or 'código'}:\n\n"
-            f"```\n{request.file_content}\n```\n\n"
+            f"```\n{truncated_content}\n```\n\n"
             "Devuelve únicamente el objeto JSON."
         )
 
@@ -356,9 +362,15 @@ async def contextual_mentorship(request: CodeCoachRequest):
             "CRÍTICO: TIENES PROHIBIDO PENSAR EN VOZ ALTA. NO expliques tu razonamiento fuera del JSON."
         )
 
+        lines = request.file_content.split('\n')
+        if len(lines) > 300:
+            truncated_content = '\n'.join(lines[:150]) + '\n\n... [CÓDIGO TRUNCADO POR TAMAÑO] ...\n\n' + '\n'.join(lines[-150:])
+        else:
+            truncated_content = request.file_content
+
         user = (
             f"Analiza este código en {request.language or 'código'}. El cursor del usuario está cerca de la línea {request.cursor_line}:\n\n"
-            f"```\n{request.file_content}\n```\n\n"
+            f"```\n{truncated_content}\n```\n\n"
             "Devuelve únicamente el arreglo JSON."
         )
 
