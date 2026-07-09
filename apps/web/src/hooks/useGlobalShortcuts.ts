@@ -62,6 +62,16 @@ export function useGlobalShortcuts() {
         window.dispatchEvent(new CustomEvent("toggle-help"));
         return;
       }
+
+      if (e.key === "?") {
+        const tag = (e.target as HTMLElement).tagName;
+        if (EDITABLE_TAGS.has(tag)) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+        window.dispatchEvent(new CustomEvent("toggle-cheat-sheet"));
+        return;
+      }
     };
 
     window.addEventListener("keydown", handler, { capture: true });
