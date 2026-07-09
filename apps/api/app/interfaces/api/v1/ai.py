@@ -80,6 +80,7 @@ class CodeCoachOverview(BaseModel):
     structure: str
     critical_security: str
     clean_code_score: int
+    technical_debt_and_tips: list[str] = []
     is_degraded: bool = False
     error_detail: str | None = None
 
@@ -232,14 +233,19 @@ async def health_overview(request: CodeCoachRequest):
         system = (
             "Eres un Arquitecto de Software. Analiza el código proporcionado. "
             "Devuelve EXCLUSIVAMENTE un objeto JSON estricto con un 'overview' general.\n\n"
+            "Además del score y la estructura, actúa como un Staff Engineer haciendo un Code Review. "
+            "Provee 2 o 3 consejos arquitectónicos críticos en el array technical_debt_and_tips. "
+            "Enfócate en vulnerabilidades de seguridad, violaciones al principio DRY, manejo de errores, y patrones de diseño. "
+            "Sé directo y profesional.\n\n"
             "Estructura EXACTA requerida:\n"
             "{\n"
             '  "structure": "Breve descripción",\n'
             '  "critical_security": "Advertencias si las hay, o None",\n'
-            '  "clean_code_score": 85\n'
+            '  "clean_code_score": 85,\n'
+            '  "technical_debt_and_tips": ["tip 1", "tip 2"]\n'
             "}\n\n"
             "EJEMPLO DE SALIDA ESPERADA:\n"
-            '{"clean_code_score": 85, "structure": "El código es modular pero carece de tipado estricto.", "critical_security": "None"}\n\n'
+            '{"clean_code_score": 85, "structure": "El código es modular pero carece de tipado estricto.", "critical_security": "None", "technical_debt_and_tips": ["Añadir validación estricta de tipos", "Implementar patrón repositorio para la BD"]}\n\n'
             "No incluyas markdown, explicaciones previas ni texto fuera del objeto JSON. "
             "CRÍTICO: TIENES PROHIBIDO PENSAR EN VOZ ALTA. NO expliques tu razonamiento fuera del JSON."
         )
@@ -303,6 +309,7 @@ async def health_overview(request: CodeCoachRequest):
                         structure=str(parsed.get("structure", "")),
                         critical_security=str(parsed.get("critical_security", "")),
                         clean_code_score=int(parsed.get("clean_code_score", 100)),
+                        technical_debt_and_tips=parsed.get("technical_debt_and_tips", []),
                         is_degraded=False
                     )
 
@@ -335,6 +342,7 @@ async def health_overview(request: CodeCoachRequest):
             structure="Fallo del proveedor IA",
             critical_security="N/A",
             clean_code_score=0,
+            technical_debt_and_tips=[],
             is_degraded=True,
             error_detail=f"Fallo del proveedor IA: {error_msg}"
         )
