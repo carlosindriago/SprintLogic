@@ -23,6 +23,7 @@ const SENSEI_QUOTES = [
 interface CoachSidebarProps {
   techData?: any;
   onRescan?: () => void;
+  onRefreshHealth?: () => void;
   isScanningTech: boolean;
   isTechError?: boolean;
   isAnalyzingCode: boolean;
@@ -36,6 +37,7 @@ interface CoachSidebarProps {
 export function CoachSidebar({
   techData,
   onRescan,
+  onRefreshHealth,
   isScanningTech,
   isTechError,
   isAnalyzingCode,
@@ -176,8 +178,21 @@ export function CoachSidebar({
             Health & Overview
             {isAnalyzingCode && overview && <Loader2 className="w-3 h-3 animate-spin text-zinc-500 ml-auto" />}
           </h3>
-          {overview && !overview.is_degraded && !isAnalyzingCode && (
-            <Button
+          <div className="flex items-center gap-1">
+            {onRefreshHealth && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onRefreshHealth}
+                disabled={isAnalyzingCode}
+                className="w-6 h-6 text-zinc-500 hover:text-white"
+                title="Recargar análisis (Health & Overview)"
+              >
+                <RefreshCw className={`w-4 h-4 ${isAnalyzingCode ? 'animate-spin' : ''}`} />
+              </Button>
+            )}
+            {overview && !overview.is_degraded && !isAnalyzingCode && (
+              <Button
               variant="ghost"
               size="icon"
               className="w-6 h-6 text-zinc-400 hover:text-white"
@@ -186,7 +201,8 @@ export function CoachSidebar({
             >
               {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
             </Button>
-          )}
+            )}
+          </div>
         </div>
         {isAnalyzingCode && !overview ? (
            <div className="flex flex-col items-center justify-center p-4 text-center border border-dashed border-zinc-800 rounded-lg bg-zinc-900/50">
