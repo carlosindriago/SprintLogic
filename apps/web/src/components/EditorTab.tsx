@@ -230,14 +230,14 @@ export default function EditorTab({
       );
 
       if (model.isDisposed()) return;
-
-      localStorage.setItem(`coach_health_${currentHash}`, JSON.stringify(healthResponse));
       
       setCoachOverview(healthResponse);
 
       if (healthResponse.is_degraded) {
         return;
       }
+
+      localStorage.setItem(`coach_health_${currentHash}`, JSON.stringify(healthResponse));
 
       const mentorshipResponse = await fetchContextualMentorship(
         content,
