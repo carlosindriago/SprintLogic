@@ -2,7 +2,7 @@
 /* eslint-disable react/no-unescaped-entities */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { CodeCoachOverview, CodeCoachMarker } from "@/lib/api";
-import { RefreshCw, ShieldAlert, FileCode2, Activity, Lightbulb, Loader2, FileText, Keyboard, Copy, Check } from "lucide-react";
+import { RefreshCw, ShieldAlert, FileCode2, Activity, Lightbulb, Loader2, FileText, Keyboard, Copy, Check, ChevronDown } from "lucide-react";
 import { SiTypescript, SiReact, SiPython, SiNextdotjs, SiFastapi, SiTailwindcss, SiNodedotjs, SiDocker, SiPostgresql, SiHtml5, SiCss, SiGnubash } from 'react-icons/si';
 import { VscCode } from 'react-icons/vsc';
 import { Button } from "@/components/ui/button";
@@ -52,6 +52,28 @@ export function CoachSidebar({
   const [quoteIndex, setQuoteIndex] = useState(0);
   const [isCopied, setIsCopied] = useState(false);
   const mentorshipRef = useRef<HTMLDivElement>(null);
+  
+  const [isTechStackOpen, setIsTechStackOpen] = useState(false);
+  const [isHealthOpen, setIsHealthOpen] = useState(true);
+
+  useEffect(() => {
+    if (overview) {
+      let hasSecurityWarning = false;
+      if (overview.is_degraded) {
+        hasSecurityWarning = true;
+      } else if (overview.critical_security && overview.critical_security !== "None" && overview.critical_security !== "N/A" && overview.critical_security !== "") {
+        hasSecurityWarning = true;
+      } else if (overview.technical_debt_and_tips) {
+        hasSecurityWarning = overview.technical_debt_and_tips.some(tip => 
+          tip.toLowerCase().includes('seguridad') || tip.toLowerCase().includes('vulnerabilidad')
+        );
+      }
+      
+      if (hasSecurityWarning && !isHealthOpen) {
+        setIsHealthOpen(true);
+      }
+    }
+  }, [overview, isHealthOpen]);
 
   useEffect(() => {
     if (allMentorshipAdvice && allMentorshipAdvice.length > 0 && !isAnalyzingCode) {
@@ -104,16 +126,23 @@ export function CoachSidebar({
     <div className="h-full w-full min-w-[250px] bg-[#0a0a0a] border-l border-zinc-800 flex flex-col overflow-y-auto custom-scrollbar p-3 space-y-4">
       {/* Celda 1: Ficha Técnica */}
       <div className="bg-[#121212] border border-zinc-800 rounded-lg p-4 flex flex-col shadow-sm">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-zinc-200 flex items-center gap-2">
+        <div 
+          className="flex items-center justify-between cursor-pointer" 
+          onClick={() => setIsTechStackOpen(!isTechStackOpen)}
+        >
+          <h3 className="text-sm font-semibold text-zinc-200 flex items-center gap-2 select-none">
             <FileCode2 className="w-4 h-4 text-blue-400" />
             Stack Técnico
+            <ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform duration-200 ${isTechStackOpen ? 'rotate-180' : ''}`} />
           </h3>
           <Button 
             variant="ghost" 
             size="icon" 
             className="w-6 h-6 text-zinc-400 hover:text-white" 
-            onClick={onRescan}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onRescan) onRescan();
+            }}
             disabled={isScanningTech}
             title="Re-escanear tecnologías"
           >
@@ -121,7 +150,9 @@ export function CoachSidebar({
           </Button>
         </div>
         
-        {fileMetadata && (
+        {isTechStackOpen && (
+          <div className="animate-in fade-in slide-in-from-top-2 mt-3">
+            {fileMetadata && (
           <div className="text-xs text-zinc-400 flex items-center gap-3 mb-4">
             <span className="flex items-center gap-1.5" title="Líneas de código">
               <FileText className="w-3.5 h-3.5" />
@@ -182,17 +213,23 @@ export function CoachSidebar({
         ) : (
           <p className="text-xs text-zinc-500">No se detectaron tecnologías específicas.</p>
         )}
+          </div>
+        )}
       </div>
 
       {/* Celda 2: Overview */}
       <div className={`bg-[#121212] border ${overview?.is_degraded ? 'border-rose-500/50' : 'border-zinc-800'} rounded-lg p-4 flex flex-col shadow-sm mb-4`}>
-        <div className="flex items-center justify-between mb-3">
-          <h3 className={`text-sm font-semibold flex items-center gap-2 ${overview?.is_degraded ? 'text-rose-400' : 'text-zinc-200'}`}>
+        <div 
+          className="flex items-center justify-between cursor-pointer"
+          onClick={() => setIsHealthOpen(!isHealthOpen)}
+        >
+          <h3 className={`text-sm font-semibold flex items-center gap-2 select-none ${overview?.is_degraded ? 'text-rose-400' : 'text-zinc-200'}`}>
             <Activity className={`w-4 h-4 ${overview?.is_degraded ? 'text-rose-500' : 'text-emerald-400'}`} />
             Health & Overview
+            <ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform duration-200 ${isHealthOpen ? 'rotate-180' : ''}`} />
             {isAnalyzingCode && overview && <Loader2 className="w-3 h-3 animate-spin text-zinc-500 ml-auto" />}
           </h3>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
             {onRefreshHealth && (
               <Button
                 variant="ghost"
@@ -266,6 +303,8 @@ export function CoachSidebar({
           </div>
         ) : (
           <p className="text-xs text-zinc-500">Esperando análisis dinámico del Coach...</p>
+        )}
+          </div>
         )}
       </div>
 
