@@ -222,33 +222,34 @@ export default function EditorTab({
       const language = node.file_path?.split('.').pop() || '';
       const position = editor.getPosition();
       
-      const [healthResponse, mentorshipResponse] = await Promise.all([
-        fetchHealthOverview(
-          content,
-          language,
-          fimDefaultModelRef.current,
-          fimFallbackModelRef.current
-        ),
-        fetchContextualMentorship(
-          content,
-          language,
-          position?.lineNumber || 1,
-          fimDefaultModelRef.current,
-          fimFallbackModelRef.current
-        )
-      ]);
+      const healthResponse = await fetchHealthOverview(
+        content,
+        language,
+        fimDefaultModelRef.current,
+        fimFallbackModelRef.current
+      );
+
+      if (model.isDisposed()) return;
+
+      localStorage.setItem(`coach_health_${currentHash}`, JSON.stringify(healthResponse));
+      
+      setCoachOverview(healthResponse);
+
+      if (healthResponse.is_degraded) {
+        return;
+      }
+
+      const mentorshipResponse = await fetchContextualMentorship(
+        content,
+        language,
+        position?.lineNumber || 1,
+        fimDefaultModelRef.current,
+        fimFallbackModelRef.current
+      );
       
       if (model.isDisposed()) return;
       
-      localStorage.setItem(`coach_health_${currentHash}`, JSON.stringify(healthResponse));
       localStorage.setItem(`coach_mentorship_${currentHash}`, JSON.stringify(mentorshipResponse));
-      
-      setCoachOverview(prev => {
-        if (healthResponse.is_degraded && prev && prev.clean_code_score > 0) {
-          return prev;
-        }
-        return healthResponse;
-      });
       
       const monacoMarkers = mentorshipResponse.map((m: any) => ({
         severity: m.severity === 'error' ? monacoRef.current!.MarkerSeverity.Error : 
