@@ -303,6 +303,22 @@ export function CoachSidebar({
               </div>
             )}
           </div>
+        ) : allMentorshipAdvice && allMentorshipAdvice.length === 0 ? (
+          <div className="flex flex-col items-center justify-center p-4 text-center border border-dashed border-zinc-800/50 rounded-lg bg-zinc-900/10">
+            <Check className="w-6 h-6 text-emerald-500/50 mb-2" />
+            <p className="text-sm font-medium text-zinc-400">¡Código Limpio!</p>
+            <p className="text-xs text-zinc-500 mt-1 leading-relaxed max-w-[250px]">
+              El Sensei no encontró antipatrones ni deudas en este archivo.
+            </p>
+          </div>
+        ) : allMentorshipAdvice && allMentorshipAdvice.length > 0 ? (
+          <div className="flex flex-col items-center justify-center p-4 text-center border border-dashed border-zinc-800/50 rounded-lg bg-zinc-900/10">
+            <Lightbulb className="w-6 h-6 text-amber-500/50 mb-2" />
+            <p className="text-sm font-medium text-zinc-400">Busca las líneas subrayadas</p>
+            <p className="text-xs text-zinc-500 mt-1 leading-relaxed max-w-[250px]">
+              Hay {allMentorshipAdvice.length} observación(es) en este archivo. Mueve el cursor hacia una línea con marcador en el editor para leer la mentoría.
+            </p>
+          </div>
         ) : (
           <p className="text-xs text-zinc-500">Esperando análisis dinámico del Coach...</p>
         )}
