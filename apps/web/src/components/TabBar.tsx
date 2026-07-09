@@ -49,7 +49,7 @@ function TabMarkerBadge({
 }
 
 export default function TabBar({ onToggleAi, aiOpen, onNewFile }: TabBarProps) {
-  const { tabs, activeTabId, setActiveTab, removeTab } = useTabsStore();
+  const { tabs, activeTabId, setActiveTab, removeTab, dirtyFiles } = useTabsStore();
   const markersFiles = useMarkersStore((s) => s.files);
 
   const getTabPath = (tab: (typeof tabs)[number]): string | null => {
@@ -103,6 +103,9 @@ export default function TabBar({ onToggleAi, aiOpen, onNewFile }: TabBarProps) {
           ) : null}
           
           {!isGlobalTool && <span className="truncate flex-1" title={tab.title}>{tab.title}</span>}
+          {!isGlobalTool && dirtyFiles[tab.id] && (
+            <div className="w-2 h-2 rounded-full bg-blue-400 shrink-0" title="Unsaved changes" />
+          )}
           {!isGlobalTool && <TabMarkerBadge path={getTabPath(tab)} markersFiles={markersFiles} />}
           
           {!isFixed && (
