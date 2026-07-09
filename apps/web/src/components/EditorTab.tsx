@@ -179,22 +179,61 @@ export default function EditorTab({
   }, [focusTarget, focusVersion]);
   const editorModeRef = useRef(editorMode);
 
-  const runCoachAnalysis = useCallback(async (model: monacoEditor.ITextModel, editor: monacoEditor.IStandaloneCodeEditor) => {
+  const runHealthAnalysis = useCallback(async (model: monacoEditor.ITextModel, skipCache = false) => {
     if (model.isDisposed()) return;
-    
     const content = model.getValue();
     const currentHash = hashString(content);
     
-    const cachedHealth = localStorage.getItem(`coach_health_${currentHash}`);
-    const cachedMentorship = localStorage.getItem(`coach_mentorship_${currentHash}`);
+    if (!skipCache) {
+      const cachedHealth = localStorage.getItem(`coach_health_${currentHash}`);
+      if (cachedHealth) {
+        try {
+          setCoachOverview(JSON.parse(cachedHealth));
+          return;
+        } catch {}
+      }
+    }
     
-    if (cachedHealth && cachedMentorship) {
+    setIsLoadingRef.current(true);
+    setIsAnalyzing(true);
+    try {
+      const language = node.file_path?.split('.').pop() || '';
+      const healthResponse = await fetchHealthOverview(
+        content,
+        language,
+        fimDefaultModelRef.current,
+        fimFallbackModelRef.current
+      );
+      if (model.isDisposed()) return;
+      setCoachOverview(healthResponse);
+      if (!healthResponse.is_degraded) {
+        localStorage.setItem(`coach_health_${currentHash}`, JSON.stringify(healthResponse));
+      }
+    } catch (error: any) {
+      console.error('[Code Coach Health] Error:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      setCoachOverview({
+        structure: "Error de red o conexión fallida al analizar el código.",
+        critical_security: "N/A",
+        clean_code_score: 0,
+        is_degraded: true,
+        error_detail: errorMessage,
+      });
+    } finally {
+      setIsLoadingRef.current(false);
+      setIsAnalyzing(false);
+    }
+  }, [fimDefaultModelRef, fimFallbackModelRef, node.file_path]);
+
+  const runMentorshipAnalysis = useCallback(async (model: monacoEditor.ITextModel, editor: monacoEditor.IStandaloneCodeEditor) => {
+    if (model.isDisposed()) return;
+    const content = model.getValue();
+    const currentHash = hashString(content);
+    
+    const cachedMentorship = localStorage.getItem(`coach_mentorship_${currentHash}`);
+    if (cachedMentorship) {
       try {
-        const parsedHealth = JSON.parse(cachedHealth);
         const parsedMentorship = JSON.parse(cachedMentorship);
-        
-        setCoachOverview(parsedHealth);
-        
         const monacoMarkers = parsedMentorship.map((m: any) => ({
           severity: m.severity === 'error' ? monacoRef.current!.MarkerSeverity.Error : 
                     m.severity === 'warning' ? monacoRef.current!.MarkerSeverity.Warning : 
@@ -206,14 +245,10 @@ export default function EditorTab({
           endColumn: model.getLineMaxColumn(m.line),
           explanation: m.explanation
         }));
-        
         monacoRef.current!.editor.setModelMarkers(model, 'ai-coach', monacoMarkers as any);
-        const lines = parsedMentorship.map((m: any) => m.line);
-        setAvailableAdviceLines(lines);
+        setAvailableAdviceLines(parsedMentorship.map((m: any) => m.line));
         return;
-      } catch {
-        // Fallback to fetch if parse fails
-      }
+      } catch {}
     }
     
     setIsLoadingRef.current(true);
@@ -221,24 +256,6 @@ export default function EditorTab({
     try {
       const language = node.file_path?.split('.').pop() || '';
       const position = editor.getPosition();
-      
-      const healthResponse = await fetchHealthOverview(
-        content,
-        language,
-        fimDefaultModelRef.current,
-        fimFallbackModelRef.current
-      );
-
-      if (model.isDisposed()) return;
-      
-      setCoachOverview(healthResponse);
-
-      if (healthResponse.is_degraded) {
-        return;
-      }
-
-      localStorage.setItem(`coach_health_${currentHash}`, JSON.stringify(healthResponse));
-
       const mentorshipResponse = await fetchContextualMentorship(
         content,
         language,
@@ -246,11 +263,8 @@ export default function EditorTab({
         fimDefaultModelRef.current,
         fimFallbackModelRef.current
       );
-      
       if (model.isDisposed()) return;
-      
       localStorage.setItem(`coach_mentorship_${currentHash}`, JSON.stringify(mentorshipResponse));
-      
       const monacoMarkers = mentorshipResponse.map((m: any) => ({
         severity: m.severity === 'error' ? monacoRef.current!.MarkerSeverity.Error : 
                   m.severity === 'warning' ? monacoRef.current!.MarkerSeverity.Warning : 
@@ -262,21 +276,10 @@ export default function EditorTab({
         endColumn: model.getLineMaxColumn(m.line),
         explanation: m.explanation
       }));
-      
       monacoRef.current!.editor.setModelMarkers(model, 'ai-coach', monacoMarkers as any);
-      
-      const lines = mentorshipResponse.map((m: any) => m.line);
-      setAvailableAdviceLines(lines);
+      setAvailableAdviceLines(mentorshipResponse.map((m: any) => m.line));
     } catch (error: any) {
-      console.error('[Code Coach] Error:', error);
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      setCoachOverview({
-        structure: "Error de red o conexión fallida al analizar el código.",
-        critical_security: "N/A",
-        clean_code_score: 0,
-        is_degraded: true,
-        error_detail: errorMessage,
-      });
+      console.error('[Code Coach Mentorship] Error:', error);
       setAvailableAdviceLines([]);
     } finally {
       setIsLoadingRef.current(false);
@@ -290,9 +293,10 @@ export default function EditorTab({
     if (coachTimerRef.current) clearTimeout(coachTimerRef.current);
     const model = editorRef.current?.getModel();
     if (model && !model.isDisposed()) {
-      runCoachAnalysis(model, editorRef.current as monacoEditor.IStandaloneCodeEditor);
+      runHealthAnalysis(model, true);
+      runMentorshipAnalysis(model, editorRef.current as monacoEditor.IStandaloneCodeEditor);
     }
-  }, [runCoachAnalysis]);
+  }, [runMentorshipAnalysis]);
 
   useEffect(() => {
     const handler = () => forceSenseiAnalysis();
@@ -305,12 +309,21 @@ export default function EditorTab({
       const model = editorRef.current.getModel();
       if (model && !model.isDisposed() && model.getValue().length > 5) {
         const timeout = setTimeout(() => {
-          runCoachAnalysis(model, editorRef.current!);
-        }, 500);
+          runMentorshipAnalysis(model, editorRef.current!);
+        }, 3500);
         return () => clearTimeout(timeout);
       }
     }
-  }, [isEditorReady, isCoachEnabled, runCoachAnalysis]);
+  }, [isEditorReady, isCoachEnabled, runMentorshipAnalysis]);
+
+  useEffect(() => {
+    if (isEditorReady && isCoachEnabled && editorRef.current) {
+      const model = editorRef.current.getModel();
+      if (model && !model.isDisposed()) {
+        runHealthAnalysis(model, false);
+      }
+    }
+  }, [isEditorReady, isCoachEnabled, node.file_path, runHealthAnalysis]);
 
   const vimStatusRef = useRef<HTMLDivElement | null>(null);
   const originalContentRef = useRef('');
@@ -547,6 +560,13 @@ export default function EditorTab({
       currentContentRef.current = current;
       setIsDirty(false);
       useUnsavedStore.getState().clearContent(targetPath);
+      // Disparar Health Overview después de guardar
+      if (isCoachEnabled && editorRef.current) {
+        const model = editorRef.current.getModel();
+        if (model) {
+          runHealthAnalysis(model);
+        }
+      }
     } catch {
       // silently fail
     } finally {
@@ -831,7 +851,7 @@ export default function EditorTab({
     });
 
     checkDirty();
-  }, [node.metadata, checkDirty, node.file_path, node.id, vimMode, forceSenseiAnalysis, runCoachAnalysis]);
+  }, [node.metadata, checkDirty, node.file_path, node.id, vimMode, forceSenseiAnalysis, runMentorshipAnalysis]);
 
   if (loading) {
     return (
@@ -1025,7 +1045,14 @@ export default function EditorTab({
             </div>
             <div className="w-1.5 shrink-0 bg-[#1a1a1a] border-l border-r border-zinc-800 z-10" />
             <div className="w-[350px] shrink-0 h-full relative overflow-hidden">
-              <CoachSidebar 
+              <CoachSidebar
+              onRefreshHealth={() => {
+                const model = editorRef.current?.getModel();
+                if (model) {
+                  runHealthAnalysis(model, true);
+                }
+              }}
+ 
                 techData={techData}
                 onRescan={() => handleRescan()}
                 isScanningTech={isScanningTech}
