@@ -6,7 +6,7 @@ import { RefreshCw, ShieldAlert, FileCode2, Activity, Lightbulb, Loader2, FileTe
 import { SiTypescript, SiReact, SiPython, SiNextdotjs, SiFastapi, SiTailwindcss, SiNodedotjs, SiDocker, SiPostgresql, SiHtml5, SiCss, SiGnubash } from 'react-icons/si';
 import { VscCode } from 'react-icons/vsc';
 import { Button } from "@/components/ui/button";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 
 const IconMap: Record<string, any> = { SiTypescript, SiReact, SiPython, SiNextdotjs, SiFastapi, SiTailwindcss, SiNodedotjs, SiDocker, SiPostgresql, SiHtml5, SiCss, SiGnubash };
 
@@ -51,6 +51,13 @@ export function CoachSidebar({
 }: CoachSidebarProps) {
   const [quoteIndex, setQuoteIndex] = useState(0);
   const [isCopied, setIsCopied] = useState(false);
+  const mentorshipRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (allMentorshipAdvice && allMentorshipAdvice.length > 0 && !isAnalyzingCode) {
+      mentorshipRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [allMentorshipAdvice, isAnalyzingCode]);
   
   const cursorAdvice = useMemo(() => {
     if (!allMentorshipAdvice || activeLineNumber === undefined || activeLineNumber === null) return null;
@@ -263,7 +270,7 @@ export function CoachSidebar({
       </div>
 
       {/* Celda 3: Mentoría Contextual */}
-      <div className="bg-[#121212] border border-zinc-800 rounded-lg p-4 flex flex-col shadow-sm flex-1">
+      <div ref={mentorshipRef} className="bg-[#121212] border border-zinc-800 rounded-lg p-4 flex flex-col shadow-sm flex-1">
         <h3 className="text-sm font-semibold text-zinc-200 flex items-center gap-2 mb-3">
           <Lightbulb className="w-4 h-4 text-amber-400" />
           Mentoría Contextual
@@ -271,10 +278,10 @@ export function CoachSidebar({
         </h3>
         
         {isEditorDirty ? (
-          <div className="flex flex-col items-center justify-center p-6 text-center border border-dashed border-zinc-800/80 rounded-lg bg-zinc-900/30">
-            <Keyboard className="w-8 h-8 text-zinc-600/50 mb-3" />
+          <div className="flex flex-col items-center justify-center p-4 text-center border border-dashed border-zinc-800/80 rounded-lg bg-zinc-900/30">
+            <Keyboard className="w-6 h-6 text-zinc-600/50 mb-2" />
             <p className="text-sm font-medium text-zinc-400">Modo Lectura Activo.</p>
-            <p className="text-xs text-zinc-500 mt-2 leading-relaxed max-w-[250px]">
+            <p className="text-xs text-zinc-500 mt-1 leading-relaxed max-w-[250px]">
               El Sensei está en reposo. El contenido ha cambiado y las líneas pueden estar desfasadas.
             </p>
           </div>
