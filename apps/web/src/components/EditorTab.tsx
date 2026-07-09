@@ -810,36 +810,9 @@ export default function EditorTab({
         useUnsavedStore.getState().setContent(backupKey, editor.getValue());
       }, 1000);
       
-      if (lintTimerRef.current) clearTimeout(lintTimerRef.current);
-      lintTimerRef.current = setTimeout(async () => {
-        const model = editor.getModel();
-        if (!model || model.isDisposed()) return;
-        try {
-          const res = await fetch(`${API_BASE_URL}/editor/lint`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              code: editor.getValue(),
-              language: 'python',
-            }),
-          });
-          if (!res.ok) return;
-          const diagnostics: LintDiagnostic[] = await res.json();
-          const model2 = editor.getModel();
-          if (!model2 || model2.isDisposed()) return;
-          const markers = diagnostics.map((d) => ({
-            severity: monaco.MarkerSeverity.Error,
-            message: d.message,
-            startLineNumber: d.line,
-            startColumn: d.column,
-            endLineNumber: d.line,
-            endColumn: d.column + 1,
-          }));
-          monaco.editor.setModelMarkers(model2, 'lint', markers);
-        } catch {
-          // network errors silently ignored
-        }
-      }, 800);
+      // Endpoint /editor/lint disabled to prevent rate limit collisions with Code Coach
+      // if (lintTimerRef.current) clearTimeout(lintTimerRef.current);
+      // lintTimerRef.current = setTimeout(async () => { ... }, 800);
 
     });
 
