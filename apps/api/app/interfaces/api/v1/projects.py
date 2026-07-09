@@ -40,6 +40,7 @@ class ScanRequest(BaseModel):
 
 class FileContentUpdate(BaseModel):
     content: str
+    base_hash: Optional[str] = None
 
 
 class RenameRequest(BaseModel):
@@ -491,10 +492,26 @@ async def update_project_file_content(
     if not candidate.is_file():
         raise HTTPException(status_code=404, detail="File not found")
 
+    import hashlib
     try:
+        # Optimistic Concurrency Control (ETag logic)
+        if payload.base_hash:
+            with open(candidate, "rb") as f:
+                current_raw = f.read()
+            current_hash = hashlib.sha256(current_raw).hexdigest()
+            if current_hash != payload.base_hash:
+                raise HTTPException(status_code=409, detail="File has been modified externally since last read")
+                
         with open(candidate, "w", encoding="utf-8") as f:
             f.write(payload.content)
-        return {"status": "success"}
+            
+        with open(candidate, "rb") as f:
+            new_raw = f.read()
+        new_hash = hashlib.sha256(new_raw).hexdigest()
+            
+        return {"status": "success", "new_hash": new_hash}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Failed to write file failed: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="An internal error occurred")

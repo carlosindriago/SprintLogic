@@ -128,11 +128,11 @@ export const analyzeProjectGraph = async (projectId: string, model: string) => {
 // --- Files ---
 export const getProjectFiles = (projectId: string) => api.get<FileTreeNode>(`/projects/${projectId}/files`);
 export const getFileContent = async (projectId: string, path: string) => {
-  const data = await api.get<{ content: string }>(`/projects/${projectId}/file/content?path=${encodeURIComponent(path)}`);
-  return data.content;
+  const data = await api.get<{ content: string; original_hash?: string }>(`/projects/${projectId}/file/content?path=${encodeURIComponent(path)}`);
+  return data;
 };
-export const saveFileContent = (projectId: string, path: string, content: string) => 
-  api.put<{ status: string }>(`/projects/${projectId}/file/content?path=${encodeURIComponent(path)}`, { content });
+export const saveFileContent = (projectId: string, path: string, content: string, base_hash?: string) => 
+  api.put<{ status: string; new_hash?: string }>(`/projects/${projectId}/file/content?path=${encodeURIComponent(path)}`, { content, base_hash });
 export const createFile = (projectId: string, path: string, content: string) => 
   api.post<{ status: string; path: string }>(`/projects/${projectId}/file/create?path=${encodeURIComponent(path)}`, { content });
 export const renameFile = (projectId: string, path: string, newName: string) => 

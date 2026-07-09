@@ -250,7 +250,7 @@ export default function GitGraphTab({ projectId }: { projectId: string }) {
     setGitIgnoreDialog(true);
     setGitIgnoreLoading(true);
     try {
-      const content = await getFileContent(projectId, '.gitignore');
+      const { content } = await getFileContent(projectId, '.gitignore');
       setGitIgnoreContent(content);
     } catch {
       setGitIgnoreContent(''); // File might not exist

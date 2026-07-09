@@ -21,6 +21,7 @@ import ContextHUD, { type VimTutorMode } from './ContextHUD';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import { CoachSidebar } from "./CoachSidebar";
 import { CodeCoachOverview, CodeCoachMarker } from "@/lib/api";
+import { toast } from 'sonner';
 
 interface LintDiagnostic {
   line: number;
@@ -421,6 +422,7 @@ export default function EditorTab({
   const isSavingRef = useRef(false);
   const coachTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const draftDecorationsRef = useRef<string[]>([]);
+  const originalHashRef = useRef<string | undefined>(undefined);
 
   const markDirty = useTabsStore((s) => s.markDirty);
 
@@ -446,8 +448,9 @@ export default function EditorTab({
       }
 
       try {
-        const data = await getFileContent(projectId, node.file_path);
+        const { content: data, original_hash: fetchedHash } = await getFileContent(projectId, node.file_path);
         if (isMounted) {
+          originalHashRef.current = fetchedHash;
           // Hot Exit: prefer project-scoped draft, then legacy unsavedStore backup
           const draft = draftStore.load(projectId, node.file_path);
           const restored = (draft && draft !== data)
@@ -651,7 +654,10 @@ export default function EditorTab({
     setSaving(true);
     try {
       const current = editorRef.current.getValue();
-      await saveFileContent(projectId, targetPath, current);
+      const response = await saveFileContent(projectId, targetPath, current, originalHashRef.current);
+      if (response && response.new_hash) {
+        originalHashRef.current = response.new_hash;
+      }
       originalContentRef.current = current;
       currentContentRef.current = current;
       setIsDirty(false);
@@ -671,8 +677,15 @@ export default function EditorTab({
           runHealthAnalysis(model);
         }
       }
-    } catch {
-      // silently fail
+    } catch (error: any) {
+      if (error?.status === 409) {
+        toast.error("Conflicto de Edición", { 
+          description: "El archivo fue modificado externamente (ej. por git pull). Tus cambios locales no se guardaron para evitar sobrescribir. Copia tus cambios, refresca y vuelve a aplicarlos.",
+          duration: 10000 
+        });
+      } else {
+        toast.error("Error al guardar", { description: error?.message || "Ocurrió un error inesperado." });
+      }
     } finally {
       setSaving(false);
       isSavingRef.current = false;
