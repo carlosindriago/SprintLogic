@@ -91,7 +91,8 @@ export default function EditorTab({
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [availableAdviceLines, setAvailableAdviceLines] = useState<number[]>([]);
   const [initialValue, setInitialValue] = useState('');
-  
+  const [draftModifiedLines, setDraftModifiedLines] = useState<number[]>([]);
+
   const isCoachEnabled = useSettingsStore((s) => s.isFimEnabled);
   const setIsCoachEnabled = useSettingsStore((s) => s.setFimEnabled);
 
@@ -374,6 +375,36 @@ export default function EditorTab({
     }
   }, [isEditorReady, isCoachEnabled, node.file_path, runHealthAnalysis]);
 
+  // Hot Exit: apply amber gutter decorations on draft-modified lines
+  useEffect(() => {
+    const editor = editorRef.current;
+    const monaco = monacoRef.current;
+    if (!editor || !monaco || !isEditorReady || draftModifiedLines.length === 0) return;
+    const model = editor.getModel();
+    if (!model || model.isDisposed()) return;
+
+    const decorations = draftModifiedLines.map((lineNumber) => ({
+      range: new monaco.Range(lineNumber, 1, lineNumber, 1),
+      options: {
+        isWholeLine: true,
+        linesDecorationsClassName: 'draft-modified-gutter',
+        className: 'draft-modified-line',
+        overviewRuler: { color: '#f59e0b', position: monaco.editor.OverviewRulerLane.Left },
+        minimap: { color: '#f59e0b', position: monaco.editor.MinimapPosition.Gutter },
+      },
+    }));
+
+    draftDecorationsRef.current = editor.deltaDecorations(draftDecorationsRef.current, decorations);
+
+    return () => {
+      if (editorRef.current && !editorRef.current.getModel()?.isDisposed()) {
+        draftDecorationsRef.current = editorRef.current.deltaDecorations(draftDecorationsRef.current, []);
+      }
+    };
+  }, [isEditorReady, draftModifiedLines]);
+
+
+
   const vimStatusRef = useRef<HTMLDivElement | null>(null);
   const originalContentRef = useRef('');
   const currentContentRef = useRef('');
@@ -389,6 +420,7 @@ export default function EditorTab({
   const handleSaveRef = useRef<(saveAs?: string) => Promise<void>>(async () => {});
   const isSavingRef = useRef(false);
   const coachTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const draftDecorationsRef = useRef<string[]>([]);
 
   const markDirty = useTabsStore((s) => s.markDirty);
 
@@ -424,7 +456,18 @@ export default function EditorTab({
           originalContentRef.current = data;
           currentContentRef.current = restored;
           setInitialValue(restored);
-          if (restored !== data) setIsDirty(true);
+          if (restored !== data) {
+            setIsDirty(true);
+            // Compute modified lines for gutter decorations
+            const originalLines = data.split('\n');
+            const draftLines = restored.split('\n');
+            const modified: number[] = [];
+            const maxLen = Math.max(originalLines.length, draftLines.length);
+            for (let i = 0; i < maxLen; i++) {
+              if (originalLines[i] !== draftLines[i]) modified.push(i + 1);
+            }
+            if (isMounted) setDraftModifiedLines(modified);
+          }
           setLoading(false);
         }
       } catch {
@@ -613,8 +656,14 @@ export default function EditorTab({
       currentContentRef.current = current;
       setIsDirty(false);
       useUnsavedStore.getState().clearContent(targetPath);
-      // Hot Exit: clear draft on successful save
-      if (node.file_path) draftStore.clear(projectId, node.file_path);
+      // Hot Exit: clear draft and gutter decorations on successful save
+      if (node.file_path) {
+        draftStore.clear(projectId, node.file_path);
+        setDraftModifiedLines([]);
+        if (editorRef.current && !editorRef.current.getModel()?.isDisposed()) {
+          draftDecorationsRef.current = editorRef.current.deltaDecorations(draftDecorationsRef.current, []);
+        }
+      }
       // Disparar Health Overview después de guardar
       if (isCoachEnabled && editorRef.current) {
         const model = editorRef.current.getModel();

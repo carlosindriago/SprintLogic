@@ -152,73 +152,19 @@ export const getFileLocalDiff = (projectId: string, filePath: string) =>
   api.get<any>(`/projects/${projectId}/git/diff?file_path=${encodeURIComponent(filePath)}`);
 export const revertFile = (projectId: string, filePath: string) => 
   api.post<{ status: string; action: string }>(`/projects/${projectId}/git/revert`, { file_path: filePath });
-export interface GitDashboardFileStatus {
-  file_path: string;
-  status: string;
-  timestamp?: number;
-}
-
-export interface GitDashboard {
-  kpis: {
-    total_files: number;
-    untracked: number;
-    ignored: number;
-    modified: number;
-  };
-  branch: {
-    current_branch: string;
-    diff_with_main?: { ahead: number | null; behind: number | null };
-  };
-  lists: {
-    staged_list: GitDashboardFileStatus[];
-    untracked_list: GitDashboardFileStatus[];
-    modified_list: GitDashboardFileStatus[];
-    last_commit_list: GitDashboardFileStatus[];
-    penultimate_commit_list: GitDashboardFileStatus[];
-  };
-  commits?: {
-    last_commit_message?: string;
-    penultimate_commit_message?: string;
-  };
-}
-
-export interface FileLocalDiff {
-  original_content: string;
-  modified_content: string;
-}
-
 export const getGitDashboard = (projectId: string) => api.get<any>(`/projects/${projectId}/git/dashboard`);
 export const stageFile = (projectId: string, filePath: string) => api.post(`/projects/${projectId}/git/stage`, { file_path: filePath });
 export const unstageFile = (projectId: string, filePath: string) => api.post(`/projects/${projectId}/git/unstage`, { file_path: filePath });
 export const commitChanges = (projectId: string, message: string) => api.post(`/projects/${projectId}/git/commit`, { message });
 
 // --- Kanban & Tasks ---
-export interface WBSTask {
-  title: string;
-  estimated_mins: number;
-  priority: "Low" | "Medium" | "High";
-  tags: string[];
-}
-
-export interface WBSResponse {
-  tasks: WBSTask[];
-  explanation: string;
-}
-
-export interface KanbanColumn {
-  id: string;
-  title: string;
-  color: string;
-  rule: 'manual' | 'pomodoro' | 'auto-on-test-fail' | 'auto-on-test-pass';
-}
-
 export const getProjectTasks = (projectId: string) => api.get<{ tasks: Task[] }>(`/projects/${projectId}/tasks`);
 export const saveProjectTasks = (projectId: string, tasks: Task[]) => api.post<{ status: string }>(`/projects/${projectId}/tasks`, { tasks });
-export const getKanbanConfig = (projectId: string) => api.get<{ columns: KanbanColumn[] }>(`/projects/${projectId}/kanban/config`);
-export const saveKanbanConfig = (projectId: string, columns: KanbanColumn[]) => api.post<{ status: string }>(`/projects/${projectId}/kanban/config`, { columns });
+export const getKanbanConfig = (projectId: string) => api.get<any>(`/projects/${projectId}/kanban/config`);
+export const saveKanbanConfig = (projectId: string, columns: any[]) => api.post<{ status: string }>(`/projects/${projectId}/kanban/config`, { columns });
 export const syncKanbanCommits = (projectId: string) => api.post<any>(`/projects/${projectId}/tasks/sync-commits`);
 export const generateWBS = (projectId: string, requirements: string, model = "openai/gpt-4o") => 
-  api.post<WBSResponse>(`/projects/${projectId}/kanban/wbs`, { requirements, model });
+  api.post<any>(`/projects/${projectId}/kanban/wbs`, { requirements, model });
 
 // --- Providers & Settings ---
 export const fetchProviderModels = (provider: string) => api.get<ModelResult[]>(`/settings/providers/${provider}/models`);
