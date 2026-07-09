@@ -2,7 +2,7 @@
 /* eslint-disable react/no-unescaped-entities */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { CodeCoachOverview, CodeCoachMarker } from "@/lib/api";
-import { RefreshCw, ShieldAlert, FileCode2, Activity, Lightbulb, Loader2, FileText, Keyboard, Copy, Check, ChevronDown } from "lucide-react";
+import { RefreshCw, ShieldAlert, FileCode2, Activity, Lightbulb, Loader2, FileText, Keyboard, Copy, Check, ChevronDown, XCircle, AlertTriangle, Info } from "lucide-react";
 import { SiTypescript, SiReact, SiPython, SiNextdotjs, SiFastapi, SiTailwindcss, SiNodedotjs, SiDocker, SiPostgresql, SiHtml5, SiCss, SiGnubash } from 'react-icons/si';
 import { VscCode } from 'react-icons/vsc';
 import { Button } from "@/components/ui/button";
@@ -375,16 +375,37 @@ export function CoachSidebar({
               'bg-blue-500/10 border-blue-500/30'}
             ${isAnalyzingCode ? 'opacity-60 transition-opacity' : ''}`}
           >
-            <span className={`font-bold ${cursorAdvice.severity === 'error' ? 'text-rose-400' : cursorAdvice.severity === 'warning' ? 'text-amber-400' : 'text-blue-400'}`}>
-              Línea {cursorAdvice.line}: {cursorAdvice.message}
+            <span className={`font-bold flex items-center gap-1.5 ${cursorAdvice.severity === 'error' ? 'text-rose-400' : cursorAdvice.severity === 'warning' ? 'text-amber-400' : 'text-blue-400'}`}>
+              {cursorAdvice.severity === 'error' ? <XCircle className="w-4 h-4" /> : cursorAdvice.severity === 'warning' ? <AlertTriangle className="w-4 h-4" /> : <Info className="w-4 h-4" />}
+              Línea {cursorAdvice.line}: {cursorAdvice.title || cursorAdvice.message}
             </span>
             <span className="text-zinc-300 leading-relaxed">
               {cursorAdvice.explanation}
             </span>
-            {cursorAdvice.suggested_code && cursorAdvice.suggested_code !== "null" && (
-              <pre className="bg-zinc-950 p-2 rounded text-sm overflow-x-auto mt-1 border border-zinc-800">
-                <code>{cursorAdvice.suggested_code}</code>
-              </pre>
+            
+            {cursorAdvice.snippet_before && cursorAdvice.snippet_before !== "null" && (
+              <div className="mt-2">
+                <span className="text-[10px] uppercase font-bold text-rose-400/80 mb-1 block">Tu Código</span>
+                <pre className="bg-rose-950/20 p-2 rounded text-xs overflow-x-auto border border-rose-900/30 text-rose-200/90 whitespace-pre-wrap">
+                  <code>{cursorAdvice.snippet_before}</code>
+                </pre>
+              </div>
+            )}
+
+            {(cursorAdvice.snippet_after && cursorAdvice.snippet_after !== "null") ? (
+              <div className="mt-1">
+                <span className="text-[10px] uppercase font-bold text-emerald-400/80 mb-1 block">Sugerencia Senior</span>
+                <pre className="bg-emerald-950/20 p-2 rounded text-xs overflow-x-auto border border-emerald-900/30 text-emerald-200/90 whitespace-pre-wrap">
+                  <code>{cursorAdvice.snippet_after}</code>
+                </pre>
+              </div>
+            ) : cursorAdvice.suggested_code && cursorAdvice.suggested_code !== "null" && (
+              <div className="mt-1">
+                <span className="text-[10px] uppercase font-bold text-emerald-400/80 mb-1 block">Sugerencia Senior</span>
+                <pre className="bg-emerald-950/20 p-2 rounded text-xs overflow-x-auto border border-emerald-900/30 text-emerald-200/90 whitespace-pre-wrap">
+                  <code>{cursorAdvice.suggested_code}</code>
+                </pre>
+              </div>
             )}
           </div>
         ) : allMentorshipAdvice && allMentorshipAdvice.length > 0 ? (

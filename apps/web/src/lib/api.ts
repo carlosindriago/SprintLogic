@@ -258,8 +258,11 @@ export interface CodeCoachMarker {
   line: number;
   severity: string;
   message: string;
+  title?: string;
   explanation: string;
   suggested_code?: string;
+  snippet_before?: string;
+  snippet_after?: string;
   is_degraded?: boolean;
 }
 
