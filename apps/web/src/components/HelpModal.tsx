@@ -56,6 +56,10 @@ export function HelpModal({ isOpen, onClose }: HelpModalProps) {
                 <span className="text-sm text-zinc-300">Pestaña Anterior</span>
                 <kbd className="bg-zinc-800 text-zinc-300 px-2 py-1 rounded text-xs font-mono shadow-sm">Ctrl + PageUp</kbd>
               </div>
+              <div className="flex items-center justify-between bg-zinc-800/30 p-3 rounded border border-zinc-800/50">
+                <span className="text-sm text-zinc-300">Búsqueda Rápida (OmniSearch)</span>
+                <kbd className="bg-zinc-800 text-zinc-300 px-2 py-1 rounded text-xs font-mono shadow-sm">Shift + Shift</kbd>
+              </div>
             </div>
           </section>
 
