@@ -36,6 +36,7 @@ interface TabsState {
   markDirty: (id: string, dirty: boolean) => void;
   setAllClean: () => void;
   switchProject: (projectId: string | null) => void;
+  cycleTabs: (direction: 'next' | 'prev') => void;
 }
 
 const DEFAULT_SESSION: ProjectSession = {
@@ -123,6 +124,17 @@ export const useTabsStore = create<TabsState>()(
           activeTabId: target.activeTabId,
           dirtyFiles: {},
         });
+      },
+
+      cycleTabs: (direction) => {
+        const { tabs, activeTabId } = get();
+        if (tabs.length <= 1) return;
+        const currentIndex = tabs.findIndex((t) => t.id === activeTabId);
+        if (currentIndex === -1) return;
+        const nextIndex = direction === 'next' 
+          ? (currentIndex + 1) % tabs.length 
+          : (currentIndex - 1 + tabs.length) % tabs.length;
+        set({ activeTabId: tabs[nextIndex].id });
       },
     }),
     {
