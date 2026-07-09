@@ -241,7 +241,7 @@ export default function EditorTab({
   return mentorshipArray.filter((m: any) => m.line && m.line > 0);
 };
 
-  const runMentorshipAnalysis = useCallback(async (model: monacoEditor.ITextModel, editor: monacoEditor.IStandaloneCodeEditor) => {
+  const runCoachAnalysis = useCallback(async (model: monacoEditor.ITextModel, editor: monacoEditor.IStandaloneCodeEditor) => {
     if (model.isDisposed()) return;
     const content = model.getValue();
     const currentHash = hashString(content);
@@ -265,6 +265,10 @@ export default function EditorTab({
         monacoRef.current!.editor.setModelMarkers(model, 'ai-coach', monacoMarkers as any);
         setAvailableAdviceLines(parsedMentorship.map((m: any) => m.line));
         setAllMentorshipAdvice(parsedMentorship);
+        
+        // CRÍTICO: Sincronizar el estado de lectura (dirty state) para la celda de mentoría
+        setIsDirty(false);
+        isDirtyRef.current = false;
         return;
       } catch {}
     }
@@ -298,6 +302,10 @@ export default function EditorTab({
       monacoRef.current!.editor.setModelMarkers(model, 'ai-coach', monacoMarkers as any);
       setAvailableAdviceLines(validMentorshipResponse.map((m: any) => m.line));
       setAllMentorshipAdvice(validMentorshipResponse);
+      
+      // CRÍTICO: Sincronizar el estado de lectura (dirty state) para la celda de mentoría
+      setIsDirty(false);
+      isDirtyRef.current = false;
     } catch (error: any) {
       console.error('[Code Coach Mentorship] Error:', error);
       setAvailableAdviceLines([]);
@@ -314,9 +322,9 @@ export default function EditorTab({
     const model = editorRef.current?.getModel();
     if (model && !model.isDisposed()) {
       runHealthAnalysis(model, true);
-      runMentorshipAnalysis(model, editorRef.current as monacoEditor.IStandaloneCodeEditor);
+      runCoachAnalysis(model, editorRef.current as monacoEditor.IStandaloneCodeEditor);
     }
-  }, [runMentorshipAnalysis]);
+  }, [runCoachAnalysis]);
 
   useEffect(() => {
     const handler = () => forceSenseiAnalysis();
@@ -329,12 +337,12 @@ export default function EditorTab({
       const model = editorRef.current.getModel();
       if (model && !model.isDisposed() && model.getValue().length > 5) {
         const timeout = setTimeout(() => {
-          runMentorshipAnalysis(model, editorRef.current!);
+          runCoachAnalysis(model, editorRef.current!);
         }, 3500);
         return () => clearTimeout(timeout);
       }
     }
-  }, [isEditorReady, isCoachEnabled, runMentorshipAnalysis]);
+  }, [isEditorReady, isCoachEnabled, runCoachAnalysis]);
 
   useEffect(() => {
     if (isEditorReady && isCoachEnabled && editorRef.current) {
@@ -861,7 +869,7 @@ export default function EditorTab({
     // No cleanup required here since handleEditorDidMount manages the disposables?
     // Wait, let's keep the checkDirty logic untouched.
     checkDirty();
-  }, [node.metadata, checkDirty, node.file_path, node.id, vimMode, forceSenseiAnalysis, runMentorshipAnalysis]);
+  }, [node.metadata, checkDirty, node.file_path, node.id, vimMode, forceSenseiAnalysis, runCoachAnalysis]);
 
   if (loading) {
     return (
