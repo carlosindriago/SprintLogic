@@ -223,6 +223,10 @@ export default function EditorTab({
     } finally {
       setIsLoadingRef.current(false);
       setIsAnalyzing(false);
+      
+      // CRÍTICO: Sincronizar el estado de lectura (dirty state) para la celda de mentoría incluso si falla
+      setIsDirty(false);
+      isDirtyRef.current = false;
     }
   }, [fimDefaultModelRef, fimFallbackModelRef, node.file_path]);
 
@@ -264,7 +268,7 @@ export default function EditorTab({
         }));
         monacoRef.current!.editor.setModelMarkers(model, 'ai-coach', monacoMarkers as any);
         setAvailableAdviceLines(parsedMentorship.map((m: any) => m.line));
-        setAllMentorshipAdvice(parsedMentorship);
+        setAllMentorshipAdvice(rawMentorship);
         
         // CRÍTICO: Sincronizar el estado de lectura (dirty state) para la celda de mentoría
         setIsDirty(false);
@@ -287,7 +291,7 @@ export default function EditorTab({
       );
       if (model.isDisposed()) return;
       const validMentorshipResponse = sanitizeMarkers(mentorshipResponse);
-      localStorage.setItem(`coach_mentorship_${currentHash}`, JSON.stringify(validMentorshipResponse));
+      localStorage.setItem(`coach_mentorship_${currentHash}`, JSON.stringify(mentorshipResponse));
       const monacoMarkers = validMentorshipResponse.map((m: any) => ({
         severity: m.severity === 'error' ? monacoRef.current!.MarkerSeverity.Error : 
                   m.severity === 'warning' ? monacoRef.current!.MarkerSeverity.Warning : 
@@ -301,17 +305,18 @@ export default function EditorTab({
       }));
       monacoRef.current!.editor.setModelMarkers(model, 'ai-coach', monacoMarkers as any);
       setAvailableAdviceLines(validMentorshipResponse.map((m: any) => m.line));
-      setAllMentorshipAdvice(validMentorshipResponse);
+      setAllMentorshipAdvice(mentorshipResponse);
       
-      // CRÍTICO: Sincronizar el estado de lectura (dirty state) para la celda de mentoría
-      setIsDirty(false);
-      isDirtyRef.current = false;
     } catch (error: any) {
       console.error('[Code Coach Mentorship] Error:', error);
       setAvailableAdviceLines([]);
     } finally {
       setIsLoadingRef.current(false);
       setIsAnalyzing(false);
+      
+      // CRÍTICO: Sincronizar el estado de lectura (dirty state) para la celda de mentoría incluso si falla
+      setIsDirty(false);
+      isDirtyRef.current = false;
     }
   }, [fimDefaultModelRef, fimFallbackModelRef, node.file_path]);
 
@@ -804,7 +809,7 @@ export default function EditorTab({
         const backupKey = node.file_path || node.id;
         useUnsavedStore.getState().setContent(backupKey, editor.getValue());
       }, 1000);
-
+      
       if (lintTimerRef.current) clearTimeout(lintTimerRef.current);
       lintTimerRef.current = setTimeout(async () => {
         const model = editor.getModel();
@@ -834,7 +839,8 @@ export default function EditorTab({
         } catch {
           // network errors silently ignored
         }
-      }, 500);
+      }, 800);
+
     });
 
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyD, () => {
