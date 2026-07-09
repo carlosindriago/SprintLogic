@@ -16,23 +16,36 @@ export interface ModelResult {
 export const API_BASE_URL: string =
   process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000/api/v1";
 
-/**
- * Retry wrapper with exponential backoff.
- * Retries on network errors (e.g. backend not yet ready, connection refused).
- * Does NOT retry on HTTP 4xx/5xx — those are real errors from a live backend.
- *
- * Backoff sequence: 500ms → 1s → 2s → 4s → 8s (max 5 attempts, ~15.5s total).
- */
+// 1. CLASE DE ERROR PERSONALIZADA
+// Permite al frontend saber exactamente qué falló (ej. error.status === 404)
+export class ApiError extends Error {
+  constructor(public status: number, message: string) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
+// 2. RETRY INTELIGENTE (Fail-Fast)
+// Solo reintenta si el servidor está caído (Network Error) o arroja 5xx.
+// NUNCA reintenta errores 4xx (como 400 Bad Request o 429 Rate Limit) para no alargar el sufrimiento.
 export async function fetchWithRetry(
-  input: RequestInfo,
+  input: string,
   init?: RequestInit,
-  maxRetries = 5,
+  maxRetries = 3,
   baseDelayMs = 500
 ): Promise<Response> {
   let lastError: Error | null = null;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       const response = await fetch(input, init);
+      // Fail-Fast: Si el cliente cometió un error (4xx), no tiene sentido reintentar.
+      if (response.status >= 400 && response.status < 500) {
+        return response; 
+      }
+      // Si el servidor colapsó (5xx), forzamos el catch para que reintente.
+      if (response.status >= 500) {
+        throw new Error(`Server Error HTTP ${response.status}`);
+      }
       return response;
     } catch (err) {
       lastError = err as Error;
@@ -42,508 +55,128 @@ export async function fetchWithRetry(
       }
     }
   }
-  throw lastError ?? new Error('Request failed after retries');
+  throw lastError ?? new Error('Network request failed after retries');
 }
 
-export async function scanProject(path: string): Promise<{ project_id: string }> {
-  const response = await fetchWithRetry(`${API_BASE_URL}/projects/scan`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ path }),
-  });
-  
+// 3. EL ENVOLTORIO MAESTRO (The Wrapper)
+// Centraliza los headers, el parseo de JSON y la intercepción de errores.
+async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  const url = `${API_BASE_URL}${endpoint}`;
+  const headers = {
+    'Content-Type': 'application/json',
+    ...options.headers,
+  };
+
+  const response = await fetchWithRetry(url, { ...options, headers });
+
   if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Scan failed: ${error}`);
+    let errorMessage = `HTTP Error ${response.status}`;
+    try {
+      // Intentamos extraer el detalle exacto que manda FastAPI en 'detail'
+      const errorData = await response.json();
+      errorMessage = errorData.detail || errorData.message || errorMessage;
+    } catch {
+      errorMessage = (await response.text()) || errorMessage;
+    }
+    throw new ApiError(response.status, errorMessage);
   }
-  
+
+  // Manejo de respuestas vacías (ej. HTTP 204 No Content)
+  if (response.status === 204) return {} as T;
+
   return response.json();
 }
 
-export async function getProjects(): Promise<{ projects: Project[] }> {
-  const response = await fetchWithRetry(`${API_BASE_URL}/projects`);
-  
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Failed to fetch projects: ${error}`);
-  }
-  
-  return response.json();
-}
-
-export async function updateProject(id: string, data: { name?: string, path?: string }): Promise<{ status: string }> {
-  const response = await fetchWithRetry(`${API_BASE_URL}/projects/${id}`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(data),
-  });
-  
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Update failed: ${error}`);
-  }
-  
-  return response.json();
-}
-
-export async function deleteProject(id: string): Promise<{ status: string }> {
-  const response = await fetchWithRetry(`${API_BASE_URL}/projects/${id}`, {
-    method: 'DELETE',
-  });
-  
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Delete failed: ${error}`);
-  }
-  
-  return response.json();
-}
-
-export async function getProjectGraph(projectId: string): Promise<GraphData> {
-  const response = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/graph`);
-  
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Graph fetch failed: ${error}`);
-  }
-  
-  return response.json();
-}
-
-export async function analyzeProjectGraph(projectId: string, model: string): Promise<string> {
-  const response = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/graph/analyze`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({ model })
-  });
-
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Graph analysis failed: ${error}`);
-  }
-
-  const data = await response.json();
-  return data.analysis;
-}
-
-export const getProjectFiles = async (projectId: string): Promise<FileTreeNode> => {
-  const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/files`);
-  if (!res.ok) throw new Error("Failed to fetch project files");
-  return res.json();
+// 4. MÉTODOS HTTP GENÉRICOS
+// Una API limpia y tipada para consumir desde los componentes
+export const api = {
+  get: <T>(endpoint: string, init?: RequestInit) => 
+    request<T>(endpoint, { ...init, method: 'GET' }),
+  post: <T>(endpoint: string, body?: unknown, init?: RequestInit) => 
+    request<T>(endpoint, { ...init, method: 'POST', body: JSON.stringify(body) }),
+  put: <T>(endpoint: string, body?: unknown, init?: RequestInit) => 
+    request<T>(endpoint, { ...init, method: 'PUT', body: JSON.stringify(body) }),
+  delete: <T>(endpoint: string, init?: RequestInit) => 
+    request<T>(endpoint, { ...init, method: 'DELETE' }),
 };
 
-export const getFileContent = async (projectId: string, path: string): Promise<string> => {
-  const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/file/content?path=${encodeURIComponent(path)}`);
-  if (!res.ok) throw new Error("Failed to fetch file content");
-  const data = await res.json();
+// ============================================================================
+// 5. DOMINIOS FUNCIONALES (Refactorizados al 10%)
+// Observa cómo las funciones pasaron de tener 10 líneas a solo 1 o 2.
+// ============================================================================
+
+// --- Projects ---
+export const scanProject = (path: string) => api.post<{ project_id: string }>('/projects/scan', { path });
+export const getProjects = () => api.get<{ projects: Project[] }>('/projects');
+export const updateProject = (id: string, data: { name?: string, path?: string }) => api.put<{ status: string }>(`/projects/${id}`, data);
+export const deleteProject = (id: string) => api.delete<{ status: string }>(`/projects/${id}`);
+
+// --- Graph ---
+export const getProjectGraph = (projectId: string) => api.get<GraphData>(`/projects/${projectId}/graph`);
+export const analyzeProjectGraph = async (projectId: string, model: string) => {
+  const data = await api.post<{ analysis: string }>(`/projects/${projectId}/graph/analyze`, { model });
+  return data.analysis;
+};
+
+// --- Files ---
+export const getProjectFiles = (projectId: string) => api.get<FileTreeNode>(`/projects/${projectId}/files`);
+export const getFileContent = async (projectId: string, path: string) => {
+  const data = await api.get<{ content: string }>(`/projects/${projectId}/file/content?path=${encodeURIComponent(path)}`);
   return data.content;
 };
+export const saveFileContent = (projectId: string, path: string, content: string) => 
+  api.put<{ status: string }>(`/projects/${projectId}/file/content?path=${encodeURIComponent(path)}`, { content });
+export const createFile = (projectId: string, path: string, content: string) => 
+  api.post<{ status: string; path: string }>(`/projects/${projectId}/file/create?path=${encodeURIComponent(path)}`, { content });
+export const renameFile = (projectId: string, path: string, newName: string) => 
+  api.post<{ status: string }>(`/projects/${projectId}/file/rename`, { path, new_name: newName });
+export const duplicateFile = (projectId: string, path: string) => 
+  api.post<{ status: string }>(`/projects/${projectId}/file/duplicate`, { path });
+export const deleteFile = (projectId: string, path: string) => 
+  api.delete<{ status: string }>(`/projects/${projectId}/file/delete?path=${encodeURIComponent(path)}`);
 
-export const saveFileContent = async (projectId: string, path: string, content: string): Promise<{ status: string }> => {
-  const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/file/content?path=${encodeURIComponent(path)}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ content }),
-  });
-  if (!res.ok) throw new Error("Failed to save file content");
-  return res.json();
-};
+// --- Git ---
+export const getCommitDetails = (projectId: string, hash: string) => api.get<CommitDetails>(`/projects/${projectId}/git/commits/${hash}`);
+export const getCommitFileDiff = (projectId: string, hash: string, path: string) => 
+  api.get<{ original: string; modified: string }>(`/projects/${projectId}/git/commits/${hash}/diff?path=${encodeURIComponent(path)}`);
+export const getGitStatus = (projectId: string) => api.get<GitStatus>(`/projects/${projectId}/git/status`);
+export const getLocalChanges = (projectId: string) => api.get<{ files: any[] }>(`/projects/${projectId}/git/changes`);
+export const getFileLocalDiff = (projectId: string, filePath: string) => 
+  api.get<any>(`/projects/${projectId}/git/diff?file_path=${encodeURIComponent(filePath)}`);
+export const revertFile = (projectId: string, filePath: string) => 
+  api.post<{ status: string; action: string }>(`/projects/${projectId}/git/revert`, { file_path: filePath });
+export const getGitDashboard = (projectId: string) => api.get<any>(`/projects/${projectId}/git/dashboard`);
+export const stageFile = (projectId: string, filePath: string) => api.post(`/projects/${projectId}/git/stage`, { file_path: filePath });
+export const unstageFile = (projectId: string, filePath: string) => api.post(`/projects/${projectId}/git/unstage`, { file_path: filePath });
+export const commitChanges = (projectId: string, message: string) => api.post(`/projects/${projectId}/git/commit`, { message });
 
-export const createFile = async (projectId: string, path: string, content: string): Promise<{ status: string; path: string }> => {
-  const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/file/create?path=${encodeURIComponent(path)}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ content }),
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.detail || "Failed to create file");
+// --- Kanban & Tasks ---
+export const getProjectTasks = (projectId: string) => api.get<{ tasks: Task[] }>(`/projects/${projectId}/tasks`);
+export const saveProjectTasks = (projectId: string, tasks: Task[]) => api.post<{ status: string }>(`/projects/${projectId}/tasks`, { tasks });
+export const getKanbanConfig = (projectId: string) => api.get<any>(`/projects/${projectId}/kanban/config`);
+export const saveKanbanConfig = (projectId: string, columns: any[]) => api.post<{ status: string }>(`/projects/${projectId}/kanban/config`, { columns });
+export const syncKanbanCommits = (projectId: string) => api.post<any>(`/projects/${projectId}/tasks/sync-commits`);
+export const generateWBS = (projectId: string, requirements: string, model = "openai/gpt-4o") => 
+  api.post<any>(`/projects/${projectId}/kanban/wbs`, { requirements, model });
+
+// --- Providers & Settings ---
+export const fetchProviderModels = (provider: string) => api.get<ModelResult[]>(`/settings/providers/${provider}/models`);
+export const verifyAndSaveProviderKey = (provider: string, apiKey: string) => 
+  api.post<ModelResult[]>(`/settings/providers/${provider}/keys`, { api_key: apiKey });
+export const checkApiKeyStatus = (provider: string) => api.get<{ is_configured: boolean }>(`/settings/api-key/${provider}`);
+export const deleteProviderKey = (provider: string) => api.delete<{ status: string }>(`/settings/api-key/${provider}`);
+
+// --- AI / Analysis ---
+export const getProjectInsights = (projectId: string) => api.get<ProjectInsights>(`/projects/${projectId}/insights`);
+export const analyzeProject = (projectId: string) => api.post<any>(`/projects/${projectId}/analyze`);
+export const fetchFimCompletion = async (prefix: string, suffix: string, language: string) => {
+  try {
+    return await api.post<any>('/ai/fim-completion', { prefix, suffix, language });
+  } catch {
+    return { code: '', explanation: '' }; // Silencia el error de FIM como lo hacía el original
   }
-  return res.json();
 };
-
-export const renameFile = async (projectId: string, path: string, newName: string) => {
-  const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/file/rename`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ path, new_name: newName }),
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.detail || 'Failed to rename file');
-  }
-  return res.json();
-};
-
-export const duplicateFile = async (projectId: string, path: string) => {
-  const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/file/duplicate`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ path }),
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.detail || 'Failed to duplicate file');
-  }
-  return res.json();
-};
-
-export const deleteFile = async (projectId: string, path: string) => {
-  const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/file/delete?path=${encodeURIComponent(path)}`, {
-    method: 'DELETE',
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.detail || 'Failed to delete file');
-  }
-  return res.json();
-};
-
-export const getCommitDetails = async (projectId: string, hash: string): Promise<CommitDetails> => {
-  const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/git/commits/${hash}`);
-  if (!res.ok) throw new Error("Failed to fetch commit details");
-  return res.json();
-};
-
-export const getCommitFileDiff = async (
-  projectId: string,
-  hash: string,
-  path: string
-): Promise<{ original: string; modified: string }> => {
-  const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/git/commits/${hash}/diff?path=${encodeURIComponent(path)}`);
-  if (!res.ok) throw new Error("Failed to fetch file diff");
-  return res.json();
-};
-
-export interface CuratedProvider {
-  provider: string;
-  provider_id: string;
-  is_configured?: boolean;
-  models: ModelResult[];
-}
-
-export const getCuratedModels = async (): Promise<CuratedProvider[]> => {
-  const response = await fetchWithRetry(`${API_BASE_URL}/ai/models`);
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => null);
-    throw new Error(errorData?.detail || `Failed to fetch curated models`);
-  }
-  return response.json();
-};
-
-export const fetchProviderModels = async (provider: string): Promise<ModelResult[]> => {
-  const response = await fetchWithRetry(`${API_BASE_URL}/settings/providers/${provider}/models`);
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => null);
-    throw new Error(errorData?.detail || `Failed to fetch models for ${provider}`);
-  }
-  return response.json();
-};
-
-export const verifyAndSaveProviderKey = async (provider: string, apiKey: string): Promise<ModelResult[]> => {
-  const response = await fetchWithRetry(`${API_BASE_URL}/settings/providers/${provider}/keys`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ api_key: apiKey }),
-  });
-  
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => null);
-    throw new Error(errorData?.detail || `Failed to verify API key for ${provider}`);
-  }
-  
-  return response.json();
-};
-
-export const checkApiKeyStatus = async (provider: string): Promise<{ is_configured: boolean }> => {
-  const response = await fetchWithRetry(`${API_BASE_URL}/settings/api-key/${provider}`);
-  if (!response.ok) throw new Error(`Failed to check API key status for ${provider}`);
-  return response.json();
-};
-
-export const deleteProviderKey = async (provider: string): Promise<{ status: string }> => {
-  const response = await fetchWithRetry(`${API_BASE_URL}/settings/api-key/${provider}`, {
-    method: 'DELETE',
-  });
-  if (!response.ok) throw new Error(`Failed to delete API key for ${provider}`);
-  return response.json();
-};
-
-export const getProjectTasks = async (projectId: string): Promise<{ tasks: Task[] }> => {
-  const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/tasks`);
-  if (!res.ok) throw new Error("Failed to fetch project tasks");
-  return res.json();
-};
-
-export const saveProjectTasks = async (projectId: string, tasks: Task[]): Promise<{ status: string }> => {
-  const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/tasks`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ tasks }),
-  });
-  if (!res.ok) throw new Error("Failed to save project tasks");
-  return res.json();
-};
-
-export const getProjectInsights = async (projectId: string): Promise<ProjectInsights> => {
-  const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/insights`);
-  if (!res.ok) throw new Error("Failed to fetch project insights");
-  return res.json();
-};
-
-export const getGitStatus = async (projectId: string): Promise<GitStatus> => {
-  const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/git/status`);
-  if (!res.ok) throw new Error("Failed to fetch git status");
-  return res.json();
-};
-
-export interface ChangedFile {
-  status_code: string;
-  file_path: string;
-  is_untracked: boolean;
-  is_modified: boolean;
-  added: number;
-  deleted: number;
-}
-
-export interface LocalChangesResponse {
-  files: ChangedFile[];
-}
-
-export const getLocalChanges = async (projectId: string): Promise<LocalChangesResponse> => {
-  const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/git/changes`);
-  if (!res.ok) throw new Error("Failed to fetch local changes");
-  return res.json();
-};
-
-export interface FileLocalDiff {
-  diff?: string;
-  original_content: string;
-  modified_content: string;
-  status: string;
-}
-
-export const getFileLocalDiff = async (
-  projectId: string,
-  filePath: string,
-): Promise<FileLocalDiff> => {
-  const res = await fetchWithRetry(
-    `${API_BASE_URL}/projects/${projectId}/git/diff?file_path=${encodeURIComponent(filePath)}`,
-  );
-  if (!res.ok) throw new Error("Failed to fetch file diff");
-  return res.json();
-};
-
-export const revertFile = async (
-  projectId: string,
-  filePath: string,
-): Promise<{ status: string; action: string }> => {
-  const res = await fetchWithRetry(
-    `${API_BASE_URL}/projects/${projectId}/git/revert`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ file_path: filePath }),
-    },
-  );
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.detail || "Failed to revert file");
-  }
-  return res.json();
-};
-
-export interface GitDashboardKPIs {
-  total_files: number;
-  tracked: number;
-  untracked: number;
-  ignored: number;
-  modified: number;
-  last_commit_files: number;
-}
-
-export interface GitDashboardFileStatus {
-  status: string;
-  file_path: string;
-  timestamp?: number;
-}
-
-export interface GitDashboardBranch {
-  current_branch: string;
-  diff_with_main: { ahead: number | null; behind: number | null };
-}
-
-export interface GitDashboard {
-  kpis: GitDashboardKPIs;
-  lists: {
-    untracked_list: GitDashboardFileStatus[];
-    modified_list: GitDashboardFileStatus[];
-    staged_list: GitDashboardFileStatus[];
-    last_commit_list: GitDashboardFileStatus[];
-    penultimate_commit_list: GitDashboardFileStatus[];
-  };
-  branch: GitDashboardBranch;
-  commits: {
-    last_commit_message: string;
-    penultimate_commit_message: string;
-  };
-}
-
-export const getGitDashboard = async (projectId: string): Promise<GitDashboard> => {
-  const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/git/dashboard`);
-  if (!res.ok) throw new Error("Failed to fetch git dashboard");
-  return res.json();
-};
-
-export const stageFile = async (projectId: string, filePath: string) => {
-  const res = await fetchWithRetry(
-    `${API_BASE_URL}/projects/${projectId}/git/stage`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ file_path: filePath }),
-    },
-  );
-  if (!res.ok) throw new Error("Failed to stage file");
-};
-
-export const unstageFile = async (projectId: string, filePath: string) => {
-  const res = await fetchWithRetry(
-    `${API_BASE_URL}/projects/${projectId}/git/unstage`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ file_path: filePath }),
-    },
-  );
-  if (!res.ok) throw new Error("Failed to unstage file");
-};
-
-export const commitChanges = async (projectId: string, message: string) => {
-  const res = await fetchWithRetry(
-    `${API_BASE_URL}/projects/${projectId}/git/commit`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message }),
-    },
-  );
-  if (!res.ok) throw new Error("Failed to commit changes");
-};
-
-export interface KanbanColumn {
-  id: string;
-  title: string;
-  color: string;
-  rule?: 'manual' | 'pomodoro' | 'auto-on-test-fail' | 'auto-on-test-pass';
-}
-
-export interface KanbanConfig {
-  columns: KanbanColumn[];
-}
-
-export const getKanbanConfig = async (projectId: string): Promise<KanbanConfig> => {
-  const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/kanban/config`);
-  if (!res.ok) throw new Error("Failed to fetch kanban config");
-  return res.json();
-};
-
-export const saveKanbanConfig = async (projectId: string, columns: KanbanColumn[]): Promise<{ status: string }> => {
-  const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/kanban/config`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ columns }),
-  });
-  if (!res.ok) throw new Error("Failed to save kanban config");
-  return res.json();
-};
-
-export const syncKanbanCommits = async (projectId: string): Promise<{ status: string; tests_passing: boolean; updated_tasks: string[] }> => {
-  const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/tasks/sync-commits`, {
-    method: 'POST'
-  });
-  if (!res.ok) throw new Error("Failed to sync project commits with tasks");
-  return res.json();
-};
-
-export interface WBSTask {
-  title: string;
-  estimated_mins: number;
-  priority: 'Low' | 'Medium' | 'High';
-  type: string;
-  tags: string[];
-}
-
-export interface WBSResponse {
-  tasks: WBSTask[];
-  explanation: string;
-}
-
-export const generateWBS = async (projectId: string, requirements: string, model = "openai/gpt-4o"): Promise<WBSResponse> => {
-  const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/kanban/wbs`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ requirements, model })
-  });
-  if (!res.ok) throw new Error("Failed to generate WBS from IA");
-  return res.json();
-};
-
-// --- Chat / AI Agent ------------------------------------------------------
-
-export interface ChatMessage {
-  role: "user" | "assistant" | "system";
-  content: string;
-  isError?: boolean;
-}
-
-export interface ChatRequestPayload {
-  messages: ChatMessage[];
-  /** Fully-qualified model identifier, format: `provider/model_id`. */
-  model: string;
-  project_id: string | null;
-}
-
-export interface ChatResponsePayload {
-  response: string;
-}
-
-export const sendChatMessage = async (
-  payload: ChatRequestPayload,
-): Promise<ChatResponsePayload> => {
-  const response = await fetchWithRetry(`${API_BASE_URL}/chat/`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => null);
-    throw new Error(errorData?.detail || "Failed to fetch chat response");
-  }
-  return response.json() as Promise<ChatResponsePayload>;
-};
-
-export interface AnalyzeResult {
-  tech_stack: Record<string, number>;
-  total_files: number;
-  global_markers: Record<string, unknown>;
-}
-
-export const analyzeProject = async (projectId: string): Promise<AnalyzeResult> => {
-  const res = await fetchWithRetry(`${API_BASE_URL}/projects/${projectId}/analyze`, {
-    method: 'POST',
-  });
-  if (!res.ok) throw new Error("Failed to analyze project");
-  return res.json();
-};
+export const sendChatMessage = (payload: any) => api.post<any>('/chat/', payload);
 
 export interface CodeCoachMarker {
   line: number;
@@ -562,29 +195,19 @@ export interface CodeCoachOverview {
   error_detail?: string;
 }
 
+// --- Code Coach (Los Nuevos Endpoints) ---
 export const fetchHealthOverview = async (
   fileContent: string,
   language: string,
   model?: string,
   fallbackModel?: string
 ): Promise<CodeCoachOverview> => {
-  const res = await fetch(`${API_BASE_URL}/ai/health-overview`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ 
-      file_content: fileContent, 
-      language,
-      model,
-      fallback_model: fallbackModel
-    }),
+  return await api.post<CodeCoachOverview>(`/ai/health-overview`, {
+    file_content: fileContent,
+    language,
+    model,
+    fallback_model: fallbackModel
   });
-  
-  if (!res.ok) {
-    const errorText = await res.text().catch(() => '');
-    throw new Error(`Health Overview request failed: ${res.status} ${errorText}`);
-  }
-  
-  return res.json();
 };
 
 export const fetchContextualMentorship = async (
@@ -594,58 +217,25 @@ export const fetchContextualMentorship = async (
   model?: string,
   fallbackModel?: string
 ): Promise<CodeCoachMarker[]> => {
-  const res = await fetch(`${API_BASE_URL}/ai/contextual-mentorship`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ 
-      file_content: fileContent, 
-      language,
-      cursor_line: cursorLine,
-      model,
-      fallback_model: fallbackModel
-    }),
+  return await api.post<CodeCoachMarker[]>(`/ai/contextual-mentorship`, {
+    file_content: fileContent,
+    language,
+    cursor_line: cursorLine,
+    model,
+    fallback_model: fallbackModel
   });
-  
-  if (!res.ok) {
-    const errorText = await res.text().catch(() => '');
-    throw new Error(`Contextual Mentorship request failed: ${res.status} ${errorText}`);
-  }
-  
-  return res.json();
 };
-
-export interface TechInfo {
-  name: string;
-  version: string;
-  doc_url: string;
-}
-
-export interface TechScanResponse {
-  technologies: TechInfo[];
-}
 
 export const fetchTechScan = async (
   fileContent: string,
   language: string,
   model?: string,
   fallbackModel?: string
-): Promise<TechScanResponse> => {
-  const res = await fetch(`${API_BASE_URL}/ai/tech-scan`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ 
-      file_content: fileContent, 
-      language,
-      model,
-      fallback_model: fallbackModel
-    }),
-    signal: AbortSignal.timeout(20000),
+): Promise<any> => {
+  return await api.post<any>(`/ai/tech-scan`, {
+    file_content: fileContent,
+    language,
+    model,
+    fallback_model: fallbackModel
   });
-  
-  if (!res.ok) {
-    const errorText = await res.text().catch(() => '');
-    throw new Error(`Tech Scan request failed: ${res.status} ${errorText}`);
-  }
-  
-  return res.json();
 };
