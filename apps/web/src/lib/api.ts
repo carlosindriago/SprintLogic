@@ -161,6 +161,10 @@ export interface GitDashboardBranch {
   current_branch: string;
   ahead?: number;
   behind?: number;
+  diff_with_main?: {
+    ahead: number | null;
+    behind: number | null;
+  };
 }
 
 export interface GitDashboardKPIs {
