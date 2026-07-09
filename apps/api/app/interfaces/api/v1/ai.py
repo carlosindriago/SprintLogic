@@ -85,8 +85,11 @@ class CodeCoachMarker(BaseModel):
     line: int
     severity: str
     message: str
+    title: str | None = None
     explanation: str
     suggested_code: str | None = None
+    snippet_before: str | None = None
+    snippet_after: str | None = None
     is_degraded: bool = False
 
 
@@ -381,10 +384,11 @@ async def contextual_mentorship(request: CodeCoachRequest):
             "El código proporcionado tiene números de línea explícitos al inicio de cada renglón (ej. [Line 45]). NUNCA adivines ni cuentes las líneas. Cuando reportes un error, extrae EXACTAMENTE el número que aparece entre corchetes en esa línea de código y ponlo en el campo line_number del JSON.\n\n"
             "Estructura EXACTA requerida:\n"
             "[\n"
-            '  { "line": 12, "severity": "hint" | "warning" | "error", "message": "Consejo", "explanation": "Explica", "suggested_code": "código o null" }\n'
+            '  { "line": 12, "severity": "hint" | "warning" | "error", "title": "Título corto", "message": "Consejo breve", "explanation": "Explicación pedagógica detallada del por qué es una mala práctica.", "snippet_before": "Líneas exactas del código original del usuario", "snippet_after": "Versión corregida y nivel Senior", "suggested_code": "null" }\n'
             "]\n\n"
             "EJEMPLO DE SALIDA ESPERADA:\n"
-            '[{"line": 12, "message": "Usa const en lugar de let.", "explanation": "Inmutabilidad previene errores de reasignación.", "severity": "warning", "suggested_code": "const config = {}"}]\n\n'
+            '[{"line": 12, "title": "Uso de let en constantes", "message": "Usa const en lugar de let.", "explanation": "La inmutabilidad previene errores de reasignación accidental y facilita la lectura.", "snippet_before": "let config = {};", "snippet_after": "const config = {};", "severity": "warning", "suggested_code": null}]\n\n'
+            "Usa SIEMPRE variables reales del archivo, NUNCA código genérico (foo/bar). "
             "No incluyas markdown, explicaciones previas ni texto fuera del arreglo JSON. "
             "CRÍTICO: TIENES PROHIBIDO PENSAR EN VOZ ALTA. NO expliques tu razonamiento fuera del JSON."
         )
@@ -454,8 +458,11 @@ async def contextual_mentorship(request: CodeCoachRequest):
                                 line=int(item["line"]),
                                 severity=str(item["severity"]),
                                 message=str(item["message"]),
+                                title=item.get("title"),
                                 explanation=str(item["explanation"]),
-                                suggested_code=item.get("suggested_code")
+                                suggested_code=item.get("suggested_code"),
+                                snippet_before=item.get("snippet_before"),
+                                snippet_after=item.get("snippet_after")
                             ))
 
                     return markers
