@@ -118,11 +118,6 @@ export function CoachSidebar({
                   rel="noopener noreferrer" 
                   title={tech.name}
                   className="text-3xl text-zinc-400 hover:text-white transition-colors cursor-pointer"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    window.open(e.currentTarget.href, '_blank', 'noopener,noreferrer');
-                  }}
                 >
                   <Icon />
                 </a>
