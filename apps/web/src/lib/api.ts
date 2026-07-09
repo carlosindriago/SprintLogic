@@ -149,7 +149,7 @@ export const getCommitFileDiff = (projectId: string, hash: string, path: string)
 export const getGitStatus = (projectId: string) => api.get<GitStatus>(`/projects/${projectId}/git/status`);
 export const getLocalChanges = (projectId: string) => api.get<{ files: any[] }>(`/projects/${projectId}/git/changes`);
 export const getFileLocalDiff = (projectId: string, filePath: string) => 
-  api.get<any>(`/projects/${projectId}/git/diff?file_path=${encodeURIComponent(filePath)}`);
+  api.get<FileLocalDiff>(`/projects/${projectId}/git/diff?file_path=${encodeURIComponent(filePath)}`);
 export const revertFile = (projectId: string, filePath: string) => 
   api.post<{ status: string; action: string }>(`/projects/${projectId}/git/revert`, { file_path: filePath });
 export interface GitDashboardFileStatus {
@@ -167,8 +167,8 @@ export interface GitDashboard {
 }
 
 export interface FileLocalDiff {
-  original: string;
-  modified: string;
+  original_content: string;
+  modified_content: string;
 }
 
 export const getGitDashboard = (projectId: string) => api.get<GitDashboard>(`/projects/${projectId}/git/dashboard`);
