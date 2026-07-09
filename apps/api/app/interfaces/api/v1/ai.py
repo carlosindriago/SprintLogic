@@ -384,7 +384,7 @@ async def contextual_mentorship(request: CodeCoachRequest):
             "El código proporcionado tiene números de línea explícitos al inicio de cada renglón (ej. [Line 45]). NUNCA adivines ni cuentes las líneas. Cuando reportes un error, extrae EXACTAMENTE el número que aparece entre corchetes en esa línea de código y ponlo en el campo line_number del JSON.\n\n"
             "Estructura EXACTA requerida:\n"
             "[\n"
-            '  { "line": 12, "severity": "hint" | "warning" | "error", "title": "Título corto", "message": "Consejo breve", "explanation": "Explicación pedagógica detallada del por qué es una mala práctica.", "snippet_before": "Líneas exactas del código original del usuario", "snippet_after": "Versión corregida y nivel Senior", "suggested_code": "null" }\n'
+            '  { "line": 12, "severity": "hint" | "warning" | "error", "title": "Título corto", "message": "Consejo breve", "explanation": "El campo explanation DEBE ser extenso, profundo y altamente pedagógico. No te limites a decir qué está mal. Explica el \\"Por qué\\", los riesgos reales (ej. memoria, seguridad, mantenibilidad) y por qué la solución propuesta (snippet_after) es el estándar de un Senior Engineer. Habla como un mentor experto y paciente.", "snippet_before": "Líneas exactas del código original del usuario", "snippet_after": "Versión corregida y nivel Senior", "suggested_code": "null" }\n'
             "]\n\n"
             "EJEMPLO DE SALIDA ESPERADA:\n"
             '[{"line": 12, "title": "Uso de let en constantes", "message": "Usa const en lugar de let.", "explanation": "La inmutabilidad previene errores de reasignación accidental y facilita la lectura.", "snippet_before": "let config = {};", "snippet_after": "const config = {};", "severity": "warning", "suggested_code": null}]\n\n'
@@ -432,7 +432,7 @@ async def contextual_mentorship(request: CodeCoachRequest):
                             model=_normalize_model_name(adapted["model"]),
                             messages=model_messages,
                             api_key=adapted["api_key"],
-                            max_tokens=2500,
+                            max_tokens=4000,
                             temperature=0.0,
                             timeout=120,
                             **adapted["kwargs"],
