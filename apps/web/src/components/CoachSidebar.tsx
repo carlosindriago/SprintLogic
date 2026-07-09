@@ -2,7 +2,7 @@
 /* eslint-disable react/no-unescaped-entities */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { CodeCoachOverview, CodeCoachMarker } from "@/lib/api";
-import { RefreshCw, ShieldAlert, FileCode2, Activity, Lightbulb, Loader2, FileText, Keyboard } from "lucide-react";
+import { RefreshCw, ShieldAlert, FileCode2, Activity, Lightbulb, Loader2, FileText, Keyboard, Copy, Check } from "lucide-react";
 import { SiTypescript, SiReact, SiPython, SiNextdotjs, SiFastapi, SiTailwindcss, SiNodedotjs, SiDocker, SiPostgresql, SiHtml5, SiCss, SiGnubash } from 'react-icons/si';
 import { VscCode } from 'react-icons/vsc';
 import { Button } from "@/components/ui/button";
@@ -46,6 +46,33 @@ export function CoachSidebar({
   isEditorDirty,
 }: CoachSidebarProps) {
   const [quoteIndex, setQuoteIndex] = useState(0);
+  const [isCopied, setIsCopied] = useState(false);
+
+  const handleCopyOverview = async () => {
+    if (!overview) return;
+    
+    let textToCopy = `Clean Code Score: ${overview.clean_code_score}/100\n\n`;
+    textToCopy += `Análisis:\n${overview.structure}\n\n`;
+    
+    if (overview.critical_security && overview.critical_security !== "None" && overview.critical_security !== "N/A" && overview.critical_security !== "") {
+      textToCopy += `Seguridad Crítica:\n${overview.critical_security}\n\n`;
+    }
+    
+    if (overview.technical_debt_and_tips && overview.technical_debt_and_tips.length > 0) {
+      textToCopy += `Deuda Técnica y Consejos:\n`;
+      overview.technical_debt_and_tips.forEach(tip => {
+        textToCopy += `- ${tip}\n`;
+      });
+    }
+
+    try {
+      await navigator.clipboard.writeText(textToCopy);
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2000);
+    } catch (err) {
+      console.error("Error al copiar al portapapeles:", err);
+    }
+  };
 
   useEffect(() => {
     if (!isAnalyzingCode) return;
@@ -143,11 +170,24 @@ export function CoachSidebar({
 
       {/* Celda 2: Overview */}
       <div className={`bg-[#121212] border ${overview?.is_degraded ? 'border-rose-500/50' : 'border-zinc-800'} rounded-lg p-4 flex flex-col shadow-sm mb-4`}>
-        <h3 className={`text-sm font-semibold flex items-center gap-2 mb-3 ${overview?.is_degraded ? 'text-rose-400' : 'text-zinc-200'}`}>
-          <Activity className={`w-4 h-4 ${overview?.is_degraded ? 'text-rose-500' : 'text-emerald-400'}`} />
-          Health & Overview
-          {isAnalyzingCode && overview && <Loader2 className="w-3 h-3 animate-spin text-zinc-500 ml-auto" />}
-        </h3>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className={`text-sm font-semibold flex items-center gap-2 ${overview?.is_degraded ? 'text-rose-400' : 'text-zinc-200'}`}>
+            <Activity className={`w-4 h-4 ${overview?.is_degraded ? 'text-rose-500' : 'text-emerald-400'}`} />
+            Health & Overview
+            {isAnalyzingCode && overview && <Loader2 className="w-3 h-3 animate-spin text-zinc-500 ml-auto" />}
+          </h3>
+          {overview && !overview.is_degraded && !isAnalyzingCode && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="w-6 h-6 text-zinc-400 hover:text-white"
+              onClick={handleCopyOverview}
+              title="Copiar análisis al portapapeles"
+            >
+              {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+            </Button>
+          )}
+        </div>
         {isAnalyzingCode && !overview ? (
            <div className="flex flex-col items-center justify-center p-4 text-center border border-dashed border-zinc-800 rounded-lg bg-zinc-900/50">
              <Loader2 className="w-6 h-6 animate-spin text-amber-500 mb-2" />
