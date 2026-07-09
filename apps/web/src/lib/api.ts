@@ -557,6 +557,7 @@ export interface CodeCoachOverview {
   structure: string;
   critical_security: string;
   clean_code_score: number;
+  technical_debt_and_tips?: string[];
   is_degraded?: boolean;
   error_detail?: string;
 }

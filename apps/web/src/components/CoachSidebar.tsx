@@ -175,6 +175,18 @@ export function CoachSidebar({
             <div className={`leading-relaxed bg-[#1a1a1a] p-2 rounded border ${overview.is_degraded ? 'text-rose-300 border-rose-500/30' : 'text-zinc-300 border-zinc-800/50'}`}>
               {overview.structure}
             </div>
+            {overview.technical_debt_and_tips && overview.technical_debt_and_tips.length > 0 && (
+              <div className="bg-zinc-800/30 p-2.5 rounded border border-zinc-700/50 mt-1">
+                <ul className="space-y-2 text-sm text-zinc-300">
+                  {overview.technical_debt_and_tips.map((tip, idx) => (
+                    <li key={idx} className="flex items-start gap-2">
+                      <Lightbulb className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                      <span className="leading-snug">{tip}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {overview.is_degraded && (overview as any).error_detail && (
               <div className="mt-2 text-[10px] font-mono bg-black/50 p-2 rounded border border-rose-900/50 text-rose-400 break-all">
                 RAW ERROR:<br/>
