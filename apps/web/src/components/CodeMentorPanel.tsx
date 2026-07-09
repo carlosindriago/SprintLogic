@@ -137,8 +137,8 @@ export default function CodeMentorPanel({ open, onToggle, filePath, fileContent,
           >
             Analizar Archivo
           </button>
-          <button onClick={onToggle} className="p-0.5 rounded hover:bg-zinc-800 text-zinc-400">
-            <ChevronRight className="w-4 h-4" />
+          <button onClick={onToggle} className="p-0.5 rounded hover:bg-zinc-800 text-zinc-400" aria-label="Cerrar panel">
+            <ChevronRight className="w-4 h-4" aria-hidden="true" />
           </button>
         </div>
 
@@ -232,15 +232,17 @@ export default function CodeMentorPanel({ open, onToggle, filePath, fileContent,
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Preguntale al Sensei..."
+              aria-label="Mensaje para el Sensei"
               className="flex-1 bg-transparent text-xs text-zinc-200 placeholder-zinc-500 outline-none"
               disabled={loading || isStreaming}
             />
             <button
+              aria-label="Enviar mensaje"
               onClick={() => sendMessage(input)}
               disabled={loading || isStreaming || !input.trim()}
               className="text-zinc-400 hover:text-white disabled:opacity-30 shrink-0"
             >
-              <Send className="w-3.5 h-3.5" />
+              <Send className="w-3.5 h-3.5" aria-hidden="true" />
             </button>
           </div>
         </div>
