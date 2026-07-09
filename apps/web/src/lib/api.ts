@@ -207,13 +207,30 @@ export const unstageFile = (projectId: string, filePath: string) => api.post(`/p
 export const commitChanges = (projectId: string, message: string) => api.post(`/projects/${projectId}/git/commit`, { message });
 
 // --- Kanban & Tasks ---
+export interface KanbanColumn {
+  id: string;
+  title: string;
+  color?: string;
+  rule?: 'manual' | 'pomodoro' | 'auto-on-test-fail' | 'auto-on-test-pass';
+}
+
+export interface WBSTask {
+  title: string;
+  priority: string;
+  tags: string[];
+}
+
+export interface WBSResponse {
+  tasks: WBSTask[];
+}
+
 export const getProjectTasks = (projectId: string) => api.get<{ tasks: Task[] }>(`/projects/${projectId}/tasks`);
 export const saveProjectTasks = (projectId: string, tasks: Task[]) => api.post<{ status: string }>(`/projects/${projectId}/tasks`, { tasks });
-export const getKanbanConfig = (projectId: string) => api.get<any>(`/projects/${projectId}/kanban/config`);
-export const saveKanbanConfig = (projectId: string, columns: any[]) => api.post<{ status: string }>(`/projects/${projectId}/kanban/config`, { columns });
+export const getKanbanConfig = (projectId: string) => api.get<{ columns: KanbanColumn[] }>(`/projects/${projectId}/kanban/config`);
+export const saveKanbanConfig = (projectId: string, columns: KanbanColumn[]) => api.post<{ status: string }>(`/projects/${projectId}/kanban/config`, { columns });
 export const syncKanbanCommits = (projectId: string) => api.post<any>(`/projects/${projectId}/tasks/sync-commits`);
 export const generateWBS = (projectId: string, requirements: string, model = "openai/gpt-4o") => 
-  api.post<any>(`/projects/${projectId}/kanban/wbs`, { requirements, model });
+  api.post<WBSResponse>(`/projects/${projectId}/kanban/wbs`, { requirements, model });
 
 // --- Providers & Settings ---
 export const fetchProviderModels = (provider: string) => api.get<ModelResult[]>(`/settings/providers/${provider}/models`);
