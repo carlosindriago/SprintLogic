@@ -616,7 +616,7 @@ function PredictiveFimSection() {
           <div className="flex items-end gap-3">
             <div className="flex-1 flex flex-col gap-3">
               <Label className="text-xs font-medium text-zinc-300">Modelo Groq para FIM</Label>
-              <Select value={fimModel} onValueChange={setFimModel}>
+              <Select value={fimModel} onValueChange={(val) => val && setFimModel(val)}>
                 <SelectTrigger className="bg-zinc-950 border-zinc-800 text-zinc-200 w-full h-10">
                   <SelectValue placeholder="Selecciona un modelo..." />
                 </SelectTrigger>
