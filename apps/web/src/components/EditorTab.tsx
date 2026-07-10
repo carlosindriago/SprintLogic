@@ -347,10 +347,18 @@ export default function EditorTab({
     try {
       const language = node.file_path?.split('.').pop() || '';
       const position = editor.getPosition();
+      const activeLine = position?.lineNumber || 1;
+      
+      const allMarkers = monacoRef.current!.editor.getModelMarkers({ resource: model.uri });
+      const nativeErrors = allMarkers
+        .filter(m => m.owner !== 'ai-coach' && Math.abs(m.startLineNumber - activeLine) <= 5)
+        .map(m => `[Error nativo en línea ${m.startLineNumber}]: "${m.message}"`);
+
       const mentorshipResponse = await fetchContextualMentorship(
         content,
         language,
-        position?.lineNumber || 1,
+        activeLine,
+        nativeErrors,
         fimDefaultModelRef.current,
         fimFallbackModelRef.current,
         aiAbortControllerRef.current?.signal

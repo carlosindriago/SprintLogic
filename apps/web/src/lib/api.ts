@@ -295,6 +295,7 @@ export const fetchContextualMentorship = async (
   fileContent: string,
   language: string,
   cursorLine: number,
+  nativeErrors?: string[],
   model?: string,
   fallbackModel?: string,
   signal?: AbortSignal
@@ -303,6 +304,7 @@ export const fetchContextualMentorship = async (
     file_content: fileContent,
     language,
     cursor_line: cursorLine,
+    native_errors: nativeErrors,
     model,
     fallback_model: fallbackModel
   }, { signal });

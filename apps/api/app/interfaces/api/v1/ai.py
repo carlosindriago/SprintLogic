@@ -77,6 +77,7 @@ class CodeCoachRequest(BaseModel):
     file_content: str
     language: str = ""
     cursor_line: int = 1
+    native_errors: list[str] | None = None
     model: str | None = None
     fallback_model: str | None = None
 
@@ -382,6 +383,7 @@ async def contextual_mentorship(request: CodeCoachRequest):
             "Eres un Mentor Senior de programación. Analiza el código proporcionado. "
             "Devuelve EXCLUSIVAMENTE un arreglo JSON de consejos pedagógicos mapeados a las líneas del código.\n\n"
             "El código proporcionado tiene números de línea explícitos al inicio de cada renglón (ej. [Line 45]). NUNCA adivines ni cuentes las líneas. Cuando reportes un error, extrae EXACTAMENTE el número que aparece entre corchetes en esa línea de código y ponlo en el campo line_number del JSON.\n\n"
+            "Si recibes native_errors, prioriza explicar y resolver estos errores de compilación antes de sugerir mejoras de estilo.\n\n"
             "Estructura EXACTA requerida:\n"
             "[\n"
             '  { "line": 12, "severity": "hint" | "warning" | "error", "title": "Título corto", "message": "Consejo breve", "explanation": "El campo explanation DEBE ser extenso, profundo y altamente pedagógico. No te limites a decir qué está mal. Explica el \\"Por qué\\", los riesgos reales (ej. memoria, seguridad, mantenibilidad) y por qué la solución propuesta (snippet_after) es el estándar de un Senior Engineer. Habla como un mentor experto y paciente.", "snippet_before": "Líneas exactas del código original del usuario", "snippet_after": "Versión corregida y nivel Senior", "suggested_code": "null" }\n'
@@ -402,8 +404,13 @@ async def contextual_mentorship(request: CodeCoachRequest):
         else:
             truncated_content = '\n'.join(lines)
 
+        native_errors_text = ""
+        if request.native_errors:
+            native_errors_text = "ERRORES NATIVOS DE COMPILACIÓN/LINTER REPORTADOS POR EL EDITOR:\n" + "\n".join(request.native_errors) + "\n\n"
+
         user = (
             f"Analiza este código en {request.language or 'código'}. El cursor del usuario está cerca de la línea {request.cursor_line}:\n\n"
+            f"{native_errors_text}"
             f"```\n{truncated_content}\n```\n\n"
             "Devuelve únicamente el arreglo JSON."
         )
