@@ -23,7 +23,7 @@ ${prefix}
 Aquí tienes el código DESPUÉS del cursor: 
 ${suffix}
 
-Responde ÚNICAMENTE con el código exacto que falta en el medio. Cero explicaciones. Cero markdown.`;
+IMPORTANTE: Responde ÚNICAMENTE con el código que falta. NO repitas el prefijo. NO incluyas markdown, ni comillas invertidas (\`\`\`). Inicia tu respuesta exactamente donde termina el prefijo.`;
 
     try {
       const response = await fetch(this.apiUrl, {
