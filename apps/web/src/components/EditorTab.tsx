@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import Editor, { type OnMount } from '@monaco-editor/react';
+import Editor, { type OnMount, useMonaco } from '@monaco-editor/react';
 import type { editor as monacoEditor, Uri } from 'monaco-editor';
 import { getFileContent, saveFileContent, API_BASE_URL, fetchHealthOverview, fetchContextualMentorship, fetchTechScan, getGitStatus } from '@/lib/api';
 import { draftStore } from '@/lib/draftStore';
@@ -103,6 +103,57 @@ export default function EditorTab({
       aiAbortControllerRef.current?.abort();
     };
   }, []);
+
+  const monaco = useMonaco();
+
+  useEffect(() => {
+    if (!monaco || !allMentorshipAdvice || allMentorshipAdvice.length === 0) return;
+
+    const language = '*';
+    
+    const provider = monaco.languages.registerCodeActionProvider(language, {
+      provideCodeActions: (model, range, context, token) => {
+        const actions: any[] = [];
+        const currentLine = range.startLineNumber;
+
+        allMentorshipAdvice.forEach(advice => {
+          if (!advice.snippet_after || advice.snippet_after === "null") return;
+          if (Math.abs(advice.line - currentLine) <= 5) {
+            const searchRange = advice.snippet_before && advice.snippet_before !== "null"
+              ? model.findMatches(advice.snippet_before, false, false, false, null, true)
+              : null;
+            
+            const editRange = searchRange && searchRange.length > 0 
+              ? searchRange[0].range 
+              : new monaco.Range(advice.line, 1, advice.line, model.getLineMaxColumn(advice.line));
+
+            actions.push({
+              title: `✨ Aplicar sugerencia del Sensei: ${advice.title || advice.message}`,
+              kind: 'quickfix',
+              isPreferred: true,
+              edit: {
+                edits: [{
+                  resource: model.uri,
+                  textEdit: {
+                    range: editRange,
+                    text: advice.snippet_after
+                  },
+                  versionId: undefined
+                }]
+              }
+            });
+          }
+        });
+
+        return {
+          actions: actions,
+          dispose: () => {}
+        };
+      }
+    });
+
+    return () => provider.dispose();
+  }, [monaco, allMentorshipAdvice, node.name]);
 
   const isCoachEnabled = useSettingsStore((s) => s.isFimEnabled);
   const setIsCoachEnabled = useSettingsStore((s) => s.setFimEnabled);
