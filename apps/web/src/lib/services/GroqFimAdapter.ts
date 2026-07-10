@@ -124,8 +124,20 @@ export class GroqFimAdapter implements FimProvider {
         const lines = prefix.split('\n');
         const last5Lines = lines.slice(-5).join('\n');
         
-        // Extract distinct identifiers
-        const identifiers = Array.from(new Set(last5Lines.match(/[a-zA-Z_$][0-9a-zA-Z_$]*/g) || []));
+        const reservedWords = new Set([
+          'if', 'else', 'for', 'while', 'do', 'switch', 'case', 'default',
+          'break', 'continue', 'return', 'function', 'class', 'interface',
+          'type', 'enum', 'const', 'let', 'var', 'import', 'export',
+          'from', 'as', 'try', 'catch', 'finally', 'throw', 'new',
+          'delete', 'typeof', 'instanceof', 'void', 'await', 'async',
+          'yield', 'this', 'super', 'public', 'private', 'protected',
+          'readonly', 'static', 'extends', 'implements', 'true', 'false',
+          'null', 'undefined', 'NaN', 'Infinity', 'console', 'window', 'document'
+        ]);
+
+        // Extract distinct identifiers, ignoring keywords
+        const identifiers = Array.from(new Set(last5Lines.match(/[a-zA-Z_$][0-9a-zA-Z_$]*/g) || []))
+          .filter(id => !reservedWords.has(id));
         
         // Get the absolute offset of the cursor in the file
         const absoluteCursorOffset = model.getOffsetAt(position);
@@ -150,7 +162,9 @@ export class GroqFimAdapter implements FimProvider {
             if (sig) {
               const cleanSig = sig.replace(/\r?\n/g, ' ').replace(/\s+/g, ' ').trim();
               if (cleanSig && cleanSig !== 'any') {
-                typeSignatures.add(cleanSig);
+                // Truncate to prevent token explosion (e.g. huge DOM interfaces)
+                const truncatedSig = cleanSig.length > 150 ? cleanSig.substring(0, 147) + '...' : cleanSig;
+                typeSignatures.add(truncatedSig);
               }
             }
           }
