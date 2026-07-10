@@ -50,9 +50,24 @@ IMPORTANTE: Responde ÚNICAMENTE con el código que falta. NO repitas el prefijo
       const data = await response.json();
       let completion = data.choices[0]?.message?.content || '';
       
-      // Cleanup any accidental markdown formatting the LLM might have ignored
-      if (completion.startsWith('```')) {
-        completion = completion.replace(/^```[a-z]*\n/, '').replace(/```$/, '');
+      // Cleanup accidental markdown blocks if the LLM hallucinated them
+      completion = completion.replace(/^```[\w]*\n?/, '').replace(/\n?```$/, '');
+
+      // Overlap Stripper (O(N) deterministic deduplication)
+      // We check up to the last 100 characters of the user's prefix
+      const maxOverlap = Math.min(100, prefix.length, completion.length);
+      let overlapLen = 0;
+
+      for (let i = 1; i <= maxOverlap; i++) {
+        const prefixEnd = prefix.slice(-i);
+        const completionStart = completion.slice(0, i);
+        if (prefixEnd === completionStart) {
+          overlapLen = i;
+        }
+      }
+
+      if (overlapLen > 0) {
+        completion = completion.slice(overlapLen);
       }
 
       return completion;
