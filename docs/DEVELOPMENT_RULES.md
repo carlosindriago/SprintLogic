@@ -1,185 +1,184 @@
 # Development Rules
 
-## 1. Regla madre
+## 1. Golden Rule
 
-**No se escribe código de producto sin pasar por planificación, diseño y criterio de aceptación.**
+**No product code is written without passing through planning, design, and acceptance criteria.**
 
-## 2. Flujo oficial de trabajo
+## 2. Official Workflow
 
-1. Idea / problema
-2. Propuesta
-3. Diseño técnico
-4. Tareas
-5. Implementación
-6. Verificación
+1. Idea / problem
+2. Proposal
+3. Technical design
+4. Tasks
+5. Implementation
+6. Verification
 7. Release note
 
-## 3. Reglas de planificación
+## 3. Planning Rules
 
-- toda feature debe tener objetivo de negocio;
-- toda feature debe definir usuario, valor y métrica;
-- todo cambio estructural debe dejar una ADR o decisión registrada;
-- si algo no entra al MVP, se mueve explícitamente al backlog futuro.
+- every feature must have a business objective;
+- every feature must define user, value, and metric;
+- every structural change must leave an ADR or registered decision;
+- if something doesn't fit the MVP, it is explicitly moved to the future backlog.
 
-## 4. Reglas de arquitectura
+## 4. Architecture Rules
 
-- modular monolith como patrón oficial;
-- dependencias dirigidas hacia dominio y no al revés;
-- no lógica de negocio crítica en componentes UI;
-- el frontend orquesta experiencia; el backend gobierna reglas;
-- evitar lógica duplicada entre web y API.
+- modular monolith as the official pattern;
+- dependencies directed towards the domain and not vice versa;
+- no critical business logic in UI components;
+- frontend orchestrates experience; backend governs rules;
+- avoid duplicate logic between web and API.
 
-## 5. Reglas de código
+## 5. Coding Rules
 
-- TypeScript estricto en frontend;
-- Python tipado en backend;
-- naming consistente y explícito;
-- funciones pequeñas, cohesionadas y testeables;
-- comentarios solo cuando expliquen intención, no obviedades;
-- cero secretos hardcodeados;
-- feature flags para cambios sensibles si el riesgo lo amerita.
+- strict TypeScript in frontend;
+- strictly typed Python in backend;
+- consistent and explicit naming;
+- small, cohesive, and testable functions;
+- comments only when they explain intention, not obvious things;
+- zero hardcoded secrets;
+- feature flags for sensitive changes if the risk warrants it.
 
-### Reglas de Clean Code
+### Clean Code Rules
 
-- una función debe tener una sola razón para cambiar;
-- preferir nombres que expresen intención;
-- evitar funciones largas y clases “Dios”;
-- eliminar duplicación sistemáticamente;
-- preferir composición sobre complejidad accidental;
-- errores explícitos antes que silencios mágicos;
-- cada módulo debe tener responsabilidad clara;
-- código legible > código “ingenioso”.
+- a function should have only one reason to change;
+- prefer names that express intention;
+- avoid long functions and "God" classes;
+- eliminate duplication systematically;
+- prefer composition over accidental complexity;
+- explicit errors rather than magical silences;
+- each module must have a clear responsibility;
+- readable code > "clever" code.
 
-## 6. Reglas de datos
+## 6. Data Rules
 
-- SQLite local es la fuente de verdad del sistema;
-- no borrar datos operativos sin política definida;
-- todo cálculo KPI debe tener fórmula documentada;
-- no confiar en tiempo enviado por el cliente sin validación;
-- cambios de estado relevantes deben ser auditables.
+- local SQLite is the system's source of truth;
+- do not delete operational data without a defined policy;
+- every KPI calculation must have a documented formula;
+- do not trust time sent by the client without validation;
+- relevant state changes must be auditable.
 
-## 6.1 Reglas de Clean Architecture
+## 6.1 Clean Architecture Rules
 
-- el dominio no depende de frameworks;
-- los casos de uso no conocen detalles de transporte HTTP;
-- infraestructura implementa interfaces definidas por capas internas;
-- DTOs de entrada/salida no son entidades de dominio;
-- no mezclar ORM models con modelos de dominio si eso degrada claridad;
-- toda dependencia externa debe entrar por adapter o gateway.
+- the domain does not depend on frameworks;
+- use cases do not know HTTP transport details;
+- infrastructure implements interfaces defined by internal layers;
+- input/output DTOs are not domain entities;
+- do not mix ORM models with domain models if it degrades clarity;
+- every external dependency must enter through an adapter or gateway.
 
-## 7. Reglas de API
+## 7. API Rules
 
-- contrato OpenAPI antes de exponer endpoints críticos;
-- payloads consistentes;
-- validación exhaustiva en bordes;
-- idempotencia en operaciones repetibles;
-- versionado explícito cuando haya ruptura.
+- OpenAPI contract before exposing critical endpoints;
+- consistent payloads;
+- exhaustive validation at the edges;
+- idempotency in repeatable operations;
+- explicit versioning when breaking changes occur.
 
-## 8. Reglas de UX de producto
+## 8. Product UX Rules
 
-- timer siempre visible pero no intrusivo;
-- una acción crítica = una confirmación clara;
-- estado del proyecto visible sin navegar demasiado;
-- dashboards comprensibles para no técnicos;
-- reportes diseñados para ser compartidos sin explicación extra.
+- timer always visible but not intrusive;
+- one critical action = one clear confirmation;
+- project state visible without too much navigation;
+- dashboards understandable for non-technical users;
+- reports designed to be shared without extra explanation.
 
-## 9. Reglas de testing
+## 9. Testing Rules
 
 ### Backend
-- unit tests para reglas de negocio;
-- integration tests para API, DB y permisos;
-- contract tests para payloads críticos.
+- unit tests for business rules;
+- integration tests for API, DB, and permissions;
+- contract tests for critical payloads.
 
 ### Frontend
-- unit tests para utilidades y hooks;
-- component tests para piezas críticas;
-- e2e para flujos:
+- unit tests for utilities and hooks;
+- component tests for critical pieces;
+- e2e for flows:
   - login;
-  - crear proyecto;
-  - mover tarea;
-  - iniciar/terminar foco;
-  - generar reporte.
+  - create project;
+  - move task;
+  - start/end focus;
+  - generate report.
 
 ## 10. Definition of Ready
 
-Una tarea entra a desarrollo solo si tiene:
+A task enters development only if it has:
 
-- objetivo claro;
-- criterio de aceptación;
-- diseño o referencia técnica;
-- impacto en datos identificado;
-- dependencia externa conocida;
-- riesgo principal identificado.
+- clear objective;
+- acceptance criteria;
+- design or technical reference;
+- data impact identified;
+- external dependency known;
+- main risk identified.
 
 ## 11. Definition of Done
 
-Una tarea se considera terminada solo si:
+A task is considered finished only if:
 
-- cumple criterios de aceptación;
-- tiene pruebas adecuadas;
-- deja observabilidad mínima;
-- actualiza documentación si aplica;
-- no rompe seguridad ni multi-tenancy;
-- pasa CI;
-- está lista para demo o release interno.
+- meets acceptance criteria;
+- has adequate tests;
+- leaves minimum observability;
+- updates documentation if applicable;
+- does not break security or multi-tenancy;
+- passes CI;
+- is ready for demo or internal release.
 
-## 12. Reglas de Git
+## 12. Git Rules
 
-- trunk-based con ramas cortas;
-- nombres tipo `feat/...`, `fix/...`, `chore/...`, `docs/...`;
-- PR pequeña, enfocada y revisable;
-- no mezclar refactor grande con feature sin necesidad;
-- commits descriptivos.
+- trunk-based with short-lived branches;
+- names like `feat/...`, `fix/...`, `chore/...`, `docs/...`;
+- PR small, focused, and reviewable;
+- do not mix a large refactor with a feature unnecessarily;
+- descriptive commits.
 
-### Reglas de ramas
+### Branch Rules
 
-- `main` siempre protegida y deployable;
-- una rama por cambio lógico;
-- ramas cortas y de vida breve;
-- convenciones sugeridas:
-  - `feat/<alcance>`
-  - `fix/<alcance>`
-  - `refactor/<alcance>`
-  - `docs/<alcance>`
-  - `chore/<alcance>`
+- `main` always protected and deployable;
+- one branch per logical change;
+- short-lived branches;
+- suggested conventions:
+  - `feat/<scope>`
+  - `fix/<scope>`
+  - `refactor/<scope>`
+  - `docs/<scope>`
+  - `chore/<scope>`
 
-### Reglas de commits atómicos
+### Atomic Commit Rules
 
-- un commit = un cambio lógico;
-- no mezclar formato, refactor y feature en el mismo commit;
-- cada commit debe dejar el proyecto en estado coherente;
-- si el cambio necesita explicación larga, probablemente no es atómico;
-- usar mensajes claros estilo Conventional Commits:
+- one commit = one logical change;
+- do not mix formatting, refactor, and feature in the same commit;
+- each commit must leave the project in a coherent state;
+- if the change needs a long explanation, it's probably not atomic;
+- use clear messages following Conventional Commits:
   - `feat(board): add task status transitions`
   - `fix(timer): prevent duplicate active sessions`
   - `refactor(api): extract project repository port`
 
-## 13. Reglas de review
+## 13. Review Rules
 
-- revisar lógica, seguridad, multi-tenant, tests y DX;
-- no aprobar “solo porque funciona”;
-- toda decisión no obvia debe quedar registrada.
+- review logic, security, tests, and DX;
+- do not approve "just because it works";
+- every non-obvious decision must be recorded.
 
-## 14. Reglas de observabilidad
+## 14. Observability Rules
 
-- todo error relevante debe poder trazarse;
-- logs sin datos sensibles;
-- alerts para fallos de jobs, reportes y auth;
-- métricas técnicas y de negocio separadas.
+- every relevant error must be traceable;
+- logs without sensitive data;
+- alerts for job failures, reports, and auth;
+- technical and business metrics separated.
 
-## 15. Reglas de seguridad
+## 15. Security Rules
 
-- mínimo privilegio;
-- validación server-side siempre;
-- protección CSRF/XSS según superficie;
-- control de acceso por organización y rol en cada operación;
-- rotación y gestión seria de secretos.
+- least privilege;
+- server-side validation always;
+- CSRF/XSS protection according to surface;
+- serious secret rotation and management.
 
-## 16. Regla de roadmap
+## 16. Roadmap Rule
 
-Cada fase debe cerrar con:
+Each phase must close with:
 
-- demo funcional;
-- métricas observables;
-- deuda técnica explícita;
-- decisión de continuar, corregir o pausar.
+- functional demo;
+- observable metrics;
+- explicit technical debt;
+- decision to continue, correct, or pause.
