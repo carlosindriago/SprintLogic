@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Settings, FolderOpen, ChevronRight, Edit2, Trash2, PlusCircle, ChevronsUpDown, FilePlus, RefreshCw, ScanSearch, Layout, Network, GitBranch, BarChart3, FolderGit2 } from "lucide-react";
+import { Settings, FolderOpen, ChevronRight, Edit2, Trash2, PlusCircle, ChevronsUpDown, FilePlus, RefreshCw, ScanSearch, Layout, Network, GitBranch, BarChart3, FolderGit2, HelpCircle } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { scanProject, getProjects, updateProject, deleteProject, analyzeProject, renameFile, duplicateFile, deleteFile } from "@/lib/api";
@@ -53,6 +53,8 @@ import { useProjectInsightsStore } from "@/store/projectInsightsStore";
 import { toast } from "sonner";
 import { useDoubleShift } from "@/hooks/useDoubleShift";
 import { useGlobalShortcuts } from "@/hooks/useGlobalShortcuts";
+import { HelpModal } from "@/components/HelpModal";
+import { CheatSheetModal } from "@/components/CheatSheetModal";
 
 // Monaco bundles are large and depend on `window`/`document`. They MUST
 // never enter the server bundle — that is what was pegging the CPU on
@@ -80,6 +82,8 @@ export default function Home() {
   const { projectId, setProjectId } = useProjectStore();
   const [loading, setLoading] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [cheatSheetOpen, setCheatSheetOpen] = useState(false);
   const [addProjectOpen, setAddProjectOpen] = useState(false);
   const isVimEnabled = useSettingsStore((s) => s.isVimEnabled);
   const setVimEnabled = useSettingsStore((s) => s.setVimEnabled);
@@ -119,8 +123,26 @@ export default function Home() {
   useGlobalShortcuts();
 
   useEffect(() => {
-    switchProject(projectId);
+    if (projectId) {
+      switchProject(projectId);
+    }
   }, [projectId, switchProject]);
+
+  useEffect(() => {
+    const handleToggleHelp = () => setHelpOpen((prev) => !prev);
+    window.addEventListener("toggle-help", handleToggleHelp);
+    return () => window.removeEventListener("toggle-help", handleToggleHelp);
+  }, []);
+
+  useEffect(() => {
+    const handleToggleCheatSheet = () => {
+      setCheatSheetOpen((prev) => !prev);
+    };
+    window.addEventListener("toggle-cheat-sheet", handleToggleCheatSheet);
+    return () => {
+      window.removeEventListener("toggle-cheat-sheet", handleToggleCheatSheet);
+    };
+  }, []);
 
   const handleSearchSelect = (result: { path: string; line?: number | null }) => {
     const filePath = result.path.split(':')[0];
@@ -443,7 +465,7 @@ export default function Home() {
                   </Button>
                 </div>
                 <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-                  <DialogContent className="sm:max-w-3xl w-full bg-zinc-900 text-zinc-200 border-zinc-800/50 ring-zinc-700/50">
+                  <DialogContent className="sm:max-w-5xl w-full bg-zinc-900 text-zinc-200 border-zinc-800/50 ring-zinc-700/50">
                     <DialogHeader>
                       <DialogTitle>Configuración</DialogTitle>
                       <DialogDescription className="text-zinc-400">
@@ -778,17 +800,25 @@ export default function Home() {
               <ProjectInsightsPanel />
             </div>
           </div>
-          <div className="p-4 border-t border-zinc-800/50 bg-[#0a0a0a]">
+          <div className="p-4 border-t border-zinc-800/50 bg-[#0a0a0a] flex items-center justify-between">
               <Button
                 variant="ghost"
-                className="w-full justify-start text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
+                className="justify-start text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 flex-1"
                 onClick={() => setSettingsOpen(true)}
               >
                 <Settings className="mr-2 h-4 w-4" />
                 Configuración
               </Button>
+              <Button
+                variant="ghost"
+                className="w-10 h-10 p-0 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 ml-2"
+                onClick={() => setHelpOpen(true)}
+                title="Mostrar Hoja de Trucos (Ctrl + /)"
+              >
+                <HelpCircle className="h-4 w-4" />
+              </Button>
             </div>
-          </div>
+        </div>
       </div>
 
       {/* Toggle button visible only when left sidebar is collapsed */}
@@ -821,7 +851,7 @@ export default function Home() {
             </div>
           ) : (
             <>
-              <TabBar onToggleAi={toggleRightSidebar} aiOpen={rightSidebarOpen} onNewFile={handleNewUntitled} />
+              <TabBar onToggleAi={toggleRightSidebar} aiOpen={rightSidebarOpen} onNewFile={handleNewUntitled} projectId={projectId ?? undefined} />
               <div className="flex-1 relative overflow-hidden bg-[#151515]" key={activeTabId}>
                 {renderActiveTabContent()}
               </div>
@@ -940,17 +970,21 @@ export default function Home() {
         )}
         <AnalysisReportDialog open={analysisDialogOpen} onOpenChange={setAnalysisDialogOpen} />
         <OmniSearchModal open={searchOpen} onClose={() => setSearchOpen(false)} onSelect={handleSearchSelect} />
-        <CodeMentorPanel
-          open={mentorOpen}
-          onToggle={() => setMentorOpen(false)}
-          filePath={mentorFile}
-          fileContent={mentorContent}
-          techStack={mentorTechStack}
-          onOpenSettings={() => {
-            setSettingsTab('llms');
-            setSettingsOpen(true);
-          }}
-        />
+        {mentorOpen && (
+          <CodeMentorPanel
+            open={mentorOpen}
+            onToggle={() => setMentorOpen(!mentorOpen)}
+            filePath={mentorFile}
+            fileContent={mentorContent}
+            techStack={mentorTechStack}
+            onOpenSettings={() => {
+              setSettingsTab('llms');
+              setSettingsOpen(true);
+            }}
+          />
+        )}
+        <HelpModal isOpen={helpOpen} onClose={() => setHelpOpen(false)} />
+        <CheatSheetModal isOpen={cheatSheetOpen} onClose={() => setCheatSheetOpen(false)} />
     </div>
   );
 }

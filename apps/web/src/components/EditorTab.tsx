@@ -1,8 +1,12 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import Editor, { type OnMount } from '@monaco-editor/react';
+import Editor, { type OnMount, useMonaco } from '@monaco-editor/react';
 import type { editor as monacoEditor, Uri } from 'monaco-editor';
-import { getFileContent, saveFileContent, API_BASE_URL, fetchFimCompletion } from '@/lib/api';
-import { cn } from '@/lib/utils';
+import { getFileContent, saveFileContent, API_BASE_URL, fetchHealthOverview, fetchContextualMentorship, fetchTechScan, getGitStatus } from '@/lib/api';
+import { draftStore } from '@/lib/draftStore';
+import { useQuery } from '@tanstack/react-query';
+import { cn, hashString } from '@/lib/utils';
 import { useTabsStore } from '@/store/tabsStore';
 import { useMarkersStore } from '@/store/markersStore';
 import { useUnsavedStore } from '@/store/unsavedStore';
@@ -11,9 +15,13 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { useLLMConfigStore } from '@/store/llmConfigStore';
 import { useFimStore } from '@/store/fimStore';
 import type { GraphNode } from '@/types';
-import { Code2, ChevronRight, Pencil, Eye, MousePointer2, GraduationCap, Save, SaveAll, Sparkles } from 'lucide-react';
+import { Code2, ChevronRight, Pencil, Eye, MousePointer2, GraduationCap, Save, SaveAll, Sparkles, Loader2 } from 'lucide-react';
 import FimHintBar from './FimHintBar';
-import VimTutorHUD, { type VimTutorMode } from './VimTutorHUD';
+import ContextHUD, { type VimTutorMode } from './ContextHUD';
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
+import { CoachSidebar } from "./CoachSidebar";
+import { CodeCoachOverview, CodeCoachMarker } from "@/lib/api";
+import { toast } from 'sonner';
 
 interface LintDiagnostic {
   line: number;
@@ -22,8 +30,7 @@ interface LintDiagnostic {
   severity: string;
 }
 
-const TOOLBAR_BUTTON =
-  "h-7 w-7 flex items-center justify-center rounded text-zinc-400 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed";
+const TOOLBAR_BUTTON = "p-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:opacity-50 disabled:pointer-events-none";
 
 let markersListenerRegistered = false;
 
@@ -34,6 +41,30 @@ function normalizeMonacoUri(uri: Uri): string {
   const str = uri.toString();
   return str.replace(/^[a-z]+:\/\//, '');
 }
+
+function CoachToggleButton({ isCoachEnabled, onToggle }: { isCoachEnabled: boolean; onToggle: () => void }) {
+  const isLoading = useFimStore((s) => s.isLoading);
+  
+  return (
+    <button
+      className={cn(TOOLBAR_BUTTON, isCoachEnabled ? 'text-emerald-400' : 'text-zinc-500')}
+      onClick={onToggle}
+      title={
+        !isCoachEnabled ? 'Code Coach desactivado' :
+        isLoading ? 'Code Coach analizando...' : 'Code Coach activado — análisis pedagógico en segundo plano'
+      }
+      aria-label="Alternar AI Code Coach"
+    >
+      {isLoading ? (
+        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+      ) : (
+        <Sparkles className={cn("w-3.5 h-3.5", isCoachEnabled && "animate-pulse")} style={{ animationDuration: '3s' }} />
+      )}
+    </button>
+  );
+}
+
+// globalCoachCache replaced by localStorage
 
 export default function EditorTab({
   projectId,
@@ -51,23 +82,148 @@ export default function EditorTab({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
+  const [isEditorReady, setIsEditorReady] = useState(false);
   const [editorMode, setEditorMode] = useState<'locked' | 'visual' | 'editable'>('locked');
-  const isFimEnabled = useSettingsStore((s) => s.isFimEnabled);
-  const setIsFimEnabled = useSettingsStore((s) => s.setFimEnabled);
+  const [coachExplanation, setCoachExplanation] = useState<string | null>(null);
+  
+  const [coachOverview, setCoachOverview] = useState<CodeCoachOverview | null>(null);
+  const [allMentorshipAdvice, setAllMentorshipAdvice] = useState<CodeCoachMarker[]>([]);
+  const [activeLineNumber, setActiveLineNumber] = useState<number | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [availableAdviceLines, setAvailableAdviceLines] = useState<number[]>([]);
+  const [initialValue, setInitialValue] = useState('');
+  const [draftModifiedLines, setDraftModifiedLines] = useState<number[]>([]);
+  const [isConflictMode, setIsConflictMode] = useState(false);
+  const aiAbortControllerRef = useRef<AbortController | null>(null);
+
+  // Initialize AbortController
+  useEffect(() => {
+    aiAbortControllerRef.current = new AbortController();
+    return () => {
+      aiAbortControllerRef.current?.abort();
+    };
+  }, []);
+
+  const monaco = useMonaco();
+
+  useEffect(() => {
+    if (!monaco || !allMentorshipAdvice || allMentorshipAdvice.length === 0) return;
+
+    const language = '*';
+    
+    const provider = monaco.languages.registerCodeActionProvider(language, {
+      provideCodeActions: (model, range, context, token) => {
+        const actions: any[] = [];
+        const currentLine = range.startLineNumber;
+
+        allMentorshipAdvice.forEach(advice => {
+          if (!advice.snippet_after || advice.snippet_after === "null") return;
+          if (Math.abs(advice.line - currentLine) <= 5) {
+            const searchRange = advice.snippet_before && advice.snippet_before !== "null"
+              ? model.findMatches(advice.snippet_before, false, false, false, null, true)
+              : null;
+            
+            const editRange = searchRange && searchRange.length > 0 
+              ? searchRange[0].range 
+              : new monaco.Range(advice.line, 1, advice.line, model.getLineMaxColumn(advice.line));
+
+            actions.push({
+              title: `✨ Aplicar sugerencia del Sensei: ${advice.title || advice.message}`,
+              kind: 'quickfix',
+              isPreferred: true,
+              edit: {
+                edits: [{
+                  resource: model.uri,
+                  textEdit: {
+                    range: editRange,
+                    text: advice.snippet_after
+                  },
+                  versionId: undefined
+                }]
+              }
+            });
+          }
+        });
+
+        return {
+          actions: actions,
+          dispose: () => {}
+        };
+      }
+    });
+
+    return () => provider.dispose();
+  }, [monaco, allMentorshipAdvice, node.name]);
+
+  const isCoachEnabled = useSettingsStore((s) => s.isFimEnabled);
+  const setIsCoachEnabled = useSettingsStore((s) => s.setFimEnabled);
+
+  const editorRef = useRef<monacoEditor.IStandaloneCodeEditor | null>(null);
+  const isDirtyRef = useRef(false);
+  const { data: techData, isFetching: isScanningTech, refetch: handleRescan, isError: isTechError } = useQuery({
+    queryKey: ['tech-scan', node.file_path],
+    queryFn: () => {
+      const content = editorRef.current?.getValue() || initialValue;
+      const lang = (node.metadata?.language as string) || node.file_path?.split('.').pop() || 'typescript';
+      console.log('[Tech Scan] Firing with args:', { model: fimDefaultModel, fallback: fimFallbackModel, lang, contentLen: content?.length });
+      return fetchTechScan(content, lang, fimDefaultModel, fimFallbackModel);
+    },
+    staleTime: Infinity,
+    retry: 2,
+    retryDelay: 2000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchOnMount: false,
+    enabled: !!node.file_path && isCoachEnabled && !!initialValue && initialValue.length > 5,
+  });
   const fimDefaultModel = useLLMConfigStore((s) => s.fimDefaultModel);
   const fimFallbackModel = useLLMConfigStore((s) => s.fimFallbackModel);
   const setIsLoading = useFimStore((s) => s.setIsLoading);
   
-  const isFimEnabledRef = useRef(true);
+  const isCoachEnabledRef = useRef(true);
   const fimDefaultModelRef = useRef(fimDefaultModel);
   const fimFallbackModelRef = useRef(fimFallbackModel);
   const setIsLoadingRef = useRef(setIsLoading);
   
+  const { data: gitStatusData } = useQuery({
+    queryKey: ['git-status', projectId],
+    queryFn: () => getGitStatus(projectId),
+    refetchInterval: 5000,
+    enabled: !!projectId
+  });
+  
+  const fileContent = initialValue;
+  const lineCount = fileContent ? fileContent.split('\n').length : 0;
+  
+  let gitStatusLabel = 'clean';
+  if (gitStatusData?.raw_output && node.file_path) {
+    const lines = gitStatusData.raw_output.split('\n');
+    const fileLine = lines.find((line: string) => line.endsWith(node.file_path!));
+    if (fileLine) {
+      const code = fileLine.substring(0, 2);
+      if (code === '??') gitStatusLabel = 'untracked';
+      else if (code[0] !== ' ' && code[0] !== '?') gitStatusLabel = 'staged';
+      else gitStatusLabel = 'modified';
+    }
+  }
+  
   const monacoRef = useRef<typeof import('monaco-editor') | null>(null);
 
   useEffect(() => {
-    isFimEnabledRef.current = isFimEnabled;
-  }, [isFimEnabled]);
+    isCoachEnabledRef.current = isCoachEnabled;
+  }, [isCoachEnabled]);
+
+  useEffect(() => {
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      // Monaco frequently throws unhandled "Canceled" rejections when disposing models 
+      // during active tokenization/language-service processing. We silence it to prevent Next.js overlay.
+      if (event.reason && (event.reason.name === 'Canceled' || event.reason.message === 'Canceled' || event.reason === 'Canceled')) {
+        event.preventDefault();
+      }
+    };
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+    return () => window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+  }, []);
 
   useEffect(() => {
     fimDefaultModelRef.current = fimDefaultModel;
@@ -87,12 +243,248 @@ export default function EditorTab({
     }
   }, [focusTarget, focusVersion]);
   const editorModeRef = useRef(editorMode);
+
+  const runHealthAnalysis = useCallback(async (model: monacoEditor.ITextModel, skipCache = false) => {
+    if (model.isDisposed()) return;
+    const content = model.getValue();
+    const currentHash = hashString(content);
+    
+    if (!skipCache) {
+      const cachedHealth = localStorage.getItem(`coach_health_${currentHash}`);
+      if (cachedHealth) {
+        try {
+          setCoachOverview(JSON.parse(cachedHealth));
+          return;
+        } catch {}
+      }
+    }
+    
+    setIsLoadingRef.current(true);
+    setIsAnalyzing(true);
+    try {
+      const language = node.file_path?.split('.').pop() || '';
+      const healthResponse = await fetchHealthOverview(
+        content,
+        language,
+        fimDefaultModelRef.current,
+        fimFallbackModelRef.current,
+        aiAbortControllerRef.current?.signal
+      );
+      if (model.isDisposed()) return;
+      setCoachOverview(healthResponse);
+      if (!healthResponse.is_degraded) {
+        localStorage.setItem(`coach_health_${currentHash}`, JSON.stringify(healthResponse));
+      }
+    } catch (error: any) {
+      console.error('[Code Coach Health] Error:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      setCoachOverview({
+        structure: "Error de red o conexión fallida al analizar el código.",
+        critical_security: "N/A",
+        clean_code_score: 0,
+        is_degraded: true,
+        error_detail: errorMessage,
+      });
+    } finally {
+      setIsLoadingRef.current(false);
+      setIsAnalyzing(false);
+      
+      // CRÍTICO: Sincronizar el estado de lectura (dirty state) para la celda de mentoría incluso si falla
+      setIsDirty(false);
+      isDirtyRef.current = false;
+    }
+  }, [fimDefaultModelRef, fimFallbackModelRef, node.file_path]);
+
+  const sanitizeMarkers = (mentorshipArray: any[]) => {
+  if (!Array.isArray(mentorshipArray)) return [];
+  const hasError = mentorshipArray.some((m: any) => {
+    if (m.is_degraded) return true;
+    const msg = String(m.message || '').toLowerCase();
+    return msg.includes('fallo del proveedor ia') || 
+           msg.includes('error 429') || 
+           msg.includes('error 400') || 
+           msg.includes('error 500') || 
+           msg.includes('all model attempts failed');
+  });
+  if (hasError) return [];
+  return mentorshipArray.filter((m: any) => m.line && m.line > 0);
+};
+
+  const runCoachAnalysis = useCallback(async (model: monacoEditor.ITextModel, editor: monacoEditor.IStandaloneCodeEditor) => {
+    if (model.isDisposed()) return;
+    const content = model.getValue();
+    const currentHash = hashString(content);
+    
+    const cachedMentorship = localStorage.getItem(`coach_mentorship_${currentHash}`);
+    if (cachedMentorship) {
+      try {
+        const rawMentorship = JSON.parse(cachedMentorship);
+        const parsedMentorship = sanitizeMarkers(rawMentorship);
+        const monacoMarkers = parsedMentorship.map((m: any) => ({
+          severity: m.severity === 'error' ? monacoRef.current!.MarkerSeverity.Error : 
+                    m.severity === 'warning' ? monacoRef.current!.MarkerSeverity.Warning : 
+                    monacoRef.current!.MarkerSeverity.Hint,
+          message: m.message,
+          startLineNumber: m.line,
+          startColumn: 1,
+          endLineNumber: m.line,
+          endColumn: model.getLineMaxColumn(m.line),
+          explanation: m.explanation
+        }));
+        monacoRef.current!.editor.setModelMarkers(model, 'ai-coach', monacoMarkers as any);
+        setAvailableAdviceLines(parsedMentorship.map((m: any) => m.line));
+        setAllMentorshipAdvice(rawMentorship);
+        
+        // CRÍTICO: Sincronizar el estado de lectura (dirty state) para la celda de mentoría
+        setIsDirty(false);
+        isDirtyRef.current = false;
+        return;
+      } catch {}
+    }
+    
+    setIsLoadingRef.current(true);
+    setIsAnalyzing(true);
+    try {
+      const language = node.file_path?.split('.').pop() || '';
+      const position = editor.getPosition();
+      const activeLine = position?.lineNumber || 1;
+      
+      const allMarkers = monacoRef.current!.editor.getModelMarkers({ resource: model.uri });
+      const nativeErrors = allMarkers
+        .filter(m => m.owner !== 'ai-coach' && Math.abs(m.startLineNumber - activeLine) <= 5)
+        .map(m => `[Error nativo en línea ${m.startLineNumber}]: "${m.message}"`);
+
+      const mentorshipResponse = await fetchContextualMentorship(
+        content,
+        language,
+        activeLine,
+        nativeErrors,
+        fimDefaultModelRef.current,
+        fimFallbackModelRef.current,
+        aiAbortControllerRef.current?.signal
+      );
+      if (model.isDisposed()) return;
+      const validMentorshipResponse = sanitizeMarkers(mentorshipResponse);
+      localStorage.setItem(`coach_mentorship_${currentHash}`, JSON.stringify(mentorshipResponse));
+      const monacoMarkers = validMentorshipResponse.map((m: any) => ({
+        severity: m.severity === 'error' ? monacoRef.current!.MarkerSeverity.Error : 
+                  m.severity === 'warning' ? monacoRef.current!.MarkerSeverity.Warning : 
+                  monacoRef.current!.MarkerSeverity.Hint,
+        message: m.message,
+        startLineNumber: m.line,
+        startColumn: 1,
+        endLineNumber: m.line,
+        endColumn: model.getLineMaxColumn(m.line),
+        explanation: m.explanation
+      }));
+      monacoRef.current!.editor.setModelMarkers(model, 'ai-coach', monacoMarkers as any);
+      setAvailableAdviceLines(validMentorshipResponse.map((m: any) => m.line));
+      setAllMentorshipAdvice(mentorshipResponse);
+      
+    } catch (error: any) {
+      console.error('[Code Coach Mentorship] Error:', error);
+      setAvailableAdviceLines([]);
+    } finally {
+      setIsLoadingRef.current(false);
+      setIsAnalyzing(false);
+      
+      // CRÍTICO: Sincronizar el estado de lectura (dirty state) para la celda de mentoría incluso si falla
+      setIsDirty(false);
+      isDirtyRef.current = false;
+    }
+  }, [fimDefaultModelRef, fimFallbackModelRef, node.file_path]);
+
+  const forceSenseiAnalysis = useCallback(() => {
+    isDirtyRef.current = true;
+    setIsDirty(true);
+    if (coachTimerRef.current) clearTimeout(coachTimerRef.current);
+    const model = editorRef.current?.getModel();
+    if (model && !model.isDisposed()) {
+      runHealthAnalysis(model, true);
+      runCoachAnalysis(model, editorRef.current as monacoEditor.IStandaloneCodeEditor);
+    }
+  }, [runCoachAnalysis, runHealthAnalysis]);
+
+  useEffect(() => {
+    const handler = () => forceSenseiAnalysis();
+    window.addEventListener("trigger-sensei", handler);
+    return () => window.removeEventListener("trigger-sensei", handler as any);
+  }, [forceSenseiAnalysis]);
+
+  // Hot Exit: allow TabBar modal to programmatically save this tab
+  useEffect(() => {
+    const eventName = `save-request-${node.id}`;
+    const handler = async () => {
+      try {
+        await handleSaveRef.current();
+      } finally {
+        window.dispatchEvent(new CustomEvent(`save-done-${node.id}`));
+      }
+    };
+    window.addEventListener(eventName, handler);
+    return () => window.removeEventListener(eventName, handler);
+  }, [node.id]);
+
+
+  useEffect(() => {
+    if (isConflictMode) return;
+    if (isEditorReady && isCoachEnabled && editorRef.current) {
+      const model = editorRef.current.getModel();
+      if (model && !model.isDisposed() && model.getValue().length > 5) {
+        const timeout = setTimeout(() => {
+          runCoachAnalysis(model, editorRef.current!);
+        }, 3500);
+        return () => clearTimeout(timeout);
+      }
+    }
+  }, [isEditorReady, isCoachEnabled, runCoachAnalysis, isConflictMode]);
+
+  useEffect(() => {
+    if (isConflictMode) return;
+    if (isEditorReady && isCoachEnabled && editorRef.current) {
+      const model = editorRef.current.getModel();
+      if (model && !model.isDisposed()) {
+        runHealthAnalysis(model, false);
+      }
+    }
+  }, [isEditorReady, isCoachEnabled, node.file_path, runHealthAnalysis, isConflictMode]);
+
+  // Hot Exit: apply amber gutter decorations on draft-modified lines
+  useEffect(() => {
+    const editor = editorRef.current;
+    const monaco = monacoRef.current;
+    if (!editor || !monaco || !isEditorReady || draftModifiedLines.length === 0) return;
+    const model = editor.getModel();
+    if (!model || model.isDisposed()) return;
+
+    const decorations = draftModifiedLines.map((lineNumber) => ({
+      range: new monaco.Range(lineNumber, 1, lineNumber, 1),
+      options: {
+        isWholeLine: true,
+        linesDecorationsClassName: 'draft-modified-gutter',
+        className: 'draft-modified-line',
+        overviewRuler: { color: '#f59e0b', position: monaco.editor.OverviewRulerLane.Left },
+        minimap: { color: '#f59e0b', position: monaco.editor.MinimapPosition.Gutter },
+      },
+    }));
+
+    draftDecorationsRef.current = editor.deltaDecorations(draftDecorationsRef.current, decorations);
+
+    return () => {
+      if (editorRef.current && !editorRef.current.getModel()?.isDisposed()) {
+        draftDecorationsRef.current = editorRef.current.deltaDecorations(draftDecorationsRef.current, []);
+      }
+    };
+  }, [isEditorReady, draftModifiedLines]);
+
+
+
   const vimStatusRef = useRef<HTMLDivElement | null>(null);
   const originalContentRef = useRef('');
   const currentContentRef = useRef('');
-  const [initialValue, setInitialValue] = useState('');
-  const editorRef = useRef<monacoEditor.IStandaloneCodeEditor | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // initialValue moved to top of component
+  // editorRef moved to top of component
+  
   const vimInstanceRef = useRef<any>(null);
   const vimObserverRef = useRef<MutationObserver | null>(null);
   const vimPendingRef = useRef(false);
@@ -101,6 +493,9 @@ export default function EditorTab({
   const backupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleSaveRef = useRef<(saveAs?: string) => Promise<void>>(async () => {});
   const isSavingRef = useRef(false);
+  const coachTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const draftDecorationsRef = useRef<string[]>([]);
+  const originalHashRef = useRef<string | undefined>(undefined);
 
   const markDirty = useTabsStore((s) => s.markDirty);
 
@@ -126,13 +521,29 @@ export default function EditorTab({
       }
 
       try {
-        const data = await getFileContent(projectId, node.file_path);
+        const { content: data, original_hash: fetchedHash } = await getFileContent(projectId, node.file_path);
         if (isMounted) {
-          const restored = backup && backup !== data ? backup : data;
-          originalContentRef.current = restored;
+          originalHashRef.current = fetchedHash;
+          // Hot Exit: prefer project-scoped draft, then legacy unsavedStore backup
+          const draft = draftStore.load(projectId, node.file_path);
+          const restored = (draft && draft !== data)
+            ? draft
+            : (backup && backup !== data ? backup : data);
+          originalContentRef.current = data;
           currentContentRef.current = restored;
           setInitialValue(restored);
-          if (restored !== data) setIsDirty(true);
+          if (restored !== data) {
+            setIsDirty(true);
+            // Compute modified lines for gutter decorations
+            const originalLines = data.split('\n');
+            const draftLines = restored.split('\n');
+            const modified: number[] = [];
+            const maxLen = Math.max(originalLines.length, draftLines.length);
+            for (let i = 0; i < maxLen; i++) {
+              if (originalLines[i] !== draftLines[i]) modified.push(i + 1);
+            }
+            if (isMounted) setDraftModifiedLines(modified);
+          }
           setLoading(false);
         }
       } catch {
@@ -149,8 +560,15 @@ export default function EditorTab({
     return () => {
       isMounted = false;
       if (lintTimerRef.current) clearTimeout(lintTimerRef.current);
-      if (backupTimerRef.current) clearTimeout(backupTimerRef.current);
+      if (backupTimerRef.current) {
+        clearTimeout(backupTimerRef.current);
+        if (editorRef.current) {
+          const backupKey = node.file_path || node.id;
+          useUnsavedStore.getState().setContent(backupKey, editorRef.current.getValue());
+        }
+      }
       if (dirtyCheckTimerRef.current) clearTimeout(dirtyCheckTimerRef.current);
+      if (coachTimerRef.current) clearTimeout(coachTimerRef.current);
       if (vimObserverRef.current) {
         vimObserverRef.current.disconnect();
         vimObserverRef.current = null;
@@ -164,74 +582,20 @@ export default function EditorTab({
   }, [projectId, node.file_path, node.id]);
 
   useEffect(() => {
-    const monaco = monacoRef.current;
-    if (!monaco) {
-      console.warn('[MONACO BOOT] FIM Provider omitido: monacoRef no inicializado');
-      return;
-    }
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      if (event.reason && event.reason.name === 'Canceled') {
+        event.preventDefault(); // Suppress benign Monaco Editor Canceled errors
+      }
+    };
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+    return () => window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+  }, []);
 
-    const language = node.file_path?.split('.').pop() || '';
-
-    try {
-      console.log('[MONACO BOOT] Registrando FIM Provider para lenguaje:', language || '(default)');
-      const disposer = monaco.languages.registerInlineCompletionsProvider(
-        { language },
-        {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          provideInlineCompletions: async (model: any, position: any, _context: any, token: any) => {
-            if (!isFimEnabledRef.current) return { items: [] };
-
-            return new Promise((resolve) => {
-              let timer: ReturnType<typeof setTimeout> | null = null;
-
-              const disposable = token.onCancellationRequested(() => {
-                if (timer) clearTimeout(timer);
-                resolve({ items: [] });
-              });
-
-              timer = setTimeout(async () => {
-                disposable.dispose();
-                if (token.isCancellationRequested) return resolve({ items: [] });
-                setIsLoadingRef.current(true);
-                try {
-                  const offset = model.getOffsetAt(position);
-                  const full = model.getValue();
-                  const prefix = full.slice(0, offset);
-                  const suffix = full.slice(offset);
-                  if (prefix.length < 3) return resolve({ items: [] });
-                  
-                  const result = await fetchFimCompletion(
-                    prefix, 
-                    suffix, 
-                    language, 
-                    fimDefaultModelRef.current, 
-                    fimFallbackModelRef.current
-                  );
-                  if (token.isCancellationRequested || !result.code) return resolve({ items: [] });
-                  resolve({ items: [{ insertText: result.code }] });
-                } catch {
-                  resolve({ items: [] });
-                } finally {
-                  setIsLoadingRef.current(false);
-                }
-              }, 800);
-            });
-          },
-          disposeInlineCompletions: () => {},
-        },
-      );
-      console.log('[MONACO BOOT] FIM Provider registrado correctamente. Disposer listo.');
-
-      return () => { disposer.dispose(); };
-    } catch (error) {
-      console.error('[MONACO BOOT FATAL ERROR] FIM Provider falló al registrar:', error);
-      return undefined;
-    }
-  }, [projectId, node.file_path]);
+  // El Code Coach se inicia en handleEditorDidMount
 
   useEffect(() => {
     const editor = editorRef.current;
-    if (!editor || !vimMode || vimInstanceRef.current) {
+    if (!editor || !vimMode || vimInstanceRef.current || vimPendingRef.current) {
       if (!editor) console.warn('[MONACO BOOT] Vim init reactivo omitido: editorRef vacío');
       else if (!vimMode) console.log('[MONACO BOOT] Vim init reactivo omitido: vimMode=false');
       else if (vimInstanceRef.current) console.log('[MONACO BOOT] Vim init reactivo omitido: instancia previa existe');
@@ -247,6 +611,11 @@ export default function EditorTab({
       }
 
       try {
+        if (!editor || !editor.getModel() || editor.getModel()?.isDisposed()) {
+          console.warn('[MONACO BOOT] Vim init cancelado: editor descartado');
+          return;
+        }
+
         const statusNode = document.createElement('div');
         statusNode.id = 'vim-statusbar';
         statusNode.style.position = 'absolute';
@@ -275,9 +644,9 @@ export default function EditorTab({
         vimInstanceRef.current = vim;
         console.log('[MONACO BOOT] Vim iniciado con éxito. Adaptador:', vim);
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (VimMode as any).Vim.defineEx('write', 'w', (args: { args: string }) => {
-          const filename = args.args.trim();
+        
+        (VimMode as any).Vim.defineEx('write', 'w', (args: { args?: string }) => {
+          const filename = args?.args?.trim() || '';
           if (filename) {
             const dir = node.file_path ? node.file_path.substring(0, node.file_path.lastIndexOf('/')) : '';
             const newPath = dir ? `${dir}/${filename}` : filename;
@@ -315,8 +684,9 @@ export default function EditorTab({
       }
     }).catch((error) => {
       console.error('[MONACO BOOT FATAL ERROR] Falló la importación de monaco-vim (reactivo):', error);
+      vimPendingRef.current = false;
     });
-  }, [vimMode, node.file_path]);
+  }, [vimMode, node.file_path, isEditorReady]);
 
   useEffect(() => {
     if (!vimMode) {
@@ -328,6 +698,7 @@ export default function EditorTab({
         vimInstanceRef.current.dispose();
         vimInstanceRef.current = null;
       }
+      vimPendingRef.current = false;
     }
   }, [vimMode]);
 
@@ -356,20 +727,52 @@ export default function EditorTab({
     setSaving(true);
     try {
       const current = editorRef.current.getValue();
-      await saveFileContent(projectId, targetPath, current);
+      const response = await saveFileContent(projectId, targetPath, current, originalHashRef.current);
+      if (response && response.new_hash) {
+        originalHashRef.current = response.new_hash;
+      }
       originalContentRef.current = current;
       currentContentRef.current = current;
       setIsDirty(false);
       useUnsavedStore.getState().clearContent(targetPath);
-    } catch {
-      // silently fail
+      // Hot Exit: clear draft and gutter decorations on successful save
+      if (node.file_path) {
+        draftStore.clear(projectId, node.file_path);
+        setDraftModifiedLines([]);
+        if (editorRef.current && !editorRef.current.getModel()?.isDisposed()) {
+          // eslint-disable-next-line react-hooks/immutability
+          draftDecorationsRef.current = editorRef.current.deltaDecorations(draftDecorationsRef.current, []);
+        }
+      }
+      // Disparar Health Overview después de guardar
+      if (isCoachEnabled && editorRef.current) {
+        const model = editorRef.current.getModel();
+        if (model) {
+          runHealthAnalysis(model);
+        }
+      }
+    } catch (error: any) {
+      if (error?.status === 409) {
+        setIsConflictMode(true);
+        if (aiAbortControllerRef.current) {
+          aiAbortControllerRef.current.abort();
+          aiAbortControllerRef.current = new AbortController();
+        }
+        toast.error("Conflicto de Edición", { 
+          description: "El archivo fue modificado externamente (ej. por git pull). Tus cambios locales no se guardaron para evitar sobrescribir. Copia tus cambios, refresca y vuelve a aplicarlos.",
+          duration: 10000 
+        });
+      } else {
+        toast.error("Error al guardar", { description: error?.message || "Ocurrió un error inesperado." });
+      }
     } finally {
       setSaving(false);
       isSavingRef.current = false;
     }
-  }, [projectId, node.file_path, onSaveUntitled]);
+  }, [projectId, node.file_path, onSaveUntitled, isCoachEnabled, runHealthAnalysis]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/immutability
     handleSaveRef.current = handleSave;
   }, [handleSave]);
 
@@ -448,9 +851,10 @@ export default function EditorTab({
 
   const handleEditorDidMount: OnMount = useCallback((editor, monaco) => {
     console.log('[MONACO BOOT] handleEditorDidMount disparado. vimMode=', vimMode, 'path=', node.file_path);
-    // eslint-disable-next-line react-hooks/immutability
+    
     editorRef.current = editor;
     monacoRef.current = monaco;
+    setIsEditorReady(true);
 
     monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
       jsx: monaco.languages.typescript.JsxEmit.ReactJSX,
@@ -507,91 +911,9 @@ export default function EditorTab({
       }
     }
 
-    if (vimMode) {
-      if (vimInstanceRef.current) {
-        vimInstanceRef.current.dispose();
-        vimInstanceRef.current = null;
-      }
-
-      vimPendingRef.current = true;
-      console.log('[MONACO BOOT] Editor montado. Intentando iniciar Vim (onMount)...');
-      import("monaco-vim").then(({ initVimMode, VimMode }) => {
-        if (!vimPendingRef.current) {
-          console.warn('[MONACO BOOT] Vim init (onMount) cancelado: vimPendingRef desactivo');
-          return;
-        }
-
-        try {
-          const statusNode = document.createElement('div');
-          statusNode.id = 'vim-statusbar';
-          statusNode.style.position = 'absolute';
-          statusNode.style.bottom = '0';
-          statusNode.style.left = '0';
-          statusNode.style.right = '0';
-          statusNode.style.width = '100%';
-          statusNode.style.padding = '2px 8px';
-          statusNode.style.fontSize = '12px';
-          statusNode.style.backgroundColor = '#1e1e1e';
-          statusNode.style.borderTop = '1px solid #333';
-          statusNode.style.color = '#fff';
-          statusNode.style.zIndex = '10';
-
-          const container = editor.getContainerDomNode();
-          if (!container) {
-            throw new Error('No se obtuvo el container DOM del editor (onMount)');
-          }
-          container.style.position = 'relative';
-          container.style.overflow = 'hidden';
-          container.appendChild(statusNode);
-          vimStatusRef.current = statusNode;
-          console.log('[MONACO BOOT] Statusbar DOM creado y anexado al editor (onMount)');
-
-          const vim = initVimMode(editor, statusNode);
-          vimInstanceRef.current = vim;
-          console.log('[MONACO BOOT] Vim iniciado con éxito. Adaptador:', vim);
-
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (VimMode as any).Vim.defineEx('write', 'w', (args: { args: string }) => {
-            const filename = args.args.trim();
-            if (filename) {
-              const dir = node.file_path ? node.file_path.substring(0, node.file_path.lastIndexOf('/')) : '';
-              const newPath = dir ? `${dir}/${filename}` : filename;
-              handleSaveRef.current(newPath);
-            } else {
-              handleSaveRef.current();
-            }
-          });
-          console.log('[MONACO BOOT] Comando ex :w registrado');
-
-          const modeLabels: Record<string, typeof editorModeRef.current> = {
-            'NORMAL': 'locked',
-            'VISUAL': 'visual',
-            'VISUAL LINE': 'visual',
-            'VISUAL BLOCK': 'visual',
-            'INSERT': 'editable',
-            'REPLACE': 'editable',
-          };
-          const observer = new MutationObserver(() => {
-            const raw = statusNode.textContent?.trim() || '';
-            const text = raw.replace(/^-+|-+$/g, '').toUpperCase();
-            for (const [label, mode] of Object.entries(modeLabels)) {
-              if (text.startsWith(label)) {
-                editorModeRef.current = mode;
-                setEditorMode(mode);
-                break;
-              }
-            }
-          });
-          observer.observe(statusNode, { characterData: true, subtree: true, childList: true });
-          vimObserverRef.current = observer;
-          console.log('[MONACO BOOT] Observer de modo Vim instalado (onMount)');
-        } catch (error) {
-          console.error('[MONACO BOOT FATAL ERROR] Vim init (onMount) lanzó excepción:', error);
-        }
-      }).catch((error) => {
-        console.error('[MONACO BOOT FATAL ERROR] Falló la importación de monaco-vim (onMount):', error);
-      });
-    }
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyS, () => {
+      forceSenseiAnalysis();
+    });
 
     if (node.metadata) {
       try {
@@ -608,7 +930,35 @@ export default function EditorTab({
       } catch { /* ignore */ }
     }
 
+    let cursorTimeout: ReturnType<typeof setTimeout>;
+    const cursorDisposable = editor.onDidChangeCursorPosition((e) => {
+      if (cursorTimeout) clearTimeout(cursorTimeout);
+      cursorTimeout = setTimeout(() => {
+        setActiveLineNumber(e.position.lineNumber);
+      }, 100);
+    });
+
     editor.onDidChangeModelContent(() => {
+      const model = editor.getModel();
+      
+      // We do NOT clear markers or states here to maintain the Stale-While-Revalidate pattern.
+      // The old markers will remain until the new ones arrive.
+      
+      if (!isDirtyRef.current) {
+        isDirtyRef.current = true;
+        setIsDirty(true);
+      }
+
+      if (coachTimerRef.current) clearTimeout(coachTimerRef.current);
+      if (isCoachEnabledRef.current && model && !model.isDisposed()) {
+        // Strict 3.5s debounce to prevent API spam and protect LLM rate limits
+        coachTimerRef.current = setTimeout(() => {
+          if (isDirtyRef.current) {
+            runCoachAnalysis(model, editor);
+          }
+        }, 3500);
+      }
+
       if (dirtyCheckTimerRef.current) clearTimeout(dirtyCheckTimerRef.current);
       dirtyCheckTimerRef.current = setTimeout(() => {
         if (editor.getModel() && !editor.getModel()?.isDisposed()) {
@@ -620,40 +970,19 @@ export default function EditorTab({
       backupTimerRef.current = setTimeout(() => {
         const model = editor.getModel();
         if (!model || model.isDisposed()) return;
+        const content = editor.getValue();
         const backupKey = node.file_path || node.id;
-        useUnsavedStore.getState().setContent(backupKey, editor.getValue());
-      }, 1000);
-
-      if (lintTimerRef.current) clearTimeout(lintTimerRef.current);
-      lintTimerRef.current = setTimeout(async () => {
-        const model = editor.getModel();
-        if (!model || model.isDisposed()) return;
-        try {
-          const res = await fetch(`${API_BASE_URL}/editor/lint`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              code: editor.getValue(),
-              language: 'python',
-            }),
-          });
-          if (!res.ok) return;
-          const diagnostics: LintDiagnostic[] = await res.json();
-          const model2 = editor.getModel();
-          if (!model2 || model2.isDisposed()) return;
-          const markers = diagnostics.map((d) => ({
-            severity: monaco.MarkerSeverity.Error,
-            message: d.message,
-            startLineNumber: d.line,
-            startColumn: d.column,
-            endLineNumber: d.line,
-            endColumn: d.column + 1,
-          }));
-          monaco.editor.setModelMarkers(model2, 'lint', markers);
-        } catch {
-          // network errors silently ignored
+        useUnsavedStore.getState().setContent(backupKey, content);
+        // Hot Exit: persist project-scoped draft
+        if (node.file_path) {
+          draftStore.save(projectId, node.file_path, content);
         }
-      }, 500);
+      }, 1000);
+      
+      // Endpoint /editor/lint disabled to prevent rate limit collisions with Code Coach
+      // if (lintTimerRef.current) clearTimeout(lintTimerRef.current);
+      // lintTimerRef.current = setTimeout(async () => { ... }, 800);
+
     });
 
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyD, () => {
@@ -685,8 +1014,10 @@ export default function EditorTab({
       handleSaveRef.current();
     });
 
+    // No cleanup required here since handleEditorDidMount manages the disposables?
+    // Wait, let's keep the checkDirty logic untouched.
     checkDirty();
-  }, [node.metadata, checkDirty, node.file_path, node.id, vimMode]);
+  }, [node.metadata, checkDirty, node.file_path, node.id, vimMode, forceSenseiAnalysis, runCoachAnalysis, projectId]);
 
   if (loading) {
     return (
@@ -778,14 +1109,7 @@ export default function EditorTab({
           <>
         <div className="w-px h-5 bg-zinc-700/50 mx-1" />
 
-        <button
-          className={cn(TOOLBAR_BUTTON, isFimEnabled ? 'text-emerald-400' : 'text-zinc-500')}
-          onClick={() => setIsFimEnabled(!isFimEnabled)}
-          title={isFimEnabled ? 'FIM Tutor activado — autocompletado por IA' : 'FIM Tutor desactivado'}
-          aria-label="Alternar autocompletado FIM Tutor"
-        >
-          <Sparkles className="w-3.5 h-3.5" />
-        </button>
+        <CoachToggleButton isCoachEnabled={isCoachEnabled} onToggle={() => setIsCoachEnabled(!isCoachEnabled)} />
             <button
               className={TOOLBAR_BUTTON}
               onClick={() => onMentor(node.file_path || fileName, editorRef.current?.getValue() || '')}
@@ -870,22 +1194,66 @@ export default function EditorTab({
         </div>
       )}
 
-      <div className="flex-1 relative overflow-hidden">
-        <Editor
-          key={editorPath}
-          height="100%"
-          theme="vs-dark"
-          path={editorPath}
-          defaultValue={initialValue}
-          onMount={handleEditorDidMount}
-          options={editorOptions}
-          loading={null}
-        />
+      <div className="flex-1 relative overflow-hidden min-h-0 min-w-0">
+        {isCoachEnabled ? (
+          <div className="absolute inset-0 flex flex-row w-full h-full">
+            <div className="flex-1 relative h-full overflow-hidden">
+              <Editor
+                key={editorPath}
+                height="100%"
+                theme="vs-dark"
+                path={editorPath}
+                defaultValue={initialValue}
+                onMount={handleEditorDidMount}
+                options={editorOptions}
+                loading={null}
+              />
+            </div>
+            <div className="w-1.5 shrink-0 bg-[#1a1a1a] border-l border-r border-zinc-800 z-10" />
+            <div className="w-[350px] shrink-0 h-full relative overflow-hidden">
+              <CoachSidebar
+              onRefreshHealth={() => {
+                const model = editorRef.current?.getModel();
+                if (model) {
+                  runHealthAnalysis(model, true);
+                }
+              }}
+ 
+                techData={techData}
+                onRescan={() => handleRescan()}
+                isScanningTech={isScanningTech}
+                isTechError={isTechError}
+                isAnalyzingCode={isAnalyzing}
+                overview={coachOverview}
+                allMentorshipAdvice={allMentorshipAdvice}
+                activeLineNumber={activeLineNumber}
+                fileMetadata={{ lineCount, gitStatus: gitStatusLabel }}
+                availableAdviceLines={availableAdviceLines}
+                isEditorDirty={isDirty}
+                isConflictMode={isConflictMode}
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="absolute inset-0">
+            <Editor
+              key={editorPath}
+              height="100%"
+              theme="vs-dark"
+              path={editorPath}
+              defaultValue={initialValue}
+              onMount={handleEditorDidMount}
+              options={editorOptions}
+              loading={null}
+            />
+          </div>
+        )}
       </div>
-      <VimTutorHUD
+      <ContextHUD
         editorRef={editorRef}
         mode={editorMode as VimTutorMode}
         vimEnabled={!!vimMode}
+        coachExplanation={coachExplanation}
       />
       <FimHintBar />
     </div>

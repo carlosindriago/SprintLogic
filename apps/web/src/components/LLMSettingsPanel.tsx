@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -19,10 +20,10 @@ import {
   ModelResult,
   getCuratedModels,
   CuratedProvider,
-  fetchFimCompletion,
+  fetchHealthOverview,
 } from "@/lib/api";
 import { useLLMConfigStore } from "@/store/llmConfigStore";
-import { Loader2, KeyRound, CheckCircle2, XCircle, Trash2, Brain, Sparkles, Play } from "lucide-react";
+import { Key, Loader2, CheckCircle2, XCircle, Trash2, Brain, Sparkles, Play } from "lucide-react";
 
 const KEY_MIN_LENGTH = 8;
 
@@ -53,11 +54,13 @@ function ProviderConfig({
   defaultModel,
   onSelectModel,
   curatedModels,
+  onProviderConfigured,
 }: {
   provider: CuratedProvider;
   defaultModel: string;
   onSelectModel: (provider: string, modelId: string) => void;
   curatedModels: ModelResult[];
+  onProviderConfigured?: (providerId: string, models: ModelResult[]) => void;
 }) {
   const [keyInput, setKeyInput] = useState("");
   const [isConfigured, setIsConfigured] = useState(false);
@@ -65,6 +68,7 @@ function ProviderConfig({
   const [isValidating, setIsValidating] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [modelSearch, setModelSearch] = useState("");
 
   const setApiKey = useLLMConfigStore((s) => s.setApiKey);
   const removeApiKey = useLLMConfigStore((s) => s.removeApiKey);
@@ -93,12 +97,17 @@ function ProviderConfig({
     setIsValidating(true);
     setValidationError(null);
     try {
-      await verifyAndSaveProviderKey(provider.provider_id, trimmed);
+      const models = await verifyAndSaveProviderKey(provider.provider_id, trimmed);
       setIsConfigured(true);
       setKeyInput("");
       setIsEditing(false);
       setStoredKeyPreview(maskKey(trimmed));
       setApiKey(provider.provider_id, trimmed);
+      
+      if (onProviderConfigured) {
+        onProviderConfigured(provider.provider_id, models);
+      }
+
       toast.success("Llave validada y guardada", {
         description: `API Key para ${provider.provider} configurada correctamente.`,
       });
@@ -108,7 +117,7 @@ function ProviderConfig({
     } finally {
       setIsValidating(false);
     }
-  }, [keyInput, provider.provider_id, provider.provider, isValidating, setApiKey]);
+  }, [keyInput, provider.provider_id, provider.provider, isValidating, setApiKey, onProviderConfigured]);
 
   const handleModelSelect = useCallback(
     (modelId: string | null) => {
@@ -150,46 +159,43 @@ function ProviderConfig({
     ? defaultModel.split("/").slice(1).join("/")
     : "";
 
+  const filteredModels = curatedModels.filter(m => 
+    m.name.toLowerCase().includes(modelSearch.toLowerCase()) || 
+    m.id.toLowerCase().includes(modelSearch.toLowerCase())
+  );
+
   return (
     <div className="flex flex-col gap-8 p-6 max-w-2xl">
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <Label className="text-sm font-semibold text-zinc-200">
+      <div className="flex flex-col gap-2 p-4 bg-zinc-900/50 border border-zinc-800/80 rounded-xl relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-1 h-full bg-blue-500/50"></div>
+        <div className="flex items-center justify-between mb-2">
+          <Label className="text-sm font-semibold text-zinc-100 flex items-center gap-2">
             Credenciales API ({provider.provider})
+            {isConfigured && (
+              <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-[10px] px-1.5 py-0 h-4">
+                <CheckCircle2 className="w-3 h-3 mr-1" />
+                CONFIGURADA
+              </Badge>
+            )}
           </Label>
-          {isConfigured && !isEditing && (
-            <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wide text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded-full">
-              <CheckCircle2 className="w-3 h-3" /> configurada
-            </span>
-          )}
-          {!isConfigured && isEditing && (
-            <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wide text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full">
-              <XCircle className="w-3 h-3" /> requerida
-            </span>
-          )}
         </div>
-
+        
         {isConfigured && !isEditing ? (
-          <div className="flex w-full items-center gap-3">
-            <div className="flex-1 bg-zinc-950/50 border border-zinc-800/80 rounded-md px-3 py-2 text-sm text-zinc-400 flex items-center gap-2 font-mono">
-              <KeyRound className="w-4 h-4 shrink-0 opacity-50" />
-              <span className="truncate">
-                {storedKeyPreview ?? maskKey(null)}
-              </span>
+          <div className="flex w-full items-center gap-2">
+            <div className="flex-1 bg-zinc-950 border border-zinc-800/80 rounded flex items-center px-3 h-9 text-zinc-400 font-mono text-sm opacity-80 cursor-not-allowed">
+              <Key className="w-3.5 h-3.5 mr-2 text-zinc-500" />
+              {storedKeyPreview}
             </div>
             <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="bg-zinc-800/50 border-zinc-700/50 hover:bg-zinc-700 text-zinc-300 h-9 px-4"
+              variant="secondary"
+              className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 h-9 px-4 text-xs font-medium"
               onClick={handleReplaceKey}
             >
               Reemplazar
             </Button>
             <Button
-              type="button"
-              variant="outline"
-              size="sm"
+              variant="destructive"
+              size="icon"
               className="bg-zinc-800/50 border-zinc-700/50 hover:bg-red-950/40 hover:text-red-400 hover:border-red-900/60 h-9 px-3"
               onClick={handleDeleteKey}
             >
@@ -237,7 +243,7 @@ function ProviderConfig({
           </p>
         )}
         
-        <p className="text-xs text-zinc-500">
+        <p className="text-xs text-zinc-500 mt-2">
           La llave se almacena cifrada localmente y se valida al salir del campo.
         </p>
       </div>
@@ -251,7 +257,17 @@ function ProviderConfig({
             <SelectValue placeholder="Selecciona un modelo…" />
           </SelectTrigger>
           <SelectContent className="bg-zinc-900 border-zinc-800 text-zinc-200 max-h-[300px]">
-            {curatedModels.map((m) => (
+            <div className="p-2 sticky top-0 bg-zinc-900 border-b border-zinc-800 z-10">
+              <Input
+                type="text"
+                placeholder="Buscar modelo..."
+                value={modelSearch}
+                onChange={(e) => setModelSearch(e.target.value)}
+                onKeyDown={(e) => e.stopPropagation()}
+                className="bg-zinc-950 border-zinc-800 h-8 text-xs text-zinc-200"
+              />
+            </div>
+            {filteredModels.map((m) => (
               <SelectItem
                 key={m.id}
                 value={m.id}
@@ -393,65 +409,96 @@ function FimConfigSection({ providers }: { providers: CuratedProvider[] }) {
   const setFimFallbackModel = useLLMConfigStore((s) => s.setFimFallbackModel);
   
   const [isTesting, setIsTesting] = useState(false);
+  const [modelSearchMain, setModelSearchMain] = useState("");
+  const [modelSearchFallback, setModelSearchFallback] = useState("");
 
   const handleTest = async () => {
     setIsTesting(true);
     try {
-      const res = await fetchFimCompletion("def add(a, b):\n  ", "\n", "python", fimDefaultModel, fimFallbackModel);
-      if (res.code) {
-        toast.success("FIM Engine respondió exitosamente", {
-          description: "La configuración actual de modelos para autocompletado es válida."
+      const res = await fetchHealthOverview("def bad_loop():\n    while True:\n        pass\n", "python", fimDefaultModel, fimFallbackModel);
+      if (res && res.clean_code_score !== undefined) {
+        toast.success("AI Code Coach respondió exitosamente", {
+          description: "La configuración actual de modelos para análisis es válida."
         });
       } else {
-        toast.error("El test FIM falló: No se devolvió ningún código.");
+        toast.error("El modelo seleccionado no pudo generar el formato JSON requerido por el Coach. Intenta con un modelo de mayor capacidad de razonamiento.");
       }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      toast.error(`Error en FIM Engine: ${message}`);
+    } catch {
+      toast.error("El modelo seleccionado no pudo generar el formato JSON requerido por el Coach. Intenta con un modelo de mayor capacidad de razonamiento.");
     } finally {
       setIsTesting(false);
     }
   };
 
-  const allModels = providers.flatMap(p => p.models.map(m => ({ ...m, provider: p.provider })));
+  const allModels = providers.flatMap(p => p.models.map(m => ({ ...m, provider: p.provider, provider_id: p.provider_id })));
+  
+  const filteredModelsMain = allModels.filter(m => 
+    m.name.toLowerCase().includes(modelSearchMain.toLowerCase()) || 
+    m.id.toLowerCase().includes(modelSearchMain.toLowerCase())
+  );
+  
+  const filteredModelsFallback = allModels.filter(m => 
+    m.name.toLowerCase().includes(modelSearchFallback.toLowerCase()) || 
+    m.id.toLowerCase().includes(modelSearchFallback.toLowerCase())
+  );
 
   return (
     <div className="flex flex-col gap-8 p-6 max-w-2xl">
       <div className="flex flex-col gap-3">
         <Label className="text-sm font-semibold text-zinc-200">
-          Modelo FIM Principal
+          Modelo Coach Principal
         </Label>
         <Select value={fimDefaultModel} onValueChange={(val) => val && setFimDefaultModel(val)}>
           <SelectTrigger className="bg-zinc-950 border-zinc-800 text-zinc-200 w-full h-10">
             <SelectValue placeholder="Selecciona el modelo principal..." />
           </SelectTrigger>
           <SelectContent className="bg-zinc-900 border-zinc-800 text-zinc-200 max-h-[300px]">
-            {allModels.map((m) => (
-              <SelectItem key={m.id} value={m.id} className="focus:bg-zinc-800 focus:text-zinc-100 cursor-pointer py-2">
+            <div className="p-2 sticky top-0 bg-zinc-900 border-b border-zinc-800 z-10">
+              <Input
+                type="text"
+                placeholder="Buscar modelo..."
+                value={modelSearchMain}
+                onChange={(e) => setModelSearchMain(e.target.value)}
+                onKeyDown={(e) => e.stopPropagation()}
+                className="bg-zinc-950 border-zinc-800 h-8 text-xs text-zinc-200"
+              />
+            </div>
+            {filteredModelsMain.map((m) => (
+              <SelectItem key={`${m.provider_id}/${m.id}`} value={`${m.provider_id}/${m.id}`} className="focus:bg-zinc-800 focus:text-zinc-100 cursor-pointer py-2">
                 {m.name} <span className="text-zinc-500 text-xs ml-1">({m.provider})</span>
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
         <p className="text-xs text-zinc-500">
-          El modelo optimizado para tareas de Fill-In-the-Middle (ej: DeepSeek Coder, Llama 3) que te sugerirá código mientras escribes.
+          El motor pedagógico que analizará tu código en segundo plano para ofrecerte mentoría, detectar vulnerabilidades y sugerir refactorizaciones.
         </p>
       </div>
 
       <div className="flex flex-col gap-3">
         <Label className="text-sm font-semibold text-zinc-200">
-          Modelo FIM de Respaldo (Fallback)
+          Modelo Coach de Respaldo (Fallback)
         </Label>
         <Select value={fimFallbackModel} onValueChange={(val) => val && setFimFallbackModel(val)}>
           <SelectTrigger className="bg-zinc-950 border-zinc-800 text-zinc-200 w-full h-10">
             <SelectValue placeholder="Selecciona un modelo de respaldo..." />
           </SelectTrigger>
           <SelectContent className="bg-zinc-900 border-zinc-800 text-zinc-200 max-h-[300px]">
+            <div className="p-2 sticky top-0 bg-zinc-900 border-b border-zinc-800 z-10">
+              <Input
+                type="text"
+                placeholder="Buscar modelo..."
+                value={modelSearchFallback}
+                onChange={(e) => setModelSearchFallback(e.target.value)}
+                onKeyDown={(e) => e.stopPropagation()}
+                className="bg-zinc-950 border-zinc-800 h-8 text-xs text-zinc-200"
+              />
+            </div>
             <SelectItem value="none" className="focus:bg-zinc-800 focus:text-zinc-100 cursor-pointer text-zinc-400 py-2">
               Ninguno
             </SelectItem>
-            {allModels.map((m) => (
-              <SelectItem key={m.id} value={m.id} className="focus:bg-zinc-800 focus:text-zinc-100 cursor-pointer py-2">
+            {filteredModelsFallback.map((m) => (
+              <SelectItem key={`${m.provider_id}/${m.id}`} value={`${m.provider_id}/${m.id}`} className="focus:bg-zinc-800 focus:text-zinc-100 cursor-pointer py-2">
                 {m.name} <span className="text-zinc-500 text-xs ml-1">({m.provider})</span>
               </SelectItem>
             ))}
@@ -468,7 +515,7 @@ function FimConfigSection({ providers }: { providers: CuratedProvider[] }) {
             Diagnóstico de Conectividad
           </Label>
           <p className="text-xs text-zinc-400 mt-1">
-            Ejecuta una petición real de FIM hacia el backend para asegurarte de que las API Keys de los modelos seleccionados están vigentes.
+            Ejecuta una petición real hacia el backend para asegurarte de que el modelo seleccionado soporta el esquema JSON requerido por el Coach.
           </p>
         </div>
         <Button
@@ -483,7 +530,7 @@ function FimConfigSection({ providers }: { providers: CuratedProvider[] }) {
           ) : (
             <Play className="w-4 h-4 mr-2 fill-current" />
           )}
-          {isTesting ? "Procesando prueba FIM..." : "Testear Motor FIM"}
+          {isTesting ? "Procesando prueba Coach..." : "Testear AI Coach"}
         </Button>
       </div>
     </div>
@@ -502,15 +549,51 @@ export default function LLMSettingsPanel() {
 
   useEffect(() => {
     let cancelled = false;
-    getCuratedModels().then((data) => {
+    getCuratedModels().then(async (data) => {
       if (cancelled) return;
       setProviders(data);
       setLoadingProviders(false);
+      
+      const updatedProviders = [...data];
+      let hasUpdates = false;
+
+      await Promise.all(
+        updatedProviders.map(async (provider, index) => {
+          if (provider.is_configured) {
+            try {
+              const { fetchProviderModels } = await import('@/lib/api');
+              const dynamicModels = await fetchProviderModels(provider.provider_id);
+              if (!cancelled && dynamicModels.length > 0) {
+                updatedProviders[index] = {
+                  ...provider,
+                  models: dynamicModels,
+                };
+                hasUpdates = true;
+              }
+            } catch (err) {
+              console.error(`Failed to fetch dynamic models for ${provider.provider_id}`, err);
+            }
+          }
+        })
+      );
+
+      if (!cancelled && hasUpdates) {
+        setProviders([...updatedProviders]);
+      }
     }).catch(() => {
       if (cancelled) return;
       setLoadingProviders(false);
     });
     return () => { cancelled = true; };
+  }, []);
+
+  const handleProviderConfigured = useCallback((providerId: string, models: ModelResult[]) => {
+    setProviders(prev => prev.map(p => {
+      if (p.provider_id === providerId && models.length > 0) {
+        return { ...p, models, is_configured: true };
+      }
+      return p;
+    }));
   }, []);
 
   const handleSelectModel = useCallback(
@@ -564,7 +647,7 @@ export default function LLMSettingsPanel() {
 
         <div className="px-4 pt-6 pb-2 mt-2 border-t border-zinc-800/50">
           <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
-            Autocompletado
+            Tools
           </span>
         </div>
         <button
@@ -576,7 +659,7 @@ export default function LLMSettingsPanel() {
           }`}
         >
           <Sparkles className="w-4 h-4 shrink-0" />
-          FIM Engine
+          AI Code Coach
         </button>
 
         <div className="px-4 pt-6 pb-2 mt-2 border-t border-zinc-800/50">
@@ -610,6 +693,7 @@ export default function LLMSettingsPanel() {
             defaultModel={defaultModel}
             onSelectModel={handleSelectModel}
             curatedModels={activeProviderData.models}
+            onProviderConfigured={handleProviderConfigured}
           />
         ) : activeSection === 'context7' ? (
           <Context7Section

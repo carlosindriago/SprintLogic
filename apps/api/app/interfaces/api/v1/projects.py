@@ -40,6 +40,7 @@ class ScanRequest(BaseModel):
 
 class FileContentUpdate(BaseModel):
     content: str
+    base_hash: str | None = None
 
 
 class RenameRequest(BaseModel):
@@ -451,10 +452,13 @@ async def get_project_file_content(
     if not candidate.is_file():
         raise HTTPException(status_code=404, detail="File not found")
 
+    import hashlib
     try:
-        with open(candidate, encoding="utf-8") as f:
-            content = f.read()
-        return {"content": content}
+        with open(candidate, "rb") as f:
+            raw_content = f.read()
+        content = raw_content.decode("utf-8")
+        file_hash = hashlib.sha256(raw_content).hexdigest()
+        return {"content": content, "original_hash": file_hash}
     except Exception as e:
         logger.error("Failed to read file failed: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="An internal error occurred")
@@ -488,10 +492,26 @@ async def update_project_file_content(
     if not candidate.is_file():
         raise HTTPException(status_code=404, detail="File not found")
 
+    import hashlib
     try:
+        # Optimistic Concurrency Control (ETag logic)
+        if payload.base_hash:
+            with open(candidate, "rb") as f:
+                current_raw = f.read()
+            current_hash = hashlib.sha256(current_raw).hexdigest()
+            if current_hash != payload.base_hash:
+                raise HTTPException(status_code=409, detail="File has been modified externally since last read")
+
         with open(candidate, "w", encoding="utf-8") as f:
             f.write(payload.content)
-        return {"status": "success"}
+
+        with open(candidate, "rb") as f:
+            new_raw = f.read()
+        new_hash = hashlib.sha256(new_raw).hexdigest()
+
+        return {"status": "success", "new_hash": new_hash}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Failed to write file failed: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="An internal error occurred")
@@ -1077,6 +1097,19 @@ class SaveKanbanConfigRequest(BaseModel):
     columns: list[dict[str, Any]]
 
 
+class StickyNote(BaseModel):
+    id: str
+    content: str
+    color: str
+    x: float
+    y: float
+    timestamp: float
+
+
+class UpdateStickyNotesRequest(BaseModel):
+    notes: list[StickyNote]
+
+
 @router.get("/projects/{project_id}/kanban/config")
 async def get_kanban_config(project_id: str, session: AsyncSession = Depends(get_db_session)):
     try:
@@ -1115,6 +1148,72 @@ async def save_kanban_config(
     if project_id in project_event_queues:
         for q in project_event_queues[project_id]:
             await q.put({"type": "kanban_update", "message": "Kanban configuration updated"})
+
+    return {"status": "success"}
+
+
+@router.get("/projects/{project_id}/notes")
+async def get_project_sticky_notes(project_id: str, session: AsyncSession = Depends(get_db_session)):
+    try:
+        project_uuid = UUID(project_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+
+    repo = SQLAlchemyProjectRepository(session)
+    project = await repo.get_project(project_uuid)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    import json
+    json_path = os.path.join(project.path, f"{project_id}.json")
+
+    notes = []
+    if os.path.exists(json_path):
+        try:
+            with open(json_path, encoding="utf-8") as f:
+                data = json.load(f)
+                notes = data.get("sticky_notes", [])
+        except Exception:
+            pass
+
+    return {"notes": notes}
+
+
+@router.put("/projects/{project_id}/notes")
+async def update_project_sticky_notes(
+    project_id: str,
+    request: UpdateStickyNotesRequest,
+    session: AsyncSession = Depends(get_db_session),
+):
+    try:
+        project_uuid = UUID(project_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+
+    repo = SQLAlchemyProjectRepository(session)
+    project = await repo.get_project(project_uuid)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    import json
+    json_path = os.path.join(project.path, f"{project_id}.json")
+
+    data = {}
+    if os.path.exists(json_path):
+        try:
+            with open(json_path, encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            pass
+
+    data["sticky_notes"] = [note.model_dump() for note in request.notes]
+
+    try:
+        with open(json_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+    except Exception as e:
+        logger.error("Failed to write sticky notes: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Could not save sticky notes")
 
     return {"status": "success"}
 

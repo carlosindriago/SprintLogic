@@ -145,3 +145,15 @@
     background: #3f3f46;
   }
 }
+
+/* Monaco Editor — Hot Exit draft gutter decorations */
+.draft-modified-gutter {
+  width: 3px !important;
+  margin-left: 3px;
+  background: #f59e0b;
+  border-radius: 2px;
+}
+
+.draft-modified-line {
+  background: rgba(245, 158, 11, 0.04);
+}

@@ -2,7 +2,7 @@
 
 import { useEffect, useReducer, useRef, useCallback, type RefObject } from "react";
 import type { editor as monacoEditor } from "monaco-editor";
-import { Keyboard, ChevronRight } from "lucide-react";
+import { Keyboard, ChevronRight, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type VimTutorMode = "locked" | "visual" | "editable";
@@ -11,6 +11,7 @@ interface VimTutorHUDProps {
   editorRef: RefObject<monacoEditor.IStandaloneCodeEditor | null>;
   mode: VimTutorMode;
   vimEnabled: boolean;
+  coachExplanation?: string | null;
 }
 
 const TIPS: Record<VimTutorMode, string[]> = {
@@ -87,7 +88,7 @@ function reducer(state: State, action: Action): State {
   }
 }
 
-export default function VimTutorHUD({ editorRef, mode, vimEnabled }: VimTutorHUDProps) {
+export default function ContextHUD({ editorRef, mode, vimEnabled, coachExplanation }: VimTutorHUDProps) {
   const [state, dispatch] = useReducer(reducer, initialState);
   const lastKeyRef = useRef<{ key: string; time: number }>({ key: "", time: 0 });
   const contextualTimersRef = useRef<Partial<Record<VimTutorMode, ReturnType<typeof setTimeout>>>>({});
@@ -184,8 +185,8 @@ export default function VimTutorHUD({ editorRef, mode, vimEnabled }: VimTutorHUD
       className="flex items-center gap-2 px-3 py-1 bg-[#0d0d0d] border-t border-amber-500/20 text-xs shrink-0"
     >
       <Keyboard className="w-3 h-3 text-amber-400 shrink-0" />
-      <span className="text-[10px] font-semibold tracking-wider text-amber-400 shrink-0">
-        VimTutor
+      <span className="text-[10px] font-semibold tracking-wider text-amber-400 shrink-0 uppercase">
+        Context HUD
       </span>
       <span className="text-zinc-700">|</span>
       <span className="flex items-center gap-1 shrink-0">
@@ -193,15 +194,24 @@ export default function VimTutorHUD({ editorRef, mode, vimEnabled }: VimTutorHUD
         <span className="font-mono text-[11px] text-zinc-200">{modeLabel}</span>
       </span>
       <ChevronRight className="w-3 h-3 text-zinc-600 shrink-0" />
-      <span
-        className={cn(
-          "truncate flex-1",
-          contextualTip ? "text-amber-100" : "text-zinc-300",
-        )}
-      >
-        {displayTip}
-      </span>
-      {!contextualTip && tips.length > 1 && (
+      
+      {coachExplanation ? (
+        <span className="flex items-center gap-1.5 truncate flex-1 text-emerald-300">
+          <Sparkles className="w-3.5 h-3.5 shrink-0" />
+          <span className="truncate">{coachExplanation}</span>
+        </span>
+      ) : (
+        <span
+          className={cn(
+            "truncate flex-1 opacity-70",
+            contextualTip ? "text-amber-100" : "text-zinc-300",
+          )}
+        >
+          {displayTip}
+        </span>
+      )}
+
+      {!coachExplanation && !contextualTip && tips.length > 1 && (
         <div className="flex gap-0.5 shrink-0">
           {tips.map((_, i) => (
             <button
