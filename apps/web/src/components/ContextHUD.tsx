@@ -93,7 +93,7 @@ export default function ContextHUD({ editorRef, mode, vimEnabled, coachExplanati
   const [state, dispatch] = useReducer(reducer, initialState);
   const lastKeyRef = useRef<{ key: string; time: number }>({ key: "", time: 0 });
   const contextualTimersRef = useRef<Partial<Record<VimTutorMode, ReturnType<typeof setTimeout>>>>({});
-  const { isFimEnabled, toggleFim } = useFimStore();
+  const { fimEnabled, toggleFim } = useFimStore();
 
   const tipIndex = state.tipIndex[mode];
   const contextualTip = state.contextual[mode];
@@ -234,13 +234,13 @@ export default function ContextHUD({ editorRef, mode, vimEnabled, coachExplanati
         onClick={toggleFim}
         className={cn(
           "ml-4 flex items-center gap-1.5 px-2 py-0.5 rounded transition-colors text-[10px] uppercase font-bold",
-          isFimEnabled 
+          fimEnabled 
             ? "bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30" 
             : "bg-zinc-800 text-zinc-500 hover:bg-zinc-700"
         )}
       >
         <Wand2 className="w-3 h-3" />
-        Autocompletar: {isFimEnabled ? "ON" : "OFF"}
+        Autocompletar: {fimEnabled ? "ON" : "OFF"}
       </button>
     </div>
   );

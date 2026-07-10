@@ -113,7 +113,7 @@ export default function EditorTab({
     const provider = monaco.languages.registerInlineCompletionsProvider('*', {
       provideInlineCompletions: async (model, position, context, token) => {
         // Cláusula de guarda 1
-        if (!useFimStore.getState().isFimEnabled) {
+        if (!useFimStore.getState().fimEnabled) {
           return { items: [] };
         }
 
