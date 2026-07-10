@@ -147,7 +147,7 @@ export const getCommitDetails = (projectId: string, hash: string) => api.get<Com
 export const getCommitFileDiff = (projectId: string, hash: string, path: string) => 
   api.get<{ original: string; modified: string }>(`/projects/${projectId}/git/commits/${hash}/diff?path=${encodeURIComponent(path)}`);
 export const getGitStatus = (projectId: string) => api.get<GitStatus>(`/projects/${projectId}/git/status`);
-export const getLocalChanges = (projectId: string) => api.get<{ files: any[] }>(`/projects/${projectId}/git/changes`);
+export const getLocalChanges = (projectId: string) => api.get<{ files: unknown[] }>(`/projects/${projectId}/git/changes`);
 export const getFileLocalDiff = (projectId: string, filePath: string) => 
   api.get<FileLocalDiff>(`/projects/${projectId}/git/diff?file_path=${encodeURIComponent(filePath)}`);
 export const revertFile = (projectId: string, filePath: string) => 
@@ -230,7 +230,7 @@ export const getProjectTasks = (projectId: string) => api.get<{ tasks: Task[] }>
 export const saveProjectTasks = (projectId: string, tasks: Task[]) => api.post<{ status: string }>(`/projects/${projectId}/tasks`, { tasks });
 export const getKanbanConfig = (projectId: string) => api.get<{ columns: KanbanColumn[] }>(`/projects/${projectId}/kanban/config`);
 export const saveKanbanConfig = (projectId: string, columns: KanbanColumn[]) => api.post<{ status: string }>(`/projects/${projectId}/kanban/config`, { columns });
-export const syncKanbanCommits = (projectId: string) => api.post<any>(`/projects/${projectId}/tasks/sync-commits`);
+export const syncKanbanCommits = (projectId: string) => api.post<unknown>(`/projects/${projectId}/tasks/sync-commits`);
 export const generateWBS = (projectId: string, requirements: string, model = "openai/gpt-4o") => 
   api.post<WBSResponse>(`/projects/${projectId}/kanban/wbs`, { requirements, model });
 
@@ -244,15 +244,15 @@ export const getCuratedModels = () => api.get<CuratedProvider[]>('/ai/models');
 
 // --- AI / Analysis ---
 export const getProjectInsights = (projectId: string) => api.get<ProjectInsights>(`/projects/${projectId}/insights`);
-export const analyzeProject = (projectId: string) => api.post<any>(`/projects/${projectId}/analyze`);
+export const analyzeProject = (projectId: string) => api.post<unknown>(`/projects/${projectId}/analyze`);
 export const fetchFimCompletion = async (prefix: string, suffix: string, language: string) => {
   try {
-    return await api.post<any>('/ai/fim-completion', { prefix, suffix, language });
+    return await api.post<unknown>('/ai/fim-completion', { prefix, suffix, language });
   } catch {
     return { code: '', explanation: '' }; // Silencia el error de FIM como lo hacía el original
   }
 };
-export const sendChatMessage = (payload: any) => api.post<any>('/chat/', payload);
+export const sendChatMessage = (payload: unknown) => api.post<unknown>('/chat/', payload);
 
 export interface CodeCoachMarker {
   line: number;
@@ -315,8 +315,8 @@ export const fetchTechScan = async (
   language: string,
   model?: string,
   fallbackModel?: string
-): Promise<any> => {
-  return await api.post<any>(`/ai/tech-scan`, {
+): Promise<unknown> => {
+  return await api.post<unknown>(`/ai/tech-scan`, {
     file_content: fileContent,
     language,
     model,

@@ -1,6 +1,5 @@
 import React, { useEffect } from 'react';
 import { X } from 'lucide-react';
-import { useSettingsStore } from '@/store/settingsStore';
 
 interface HelpModalProps {
   isOpen: boolean;

@@ -7,6 +7,23 @@ interface CheatSheetModalProps {
   onClose: () => void;
 }
 
+const Kbd = ({ children }: { children: React.ReactNode }) => (
+  <kbd className="bg-zinc-800 border border-zinc-700 shadow-[0_2px_0_rgba(255,255,255,0.1)] text-zinc-300 rounded-md px-1.5 py-0.5 text-xs font-mono font-medium">
+    {children}
+  </kbd>
+);
+
+const ShortcutRow = ({ label, keys }: { label: string; keys: string[] }) => (
+  <div className="flex items-center justify-between py-1.5 border-b border-zinc-800/50 last:border-0">
+    <span className="text-sm text-zinc-400">{label}</span>
+    <div className="flex items-center gap-1.5">
+      {keys.map((k, i) => (
+        <Kbd key={i}>{k}</Kbd>
+      ))}
+    </div>
+  </div>
+);
+
 export function CheatSheetModal({ isOpen, onClose }: CheatSheetModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
 
@@ -27,23 +44,6 @@ export function CheatSheetModal({ isOpen, onClose }: CheatSheetModalProps) {
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;
-
-  const Kbd = ({ children }: { children: React.ReactNode }) => (
-    <kbd className="bg-zinc-800 border border-zinc-700 shadow-[0_2px_0_rgba(255,255,255,0.1)] text-zinc-300 rounded-md px-1.5 py-0.5 text-xs font-mono font-medium">
-      {children}
-    </kbd>
-  );
-
-  const ShortcutRow = ({ label, keys }: { label: string; keys: string[] }) => (
-    <div className="flex items-center justify-between py-1.5 border-b border-zinc-800/50 last:border-0">
-      <span className="text-sm text-zinc-400">{label}</span>
-      <div className="flex items-center gap-1.5">
-        {keys.map((k, i) => (
-          <Kbd key={i}>{k}</Kbd>
-        ))}
-      </div>
-    </div>
-  );
 
   return (
     <div 

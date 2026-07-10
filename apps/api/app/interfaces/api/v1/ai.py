@@ -1,16 +1,18 @@
-import json
 import logging
 import re
-import logging
 
 import litellm
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from pydantic import BaseModel
 
-from app.infrastructure.ai.context7_client import Context7Client
 from app.infrastructure.ai.provider_adapter import ProviderAdapter
 from app.infrastructure.security.credential_manager import CredentialManager
-from app.interfaces.api.v1.settings import CURATED_MODELS, PROVIDER_LABELS, fetch_provider_models, ProviderFetchError
+from app.interfaces.api.v1.settings import (
+    CURATED_MODELS,
+    PROVIDER_LABELS,
+    ProviderFetchError,
+    fetch_provider_models,
+)
 
 router = APIRouter()
 
@@ -20,28 +22,28 @@ def _normalize_model_name(model_str: str) -> str:
     """Normalizes model IDs to ensure LiteLLM routing compatibility."""
     if not model_str:
         return ""
-        
+
     if "nvidia_nim/" in model_str:
         return "nvidia_nim/" + model_str.split("nvidia_nim/")[-1]
-        
+
     import os
     if os.getenv("DEFAULT_LLM_PROVIDER") == "openrouter" and not model_str.startswith("openrouter/"):
         return f"openrouter/{model_str}"
-        
+
     return model_str
 
 def _extract_json(text: str) -> str:
     """Robust two-stage JSON extractor to safely parse conversational LLM outputs."""
     if not text:
         return ""
-    
+
     # Phase 1: RegEx no codiciosa para capturar el contenido dentro de bloques de código Markdown
     match = re.search(r"```(?:json)?(.*?)```", text, re.DOTALL | re.IGNORECASE)
     if match:
         extracted = match.group(1).strip()
         if extracted:
             return extracted
-            
+
     # Phase 2: Fallback usando índices absolutos ignorando texto introductorio
     start_dict = text.find('{')
     end_dict = text.rfind('}')
@@ -60,7 +62,7 @@ def _extract_json(text: str) -> str:
         return text[start_list:end_list+1]
     elif has_dict:
         return text[start_dict:end_dict+1]
-        
+
     return text.strip()
 
 class APIKeysPayload(BaseModel):
@@ -137,7 +139,7 @@ async def get_ai_models():
     for provider, fallback_models in CURATED_MODELS.items():
         key = CredentialManager.get_api_key(provider)
         is_configured = key is not None and key != ""
-        
+
         models = fallback_models
         if is_configured:
             try:
@@ -178,7 +180,7 @@ async def get_active_models(payload: APIKeysPayload):
                 models = await fetch_provider_models(provider, key)
             except ProviderFetchError:
                 models = fallback_models
-                
+
             results.append(
                 {
                     "provider": provider.upper(),
@@ -208,7 +210,7 @@ async def tech_scan(request: TechScanRequest):
     try:
         content = request.file_content or ""
         techs = []
-        
+
         for tech_data in TECH_RULES:
             if re.search(tech_data["regex"], content):
                 techs.append(TechInfo(
@@ -217,7 +219,7 @@ async def tech_scan(request: TechScanRequest):
                     doc_url=tech_data["doc_url"],
                     icon=tech_data["icon"]
                 ))
-                
+
         if not techs:
             lang_str = request.language if getattr(request, 'language', None) else "Desconocido"
             techs.append(TechInfo(
@@ -226,9 +228,9 @@ async def tech_scan(request: TechScanRequest):
                 doc_url="#",
                 icon="SiGnubash"
             ))
-            
+
         return TechScanResponse(technologies=techs)
-        
+
     except Exception as e:
         _logger.error(f"[TECH SCAN ERROR] {str(e)}")
         lang_str = request.language if getattr(request, 'language', None) else "Desconocido"
@@ -296,7 +298,7 @@ async def health_overview(request: CodeCoachRequest):
                 {"role": "user", "content": user},
             ]
 
-            success = False
+            
             for attempt in range(MAX_RETRIES + 1):
                 raw_content = ""
                 try:
@@ -313,7 +315,7 @@ async def health_overview(request: CodeCoachRequest):
                         ),
                         timeout=65.0
                     )
-                    
+
                     raw_content = str(response.choices[0].message.content or "").strip()
                     raw_clean = _extract_json(raw_content)
 
@@ -322,7 +324,7 @@ async def health_overview(request: CodeCoachRequest):
 
                     import json
                     parsed = json.loads(raw_clean)
-                    
+
                     overview = CodeCoachOverview(
                         structure=str(parsed.get("structure", "")),
                         critical_security=str(parsed.get("critical_security", "")),
@@ -332,13 +334,13 @@ async def health_overview(request: CodeCoachRequest):
                     )
 
                     return overview
-                    
+
                 except Exception as e:
                     if not raw_content:
                         _logger.warning("Health Overview API call failed with model %s: %s", current_model, e)
                         last_error = repr(e)
                         break
-                    
+
                     if attempt < MAX_RETRIES:
                         model_messages.append({"role": "assistant", "content": raw_content})
                         model_messages.append({
@@ -355,7 +357,7 @@ async def health_overview(request: CodeCoachRequest):
     except Exception as e:
         error_msg = repr(e)
         _logger.error(f"Health Overview Fallback triggered: {error_msg}")
-        
+
         return CodeCoachOverview(
             structure="Fallo del proveedor IA",
             critical_security="N/A",
@@ -398,7 +400,7 @@ async def contextual_mentorship(request: CodeCoachRequest):
         original_lines = request.file_content.split('\n')
         # Inyectar números de línea absolutos
         lines = [f"[Line {i+1}] {line}" for i, line in enumerate(original_lines)]
-        
+
         if len(lines) > 300:
             truncated_content = '\n'.join(lines[:150]) + '\n\n... [CÓDIGO TRUNCADO POR TAMAÑO] ...\n\n' + '\n'.join(lines[-150:])
         else:
@@ -446,7 +448,7 @@ async def contextual_mentorship(request: CodeCoachRequest):
                         ),
                         timeout=125.0
                     )
-                    
+
                     raw_content = str(response.choices[0].message.content or "").strip()
                     raw_clean = _extract_json(raw_content)
 
@@ -457,7 +459,7 @@ async def contextual_mentorship(request: CodeCoachRequest):
                     parsed = json.loads(raw_clean)
                     if not isinstance(parsed, list):
                         raise ValueError("Root JSON must be a list")
-                        
+
                     markers = []
                     for item in parsed:
                         if isinstance(item, dict) and "line" in item and "severity" in item and "message" in item and "explanation" in item:
@@ -473,7 +475,7 @@ async def contextual_mentorship(request: CodeCoachRequest):
                             ))
 
                     return markers
-                    
+
                 except Exception as e:
                     if attempt < MAX_RETRIES:
                         if raw_content:
@@ -492,7 +494,7 @@ async def contextual_mentorship(request: CodeCoachRequest):
     except Exception as e:
         error_msg = repr(e)
         _logger.error(f"Contextual Mentorship Fallback triggered: {error_msg}")
-        
+
         return [CodeCoachMarker(
             line=1,
             severity="error",

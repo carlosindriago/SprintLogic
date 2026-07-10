@@ -72,6 +72,7 @@ export function CoachSidebar({
       }
       
       if (hasSecurityWarning && !isHealthOpen) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setIsHealthOpen(true);
       }
     }

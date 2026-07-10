@@ -403,7 +403,7 @@ export default function EditorTab({
       runHealthAnalysis(model, true);
       runCoachAnalysis(model, editorRef.current as monacoEditor.IStandaloneCodeEditor);
     }
-  }, [runCoachAnalysis]);
+  }, [runCoachAnalysis, runHealthAnalysis]);
 
   useEffect(() => {
     const handler = () => forceSenseiAnalysis();
@@ -484,7 +484,7 @@ export default function EditorTab({
   const currentContentRef = useRef('');
   // initialValue moved to top of component
   // editorRef moved to top of component
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  
   const vimInstanceRef = useRef<any>(null);
   const vimObserverRef = useRef<MutationObserver | null>(null);
   const vimPendingRef = useRef(false);
@@ -644,7 +644,7 @@ export default function EditorTab({
         vimInstanceRef.current = vim;
         console.log('[MONACO BOOT] Vim iniciado con éxito. Adaptador:', vim);
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        
         (VimMode as any).Vim.defineEx('write', 'w', (args: { args?: string }) => {
           const filename = args?.args?.trim() || '';
           if (filename) {
@@ -740,6 +740,7 @@ export default function EditorTab({
         draftStore.clear(projectId, node.file_path);
         setDraftModifiedLines([]);
         if (editorRef.current && !editorRef.current.getModel()?.isDisposed()) {
+          // eslint-disable-next-line react-hooks/immutability
           draftDecorationsRef.current = editorRef.current.deltaDecorations(draftDecorationsRef.current, []);
         }
       }
@@ -768,9 +769,10 @@ export default function EditorTab({
       setSaving(false);
       isSavingRef.current = false;
     }
-  }, [projectId, node.file_path, onSaveUntitled]);
+  }, [projectId, node.file_path, onSaveUntitled, isCoachEnabled, runHealthAnalysis]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/immutability
     handleSaveRef.current = handleSave;
   }, [handleSave]);
 
@@ -849,7 +851,7 @@ export default function EditorTab({
 
   const handleEditorDidMount: OnMount = useCallback((editor, monaco) => {
     console.log('[MONACO BOOT] handleEditorDidMount disparado. vimMode=', vimMode, 'path=', node.file_path);
-    // eslint-disable-next-line react-hooks/immutability
+    
     editorRef.current = editor;
     monacoRef.current = monaco;
     setIsEditorReady(true);
@@ -1015,7 +1017,7 @@ export default function EditorTab({
     // No cleanup required here since handleEditorDidMount manages the disposables?
     // Wait, let's keep the checkDirty logic untouched.
     checkDirty();
-  }, [node.metadata, checkDirty, node.file_path, node.id, vimMode, forceSenseiAnalysis, runCoachAnalysis]);
+  }, [node.metadata, checkDirty, node.file_path, node.id, vimMode, forceSenseiAnalysis, runCoachAnalysis, projectId]);
 
   if (loading) {
     return (
