@@ -154,7 +154,8 @@ export default function EditorTab({
           token.onCancellationRequested(() => controller.abort());
 
           const filePath = model.uri.toString();
-          const result = await adapter.getCompletion(prefix, suffix, filePath, controller.signal);
+          const editorContext = { monaco, model, position };
+          const result = await adapter.getCompletion(prefix, suffix, filePath, controller.signal, editorContext);
           if (token.isCancellationRequested || !result) return { items: [] };
 
           return { items: [{ insertText: result }] };
