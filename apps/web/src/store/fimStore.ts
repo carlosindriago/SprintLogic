@@ -5,6 +5,8 @@ interface FimState {
   setExplanation: (text: string | null) => void;
   isLoading: boolean;
   setIsLoading: (loading: boolean) => void;
+  isFimEnabled: boolean;
+  toggleFim: () => void;
 }
 
 export const useFimStore = create<FimState>((set) => ({
@@ -12,4 +14,6 @@ export const useFimStore = create<FimState>((set) => ({
   setExplanation: (text) => set({ explanation: text }),
   isLoading: false,
   setIsLoading: (loading) => set({ isLoading: loading }),
+  isFimEnabled: false,
+  toggleFim: () => set((state) => ({ isFimEnabled: !state.isFimEnabled })),
 }));

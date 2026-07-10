@@ -2,8 +2,9 @@
 
 import { useEffect, useReducer, useRef, useCallback, type RefObject } from "react";
 import type { editor as monacoEditor } from "monaco-editor";
-import { Keyboard, ChevronRight, Sparkles } from "lucide-react";
+import { Keyboard, ChevronRight, Sparkles, Wand2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useFimStore } from "@/store/fimStore";
 
 export type VimTutorMode = "locked" | "visual" | "editable";
 
@@ -92,6 +93,7 @@ export default function ContextHUD({ editorRef, mode, vimEnabled, coachExplanati
   const [state, dispatch] = useReducer(reducer, initialState);
   const lastKeyRef = useRef<{ key: string; time: number }>({ key: "", time: 0 });
   const contextualTimersRef = useRef<Partial<Record<VimTutorMode, ReturnType<typeof setTimeout>>>>({});
+  const { isFimEnabled, toggleFim } = useFimStore();
 
   const tipIndex = state.tipIndex[mode];
   const contextualTip = state.contextual[mode];
@@ -227,6 +229,19 @@ export default function ContextHUD({ editorRef, mode, vimEnabled, coachExplanati
           ))}
         </div>
       )}
+
+      <button
+        onClick={toggleFim}
+        className={cn(
+          "ml-4 flex items-center gap-1.5 px-2 py-0.5 rounded transition-colors text-[10px] uppercase font-bold",
+          isFimEnabled 
+            ? "bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30" 
+            : "bg-zinc-800 text-zinc-500 hover:bg-zinc-700"
+        )}
+      >
+        <Wand2 className="w-3 h-3" />
+        Autocompletar: {isFimEnabled ? "ON" : "OFF"}
+      </button>
     </div>
   );
 }
