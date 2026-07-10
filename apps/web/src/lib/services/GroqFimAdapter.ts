@@ -1,4 +1,4 @@
-import { useLLMConfigStore } from '@/store/llmConfigStore';
+import { useFimStore } from '@/store/fimStore';
 
 export interface FimProvider {
   getCompletion(prefix: string, suffix: string, signal: AbortSignal): Promise<string>;
@@ -7,14 +7,13 @@ export interface FimProvider {
 export class GroqFimAdapter implements FimProvider {
   private apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
   
-  // Suggested model for fast FIM: 'llama-3.1-8b-instant'
-  private defaultModel = 'llama-3.1-8b-instant';
-
   async getCompletion(prefix: string, suffix: string, signal: AbortSignal): Promise<string> {
-    const apiKey = useLLMConfigStore.getState().apiKeys['groq'];
+    const state = useFimStore.getState();
+    const apiKey = state.groqApiKey;
+    const model = state.fimModel || 'llama-3.1-8b-instant';
     
     if (!apiKey) {
-      console.warn('Groq API Key not found. Cannot run FIM completion.');
+      // Cláusula de guarda: si no hay API key, retornar en silencio
       return '';
     }
 
@@ -34,7 +33,7 @@ Responde ÚNICAMENTE con el código exacto que falta en el medio. Cero explicaci
           'Authorization': `Bearer ${apiKey}`
         },
         body: JSON.stringify({
-          model: this.defaultModel,
+          model: model,
           messages: [
             { role: 'system', content: systemPrompt }
           ],
