@@ -153,7 +153,8 @@ export default function EditorTab({
           const controller = new AbortController();
           token.onCancellationRequested(() => controller.abort());
 
-          const result = await adapter.getCompletion(prefix, suffix, controller.signal);
+          const filePath = model.uri.toString();
+          const result = await adapter.getCompletion(prefix, suffix, filePath, controller.signal);
           if (token.isCancellationRequested || !result) return { items: [] };
 
           return { items: [{ insertText: result }] };

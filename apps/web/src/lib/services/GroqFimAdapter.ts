@@ -1,7 +1,7 @@
 import { useFimStore } from '@/store/fimStore';
 
 export interface FimProvider {
-  getCompletion(prefix: string, suffix: string, signal: AbortSignal): Promise<string>;
+  getCompletion(prefix: string, suffix: string, filePath: string, signal: AbortSignal): Promise<string>;
 }
 
 // ---------------------------------------------------------------------------
@@ -20,13 +20,13 @@ let activePrediction: { originalPrefix: string; suggestion: string } | null = nu
  * Purely in-memory — discarded on page reload.
  */
 const predictionCache = new Map<string, string>();
-const MAX_CACHE_SIZE = 20;
+const MAX_CACHE_SIZE = 150;
 
 /** Lightweight cache key — no cryptographic hash needed for in-memory use. */
-function buildCacheKey(prefix: string, suffix: string): string {
+function buildCacheKey(filePath: string, prefix: string, suffix: string): string {
   // Keep only the last 200 chars of prefix to bound key size while preserving
   // enough context to avoid false cache hits.
-  return `${prefix.slice(-200)}|||${suffix.slice(0, 100)}`;
+  return `${filePath}|||${prefix.slice(-200)}|||${suffix.slice(0, 100)}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -58,6 +58,7 @@ export class GroqFimAdapter implements FimProvider {
   async getCompletion(
     prefix: string,
     suffix: string,
+    filePath: string,
     signal: AbortSignal,
   ): Promise<string> {
     const state = useFimStore.getState();
@@ -90,7 +91,7 @@ export class GroqFimAdapter implements FimProvider {
     // -----------------------------------------------------------------------
     // Step 2 — LRU Cache lookup (still zero-latency, handles backspace/rewrite)
     // -----------------------------------------------------------------------
-    const cacheKey = buildCacheKey(prefix, suffix);
+    const cacheKey = buildCacheKey(filePath, prefix, suffix);
     const cached = predictionCache.get(cacheKey);
 
     if (cached !== undefined) {
