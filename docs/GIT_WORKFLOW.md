@@ -1,108 +1,49 @@
 # Git Workflow
 
-## 1. Objetivo
+## 1. Branching Strategy
+We use a lightweight, Trunk-Based Development approach adapted for solo/small teams.
 
-Definir un flujo Git profesional que favorezca trazabilidad, revisiones limpias, integración continua y bajo riesgo.
+- `main`: The single source of truth. Always deployable and pristine.
+- Ephemeral branches: Branches created off `main` for specific features, fixes, or chores. Must be short-lived.
 
-## 2. Estrategia base
+## 2. Naming Conventions
 
-Se adopta un flujo **trunk-based controlado**:
+All ephemeral branches must follow the `type/scope` format.
 
-- `main` es la rama estable;
-- el trabajo se hace en ramas cortas;
-- toda integración pasa por Pull Request;
-- los cambios se integran pequeños y frecuentes.
+- `feat/<scope>`: For new features (e.g., `feat/kanban-board`).
+- `fix/<scope>`: For bug fixes (e.g., `fix/auth-token-leak`).
+- `chore/<scope>`: For maintenance, dependencies, or configuration (e.g., `chore/update-deps`).
+- `docs/<scope>`: For documentation updates (e.g., `docs/api-spec`).
+- `refactor/<scope>`: For code restructuring without behavior changes (e.g., `refactor/api-controllers`).
 
-## 3. Tipos de ramas
+## 3. Atomic Commits
 
-- `feat/<scope>`
-- `fix/<scope>`
-- `refactor/<scope>`
-- `docs/<scope>`
-- `chore/<scope>`
-- `test/<scope>`
+We strictly follow the [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) specification. A commit should be atomic, meaning it only contains changes related to a single, logical concept.
 
-Ejemplos:
+Format: `<type>[optional scope]: <description>`
 
-- `feat/focus-timer`
-- `fix/report-pdf-timezone`
-- `refactor/task-domain-model`
+Examples:
+- `feat(ui): implement draggable kanban columns`
+- `fix(api): resolve memory leak in project parser`
+- `refactor(core): decouple database adapter`
 
-## 4. Reglas de ramas
+Do not mix a whitespace formatting chore with a feature addition in the same commit.
 
-1. Nunca trabajar directo en `main`.
-2. Una rama debe atacar un solo objetivo.
-3. Si una rama crece demasiado, se divide.
-4. Rebase frecuente contra `main` para evitar drift largo.
-5. Las ramas deben vivir poco tiempo.
+## 4. The Loop
 
-## 5. Commits atómicos
+1. Sync local `main` with remote: `git checkout main && git pull origin main`
+2. Create a new branch: `git checkout -b feat/my-new-feature`
+3. Write code, tests, and documentation.
+4. Stage specific files (never `git add .` blindly).
+5. Create atomic commits.
+6. Push to remote: `git push -u origin HEAD`
+7. Open a Pull Request against `main`.
+8. Ensure CI passes (linter, tests, build).
+9. Squash and merge into `main`.
+10. Delete the ephemeral branch locally and remotely.
 
-### Definición
-Un commit atómico representa **una sola intención de cambio** y deja el repositorio en estado consistente.
+## 5. Security & Safety Guards
 
-### Reglas
-
-- separar refactor de feature;
-- separar renombres masivos de cambios funcionales;
-- separar cambios de infraestructura de cambios de dominio, salvo necesidad clara;
-- no mezclar backend y frontend en un commit si no forman un solo cambio lógico;
-- cada commit debe poder revisarse, revertirse y entenderse por sí solo.
-
-## 6. Formato de commits
-
-Usar **Conventional Commits**:
-
-```text
-type(scope): short summary
-```
-
-Tipos principales:
-
-- `feat`
-- `fix`
-- `refactor`
-- `docs`
-- `test`
-- `chore`
-- `build`
-- `ci`
-
-Ejemplos:
-
-```text
-feat(tasks): add task assignment endpoint
-fix(focus): block concurrent active sessions
-refactor(domain): extract project status value object
-docs(architecture): define clean architecture boundaries
-```
-
-## 7. Pull Requests
-
-Cada PR debe:
-
-- resolver un problema claro;
-- ser pequeña o medianamente pequeña;
-- incluir contexto de negocio y técnico;
-- indicar riesgos;
-- listar pruebas realizadas;
-- actualizar docs si cambia comportamiento o arquitectura.
-
-## 8. Política de merge
-
-- preferir **squash merge** cuando la rama tenga commits de trabajo intermedio;
-- preferir **rebase merge** cuando la secuencia de commits atómicos aporte valor histórico;
-- no usar merge commits ruidosos sin necesidad.
-
-## 9. Regla práctica
-
-Si un reviewer no puede entender un commit en pocos minutos, el commit no es suficientemente atómico.
-
-## 10. Checklist antes de abrir PR
-
-- [ ] rama bien nombrada
-- [ ] commits atómicos
-- [ ] tests relevantes pasan
-- [ ] linter/formatter pasa
-- [ ] docs actualizadas si aplica
-- [ ] sin cambios accidentales
+- Never force push (`--force`) to `main`.
+- Never rewrite history on a shared branch.
+- Pre-commit hooks will enforce linting and conventional commit message formats.
