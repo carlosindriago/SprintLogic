@@ -28,6 +28,10 @@ from app.infrastructure.db.project_repository import SQLAlchemyProjectRepository
 from app.infrastructure.git.git_gateway import LocalGitGateway
 from app.infrastructure.parser.ast_parser import ASTParserService
 from app.infrastructure.repositories.graph_repository import SQLAlchemyGraphRepository
+from app.infrastructure.events.event_bus import global_event_bus
+from app.infrastructure.providers.local_fs import LocalFileSystemProvider
+from sse_starlette.sse import EventSourceResponse
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -59,8 +63,12 @@ async def get_projects(session: AsyncSession = Depends(get_db_session)):
     return {"projects": projects}
 
 
-@router.post("/projects/scan")
-async def scan_project(request: ScanRequest, session: AsyncSession = Depends(get_db_session)):
+@router.post("/projects/scan", status_code=202)
+async def scan_project(
+    request: ScanRequest, 
+    background_tasks: BackgroundTasks,
+    session: AsyncSession = Depends(get_db_session)
+):
     git_gateway = LocalGitGateway()
     project_repo = SQLAlchemyProjectRepository(session)
     scan_repo_usecase = ScanLocalRepository(git_gateway, project_repo)
@@ -79,11 +87,28 @@ async def scan_project(request: ScanRequest, session: AsyncSession = Depends(get
 
     parser = ASTParserService()
     graph_repo = SQLAlchemyGraphRepository(session)
-    scan_codebase_usecase = ScanCodebaseUseCase(parser, graph_repo)
+    provider = LocalFileSystemProvider(saved_project.path)
+    
+    scan_codebase_usecase = ScanCodebaseUseCase(provider, parser, global_event_bus, graph_repo)
 
-    await scan_codebase_usecase.execute(saved_project.id, request.path)
+    # Fire and Forget
+    background_tasks.add_task(scan_codebase_usecase.execute, saved_project.id)
 
-    return {"project_id": str(saved_project.id)}
+    return {
+        "status": "scanning started", 
+        "project_id": str(saved_project.id),
+        "message": "The AST parsing is running in the background."
+    }
+
+@router.get("/projects/{project_id}/scan/stream")
+async def stream_scan_progress(project_id: str):
+    async def event_generator():
+        topic = f"scan:{project_id}"
+        async for event in global_event_bus.event_generator(topic):
+            yield {"data": event}
+                
+    return EventSourceResponse(event_generator())
+
 
 
 class UpdateProjectRequest(BaseModel):
