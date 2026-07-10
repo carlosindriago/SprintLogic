@@ -1,7 +1,8 @@
 import { useFimStore } from '@/store/fimStore';
+import { TypeScriptWorkerService } from './TypeScriptWorkerService';
 
 export interface FimProvider {
-  getCompletion(prefix: string, suffix: string, filePath: string, signal: AbortSignal): Promise<string>;
+  getCompletion(prefix: string, suffix: string, filePath: string, signal: AbortSignal, editorContext?: unknown): Promise<string>;
 }
 
 // ---------------------------------------------------------------------------
@@ -60,6 +61,7 @@ export class GroqFimAdapter implements FimProvider {
     suffix: string,
     filePath: string,
     signal: AbortSignal,
+    editorContext?: unknown
   ): Promise<string> {
     const state = useFimStore.getState();
     const apiKey = state.groqApiKey;
@@ -105,10 +107,69 @@ export class GroqFimAdapter implements FimProvider {
     }
 
     // -----------------------------------------------------------------------
+    // Step 2.5 — Syntactic RAG (Type Stealing via Monaco Worker)
+    // -----------------------------------------------------------------------
+    let typeContextString = '';
+    if (editorContext) {
+      const ctx = editorContext as {
+        monaco?: unknown;
+        model?: { uri: unknown; getOffsetAt: (position: unknown) => number };
+        position?: unknown;
+      };
+
+      if (ctx.monaco && ctx.model && ctx.position) {
+        try {
+          const { monaco, model, position } = ctx;
+        // Extract the last 5 lines from prefix
+        const lines = prefix.split('\n');
+        const last5Lines = lines.slice(-5).join('\n');
+        
+        // Extract distinct identifiers
+        const identifiers = Array.from(new Set(last5Lines.match(/[a-zA-Z_$][0-9a-zA-Z_$]*/g) || []));
+        
+        // Get the absolute offset of the cursor in the file
+        const absoluteCursorOffset = model.getOffsetAt(position);
+        
+        const typeSignatures = new Set<string>();
+        
+        // Protect against doing too many requests; check at most 10 unique identifiers
+        for (const id of identifiers.slice(-10)) {
+          // Find the last index of the identifier in the full prefix
+          const relativeIndex = prefix.lastIndexOf(id);
+          if (relativeIndex !== -1) {
+            const idAbsoluteOffset = absoluteCursorOffset - prefix.length + relativeIndex;
+            
+            // Query the worker safely with our 50ms timeout
+            const sig = await TypeScriptWorkerService.getQuickInfoWithTimeout(
+              monaco,
+              model.uri,
+              idAbsoluteOffset,
+              50
+            );
+            
+            if (sig) {
+              const cleanSig = sig.replace(/\r?\n/g, ' ').replace(/\s+/g, ' ').trim();
+              if (cleanSig && cleanSig !== 'any') {
+                typeSignatures.add(cleanSig);
+              }
+            }
+          }
+        }
+        
+        if (typeSignatures.size > 0) {
+          typeContextString = `[CONTEXTO DE TIPOS TS]\n${Array.from(typeSignatures).join('\n')}\n[/CONTEXTO DE TIPOS TS]\n\n`;
+        }
+        } catch {
+          // Fail gracefully, this is a progressive enhancement
+        }
+      }
+    }
+
+    // -----------------------------------------------------------------------
     // Step 3 — Network call to Groq (cold path)
     // -----------------------------------------------------------------------
     const systemPrompt = `Eres un motor de autocompletado de código. Aquí tienes el código ANTES del cursor: 
-${prefix}
+${typeContextString}${prefix}
 
 Aquí tienes el código DESPUÉS del cursor: 
 ${suffix}
