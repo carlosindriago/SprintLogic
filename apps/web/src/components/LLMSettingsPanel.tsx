@@ -539,6 +539,8 @@ function FimConfigSection({ providers }: { providers: CuratedProvider[] }) {
   );
 }
 
+import { useState } from "react";
+
 function PredictiveFimSection() {
   const fimEnabled = useFimStore((s) => s.fimEnabled);
   const setFimEnabled = useFimStore((s) => s.setFimEnabled);
@@ -546,6 +548,42 @@ function PredictiveFimSection() {
   const setGroqApiKey = useFimStore((s) => s.setGroqApiKey);
   const fimModel = useFimStore((s) => s.fimModel);
   const setFimModel = useFimStore((s) => s.setFimModel);
+
+  const [models, setModels] = useState<string[]>([
+    'llama-3.1-8b-instant',
+    'gemma2-9b-it',
+    'qwen-2.5-coder-32b'
+  ]);
+  const [testing, setTesting] = useState(false);
+  const [testStatus, setTestStatus] = useState<'idle' | 'success' | 'error'>('idle');
+
+  const handleTestAndLoad = async () => {
+    if (!groqApiKey) return;
+    setTesting(true);
+    setTestStatus('idle');
+    try {
+      const response = await fetch('https://api.groq.com/openai/v1/models', {
+        headers: {
+          'Authorization': `Bearer ${groqApiKey}`
+        }
+      });
+      if (!response.ok) throw new Error('Failed to fetch models');
+      const data = await response.json();
+      if (data && Array.isArray(data.data)) {
+        const loadedModels = data.data.map((m: any) => m.id).sort();
+        setModels(loadedModels);
+        setTestStatus('success');
+        // Si el modelo actual no está en la lista (o está vacío), seteamos el primero por defecto
+        if (!loadedModels.includes(fimModel)) {
+          setFimModel(loadedModels[0]);
+        }
+      }
+    } catch (error) {
+      setTestStatus('error');
+    } finally {
+      setTesting(false);
+    }
+  };
 
   return (
     <div className="flex flex-col gap-8 p-6 max-w-2xl">
@@ -577,17 +615,41 @@ function PredictiveFimSection() {
         </div>
 
         <div className="flex flex-col gap-3 mt-2">
-          <Label className="text-xs font-medium text-zinc-300">Modelo Groq para FIM</Label>
-          <Select value={fimModel} onValueChange={setFimModel}>
-            <SelectTrigger className="bg-zinc-950 border-zinc-800 text-zinc-200 w-full h-10">
-              <SelectValue placeholder="Selecciona un modelo..." />
-            </SelectTrigger>
-            <SelectContent className="bg-zinc-900 border-zinc-800 text-zinc-200">
-              <SelectItem value="llama-3.1-8b-instant" className="focus:bg-zinc-800">llama-3.1-8b-instant</SelectItem>
-              <SelectItem value="gemma2-9b-it" className="focus:bg-zinc-800">gemma2-9b-it</SelectItem>
-              <SelectItem value="qwen-2.5-coder-32b" className="focus:bg-zinc-800">qwen-2.5-coder-32b</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="flex items-end gap-3">
+            <div className="flex-1 flex flex-col gap-3">
+              <Label className="text-xs font-medium text-zinc-300">Modelo Groq para FIM</Label>
+              <Select value={fimModel} onValueChange={setFimModel}>
+                <SelectTrigger className="bg-zinc-950 border-zinc-800 text-zinc-200 w-full h-10">
+                  <SelectValue placeholder="Selecciona un modelo..." />
+                </SelectTrigger>
+                <SelectContent className="bg-zinc-900 border-zinc-800 text-zinc-200">
+                  {models.map((m) => (
+                    <SelectItem key={m} value={m} className="focus:bg-zinc-800">{m}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button
+              onClick={handleTestAndLoad}
+              disabled={!groqApiKey || testing}
+              className={`h-10 px-4 whitespace-nowrap transition-colors flex items-center gap-2 ${
+                testStatus === 'success' ? 'bg-emerald-500 hover:bg-emerald-600 text-white' : 
+                testStatus === 'error' ? 'bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/50' : 
+                'bg-zinc-800 hover:bg-zinc-700 text-zinc-200'
+              }`}
+            >
+              {testing ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : testStatus === 'success' ? (
+                <CheckCircle2 className="w-4 h-4" />
+              ) : testStatus === 'error' ? (
+                <XCircle className="w-4 h-4" />
+              ) : (
+                <Wand2 className="w-4 h-4" />
+              )}
+              {testStatus === 'success' ? 'Verificado' : 'Probar y Cargar'}
+            </Button>
+          </div>
         </div>
       </div>
     </div>
