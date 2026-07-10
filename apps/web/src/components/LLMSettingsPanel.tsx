@@ -23,7 +23,9 @@ import {
   fetchHealthOverview,
 } from "@/lib/api";
 import { useLLMConfigStore } from "@/store/llmConfigStore";
-import { Key, Loader2, CheckCircle2, XCircle, Trash2, Brain, Sparkles, Play } from "lucide-react";
+import { useFimStore } from "@/store/fimStore";
+import { Switch } from "@/components/ui/switch";
+import { Key, Loader2, CheckCircle2, XCircle, Trash2, Brain, Sparkles, Play, Wand2 } from "lucide-react";
 
 const KEY_MIN_LENGTH = 8;
 
@@ -537,6 +539,61 @@ function FimConfigSection({ providers }: { providers: CuratedProvider[] }) {
   );
 }
 
+function PredictiveFimSection() {
+  const fimEnabled = useFimStore((s) => s.fimEnabled);
+  const setFimEnabled = useFimStore((s) => s.setFimEnabled);
+  const groqApiKey = useFimStore((s) => s.groqApiKey);
+  const setGroqApiKey = useFimStore((s) => s.setGroqApiKey);
+  const fimModel = useFimStore((s) => s.fimModel);
+  const setFimModel = useFimStore((s) => s.setFimModel);
+
+  return (
+    <div className="flex flex-col gap-8 p-6 max-w-2xl">
+      <div className="flex flex-col gap-4 p-5 bg-zinc-900/50 border border-zinc-800/80 rounded-xl relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500/50"></div>
+        <div className="flex items-center justify-between">
+          <Label className="text-sm font-semibold text-zinc-100 flex items-center gap-2">
+            <Wand2 className="w-4 h-4 text-emerald-400" />
+            Autocompletado Predictivo (FIM - Groq)
+          </Label>
+          <Switch checked={fimEnabled} onCheckedChange={setFimEnabled} />
+        </div>
+        
+        <p className="text-xs text-zinc-400 leading-relaxed">
+          Las peticiones FIM se procesan a alta velocidad. Si notas sugerencias incorrectas, la Mentoría Contextual (Sensei) validará el código 3 segundos después.
+        </p>
+
+        <div className="flex flex-col gap-3 mt-2">
+          <Label className="text-xs font-medium text-zinc-300">Groq API Key</Label>
+          <Input 
+            type="password"
+            value={groqApiKey}
+            onChange={(e) => setGroqApiKey(e.target.value)}
+            placeholder="gsk_..."
+            autoComplete="off"
+            spellCheck={false}
+            className="bg-zinc-950 border-zinc-800 focus-visible:border-emerald-500/50 focus-visible:ring-emerald-500/20 text-zinc-200 font-mono h-10"
+          />
+        </div>
+
+        <div className="flex flex-col gap-3 mt-2">
+          <Label className="text-xs font-medium text-zinc-300">Modelo Groq para FIM</Label>
+          <Select value={fimModel} onValueChange={setFimModel}>
+            <SelectTrigger className="bg-zinc-950 border-zinc-800 text-zinc-200 w-full h-10">
+              <SelectValue placeholder="Selecciona un modelo..." />
+            </SelectTrigger>
+            <SelectContent className="bg-zinc-900 border-zinc-800 text-zinc-200">
+              <SelectItem value="llama-3.1-8b-instant" className="focus:bg-zinc-800">llama-3.1-8b-instant</SelectItem>
+              <SelectItem value="gemma2-9b-it" className="focus:bg-zinc-800">gemma2-9b-it</SelectItem>
+              <SelectItem value="qwen-2.5-coder-32b" className="focus:bg-zinc-800">qwen-2.5-coder-32b</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function LLMSettingsPanel() {
   const defaultModel = useLLMConfigStore((s) => s.defaultModel);
   const setDefaultModel = useLLMConfigStore((s) => s.setDefaultModel);
@@ -651,6 +708,17 @@ export default function LLMSettingsPanel() {
           </span>
         </div>
         <button
+          onClick={() => setActiveSection('predictive-fim')}
+          className={`text-left px-4 py-2 text-sm transition-colors flex items-center gap-2 ${
+            activeSection === 'predictive-fim'
+              ? "bg-emerald-500/10 text-emerald-300 border-l-2 border-emerald-500 font-medium"
+              : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200 border-l-2 border-transparent"
+          }`}
+        >
+          <Wand2 className="w-4 h-4 shrink-0" />
+          FIM Groq
+        </button>
+        <button
           onClick={() => setActiveSection('fim-config')}
           className={`text-left px-4 py-2 text-sm transition-colors flex items-center gap-2 ${
             activeSection === 'fim-config'
@@ -695,6 +763,8 @@ export default function LLMSettingsPanel() {
             curatedModels={activeProviderData.models}
             onProviderConfigured={handleProviderConfigured}
           />
+        ) : activeSection === 'predictive-fim' ? (
+          <PredictiveFimSection key="predictive-fim" />
         ) : activeSection === 'context7' ? (
           <Context7Section
             apiKey={context7ApiKey}
