@@ -568,7 +568,7 @@ function PredictiveFimSection() {
       if (!response.ok) throw new Error('Failed to fetch models');
       const data = await response.json();
       if (data && Array.isArray(data.data)) {
-        const loadedModels = data.data.map((m: any) => m.id).sort();
+        const loadedModels = data.data.map((m: { id: string }) => m.id).sort();
         setModels(loadedModels);
         setTestStatus('success');
         // Si el modelo actual no está en la lista (o está vacío), seteamos el primero por defecto
@@ -576,7 +576,7 @@ function PredictiveFimSection() {
           setFimModel(loadedModels[0]);
         }
       }
-    } catch (error) {
+    } catch {
       setTestStatus('error');
     } finally {
       setTesting(false);

@@ -71,8 +71,8 @@ IMPORTANTE: Responde ÚNICAMENTE con el código que falta. NO repitas el prefijo
       }
 
       return completion;
-    } catch (error: any) {
-      if (error.name === 'AbortError') {
+    } catch (error: unknown) {
+      if (error instanceof Error && error.name === 'AbortError') {
         console.log('FIM completion aborted by user or timeout');
         throw error;
       }
