@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Activity, GitCommit, GitBranch, FolderGit2 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
@@ -33,6 +33,22 @@ export default function InsightDashboard({ projectId }: { projectId: string }) {
     };
   }, [projectId]);
 
+  // Dummy burn down data for the AreaChart
+  const burndownData = useMemo(() => [
+    { name: 'Day 1', tasks: 100 },
+    { name: 'Day 2', tasks: 90 },
+    { name: 'Day 3', tasks: 75 },
+    { name: 'Day 4', tasks: 60 },
+    { name: 'Day 5', tasks: 45 },
+    { name: 'Day 6', tasks: 20 },
+    { name: 'Day 7', tasks: data?.tasks_by_state?.todo || 0 },
+  ], [data]);
+
+  const COLORS = ['#3b82f6', '#d946ef', '#10b981', '#f59e0b', '#ef4444'];
+  const langData = useMemo(() => data?.language_distribution && data.language_distribution.length > 0
+    ? data.language_distribution
+    : [{ name: 'N/A', value: 1 }], [data]);
+
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center bg-[#0d0d0d] text-zinc-400">
@@ -49,21 +65,9 @@ export default function InsightDashboard({ projectId }: { projectId: string }) {
     );
   }
 
-  // Dummy burn down data for the AreaChart
-  const burndownData = [
-    { name: 'Day 1', tasks: 100 },
-    { name: 'Day 2', tasks: 90 },
-    { name: 'Day 3', tasks: 75 },
-    { name: 'Day 4', tasks: 60 },
-    { name: 'Day 5', tasks: 45 },
-    { name: 'Day 6', tasks: 20 },
-    { name: 'Day 7', tasks: data.tasks_by_state?.todo || 0 },
-  ];
 
-  const COLORS = ['#3b82f6', '#d946ef', '#10b981', '#f59e0b', '#ef4444'];
-  const langData = data.language_distribution && data.language_distribution.length > 0
-    ? data.language_distribution
-    : [{ name: 'N/A', value: 1 }];
+
+
 
   return (
     <div className="h-full w-full bg-[#0d0d0d] overflow-auto p-6 text-zinc-200">
