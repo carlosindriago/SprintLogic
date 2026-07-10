@@ -539,8 +539,6 @@ function FimConfigSection({ providers }: { providers: CuratedProvider[] }) {
   );
 }
 
-import { useState } from "react";
-
 function PredictiveFimSection() {
   const fimEnabled = useFimStore((s) => s.fimEnabled);
   const setFimEnabled = useFimStore((s) => s.setFimEnabled);
