@@ -298,7 +298,6 @@ async def health_overview(request: CodeCoachRequest):
                 {"role": "user", "content": user},
             ]
 
-            
             for attempt in range(MAX_RETRIES + 1):
                 raw_content = ""
                 try:
