@@ -20,8 +20,7 @@ from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.application.scan_codebase import ScanCodebaseUseCase
-from app.application.scan_repo import ScanLocalRepository
+from app.application.scan_repo import ScanLocalRepository, ScanCodebaseUseCase
 from app.domain.exceptions import PathBlockedError, ScannerError
 from app.infrastructure.db.database import AsyncSessionLocal, get_db_session
 from app.infrastructure.db.project_repository import SQLAlchemyProjectRepository

@@ -38,6 +38,7 @@ import FileTree from "@/components/FileTree";
 import { useTabsStore } from '@/store/tabsStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useProjectStore } from '@/store/projectStore';
+import { useBackgroundJobsStore } from '@/store/backgroundJobsStore';
 import TabBar from '@/components/TabBar';
 import { useThemeStore, AccentColor, UiScale } from '@/store/themeStore';
 import GitStatusWidget from '@/components/GitStatusWidget';
@@ -90,6 +91,7 @@ export default function Home() {
   
   const { tabs, activeTabId, addTab, switchProject } = useTabsStore();
   const { accentColor, setAccentColor, uiScale, setUiScale } = useThemeStore();
+  const startScan = useBackgroundJobsStore(state => state.startScan);
 
   const [settingsTab, setSettingsTab] = useState<'llms' | 'appearance'>('llms');
   const [newFileDialogOpen, setNewFileDialogOpen] = useState(false);
@@ -188,6 +190,7 @@ export default function Home() {
     try {
       const data = await scanProject(path);
       setProjectId(data.project_id);
+      startScan(data.project_id);
       fetchProjects(); // Refresh the list
     } catch (e) {
       console.error(e);

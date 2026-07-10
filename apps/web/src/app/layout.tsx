@@ -5,6 +5,7 @@ import ThemeProvider from "@/components/ThemeProvider";
 import { QueryProvider } from "@/components/QueryProvider";
 import { Toaster } from "sonner";
 import Script from "next/script";
+import { GlobalActivityOverlay } from "@/components/GlobalActivityOverlay";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -51,6 +52,7 @@ export default function RootLayout({
         <QueryProvider>
           <ThemeProvider>{children}</ThemeProvider>
         </QueryProvider>
+        <GlobalActivityOverlay />
         <Toaster theme="dark" position="bottom-right" />
       </body>
     </html>
