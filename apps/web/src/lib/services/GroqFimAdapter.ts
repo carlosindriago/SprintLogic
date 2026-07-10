@@ -4,19 +4,108 @@ export interface FimProvider {
   getCompletion(prefix: string, suffix: string, signal: AbortSignal): Promise<string>;
 }
 
+// ---------------------------------------------------------------------------
+// Module-level state (ephemeral RAM only — never persisted to disk/localStorage)
+// ---------------------------------------------------------------------------
+
+/**
+ * Tracks the last active prediction so we can serve zero-latency completions
+ * when the user keeps typing characters that match the predicted suggestion.
+ */
+let activePrediction: { originalPrefix: string; suggestion: string } | null = null;
+
+/**
+ * LRU cache: stores up to MAX_CACHE_SIZE recent (prefix+suffix) → completion
+ * pairs. Map preserves insertion order, so the oldest entry is always first.
+ * Purely in-memory — discarded on page reload.
+ */
+const predictionCache = new Map<string, string>();
+const MAX_CACHE_SIZE = 20;
+
+/** Lightweight cache key — no cryptographic hash needed for in-memory use. */
+function buildCacheKey(prefix: string, suffix: string): string {
+  // Keep only the last 200 chars of prefix to bound key size while preserving
+  // enough context to avoid false cache hits.
+  return `${prefix.slice(-200)}|||${suffix.slice(0, 100)}`;
+}
+
+// ---------------------------------------------------------------------------
+// Sanitization helpers (shared between fresh completions and cached ones)
+// ---------------------------------------------------------------------------
+
+function stripMarkdown(text: string): string {
+  return text.replace(/^```[\w]*\n?/, '').replace(/\n?```$/, '');
+}
+
+function stripOverlap(prefix: string, completion: string): string {
+  const maxOverlap = Math.min(100, prefix.length, completion.length);
+  let overlapLen = 0;
+  for (let i = 1; i <= maxOverlap; i++) {
+    if (prefix.slice(-i) === completion.slice(0, i)) {
+      overlapLen = i;
+    }
+  }
+  return overlapLen > 0 ? completion.slice(overlapLen) : completion;
+}
+
+// ---------------------------------------------------------------------------
+// Adapter
+// ---------------------------------------------------------------------------
+
 export class GroqFimAdapter implements FimProvider {
   private apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
-  
-  async getCompletion(prefix: string, suffix: string, signal: AbortSignal): Promise<string> {
+
+  async getCompletion(
+    prefix: string,
+    suffix: string,
+    signal: AbortSignal,
+  ): Promise<string> {
     const state = useFimStore.getState();
     const apiKey = state.groqApiKey;
     const model = state.fimModel || 'llama-3.1-8b-instant';
-    
-    if (!apiKey) {
-      // Cláusula de guarda: si no hay API key, retornar en silencio
-      return '';
+
+    if (!apiKey) return '';
+
+    // -----------------------------------------------------------------------
+    // Step 1 — Prefix Consumption Engine (zero-latency path)
+    // -----------------------------------------------------------------------
+    if (activePrediction !== null) {
+      const { originalPrefix, suggestion } = activePrediction;
+
+      if (prefix.startsWith(originalPrefix) && suggestion.length > 0) {
+        const typed = prefix.slice(originalPrefix.length); // chars added since last prediction
+
+        if (typed.length > 0 && suggestion.startsWith(typed)) {
+          // User is still "consuming" the suggestion — slice off the consumed part
+          const remaining = suggestion.slice(typed.length);
+          activePrediction = { originalPrefix: prefix, suggestion: remaining };
+          return remaining; // ← zero-latency: no network call
+        }
+      }
+
+      // User diverged from the prediction — invalidate
+      activePrediction = null;
     }
 
+    // -----------------------------------------------------------------------
+    // Step 2 — LRU Cache lookup (still zero-latency, handles backspace/rewrite)
+    // -----------------------------------------------------------------------
+    const cacheKey = buildCacheKey(prefix, suffix);
+    const cached = predictionCache.get(cacheKey);
+
+    if (cached !== undefined) {
+      // Promote to most-recent by re-inserting (Map preserves insertion order)
+      predictionCache.delete(cacheKey);
+      predictionCache.set(cacheKey, cached);
+
+      // Warm the active prediction so the consumption engine kicks in next keystroke
+      activePrediction = { originalPrefix: prefix, suggestion: cached };
+      return cached;
+    }
+
+    // -----------------------------------------------------------------------
+    // Step 3 — Network call to Groq (cold path)
+    // -----------------------------------------------------------------------
     const systemPrompt = `Eres un motor de autocompletado de código. Aquí tienes el código ANTES del cursor: 
 ${prefix}
 
@@ -30,17 +119,15 @@ IMPORTANTE: Responde ÚNICAMENTE con el código que falta. NO repitas el prefijo
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
+          'Authorization': `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
-          model: model,
-          messages: [
-            { role: 'system', content: systemPrompt }
-          ],
-          temperature: 0.2, // Low temperature for code completion predictability
-          max_tokens: 150, // Keep it short for inline completions
+          model,
+          messages: [{ role: 'system', content: systemPrompt }],
+          temperature: 0.2,
+          max_tokens: 150,
         }),
-        signal
+        signal,
       });
 
       if (!response.ok) {
@@ -48,35 +135,27 @@ IMPORTANTE: Responde ÚNICAMENTE con el código que falta. NO repitas el prefijo
       }
 
       const data = await response.json();
-      let completion = data.choices[0]?.message?.content || '';
-      
-      // Cleanup accidental markdown blocks if the LLM hallucinated them
-      completion = completion.replace(/^```[\w]*\n?/, '').replace(/\n?```$/, '');
+      let completion: string = data.choices[0]?.message?.content || '';
 
-      // Overlap Stripper (O(N) deterministic deduplication)
-      // We check up to the last 100 characters of the user's prefix
-      const maxOverlap = Math.min(100, prefix.length, completion.length);
-      let overlapLen = 0;
+      // Sanitize
+      completion = stripMarkdown(completion);
+      completion = stripOverlap(prefix, completion);
 
-      for (let i = 1; i <= maxOverlap; i++) {
-        const prefixEnd = prefix.slice(-i);
-        const completionStart = completion.slice(0, i);
-        if (prefixEnd === completionStart) {
-          overlapLen = i;
-        }
+      if (!completion) return '';
+
+      // Store in LRU cache — evict oldest entry if over budget
+      if (predictionCache.size >= MAX_CACHE_SIZE) {
+        const oldest = predictionCache.keys().next().value;
+        if (oldest !== undefined) predictionCache.delete(oldest);
       }
+      predictionCache.set(cacheKey, completion);
 
-      if (overlapLen > 0) {
-        completion = completion.slice(overlapLen);
-      }
+      // Arm the prefix consumption engine for the next keystroke
+      activePrediction = { originalPrefix: prefix, suggestion: completion };
 
       return completion;
     } catch (error: unknown) {
-      // Both AbortError (from AbortController) and any network error must be
-      // swallowed here. The caller (provideInlineCompletions) has its own
-      // try-catch that converts any throw into { items: [] }.
-      // Re-throwing would surface as an unhandledRejection when Monaco disposes
-      // the inline completions provider while a request is in flight.
+      // Swallow AbortError silently; log genuine network errors.
       if (error instanceof Error && error.name !== 'AbortError') {
         console.error('Error fetching Groq FIM completion:', error);
       }
