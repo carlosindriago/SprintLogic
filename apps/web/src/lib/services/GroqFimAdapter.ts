@@ -72,11 +72,14 @@ IMPORTANTE: Responde ÚNICAMENTE con el código que falta. NO repitas el prefijo
 
       return completion;
     } catch (error: unknown) {
-      if (error instanceof Error && error.name === 'AbortError') {
-        console.log('FIM completion aborted by user or timeout');
-        throw error;
+      // Both AbortError (from AbortController) and any network error must be
+      // swallowed here. The caller (provideInlineCompletions) has its own
+      // try-catch that converts any throw into { items: [] }.
+      // Re-throwing would surface as an unhandledRejection when Monaco disposes
+      // the inline completions provider while a request is in flight.
+      if (error instanceof Error && error.name !== 'AbortError') {
+        console.error('Error fetching Groq FIM completion:', error);
       }
-      console.error('Error fetching Groq FIM completion:', error);
       return '';
     }
   }
