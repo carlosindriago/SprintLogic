@@ -158,7 +158,7 @@ export default function EditorTab({
           return { items: [] };
         }
       },
-      freeInlineCompletions: () => {}
+      disposeInlineCompletions: () => {}
     });
 
     return () => provider.dispose();
