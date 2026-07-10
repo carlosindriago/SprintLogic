@@ -111,50 +111,55 @@ export default function EditorTab({
     if (!monaco) return;
 
     const provider = monaco.languages.registerInlineCompletionsProvider('*', {
-      provideInlineCompletions: async (model, position, context, token) => {
-        // Cláusula de guarda 1
-        if (!useFimStore.getState().fimEnabled) {
-          return { items: [] };
-        }
-
-        // Cláusula de guarda 2 (Debounce + Cancellation)
-        await new Promise(resolve => setTimeout(resolve, 300));
-        if (token.isCancellationRequested) return { items: [] };
-
-        const prefixLines = [];
-        for (let i = Math.max(1, position.lineNumber - 50); i <= position.lineNumber; i++) {
-          if (i === position.lineNumber) {
-            prefixLines.push(model.getLineContent(i).substring(0, position.column - 1));
-          } else {
-            prefixLines.push(model.getLineContent(i));
-          }
-        }
-        
-        const suffixLines = [];
-        for (let i = position.lineNumber; i <= Math.min(model.getLineCount(), position.lineNumber + 50); i++) {
-          if (i === position.lineNumber) {
-            suffixLines.push(model.getLineContent(i).substring(position.column - 1));
-          } else {
-            suffixLines.push(model.getLineContent(i));
-          }
-        }
-
-        const prefix = prefixLines.join('\n');
-        const suffix = suffixLines.join('\n');
-
-        const adapter = new GroqFimAdapter();
-        const controller = new AbortController();
-        token.onCancellationRequested(() => controller.abort());
-
+      provideInlineCompletions: async (model, position, _context, token) => {
         try {
+          // Guard 1: FIM disabled
+          if (!useFimStore.getState().fimEnabled) return { items: [] };
+
+          // Guard 2: Cancellation-aware debounce
+          // Wrap in a promise that resolves on timeout OR rejects on cancellation
+          await new Promise<void>((resolve, reject) => {
+            const timer = setTimeout(resolve, 300);
+            token.onCancellationRequested(() => {
+              clearTimeout(timer);
+              reject(new DOMException('Debounce cancelled', 'AbortError'));
+            });
+          });
+
+          if (token.isCancellationRequested) return { items: [] };
+
+          const prefixLines = [];
+          for (let i = Math.max(1, position.lineNumber - 50); i <= position.lineNumber; i++) {
+            if (i === position.lineNumber) {
+              prefixLines.push(model.getLineContent(i).substring(0, position.column - 1));
+            } else {
+              prefixLines.push(model.getLineContent(i));
+            }
+          }
+
+          const suffixLines = [];
+          for (let i = position.lineNumber; i <= Math.min(model.getLineCount(), position.lineNumber + 50); i++) {
+            if (i === position.lineNumber) {
+              suffixLines.push(model.getLineContent(i).substring(position.column - 1));
+            } else {
+              suffixLines.push(model.getLineContent(i));
+            }
+          }
+
+          const prefix = prefixLines.join('\n');
+          const suffix = suffixLines.join('\n');
+
+          const adapter = new GroqFimAdapter();
+          const controller = new AbortController();
+          token.onCancellationRequested(() => controller.abort());
+
           const result = await adapter.getCompletion(prefix, suffix, controller.signal);
           if (token.isCancellationRequested || !result) return { items: [] };
-          return {
-            items: [{
-              insertText: result
-            }]
-          };
-        } catch (error) {
+
+          return { items: [{ insertText: result }] };
+        } catch {
+          // Swallow all errors (AbortError, CancellationError, network errors)
+          // so they never propagate as unhandledRejection to the browser console
           return { items: [] };
         }
       },
