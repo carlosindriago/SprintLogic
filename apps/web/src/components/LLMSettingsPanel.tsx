@@ -23,7 +23,9 @@ import {
   fetchHealthOverview,
 } from "@/lib/api";
 import { useLLMConfigStore } from "@/store/llmConfigStore";
-import { Key, Loader2, CheckCircle2, XCircle, Trash2, Brain, Sparkles, Play } from "lucide-react";
+import { useFimStore } from "@/store/fimStore";
+import { Switch } from "@/components/ui/switch";
+import { Key, Loader2, CheckCircle2, XCircle, Trash2, Brain, Sparkles, Play, Wand2 } from "lucide-react";
 
 const KEY_MIN_LENGTH = 8;
 
@@ -537,6 +539,121 @@ function FimConfigSection({ providers }: { providers: CuratedProvider[] }) {
   );
 }
 
+function PredictiveFimSection() {
+  const fimEnabled = useFimStore((s) => s.fimEnabled);
+  const setFimEnabled = useFimStore((s) => s.setFimEnabled);
+  const groqApiKey = useFimStore((s) => s.groqApiKey);
+  const setGroqApiKey = useFimStore((s) => s.setGroqApiKey);
+  const fimModel = useFimStore((s) => s.fimModel);
+  const setFimModel = useFimStore((s) => s.setFimModel);
+
+  const [models, setModels] = useState<string[]>([
+    'llama-3.1-8b-instant',
+    'gemma2-9b-it',
+    'qwen-2.5-coder-32b'
+  ]);
+  const [testing, setTesting] = useState(false);
+  const [testStatus, setTestStatus] = useState<'idle' | 'success' | 'error'>('idle');
+
+  const handleTestAndLoad = async () => {
+    if (!groqApiKey) return;
+    setTesting(true);
+    setTestStatus('idle');
+    try {
+      const response = await fetch('https://api.groq.com/openai/v1/models', {
+        headers: {
+          'Authorization': `Bearer ${groqApiKey}`
+        }
+      });
+      if (!response.ok) throw new Error('Failed to fetch models');
+      const data = await response.json();
+      if (data && Array.isArray(data.data)) {
+        const loadedModels = data.data.map((m: { id: string }) => m.id).sort();
+        setModels(loadedModels);
+        setTestStatus('success');
+        // Si el modelo actual no está en la lista (o está vacío), seteamos el primero por defecto
+        if (!loadedModels.includes(fimModel)) {
+          setFimModel(loadedModels[0]);
+        }
+      }
+    } catch {
+      setTestStatus('error');
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-8 p-6 max-w-2xl">
+      <div className="flex flex-col gap-4 p-5 bg-zinc-900/50 border border-zinc-800/80 rounded-xl relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500/50"></div>
+        <div className="flex items-center justify-between">
+          <Label className="text-sm font-semibold text-zinc-100 flex items-center gap-2">
+            <Wand2 className="w-4 h-4 text-emerald-400" />
+            Autocompletado Predictivo (FIM - Groq)
+          </Label>
+          <Switch checked={fimEnabled} onCheckedChange={setFimEnabled} />
+        </div>
+        
+        <p className="text-xs text-zinc-400 leading-relaxed">
+          Las peticiones FIM se procesan a alta velocidad. Si notas sugerencias incorrectas, la Mentoría Contextual (Sensei) validará el código 3 segundos después.
+        </p>
+
+        <div className="flex flex-col gap-3 mt-2">
+          <Label className="text-xs font-medium text-zinc-300">Groq API Key</Label>
+          <Input 
+            type="password"
+            value={groqApiKey}
+            onChange={(e) => setGroqApiKey(e.target.value)}
+            placeholder="gsk_..."
+            autoComplete="off"
+            spellCheck={false}
+            className="bg-zinc-950 border-zinc-800 focus-visible:border-emerald-500/50 focus-visible:ring-emerald-500/20 text-zinc-200 font-mono h-10"
+          />
+        </div>
+
+        <div className="flex flex-col gap-3 mt-2">
+          <div className="flex items-end gap-3">
+            <div className="flex-1 flex flex-col gap-3">
+              <Label className="text-xs font-medium text-zinc-300">Modelo Groq para FIM</Label>
+              <Select value={fimModel} onValueChange={(val) => val && setFimModel(val)}>
+                <SelectTrigger className="bg-zinc-950 border-zinc-800 text-zinc-200 w-full h-10">
+                  <SelectValue placeholder="Selecciona un modelo..." />
+                </SelectTrigger>
+                <SelectContent className="bg-zinc-900 border-zinc-800 text-zinc-200">
+                  {models.map((m) => (
+                    <SelectItem key={m} value={m} className="focus:bg-zinc-800">{m}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button
+              onClick={handleTestAndLoad}
+              disabled={!groqApiKey || testing}
+              className={`h-10 px-4 whitespace-nowrap transition-colors flex items-center gap-2 ${
+                testStatus === 'success' ? 'bg-emerald-500 hover:bg-emerald-600 text-white' : 
+                testStatus === 'error' ? 'bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/50' : 
+                'bg-zinc-800 hover:bg-zinc-700 text-zinc-200'
+              }`}
+            >
+              {testing ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : testStatus === 'success' ? (
+                <CheckCircle2 className="w-4 h-4" />
+              ) : testStatus === 'error' ? (
+                <XCircle className="w-4 h-4" />
+              ) : (
+                <Wand2 className="w-4 h-4" />
+              )}
+              {testStatus === 'success' ? 'Verificado' : 'Probar y Cargar'}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function LLMSettingsPanel() {
   const defaultModel = useLLMConfigStore((s) => s.defaultModel);
   const setDefaultModel = useLLMConfigStore((s) => s.setDefaultModel);
@@ -651,6 +768,17 @@ export default function LLMSettingsPanel() {
           </span>
         </div>
         <button
+          onClick={() => setActiveSection('predictive-fim')}
+          className={`text-left px-4 py-2 text-sm transition-colors flex items-center gap-2 ${
+            activeSection === 'predictive-fim'
+              ? "bg-emerald-500/10 text-emerald-300 border-l-2 border-emerald-500 font-medium"
+              : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200 border-l-2 border-transparent"
+          }`}
+        >
+          <Wand2 className="w-4 h-4 shrink-0" />
+          FIM Groq
+        </button>
+        <button
           onClick={() => setActiveSection('fim-config')}
           className={`text-left px-4 py-2 text-sm transition-colors flex items-center gap-2 ${
             activeSection === 'fim-config'
@@ -695,6 +823,8 @@ export default function LLMSettingsPanel() {
             curatedModels={activeProviderData.models}
             onProviderConfigured={handleProviderConfigured}
           />
+        ) : activeSection === 'predictive-fim' ? (
+          <PredictiveFimSection key="predictive-fim" />
         ) : activeSection === 'context7' ? (
           <Context7Section
             apiKey={context7ApiKey}

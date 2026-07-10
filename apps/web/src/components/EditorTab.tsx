@@ -22,6 +22,7 @@ import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/componen
 import { CoachSidebar } from "./CoachSidebar";
 import { CodeCoachOverview, CodeCoachMarker } from "@/lib/api";
 import { toast } from 'sonner';
+import { GroqFimAdapter } from '@/lib/services/GroqFimAdapter';
 
 interface LintDiagnostic {
   line: number;
@@ -105,6 +106,63 @@ export default function EditorTab({
   }, []);
 
   const monaco = useMonaco();
+
+  useEffect(() => {
+    if (!monaco) return;
+
+    const provider = monaco.languages.registerInlineCompletionsProvider('*', {
+      provideInlineCompletions: async (model, position, context, token) => {
+        // Cláusula de guarda 1
+        if (!useFimStore.getState().fimEnabled) {
+          return { items: [] };
+        }
+
+        // Cláusula de guarda 2 (Debounce + Cancellation)
+        await new Promise(resolve => setTimeout(resolve, 300));
+        if (token.isCancellationRequested) return { items: [] };
+
+        const prefixLines = [];
+        for (let i = Math.max(1, position.lineNumber - 50); i <= position.lineNumber; i++) {
+          if (i === position.lineNumber) {
+            prefixLines.push(model.getLineContent(i).substring(0, position.column - 1));
+          } else {
+            prefixLines.push(model.getLineContent(i));
+          }
+        }
+        
+        const suffixLines = [];
+        for (let i = position.lineNumber; i <= Math.min(model.getLineCount(), position.lineNumber + 50); i++) {
+          if (i === position.lineNumber) {
+            suffixLines.push(model.getLineContent(i).substring(position.column - 1));
+          } else {
+            suffixLines.push(model.getLineContent(i));
+          }
+        }
+
+        const prefix = prefixLines.join('\n');
+        const suffix = suffixLines.join('\n');
+
+        const adapter = new GroqFimAdapter();
+        const controller = new AbortController();
+        token.onCancellationRequested(() => controller.abort());
+
+        try {
+          const result = await adapter.getCompletion(prefix, suffix, controller.signal);
+          if (token.isCancellationRequested || !result) return { items: [] };
+          return {
+            items: [{
+              insertText: result
+            }]
+          };
+        } catch (error) {
+          return { items: [] };
+        }
+      },
+      disposeInlineCompletions: () => {}
+    });
+
+    return () => provider.dispose();
+  }, [monaco]);
 
   useEffect(() => {
     if (!monaco || !allMentorshipAdvice || allMentorshipAdvice.length === 0) return;
