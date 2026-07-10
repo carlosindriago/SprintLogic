@@ -1,5 +1,6 @@
 import logging
 import os
+import asyncio
 
 from app.domain.exceptions import ScannerError
 from app.domain.path_validator import PathSecurityValidator
@@ -46,26 +47,47 @@ class ScanLocalRepository:
         saved_project = await self.repository.save_project(project)
         return saved_project
 
+from app.infrastructure.repositories.graph_repository import SQLAlchemyGraphRepository
+from app.infrastructure.parser.ast_parser import extract_nodes_from_code
+import os
+from uuid import UUID
+
 class ScanCodebaseUseCase:
     """
     Refactorizado: El Caso de Uso ahora es 100% agnóstico del File System.
     La Inyección de Dependencias elimina el acoplamiento con la infraestructura local.
     """
-    def __init__(self, provider: CodebaseProvider, parser: ASTParserService, event_bus: EventBus):
+    def __init__(self, provider: CodebaseProvider, parser: ASTParserService, event_bus: EventBus, graph_repo: SQLAlchemyGraphRepository):
         self.provider = provider
         self.parser = parser
         self.event_bus = event_bus
+        self.graph_repo = graph_repo
 
-    async def execute(self, project_id: str):
+    async def execute(self, project_id: UUID, cancel_token: asyncio.Event = None):
         topic = f"scan:{project_id}"
         parsed_count = 0
+        all_nodes = []
+        all_edges = []
         
         # Ahora iteramos asíncronamente sin bloquear el Event Loop (ASGI)
-        async for logical_path, content in self.provider.get_source_files(['.ts', '.tsx', '.py']):
+        async for logical_path, content in self.provider.get_source_files(['.ts', '.tsx', '.py', '.java', '.php', '.go', '.html', '.htm', '.css']):
+            if cancel_token and cancel_token.is_set():
+                _logger.warning(f"Scan aborted by user for project {project_id}")
+                await self.graph_repo.clear_by_project(project_id)
+                return
+                
             parsed_count += 1
+            ext = os.path.splitext(logical_path)[1]
             
-            # El Caso de Uso (el Arquitecto) toma el control directo del ritmo.
-            # ast_tree = extract_nodes_from_code(project_id, logical_path, content.encode('utf-8'), ext)
+            try:
+                # Delegamos el parseo puro
+                nodes, edges, imports = extract_nodes_from_code(
+                    project_id, logical_path, content.encode('utf-8'), ext
+                )
+                all_nodes.extend(nodes)
+                all_edges.extend(edges)
+            except Exception as e:
+                _logger.error(f"Error parsing {logical_path}: {e}")
             
             await self.event_bus.publish_throttled(
                 topic=topic,
@@ -77,12 +99,17 @@ class ScanCodebaseUseCase:
                 throttle_ms=100
             )
             
+        await self.graph_repo.clear_by_project(project_id)
+        await self.graph_repo.save_nodes(all_nodes)
+        await self.graph_repo.save_edges(all_edges)
+            
         # Forzamos la emisión final de completion
         await self.event_bus.publish_throttled(
             topic=topic,
             data={
                 "type": "completed",
                 "parsed": parsed_count,
-                "project_id": project_id
+                "project_id": str(project_id)
             }
         )
+

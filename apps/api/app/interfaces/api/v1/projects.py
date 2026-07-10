@@ -29,6 +29,7 @@ from app.infrastructure.git.git_gateway import LocalGitGateway
 from app.infrastructure.parser.ast_parser import ASTParserService
 from app.infrastructure.repositories.graph_repository import SQLAlchemyGraphRepository
 from app.infrastructure.events.event_bus import global_event_bus
+from app.infrastructure.events.active_scans import active_scans
 from app.infrastructure.providers.local_fs import LocalFileSystemProvider
 from sse_starlette.sse import EventSourceResponse
 import asyncio
@@ -91,8 +92,12 @@ async def scan_project(
     
     scan_codebase_usecase = ScanCodebaseUseCase(provider, parser, global_event_bus, graph_repo)
 
+    # Creamos el token de cancelación para este escaneo
+    cancel_token = asyncio.Event()
+    active_scans[str(saved_project.id)] = cancel_token
+
     # Fire and Forget
-    background_tasks.add_task(scan_codebase_usecase.execute, saved_project.id)
+    background_tasks.add_task(scan_codebase_usecase.execute, saved_project.id, cancel_token)
 
     return {
         "status": "scanning started", 
@@ -103,9 +108,19 @@ async def scan_project(
 @router.get("/projects/{project_id}/scan/stream")
 async def stream_scan_progress(project_id: str):
     async def event_generator():
-        topic = f"scan:{project_id}"
-        async for event in global_event_bus.event_generator(topic):
-            yield {"data": event}
+        try:
+            topic = f"scan:{project_id}"
+            async for event in global_event_bus.event_generator(topic):
+                yield {"data": event}
+                if event.get("type") == "completed":
+                    break
+        except asyncio.CancelledError:
+            logger.warning("TCP client disconnected abruptly for project %s", project_id)
+            raise
+        finally:
+            cancel_token = active_scans.pop(project_id, None)
+            if cancel_token:
+                cancel_token.set()
                 
     return EventSourceResponse(event_generator())
 

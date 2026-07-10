@@ -58,3 +58,5 @@ class EventBus:
                     break
         finally:
             self.unsubscribe(topic, queue)
+
+global_event_bus = EventBus()
