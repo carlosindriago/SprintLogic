@@ -558,21 +558,24 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
                             disabled={idx === 0} 
                             onClick={() => handleMoveColumn(idx, 'left')}
                             className="p-1 rounded text-zinc-400 hover:text-white disabled:opacity-30 disabled:hover:text-zinc-400"
+                            aria-label="Move column left"
                           >
-                            <ChevronLeft className="w-4 h-4" />
+                            <ChevronLeft className="w-4 h-4" aria-hidden="true" />
                           </button>
                           <button 
                             disabled={idx === editingColumns.length - 1} 
                             onClick={() => handleMoveColumn(idx, 'right')}
                             className="p-1 rounded text-zinc-400 hover:text-white disabled:opacity-30 disabled:hover:text-zinc-400"
+                            aria-label="Move column right"
                           >
-                            <ChevronRight className="w-4 h-4" />
+                            <ChevronRight className="w-4 h-4" aria-hidden="true" />
                           </button>
                           <button 
                             onClick={() => handleDeleteColumn(col.id)}
                             className="p-1 rounded text-red-400 hover:text-red-300 hover:bg-red-950/20"
+                            aria-label="Delete column"
                           >
-                            <Trash className="w-4 h-4" />
+                            <Trash className="w-4 h-4" aria-hidden="true" />
                           </button>
                         </div>
                       </div>
