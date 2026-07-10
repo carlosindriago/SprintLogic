@@ -99,7 +99,8 @@ async def get_git_status(project_id: str, session: AsyncSession = Depends(get_db
 
     status = await git_gateway.get_status(project.path)
     if "error" in status:
-        raise HTTPException(status_code=500, detail=status["error"])
+        logger.error("Git status error: %s", status["error"])
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
     return status
 
@@ -211,7 +212,8 @@ async def get_commit_details(
 
     details = await git_gateway.get_commit_details(project.path, hash)
     if "error" in details:
-        raise HTTPException(status_code=500, detail=details["error"])
+        logger.error("Git get commit details error: %s", details["error"])
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
     return details
 
@@ -347,7 +349,7 @@ async def delete_branch(
         return {"status": "success", "output": out}
     except UnmergedBranchError as e:
         raise HTTPException(
-            status_code=409, detail={"message": str(e), "requires_force": e.requires_force}
+            status_code=409, detail={"message": "Unmerged branch error", "requires_force": e.requires_force}
         )
     except RuntimeError as e:
         logger.error("Git operation failed: %s", e, exc_info=True)
@@ -504,7 +506,8 @@ async def get_file_local_diff(
 
     result = await git_gateway.get_file_diff(project.path, file_path)
     if "error" in result:
-        raise HTTPException(status_code=404, detail=result["error"])
+        logger.error("Git get file diff error: %s", result["error"])
+        raise HTTPException(status_code=404, detail="Diff not found")
     return result
 
 
@@ -559,7 +562,8 @@ async def revert_file(
     result = await git_gateway.revert_file_changes(project.path, request.file_path)
 
     if result.get("status") == "error":
-        raise HTTPException(status_code=500, detail=result.get("message"))
+        logger.error("Git revert file error: %s", result.get("message"))
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
     return result
 
