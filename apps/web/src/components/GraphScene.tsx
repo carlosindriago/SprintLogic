@@ -214,13 +214,23 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
  
   const handleZoomIn = () => {
     if (fgRef.current) {
-      fgRef.current.zoom(fgRef.current.zoom() * 1.5, 400);
+      if (is3D) {
+        const { x, y, z } = fgRef.current.cameraPosition();
+        fgRef.current.cameraPosition({ x: x * 0.7, y: y * 0.7, z: z * 0.7 }, undefined, 400);
+      } else {
+        fgRef.current.zoom(fgRef.current.zoom() * 1.5, 400);
+      }
     }
   };
  
   const handleZoomOut = () => {
     if (fgRef.current) {
-      fgRef.current.zoom(fgRef.current.zoom() / 1.5, 400);
+      if (is3D) {
+        const { x, y, z } = fgRef.current.cameraPosition();
+        fgRef.current.cameraPosition({ x: x * 1.5, y: y * 1.5, z: z * 1.5 }, undefined, 400);
+      } else {
+        fgRef.current.zoom(fgRef.current.zoom() / 1.5, 400);
+      }
     }
   };
  
