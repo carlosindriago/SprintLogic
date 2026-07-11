@@ -297,6 +297,7 @@ async def get_project_graph(project_id: str, session: AsyncSession = Depends(get
 
 class AnalyzeGraphRequest(BaseModel):
     model: str = "gemini/gemini-2.5-flash"
+    fallback_model: str | None = None
 
 
 @router.post("/projects/{project_id}/graph/analyze")
@@ -366,6 +367,7 @@ CONTEXTO DE DOMINIO (LEER ANTES DE ANALIZAR):
 Estás analizando el grafo de dependencias de "SprintLogic", una herramienta de desarrollo que lee el código fuente del usuario (AST Parsing).
 Regla de Física #1: El backend en Python frecuentemente lee (File I/O) archivos del frontend (.css, .tsx, .ts) para analizarlos.
 Regla de Física #2: Leer un archivo NO es importarlo. Python no puede importar CSS o React. Si ves una conexión entre el backend y el frontend, ASUME por defecto que es una operación de lectura/escaneo, NO una violación de dependencias cruzadas.
+Regla de Física #3 (Dirección de la Dependencia): En la lista de enlaces, el formato "A IMPORTS B" o "A CALLS B" significa ESTRICTAMENTE que el archivo A depende del archivo B (A importa o invoca a B). NUNCA inviertas esta relación en tu redacción. Si A importa a B, el flujo es A -> B.
 
 MARCO DE EVIDENCIA ESTRICTO:
 Tu trabajo es identificar vulnerabilidades arquitectónicas, pero estás sujeto a un rigor científico absoluto. Sigue estas reglas al emitir tu reporte:
@@ -381,6 +383,10 @@ Formato: [NombreDelArchivo](ide://ruta/relativa/al/archivo)
 Ejemplo correcto: El archivo [main.py](ide://apps/api/main.py) tiene una dependencia circular.
 Ejemplo incorrecto: El archivo `apps/api/main.py` tiene...
 ¡NO USES acentos graves (```) para los nombres de archivo si puedes usar enlaces ide://!
+
+INSTRUCCIÓN DE TÍTULO (OBLIGATORIA):
+Tu reporte DEBE comenzar en la primera línea con un título H1 (un solo #) que sea MUY descriptivo e insightful sobre el hallazgo más crítico de la arquitectura.
+Ejemplo: # Análisis: sprintLogic-monorepo - Arquitectura Hexagonal y Violación de Clean Architecture
 ---
 """
 
@@ -411,14 +417,23 @@ Responde en formato Markdown limpio, directo y profesional. Usa títulos y lista
     llm_gateway = LiteLLMGateway()
 
     try:
-        analysis = llm_gateway.generate_completion(prompt=prompt, model=request.model)
+        try:
+            analysis = llm_gateway.generate_completion(prompt=prompt, model=request.model)
+            used_model = request.model
+        except Exception as first_err:
+            if request.fallback_model and request.fallback_model != "none":
+                logger.warning(f"Failed with {request.model}, falling back to {request.fallback_model}. Error: {first_err}")
+                analysis = llm_gateway.generate_completion(prompt=prompt, model=request.fallback_model)
+                used_model = request.fallback_model
+            else:
+                raise first_err
 
         # Save to database
         report = AnalysisReportModel(
             id=uuid.uuid4(),
             project_id=project_uuid,
             content=analysis,
-            ai_model_version=request.model,
+            ai_model_version=used_model,
             created_at=datetime.utcnow()
         )
         session.add(report)
