@@ -304,9 +304,11 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
          delete n.vz;
       });
     }
+  }, [graphData, is3D]);
 
+  useEffect(() => {
     // Configure D3 Force layout for a "solar system" spread
-    if (fgRef.current) {
+    if (fgRef.current && dimensions.width > 0 && dimensions.height > 0) {
       fgRef.current.d3Force('charge').strength(-1000); // Much stronger repulsion to spread nodes out
       fgRef.current.d3Force('link').distance((link: any) => {
         // File-to-File (imports) are pushed far apart, internal classes orbit closely
@@ -322,7 +324,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
       }, 1200);
       return () => clearTimeout(timer);
     }
-  }, [graphData, is3D]);
+  }, [graphData, is3D, dimensions.width, dimensions.height]);
 
   useEffect(() => {
     if (!enableFlow || !is3D || !graphData || !graphData.links) {
