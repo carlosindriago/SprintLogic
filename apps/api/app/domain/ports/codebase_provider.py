@@ -1,9 +1,6 @@
-"""
-Port (Interface): Abstract contract for any source of code files.
-The Application layer is completely decoupled from the physical source.
-"""
 from abc import ABC, abstractmethod
-from typing import AsyncIterator, Tuple
+from collections.abc import AsyncIterator
+from pathlib import Path
 
 
 class CodebaseProvider(ABC):
@@ -13,9 +10,17 @@ class CodebaseProvider(ABC):
     """
 
     @abstractmethod
+    def discover(self, extension_filter: list[str] | None = None) -> list[Path]:
+        """
+        Returns the full list of candidate file paths synchronously (no file I/O).
+        Call this first to learn the total count before streaming content.
+        """
+        ...
+
+    @abstractmethod
     async def get_source_files(
         self, extension_filter: list[str] | None = None
-    ) -> AsyncIterator[Tuple[str, str]]:
+    ) -> AsyncIterator[tuple[str, str]]:
         """
         Yields tuples of (logical_file_path, plain_text_content).
         Must be an async generator to avoid blocking the ASGI event loop.

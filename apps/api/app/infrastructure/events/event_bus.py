@@ -1,6 +1,7 @@
 import asyncio
 import time
-from typing import Dict, AsyncGenerator
+from collections.abc import AsyncGenerator
+
 
 class EventBus:
     """
@@ -11,9 +12,9 @@ class EventBus:
     """
     def __init__(self):
         # Diccionario de colas: un topic -> lista de colas (una por suscriptor)
-        self._subscribers: Dict[str, list[asyncio.Queue]] = {}
+        self._subscribers: dict[str, list[asyncio.Queue]] = {}
         # Estado para el throttling: topic -> timestamp del último envío
-        self._last_emitted: Dict[str, float] = {}
+        self._last_emitted: dict[str, float] = {}
 
     def subscribe(self, topic: str) -> asyncio.Queue:
         if topic not in self._subscribers:
@@ -38,9 +39,9 @@ class EventBus:
         """
         now = time.time()
         last = self._last_emitted.get(topic, 0)
-        
+
         is_completed = data.get("type") == "completed" or data.get("progress") == 100
-        
+
         if is_completed or (now - last) >= (throttle_ms / 1000.0):
             self._last_emitted[topic] = now
             await self.publish(topic, data)
