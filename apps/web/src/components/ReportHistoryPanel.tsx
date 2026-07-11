@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useTabsStore } from "../store/tabsStore";
 import { getProjectReports } from "../lib/api";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { FileText, Clock, Bot } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale"; // Or en-US depending on your locale preference
