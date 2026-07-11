@@ -289,16 +289,17 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
   }, [projectId]);
 
   useEffect(() => {
-    // When switching to 3D, break the 2D plane by adding a small random Z coordinate
-    // and deleting previous 2D velocities so it doesn't stay flat
-    if (graphData && graphData.nodes && is3D) {
+    // Whenever we toggle between 2D and 3D, clear all coordinates
+    // so the physics engine rebuilds the layout perfectly for the new dimension
+    // instead of inheriting the previous flattened or extruded layout.
+    if (graphData && graphData.nodes) {
       graphData.nodes.forEach((n: any) => {
-        if (n.z === undefined || n.z === 0) {
-          n.z = (Math.random() - 0.5) * 300;
-        }
-        delete n.vx;
-        delete n.vy;
-        delete n.vz;
+         delete n.x;
+         delete n.y;
+         delete n.z;
+         delete n.vx;
+         delete n.vy;
+         delete n.vz;
       });
     }
 
