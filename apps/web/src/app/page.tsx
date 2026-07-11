@@ -568,8 +568,8 @@ export default function Home() {
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-700"
-                  onClick={() => launchTool('graph', 'Grafo 2D', 'graph')}
-                  title="Grafo 2D"
+                  onClick={() => launchTool('graph', 'Análisis Gráfico', 'graph')}
+                  title="Análisis Gráfico"
                 >
                   <Network className="w-4 h-4" />
                 </Button>
