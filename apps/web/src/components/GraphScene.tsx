@@ -51,7 +51,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
   const [graphData, setGraphData] = useState<GraphData>({ nodes: [], links: [] });
   const containerRef = useRef<HTMLDivElement>(null);
   const fgRef = useRef<any>(null);
-  const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
+  const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
  
   const [hoverNode, setHoverNode] = useState<string | null>(null);
   const [focusNode, setFocusNode] = useState<string | null>(null);
@@ -785,10 +785,10 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
         <button 
           onClick={() => setIs3D(!is3D)}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-colors border border-[#3f3f46] bg-[#18181b] hover:bg-zinc-800 ${is3D ? "text-blue-400" : "text-zinc-400"}`}
-          title={is3D ? "Cambiar a Vista 2D" : "Cambiar a Vista 3D"}
+          title={is3D ? "Cambiar a Análisis 2D" : "Cambiar a Análisis 3D"}
         >
           {is3D ? <Box className="w-3.5 h-3.5" /> : <Layers className="w-3.5 h-3.5" />}
-          {is3D ? "3D" : "2D"}
+          {is3D ? "Análisis 3D" : "Análisis 2D"}
         </button>
         
         <div className="w-px h-6 bg-[#3f3f46] mx-1"></div>
@@ -810,12 +810,13 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
       </div>
 
       <div ref={containerRef} className="flex-1 w-full">
-        {is3D ? (
-          <ForceGraph3D
-            ref={fgRef}
-            width={dimensions.width}
-            height={dimensions.height}
-            graphData={displayGraphData}
+        {dimensions.width > 0 && dimensions.height > 0 && (
+          is3D ? (
+            <ForceGraph3D
+              ref={fgRef}
+              width={dimensions.width}
+              height={dimensions.height}
+              graphData={displayGraphData}
             backgroundColor={graphTheme.background}
             nodeThreeObject={getNodeThreeObject}
             linkColor={getLinkColor}
@@ -901,6 +902,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
             enableZoomInteraction={true}
             enablePanInteraction={true}
           />
+          )
         )}
       </div>
     </div>
