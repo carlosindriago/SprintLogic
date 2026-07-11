@@ -328,45 +328,59 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     ctx.globalAlpha = 1; // reset
   }, [activeTypes, lowerSearchQuery, isFaded, hoverNode, focusNode]);
 
-  const paintLink = useCallback((link: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
+  const getLinkColor = useCallback((link: any) => {
+    const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+    const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+    
+    const faded = isFaded(sourceId) && isFaded(targetId);
+    
+    let baseColor = "#38BDF8"; // default bright sky blue
+    if (showCycles && link.is_cycle) {
+      baseColor = "#FF3366"; // Neon pink/red for cycles
+    } else if (link.type === "IMPORTS") {
+      baseColor = "#00E5FF"; // Neon cyan for imports
+    } else {
+      baseColor = "#10B981"; // Emerald green for calls/others
+    }
+    
+    if (faded) {
+      return baseColor === "#FF3366" ? "rgba(255, 51, 102, 0.05)" : 
+             baseColor === "#00E5FF" ? "rgba(0, 229, 255, 0.05)" : 
+             "rgba(16, 185, 129, 0.05)";
+    }
+    return baseColor;
+  }, [isFaded, showCycles]);
+
+  const getLinkWidth = useCallback((link: any) => {
+    const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+    const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+    const faded = isFaded(sourceId) && isFaded(targetId);
+    if (faded) return 0.2;
+    
+    if (showCycles && link.is_cycle) return 2.0;
+    if (link.type === "IMPORTS") return 1.2;
+    return 0.8;
+  }, [isFaded, showCycles]);
+
+  const getLinkVisibility = useCallback((link: any) => {
     const sourceNode = link.source;
     const targetNode = link.target;
+    if (!sourceNode || !targetNode) return false;
     
-    if (!sourceNode || !targetNode || sourceNode.x === undefined || targetNode.x === undefined) return;
+    const sourceLabel = typeof sourceNode === 'object' ? sourceNode.label : null;
+    const targetLabel = typeof targetNode === 'object' ? targetNode.label : null;
     
-    const sourceLabel = sourceNode.label as string;
-    const targetLabel = targetNode.label as string;
+    if (sourceLabel && !activeTypes.has(sourceLabel)) return false;
+    if (targetLabel && !activeTypes.has(targetLabel)) return false;
     
-    if (!activeTypes.has(sourceLabel) || !activeTypes.has(targetLabel)) return;
-
     if (lowerSearchQuery) {
-      const sourceName = sourceNode.name as string;
-      const targetName = targetNode.name as string;
-      if (!sourceName.toLowerCase().includes(lowerSearchQuery) &&
-          !targetName.toLowerCase().includes(lowerSearchQuery)) return;
-    }
-
-    const faded = isFaded(sourceNode.id as string) && isFaded(targetNode.id as string);
-    ctx.globalAlpha = faded ? graphTheme.dimOpacity : 1;
-
-    ctx.beginPath();
-    ctx.moveTo(sourceNode.x, sourceNode.y);
-    ctx.lineTo(targetNode.x, targetNode.y);
-
-    if (showCycles && link.is_cycle) {
-      ctx.strokeStyle = graphTheme.edgeCycle;
-      ctx.lineWidth = 1 / globalScale;
-    } else if (link.type === "IMPORTS") {
-      ctx.strokeStyle = graphTheme.edgeImport;
-      ctx.lineWidth = 0.6 / globalScale;
-    } else {
-      ctx.strokeStyle = graphTheme.edgeCall;
-      ctx.lineWidth = 0.4 / globalScale;
+      const sourceName = (typeof sourceNode === 'object' ? sourceNode.name : '').toLowerCase();
+      const targetName = (typeof targetNode === 'object' ? targetNode.name : '').toLowerCase();
+      if (!sourceName.includes(lowerSearchQuery) && !targetName.includes(lowerSearchQuery)) return false;
     }
     
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-  }, [activeTypes, lowerSearchQuery, isFaded, showCycles]);
+    return true;
+  }, [activeTypes, lowerSearchQuery]);
 
   const toggleType = (type: string) => {
     setActiveTypes(prev => {
@@ -522,8 +536,21 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
           graphData={graphData}
           backgroundColor={graphTheme.background}
           nodeCanvasObject={paintNode}
-          linkCanvasObjectMode={() => "replace"}
-          linkCanvasObject={paintLink}
+          linkColor={getLinkColor}
+          linkWidth={getLinkWidth}
+          linkVisibility={getLinkVisibility}
+          linkDirectionalParticles={(link: any) => {
+            const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+            const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+            const faded = isFaded(sourceId) && isFaded(targetId);
+            if (faded) return 0;
+            return showCycles && link.is_cycle ? 4 : 2;
+          }}
+          linkDirectionalParticleSpeed={(link: any) => (showCycles && link.is_cycle ? 0.012 : 0.005)}
+          linkDirectionalParticleWidth={2}
+          linkDirectionalParticleColor={getLinkColor}
+          linkDirectionalArrowLength={3.5}
+          linkDirectionalArrowRelPos={1}
           onNodeClick={(node: any, event: any) => {
             setFocusNode(node.id as string);
             if (onNodeClick) {
