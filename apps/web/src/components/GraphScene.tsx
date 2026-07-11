@@ -7,13 +7,18 @@ import { getProjectGraph, analyzeProjectGraph } from "@/lib/api";
 import { GraphData, GraphNode } from "@/types";
 import { ForceGraphProps, NodeObject, LinkObject } from "react-force-graph-2d";
 import { graphTheme } from "@/lib/graph-theme";
-import { Search, RotateCcw, ZoomIn, ZoomOut, Maximize, Brain, AlertTriangle } from "lucide-react";
+import { Search, RotateCcw, ZoomIn, ZoomOut, Maximize, Brain, AlertTriangle, Play, Pause, Zap, ZapOff, Box, Layers } from "lucide-react";
 import { useTabsStore } from "../store/tabsStore";
 import { useLLMConfigStore } from "../store/llmConfigStore";
 
-// Dynamically import react-force-graph-2d to avoid SSR issues
+// Dynamically import react-force-graph to avoid SSR issues
 const ForceGraph2D = dynamic<any>(
   () => import("react-force-graph-2d").then((mod) => mod.default as any),
+  { ssr: false }
+);
+
+const ForceGraph3D = dynamic<any>(
+  () => import("react-force-graph-3d").then((mod) => mod.default as any),
   { ssr: false }
 );
  
@@ -52,6 +57,10 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
   const [searchQuery, setSearchQuery] = useState("");
   const [showCycles, setShowCycles] = useState(false);
   const [activeTypes, setActiveTypes] = useState<Set<string>>(new Set(["File", "Class", "Function", "Interface"]));
+  
+  const [is3D, setIs3D] = useState(false);
+  const [enableFlow, setEnableFlow] = useState(true);
+  const [isPhysicsActive, setIsPhysicsActive] = useState(true);
   
   const [iconsLoaded, setIconsLoaded] = useState(false);
   const iconImages = useRef<Record<string, HTMLImageElement>>({});
@@ -185,6 +194,21 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     if (fgRef.current) {
       fgRef.current.zoomToFit(400, 50);
     }
+  };
+
+  const togglePhysics = () => {
+    setIsPhysicsActive(prev => {
+      const next = !prev;
+      const graph = fgRef.current;
+      if (graph) {
+        if (next) {
+          graph.resumeAnimation();
+        } else {
+          graph.pauseAnimation();
+        }
+      }
+      return next;
+    });
   };
 
   useEffect(() => {
@@ -568,47 +592,126 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
         </button>
       </div>
 
+      {/* Visualization Controls Overlay (3D, Physics, Animation) */}
+      <div className="absolute bottom-6 left-16 z-10 flex flex-col gap-2 p-1.5 rounded-lg shadow-lg" 
+           style={{ backgroundColor: graphTheme.surfaceElevated, border: `1px solid ${graphTheme.border}` }}>
+        <button 
+          onClick={() => setIs3D(!is3D)}
+          className={`p-1.5 rounded-md transition-colors ${is3D ? "text-blue-400 hover:text-blue-300 bg-blue-900/20" : "text-zinc-400 hover:text-white hover:bg-[#3f3f46]"}`}
+          title={is3D ? "Cambiar a vista 2D" : "Cambiar a vista 3D"}
+        >
+          <Layers className="w-4 h-4" />
+        </button>
+        <button 
+          onClick={togglePhysics}
+          className={`p-1.5 rounded-md transition-colors ${isPhysicsActive ? "text-emerald-400 hover:text-emerald-300 bg-emerald-950/20" : "text-zinc-500 hover:text-zinc-300 hover:bg-[#3f3f46]"}`}
+          title={isPhysicsActive ? "Pausar Simulación Física" : "Reanudar Simulación Física"}
+        >
+          {isPhysicsActive ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+        </button>
+        <button 
+          onClick={() => setEnableFlow(!enableFlow)}
+          className={`p-1.5 rounded-md transition-colors ${enableFlow ? "text-yellow-400 hover:text-yellow-300 bg-yellow-950/20" : "text-zinc-500 hover:text-zinc-300 hover:bg-[#3f3f46]"}`}
+          title={enableFlow ? "Desactivar Flujo de Corriente" : "Activar Flujo de Corriente"}
+        >
+          {enableFlow ? <Zap className="w-4 h-4" /> : <ZapOff className="w-4 h-4" />}
+        </button>
+      </div>
+
       <div ref={containerRef} className="flex-1 w-full" onClick={() => setFocusNode(null)}>
-        <ForceGraph2D
-          ref={fgRef}
-          width={dimensions.width}
-          height={dimensions.height}
-          graphData={graphData}
-          backgroundColor={graphTheme.background}
-          nodeCanvasObject={paintNode}
-          linkColor={getLinkColor}
-          linkWidth={getLinkWidth}
-          linkVisibility={getLinkVisibility}
-          linkCurvature={0.15}
-          linkDirectionalParticles={(link: any) => {
-            const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
-            const targetId = typeof link.target === 'object' ? link.target.id : link.target;
-            const faded = isFaded(sourceId) && isFaded(targetId);
-            if (faded) return 0;
-            return showCycles && link.is_cycle ? 4 : 2;
-          }}
-          linkDirectionalParticleSpeed={(link: any) => (showCycles && link.is_cycle ? 0.012 : 0.005)}
-          linkDirectionalParticleWidth={2}
-          linkDirectionalParticleColor={getParticleColor}
-          linkDirectionalArrowLength={3.5}
-          linkDirectionalArrowRelPos={1}
-          onNodeClick={(node: any, event: any) => {
-            setFocusNode(node.id as string);
-            if (onNodeClick) {
-              onNodeClick({
-                id: (node.id as string) || "",
-                label: (node.label as "File" | "Class" | "Function") || "File",
-                name: (node.name as string) || "",
-                file_path: (node.file_path as string) || "",
-                size: (node as any).size as number | undefined,
-                metadata: (node as any).metadata as Record<string, unknown> | undefined
-              });
-            }
-          }}
-          onNodeHover={(node: any) => setHoverNode(node ? (node.id as string) : null)}
-          enableZoomInteraction={true}
-          enablePanInteraction={true}
-        />
+        {is3D ? (
+          <ForceGraph3D
+            ref={fgRef}
+            width={dimensions.width}
+            height={dimensions.height}
+            graphData={graphData}
+            backgroundColor={graphTheme.background}
+            nodeColor={(node: any) => {
+              const label = node.label;
+              if (!activeTypes.has(label)) return "rgba(0,0,0,0)";
+              if (lowerSearchQuery && !node.name.toLowerCase().includes(lowerSearchQuery)) return "rgba(0,0,0,0)";
+              if (isFaded(node.id)) return "rgba(156, 163, 175, 0.15)";
+              return graphTheme[label.toLowerCase() as keyof typeof graphTheme] || graphTheme.unknown;
+            }}
+            nodeVal={(node: any) => {
+              if (node.label === "File") return Math.min(Math.max((node.size || 0) / 2000, 2), 6);
+              return 3;
+            }}
+            linkColor={getLinkColor}
+            linkWidth={(link: any) => getLinkWidth(link) * 1.5}
+            linkVisibility={getLinkVisibility}
+            linkCurvature={0.15}
+            linkDirectionalParticles={enableFlow ? ((link: any) => {
+              const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+              const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+              const faded = isFaded(sourceId) && isFaded(targetId);
+              if (faded) return 0;
+              return showCycles && link.is_cycle ? 4 : 2;
+            }) : 0}
+            linkDirectionalParticleSpeed={(link: any) => (showCycles && link.is_cycle ? 0.012 : 0.005)}
+            linkDirectionalParticleWidth={2.5}
+            linkDirectionalParticleColor={getParticleColor}
+            cooldownTicks={100}
+            onNodeClick={(node: any, event: any) => {
+              setFocusNode(node.id as string);
+              if (onNodeClick) {
+                onNodeClick({
+                  id: (node.id as string) || "",
+                  label: (node.label as "File" | "Class" | "Function") || "File",
+                  name: (node.name as string) || "",
+                  file_path: (node.file_path as string) || "",
+                  size: (node as any).size as number | undefined,
+                  metadata: (node as any).metadata as Record<string, unknown> | undefined
+                });
+              }
+            }}
+            onNodeHover={(node: any) => setHoverNode(node ? (node.id as string) : null)}
+            enableZoomInteraction={true}
+            enableNavigationControls={true}
+          />
+        ) : (
+          <ForceGraph2D
+            ref={fgRef}
+            width={dimensions.width}
+            height={dimensions.height}
+            graphData={graphData}
+            backgroundColor={graphTheme.background}
+            nodeCanvasObject={paintNode}
+            linkColor={getLinkColor}
+            linkWidth={getLinkWidth}
+            linkVisibility={getLinkVisibility}
+            linkCurvature={0.15}
+            linkDirectionalParticles={enableFlow ? ((link: any) => {
+              const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+              const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+              const faded = isFaded(sourceId) && isFaded(targetId);
+              if (faded) return 0;
+              return showCycles && link.is_cycle ? 4 : 2;
+            }) : 0}
+            linkDirectionalParticleSpeed={(link: any) => (showCycles && link.is_cycle ? 0.012 : 0.005)}
+            linkDirectionalParticleWidth={2}
+            linkDirectionalParticleColor={getParticleColor}
+            linkDirectionalArrowLength={3.5}
+            linkDirectionalArrowRelPos={1}
+            cooldownTicks={100}
+            onNodeClick={(node: any, event: any) => {
+              setFocusNode(node.id as string);
+              if (onNodeClick) {
+                onNodeClick({
+                  id: (node.id as string) || "",
+                  label: (node.label as "File" | "Class" | "Function") || "File",
+                  name: (node.name as string) || "",
+                  file_path: (node.file_path as string) || "",
+                  size: (node as any).size as number | undefined,
+                  metadata: (node as any).metadata as Record<string, unknown> | undefined
+                });
+              }
+            }}
+            onNodeHover={(node: any) => setHoverNode(node ? (node.id as string) : null)}
+            enableZoomInteraction={true}
+            enablePanInteraction={true}
+          />
+        )}
       </div>
     </div>
   );
