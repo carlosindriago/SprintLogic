@@ -289,11 +289,15 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
 
   useEffect(() => {
     // When switching to 3D, break the 2D plane by adding a small random Z coordinate
+    // and deleting previous 2D velocities so it doesn't stay flat
     if (graphData && graphData.nodes && is3D) {
       graphData.nodes.forEach((n: any) => {
         if (n.z === undefined || n.z === 0) {
-          n.z = (Math.random() - 0.5) * 150;
+          n.z = (Math.random() - 0.5) * 300;
         }
+        delete n.vx;
+        delete n.vy;
+        delete n.vz;
       });
     }
 
@@ -566,7 +570,8 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
       colorHex = graphTheme.interface;
     }
 
-    const geometry = new THREE.SphereGeometry(radius, 16, 16);
+    // Use lower segment count (8x8) instead of (16x16) for much better 3D performance
+    const geometry = new THREE.SphereGeometry(radius, 8, 8);
     const material = new THREE.MeshLambertMaterial({
       color: colorHex,
       transparent: true,
@@ -772,8 +777,10 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
             }) : 0}
             linkDirectionalParticleSpeed={(link: any) => (showCycles && link.is_cycle ? 0.012 : 0.005)}
             linkDirectionalParticleWidth={0.8}
+            linkDirectionalParticleResolution={4}
             linkDirectionalParticleColor={getParticleColor}
             linkOpacity={0.2}
+            numDimensions={3}
             cooldownTicks={100}
             onNodeClick={(node: any, event: any) => {
               setFocusNode(node.id as string);
