@@ -647,7 +647,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
   };
 
   return (
-    <div className="w-full h-full flex flex-col relative" style={{ backgroundColor: graphTheme.background }}>
+    <div className="flex-1 w-full flex flex-col relative" style={{ backgroundColor: graphTheme.background }}>
       {/* Controls Overlay */}
       <div className="absolute top-4 left-4 z-10 flex flex-col gap-3 p-4 rounded-lg shadow-lg" 
            style={{ backgroundColor: graphTheme.surfaceElevated, border: `1px solid ${graphTheme.border}` }}>
@@ -758,53 +758,49 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
       </div>
 
       {/* Unified Graph Controls Toolbar */}
-      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 flex flex-row items-center gap-1.5 p-1.5 rounded-lg shadow-lg" 
+      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 flex flex-row items-center rounded-lg shadow-lg overflow-hidden" 
            style={{ backgroundColor: graphTheme.surfaceElevated, border: `1px solid ${graphTheme.border}` }}>
         <button 
           onClick={handleZoomIn}
-          className="p-1.5 rounded-md transition-colors text-zinc-400 hover:text-white hover:bg-[#3f3f46]"
+          className="p-2 transition-colors text-zinc-400 hover:text-white hover:bg-[#3f3f46]"
           title="Acercar (Zoom In)"
         >
           <ZoomIn className="w-4 h-4" />
         </button>
         <button 
           onClick={handleFitView}
-          className="p-1.5 rounded-md transition-colors text-zinc-400 hover:text-white hover:bg-[#3f3f46]"
+          className="p-2 border-l border-[#3f3f46] transition-colors text-zinc-400 hover:text-white hover:bg-[#3f3f46]"
           title="Ajustar a la pantalla"
         >
           <Maximize className="w-4 h-4" />
         </button>
         <button 
           onClick={handleZoomOut}
-          className="p-1.5 rounded-md transition-colors text-zinc-400 hover:text-white hover:bg-[#3f3f46]"
+          className="p-2 border-l border-[#3f3f46] transition-colors text-zinc-400 hover:text-white hover:bg-[#3f3f46]"
           title="Alejar (Zoom Out)"
         >
           <ZoomOut className="w-4 h-4" />
         </button>
 
-        <div className="w-px h-6 bg-[#3f3f46] mx-1"></div>
-
         <button 
           onClick={() => setIs3D(!is3D)}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-colors border border-[#3f3f46] bg-[#18181b] hover:bg-zinc-800 ${is3D ? "text-blue-400" : "text-zinc-400"}`}
+          className={`flex items-center gap-1.5 px-4 py-2 text-xs font-bold transition-colors border-l border-[#3f3f46] hover:bg-zinc-800 ${is3D ? "text-blue-400" : "text-zinc-400"}`}
           title={is3D ? "Cambiar a Análisis 2D" : "Cambiar a Análisis 3D"}
         >
           {is3D ? <Box className="w-3.5 h-3.5" /> : <Layers className="w-3.5 h-3.5" />}
           {is3D ? "Análisis 3D" : "Análisis 2D"}
         </button>
         
-        <div className="w-px h-6 bg-[#3f3f46] mx-1"></div>
-
         <button 
           onClick={togglePhysics}
-          className={`p-1.5 rounded-md transition-colors ${isPhysicsActive ? "text-emerald-400 hover:text-emerald-300 bg-emerald-950/20" : "text-zinc-500 hover:text-zinc-300 hover:bg-[#3f3f46]"}`}
+          className={`p-2 border-l border-[#3f3f46] transition-colors ${isPhysicsActive ? "text-emerald-400 hover:text-emerald-300 bg-emerald-950/20" : "text-zinc-500 hover:text-zinc-300 hover:bg-[#3f3f46]"}`}
           title={isPhysicsActive ? "Pausar Simulación Física" : "Reanudar Simulación Física"}
         >
           {isPhysicsActive ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
         </button>
         <button 
           onClick={() => setEnableFlow(!enableFlow)}
-          className={`p-1.5 rounded-md transition-colors ${enableFlow ? "text-yellow-400 hover:text-yellow-300 bg-yellow-950/20" : "text-zinc-500 hover:text-zinc-300 hover:bg-[#3f3f46]"}`}
+          className={`p-2 border-l border-[#3f3f46] transition-colors ${enableFlow ? "text-yellow-400 hover:text-yellow-300 bg-yellow-950/20" : "text-zinc-500 hover:text-zinc-300 hover:bg-[#3f3f46]"}`}
           title={enableFlow ? "Desactivar Flujo de Corriente" : "Activar Flujo de Corriente"}
         >
           {enableFlow ? <Zap className="w-4 h-4" /> : <ZapOff className="w-4 h-4" />}
