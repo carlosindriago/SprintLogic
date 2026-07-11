@@ -8,7 +8,7 @@ import { getProjectGraph, analyzeProjectGraph } from "@/lib/api";
 import { GraphData, GraphNode } from "@/types";
 import { ForceGraphProps, NodeObject, LinkObject } from "react-force-graph-2d";
 import { graphTheme } from "@/lib/graph-theme";
-import { Search, RotateCcw, ZoomIn, ZoomOut, Maximize, Brain, AlertTriangle, Play, Pause, Zap, ZapOff, Box, Layers } from "lucide-react";
+import { Search, RotateCcw, ZoomIn, ZoomOut, Maximize, Brain, AlertTriangle, Play, Pause, Zap, ZapOff, Box, Layers, ScanSearch, FileCode } from "lucide-react";
 import { useTabsStore } from "../store/tabsStore";
 import { useLLMConfigStore } from "../store/llmConfigStore";
 
@@ -65,7 +65,13 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
   const [glowingLinks, setGlowingLinks] = useState<Set<string>>(new Set());
   
   const lastClickTimeRef = useRef<number>(0);
+  const [contextMenu, setContextMenu] = useState<{ visible: boolean, x: number, y: number, node: any } | null>(null);
 
+  useEffect(() => {
+    const handleClick = () => setContextMenu(null);
+    document.addEventListener('click', handleClick);
+    return () => document.removeEventListener('click', handleClick);
+  }, []);
   const [iconsLoaded, setIconsLoaded] = useState(false);
   const iconImages = useRef<Record<string, HTMLImageElement>>({});
   
@@ -808,6 +814,44 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
       </div>
 
       <div ref={containerRef} className="flex-1 w-full">
+        {contextMenu && contextMenu.visible && (
+          <div 
+            className="fixed z-50 bg-[#18181b] border border-[#3f3f46] rounded-md shadow-xl py-1 w-48 text-sm overflow-hidden"
+            style={{ left: contextMenu.x, top: contextMenu.y }}
+            onContextMenu={(e) => e.preventDefault()}
+          >
+            <button 
+              className="w-full text-left px-4 py-2 text-zinc-300 hover:bg-blue-600 hover:text-white transition-colors flex items-center gap-2"
+              onClick={(e) => {
+                e.stopPropagation();
+                setFocusNode(contextMenu.node.id as string);
+                setContextMenu(null);
+              }}
+            >
+              <ScanSearch className="w-4 h-4" /> Aislar Nodo
+            </button>
+            <button 
+              className="w-full text-left px-4 py-2 text-zinc-300 hover:bg-blue-600 hover:text-white transition-colors flex items-center gap-2"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (onNodeClick) {
+                  onNodeClick({
+                    id: (contextMenu.node.id as string) || "",
+                    label: (contextMenu.node.label as "File" | "Class" | "Function") || "File",
+                    name: (contextMenu.node.name as string) || "",
+                    file_path: (contextMenu.node.file_path as string) || "",
+                    size: (contextMenu.node as any).size as number | undefined,
+                    metadata: (contextMenu.node as any).metadata as Record<string, unknown> | undefined
+                  });
+                }
+                setContextMenu(null);
+              }}
+            >
+              <FileCode className="w-4 h-4" /> Abrir Archivo
+            </button>
+          </div>
+        )}
+
         {dimensions.width > 0 && dimensions.height > 0 && (
           is3D ? (
             <ForceGraph3D
@@ -846,6 +890,14 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
               }
             }}
             onBackgroundClick={() => setFocusNode(null)}
+            onNodeRightClick={(node: any, event: any) => {
+              setContextMenu({
+                visible: true,
+                x: event.clientX,
+                y: event.clientY,
+                node
+              });
+            }}
             onNodeHover={(node: any) => setHoverNode(node ? (node.id as string) : null)}
             enableZoomInteraction={true}
             enableNavigationControls={true}
@@ -896,6 +948,14 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
               }
             }}
             onBackgroundClick={() => setFocusNode(null)}
+            onNodeRightClick={(node: any, event: any) => {
+              setContextMenu({
+                visible: true,
+                x: event.clientX,
+                y: event.clientY,
+                node
+              });
+            }}
             onNodeHover={(node: any) => setHoverNode(node ? (node.id as string) : null)}
             enableZoomInteraction={true}
             enablePanInteraction={true}
