@@ -1,4 +1,5 @@
 # ruff: noqa: E402, E501
+import asyncio
 import logging
 import os
 import re
@@ -19,24 +20,36 @@ from fastapi import (
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+from sse_starlette.sse import EventSourceResponse
 
-from app.application.scan_codebase import ScanCodebaseUseCase
-from app.application.scan_repo import ScanLocalRepository
+from app.application.scan_repo import ScanCodebaseUseCase, ScanLocalRepository
 from app.domain.exceptions import PathBlockedError, ScannerError
 from app.infrastructure.db.database import AsyncSessionLocal, get_db_session
 from app.infrastructure.db.project_repository import SQLAlchemyProjectRepository
+from app.infrastructure.events.active_scans import active_scans
+from app.infrastructure.events.event_bus import global_event_bus
 from app.infrastructure.git.git_gateway import LocalGitGateway
 from app.infrastructure.parser.ast_parser import ASTParserService
+from app.infrastructure.providers.local_fs import LocalFileSystemProvider
 from app.infrastructure.repositories.graph_repository import SQLAlchemyGraphRepository
+from app.interfaces.api.v1.project_schemas import (
+    ProjectDeletedResponse,
+    ProjectListResponse,
+    ProjectResponse,
+    ScanProjectRequest,
+    ScanStartedResponse,
+)
+from app.interfaces.api.v1.project_schemas import (
+    UpdateProjectRequest as UpdateProjectRequestDTO,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 
-class ScanRequest(BaseModel):
-    path: str
-
+# ── Request models not yet moved to project_schemas ───────────────────────────
+# (file/editor-specific schemas; keep here until they get their own module)
 
 class FileContentUpdate(BaseModel):
     content: str
@@ -52,15 +65,21 @@ class FileOperationRequest(BaseModel):
     path: str
 
 
-@router.get("/projects")
-async def get_projects(session: AsyncSession = Depends(get_db_session)):
+@router.get("/projects", response_model=ProjectListResponse)
+async def get_projects(session: AsyncSession = Depends(get_db_session)) -> ProjectListResponse:
     repo = SQLAlchemyProjectRepository(session)
-    projects = await repo.get_all_projects()
-    return {"projects": projects}
+    projects = await repo.get_all()
+    return ProjectListResponse(
+        projects=[ProjectResponse.model_validate(p, from_attributes=True) for p in projects]
+    )
 
 
-@router.post("/projects/scan")
-async def scan_project(request: ScanRequest, session: AsyncSession = Depends(get_db_session)):
+@router.post("/projects/scan", status_code=202, response_model=ScanStartedResponse)
+async def scan_project(
+    request: ScanProjectRequest,
+    background_tasks: BackgroundTasks,
+    session: AsyncSession = Depends(get_db_session),
+) -> ScanStartedResponse:
     git_gateway = LocalGitGateway()
     project_repo = SQLAlchemyProjectRepository(session)
     scan_repo_usecase = ScanLocalRepository(git_gateway, project_repo)
@@ -79,51 +98,73 @@ async def scan_project(request: ScanRequest, session: AsyncSession = Depends(get
 
     parser = ASTParserService()
     graph_repo = SQLAlchemyGraphRepository(session)
-    scan_codebase_usecase = ScanCodebaseUseCase(parser, graph_repo)
+    provider = LocalFileSystemProvider(saved_project.path)
 
-    await scan_codebase_usecase.execute(saved_project.id, request.path)
+    scan_codebase_usecase = ScanCodebaseUseCase(provider, parser, global_event_bus, graph_repo)
 
-    return {"project_id": str(saved_project.id)}
+    cancel_token = asyncio.Event()
+    active_scans[str(saved_project.id)] = cancel_token
+
+    background_tasks.add_task(scan_codebase_usecase.execute, saved_project.id, cancel_token)
+
+    return ScanStartedResponse(
+        status="scanning started",
+        project_id=saved_project.id,
+        message="The AST parsing is running in the background.",
+    )
+
+@router.get("/projects/{project_id}/scan/stream")
+async def stream_scan_progress(project_id: str):
+    async def event_generator():
+        try:
+            topic = f"scan:{project_id}"
+            async for event in global_event_bus.event_generator(topic):
+                yield {"data": event}
+                if event.get("type") == "completed":
+                    break
+        except asyncio.CancelledError:
+            logger.warning("TCP client disconnected abruptly for project %s", project_id)
+            raise
+        finally:
+            cancel_token = active_scans.pop(project_id, None)
+            if cancel_token:
+                cancel_token.set()
+
+    return EventSourceResponse(event_generator())
 
 
-class UpdateProjectRequest(BaseModel):
-    name: str | None = None
-    path: str | None = None
 
-
-@router.put("/projects/{project_id}")
+@router.put("/projects/{project_id}", response_model=ProjectResponse)
 async def update_project(
-    project_id: str, request: UpdateProjectRequest, session: AsyncSession = Depends(get_db_session)
-):
+    project_id: str, request: UpdateProjectRequestDTO, session: AsyncSession = Depends(get_db_session)
+) -> ProjectResponse:
     try:
         project_uuid = UUID(project_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid project ID format")
 
     repo = SQLAlchemyProjectRepository(session)
-    project = await repo.update_project(project_uuid, name=request.name, path=request.path)
+    project = await repo.update(project_uuid, name=request.name, path=request.path)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    return {
-        "status": "success",
-        "project": {"id": str(project.id), "name": project.name, "path": project.path},
-    }
+    return ProjectResponse.model_validate(project, from_attributes=True)
 
 
-@router.delete("/projects/{project_id}")
-async def delete_project(project_id: str, session: AsyncSession = Depends(get_db_session)):
+
+@router.delete("/projects/{project_id}", response_model=ProjectDeletedResponse)
+async def delete_project(project_id: str, session: AsyncSession = Depends(get_db_session)) -> ProjectDeletedResponse:
     try:
         project_uuid = UUID(project_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid project ID format")
 
     repo = SQLAlchemyProjectRepository(session)
-    success = await repo.delete_project(project_uuid)
+    success = await repo.delete(project_uuid)
     if not success:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    return {"status": "success"}
+    return ProjectDeletedResponse(status="success")
 
 
 @router.get("/projects/{project_id}/graph")
@@ -256,6 +297,7 @@ async def get_project_graph(project_id: str, session: AsyncSession = Depends(get
 
 class AnalyzeGraphRequest(BaseModel):
     model: str = "gemini/gemini-2.5-flash"
+    fallback_model: str | None = None
 
 
 @router.post("/projects/{project_id}/graph/analyze")
@@ -320,7 +362,35 @@ async def analyze_project_graph(
     if len(edges_summary) > 200:
         edges_text += f"\n... (and {len(edges_summary) - 200} more edges)"
 
-    prompt = f"""Analiza la estructura de este proyecto de software basándote en su grafo de dependencias de código.
+    _IRON_PROMPT_PREAMBLE = """\
+CONTEXTO DE DOMINIO (LEER ANTES DE ANALIZAR):
+Estás analizando el grafo de dependencias de "SprintLogic", una herramienta de desarrollo que lee el código fuente del usuario (AST Parsing).
+Regla de Física #1: El backend en Python frecuentemente lee (File I/O) archivos del frontend (.css, .tsx, .ts) para analizarlos.
+Regla de Física #2: Leer un archivo NO es importarlo. Python no puede importar CSS o React. Si ves una conexión entre el backend y el frontend, ASUME por defecto que es una operación de lectura/escaneo, NO una violación de dependencias cruzadas.
+Regla de Física #3 (Dirección de la Dependencia): En la lista de enlaces, el formato "A IMPORTS B" o "A CALLS B" significa ESTRICTAMENTE que el archivo A depende del archivo B (A importa o invoca a B). NUNCA inviertas esta relación en tu redacción. Si A importa a B, el flujo es A -> B.
+
+MARCO DE EVIDENCIA ESTRICTO:
+Tu trabajo es identificar vulnerabilidades arquitectónicas, pero estás sujeto a un rigor científico absoluto. Sigue estas reglas al emitir tu reporte:
+
+- Cero Suposiciones: No deduzcas intenciones. Si ves un acoplamiento, descríbelo. Si crees que es un "import" entre lenguajes incompatibles, detente y reclasifícalo como operación de I/O.
+- Evidencia Requerida: Si vas a reportar un error crítico (como un God Object o una violación de la Arquitectura Limpia), debes citar los nombres exactos de los nodos o módulos que lo prueban.
+- Humildad Epistémica: Si el grafo es ambiguo o una conexión no tiene sentido lógico en el lenguaje objetivo, tu respuesta obligatoria debe ser: "El grafo muestra una relación entre X y Y, pero debido a la incompatibilidad de lenguajes, esto probablemente representa una operación de lectura/parseo y no una dependencia de módulo. Se requiere validación manual."
+- Lenguaje Categórico: Nunca uses frases como "Me parece que", "Podría ser", "Yo creo". Usa "El grafo indica", "Se observa", o "La evidencia es insuficiente para concluir".
+
+REGLA DE ENLACES MÁGICOS (OBLIGATORIA):
+Siempre que menciones un archivo o componente de código en tu reporte, DEBES crear un enlace clickeable usando el protocolo ide://.
+Formato: [NombreDelArchivo](ide://ruta/relativa/al/archivo)
+Ejemplo correcto: El archivo [main.py](ide://apps/api/main.py) tiene una dependencia circular.
+Ejemplo incorrecto: El archivo `apps/api/main.py` tiene...
+¡NO USES acentos graves (```) para los nombres de archivo si puedes usar enlaces ide://!
+
+INSTRUCCIÓN DE TÍTULO (OBLIGATORIA):
+Tu reporte DEBE comenzar en la primera línea con un título H1 (un solo #) que sea MUY descriptivo e insightful sobre el hallazgo más crítico de la arquitectura.
+Ejemplo: # Análisis: sprintLogic-monorepo - Arquitectura Hexagonal y Violación de Clean Architecture
+---
+"""
+
+    prompt = f"{_IRON_PROMPT_PREAMBLE}" + f"""Analiza la estructura de este proyecto de software basándote en su grafo de dependencias de código.
 Ruta del proyecto: {project.path}
 Nombre del proyecto: {project.name}
 
@@ -333,21 +403,103 @@ Relaciones/Dependencias (Enlaces):
 Por favor, realiza un análisis profesional y exhaustivo del proyecto:
 1. Explica brevemente de qué trata este proyecto y qué tecnologías predominan (lenguajes, frameworks).
 2. Describe la arquitectura del código basándote en la estructura de carpetas y dependencias (Hexagonal, MVC, Monolito, etc.).
-3. Identifica posibles problemas de diseño, dependencias circulares o cuellos de botella estructurales.
+3. Identifica posibles problemas de diseño, dependencias circulares o cuellos de botella estructurales. Cita los nodos exactos como evidencia.
 4. Sugiere mejoras específicas para la calidad del código, modularidad y mantenibilidad.
 
 Responde en formato Markdown limpio, directo y profesional. Usa títulos y listas para que sea fácil de leer."""
 
+    import uuid
+    from datetime import datetime
+
     from app.infrastructure.ai.llm_gateway import LiteLLMGateway
+    from app.infrastructure.db.models import AnalysisReportModel
 
     llm_gateway = LiteLLMGateway()
 
     try:
-        analysis = llm_gateway.generate_completion(prompt=prompt, model=request.model)
-        return {"analysis": analysis}
+        try:
+            analysis = llm_gateway.generate_completion(prompt=prompt, model=request.model)
+            used_model = request.model
+        except Exception as first_err:
+            if request.fallback_model and request.fallback_model != "none":
+                logger.warning(f"Failed with {request.model}, falling back to {request.fallback_model}. Error: {first_err}")
+                analysis = llm_gateway.generate_completion(prompt=prompt, model=request.fallback_model)
+                used_model = request.fallback_model
+            else:
+                raise first_err
+
+        # Save to database
+        report = AnalysisReportModel(
+            id=uuid.uuid4(),
+            project_id=project_uuid,
+            content=analysis,
+            ai_model_version=used_model,
+            created_at=datetime.utcnow()
+        )
+        session.add(report)
+        await session.commit()
+
+        from app.interfaces.api.v1.report_schemas import AnalysisReportResponse
+        return AnalysisReportResponse.model_validate(report, from_attributes=True)
     except Exception as e:
         logger.error("Fallo en la llamada a la IA failed: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="An internal error occurred")
+
+
+@router.get("/projects/{project_id}/reports")
+async def get_project_reports(
+    project_id: str, session: AsyncSession = Depends(get_db_session)
+):
+    try:
+        project_uuid = UUID(project_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+
+    from sqlalchemy import select
+
+    from app.infrastructure.db.models import AnalysisReportModel
+    from app.interfaces.api.v1.report_schemas import (
+        AnalysisReportListResponse,
+        AnalysisReportResponse,
+    )
+
+    result = await session.execute(
+        select(AnalysisReportModel)
+        .where(AnalysisReportModel.project_id == project_uuid)
+        .order_by(AnalysisReportModel.created_at.desc())
+    )
+    reports = result.scalars().all()
+
+    return AnalysisReportListResponse(
+        reports=[AnalysisReportResponse.model_validate(r, from_attributes=True) for r in reports]
+    )
+
+
+@router.get("/projects/{project_id}/reports/{report_id}")
+async def get_project_report(
+    project_id: str, report_id: str, session: AsyncSession = Depends(get_db_session)
+):
+    try:
+        project_uuid = UUID(project_id)
+        report_uuid = UUID(report_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid ID format")
+
+    from sqlalchemy import select
+
+    from app.infrastructure.db.models import AnalysisReportModel
+    from app.interfaces.api.v1.report_schemas import AnalysisReportResponse
+
+    result = await session.execute(
+        select(AnalysisReportModel)
+        .where(AnalysisReportModel.id == report_uuid, AnalysisReportModel.project_id == project_uuid)
+    )
+    report = result.scalar_one_or_none()
+
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    return AnalysisReportResponse.model_validate(report, from_attributes=True)
 
 
 from sqlalchemy import select
@@ -911,10 +1063,8 @@ async def search_project_memory(
         return {"results": []}
 
 
-import asyncio
 import contextlib
 
-from sse_starlette.sse import EventSourceResponse  # type: ignore[import-not-found]
 from watchfiles import Change
 
 from app.infrastructure.file_watcher import file_watcher

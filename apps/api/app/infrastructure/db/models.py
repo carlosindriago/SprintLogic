@@ -88,3 +88,16 @@ class ContextSnippetModel(Base):
     content: Mapped[str] = mapped_column(String, nullable=False)
     # The actual vectors will be stored in a raw sqlite-vec virtual table `vec_context_snippets`
     # linked by rowid = ContextSnippetModel.id
+
+class AnalysisReportModel(Base):
+    __tablename__ = "analysis_reports"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    project_id: Mapped[UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    content: Mapped[str] = mapped_column(String, nullable=False)
+    ai_model_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=datetime.utcnow
+    )

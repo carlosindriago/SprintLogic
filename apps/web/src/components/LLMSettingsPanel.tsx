@@ -654,6 +654,97 @@ function PredictiveFimSection() {
   );
 }
 
+function AnalysisConfigSection({ providers }: { providers: CuratedProvider[] }) {
+  const analysisDefaultModel = useLLMConfigStore((s) => s.analysisDefaultModel);
+  const setAnalysisDefaultModel = useLLMConfigStore((s) => s.setAnalysisDefaultModel);
+  const analysisFallbackModel = useLLMConfigStore((s) => s.analysisFallbackModel);
+  const setAnalysisFallbackModel = useLLMConfigStore((s) => s.setAnalysisFallbackModel);
+  
+  const [modelSearchMain, setModelSearchMain] = useState("");
+  const [modelSearchFallback, setModelSearchFallback] = useState("");
+
+  const allModels = providers.flatMap(p => p.models.map(m => ({ ...m, provider: p.provider, provider_id: p.provider_id })));
+  
+  const filteredModelsMain = allModels.filter(m => 
+    m.name.toLowerCase().includes(modelSearchMain.toLowerCase()) || 
+    m.id.toLowerCase().includes(modelSearchMain.toLowerCase())
+  );
+  
+  const filteredModelsFallback = allModels.filter(m => 
+    m.name.toLowerCase().includes(modelSearchFallback.toLowerCase()) || 
+    m.id.toLowerCase().includes(modelSearchFallback.toLowerCase())
+  );
+
+  return (
+    <div className="flex flex-col gap-8 p-6 max-w-2xl">
+      <div className="flex flex-col gap-3">
+        <Label className="text-sm font-semibold text-zinc-200">
+          Modelo Principal para Análisis
+        </Label>
+        <Select value={analysisDefaultModel} onValueChange={(val) => val && setAnalysisDefaultModel(val)}>
+          <SelectTrigger className="bg-zinc-950 border-zinc-800 text-zinc-200 w-full h-10">
+            <SelectValue placeholder="Selecciona el modelo principal..." />
+          </SelectTrigger>
+          <SelectContent className="bg-zinc-900 border-zinc-800 text-zinc-200 max-h-[300px]">
+            <div className="p-2 sticky top-0 bg-zinc-900 border-b border-zinc-800 z-10">
+              <Input
+                type="text"
+                placeholder="Buscar modelo..."
+                value={modelSearchMain}
+                onChange={(e) => setModelSearchMain(e.target.value)}
+                onKeyDown={(e) => e.stopPropagation()}
+                className="bg-zinc-950 border-zinc-800 h-8 text-xs text-zinc-200"
+              />
+            </div>
+            {filteredModelsMain.map((m) => (
+              <SelectItem key={`${m.provider_id}/${m.id}`} value={`${m.provider_id}/${m.id}`} className="focus:bg-zinc-800 focus:text-zinc-100 cursor-pointer py-2">
+                {m.name} <span className="text-zinc-500 text-xs ml-1">({m.provider})</span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-zinc-500">
+          El modelo que se usará para analizar el grafo 2D y la arquitectura de la base de código.
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-3">
+        <Label className="text-sm font-semibold text-zinc-200">
+          Modelo de Respaldo (Fallback)
+        </Label>
+        <Select value={analysisFallbackModel} onValueChange={(val) => val && setAnalysisFallbackModel(val)}>
+          <SelectTrigger className="bg-zinc-950 border-zinc-800 text-zinc-200 w-full h-10">
+            <SelectValue placeholder="Selecciona un modelo de respaldo..." />
+          </SelectTrigger>
+          <SelectContent className="bg-zinc-900 border-zinc-800 text-zinc-200 max-h-[300px]">
+            <div className="p-2 sticky top-0 bg-zinc-900 border-b border-zinc-800 z-10">
+              <Input
+                type="text"
+                placeholder="Buscar modelo..."
+                value={modelSearchFallback}
+                onChange={(e) => setModelSearchFallback(e.target.value)}
+                onKeyDown={(e) => e.stopPropagation()}
+                className="bg-zinc-950 border-zinc-800 h-8 text-xs text-zinc-200"
+              />
+            </div>
+            <SelectItem value="none" className="focus:bg-zinc-800 focus:text-zinc-100 cursor-pointer text-zinc-400 py-2">
+              Ninguno
+            </SelectItem>
+            {filteredModelsFallback.map((m) => (
+              <SelectItem key={`${m.provider_id}/${m.id}`} value={`${m.provider_id}/${m.id}`} className="focus:bg-zinc-800 focus:text-zinc-100 cursor-pointer py-2">
+                {m.name} <span className="text-zinc-500 text-xs ml-1">({m.provider})</span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-zinc-500">
+          Modelo alternativo en caso de que el proveedor principal falle o esté inestable durante el análisis.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export default function LLMSettingsPanel() {
   const defaultModel = useLLMConfigStore((s) => s.defaultModel);
   const setDefaultModel = useLLMConfigStore((s) => s.setDefaultModel);
@@ -789,6 +880,17 @@ export default function LLMSettingsPanel() {
           <Sparkles className="w-4 h-4 shrink-0" />
           AI Code Coach
         </button>
+        <button
+          onClick={() => setActiveSection('analysis-config')}
+          className={`text-left px-4 py-2 text-sm transition-colors flex items-center gap-2 ${
+            activeSection === 'analysis-config'
+              ? "bg-blue-500/10 text-blue-300 border-l-2 border-blue-500 font-medium"
+              : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200 border-l-2 border-transparent"
+          }`}
+        >
+          <Sparkles className="w-4 h-4 shrink-0" />
+          Análisis Arquitectura
+        </button>
 
         <div className="px-4 pt-6 pb-2 mt-2 border-t border-zinc-800/50">
           <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
@@ -814,6 +916,17 @@ export default function LLMSettingsPanel() {
           <div className="p-6">
             <Loader2 className="w-6 h-6 text-zinc-600 animate-spin" />
           </div>
+        ) : activeSection === 'predictive-fim' ? (
+          <PredictiveFimSection key="predictive-fim" />
+        ) : activeSection === 'fim-config' ? (
+          <FimConfigSection key="fim-config" providers={providers} />
+        ) : activeSection === 'analysis-config' ? (
+          <AnalysisConfigSection key="analysis-config" providers={providers} />
+        ) : activeSection === 'context7' ? (
+          <Context7Section
+            apiKey={context7ApiKey}
+            onSave={setContext7ApiKey}
+          />
         ) : isLLMProvider && activeProviderData ? (
           <ProviderConfig
             key={activeSection}
@@ -823,16 +936,7 @@ export default function LLMSettingsPanel() {
             curatedModels={activeProviderData.models}
             onProviderConfigured={handleProviderConfigured}
           />
-        ) : activeSection === 'predictive-fim' ? (
-          <PredictiveFimSection key="predictive-fim" />
-        ) : activeSection === 'context7' ? (
-          <Context7Section
-            apiKey={context7ApiKey}
-            onSave={setContext7ApiKey}
-          />
-        ) : (
-          <FimConfigSection key="fim-config" providers={providers} />
-        )}
+        ) : null}
       </div>
     </div>
   );

@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Settings, FolderOpen, ChevronRight, Edit2, Trash2, PlusCircle, ChevronsUpDown, FilePlus, RefreshCw, ScanSearch, Layout, Network, GitBranch, BarChart3, FolderGit2, HelpCircle } from "lucide-react";
+import { Settings, FolderOpen, ChevronRight, Edit2, Trash2, PlusCircle, ChevronsUpDown, FilePlus, RefreshCw, ScanSearch, Layout, Network, GitBranch, BarChart3, FolderGit2, HelpCircle, Bot } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { scanProject, getProjects, updateProject, deleteProject, analyzeProject, renameFile, duplicateFile, deleteFile } from "@/lib/api";
@@ -38,6 +38,7 @@ import FileTree from "@/components/FileTree";
 import { useTabsStore } from '@/store/tabsStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useProjectStore } from '@/store/projectStore';
+import { useBackgroundJobsStore } from '@/store/backgroundJobsStore';
 import TabBar from '@/components/TabBar';
 import { useThemeStore, AccentColor, UiScale } from '@/store/themeStore';
 import GitStatusWidget from '@/components/GitStatusWidget';
@@ -74,6 +75,16 @@ const AIAuditPanel = dynamic(
   { ssr: false },
 );
 
+const AIReportViewer = dynamic(
+  () => import('@/components/AIReportViewer').then((m) => m.AIReportViewer),
+  { ssr: false },
+);
+
+const ReportHistoryPanel = dynamic(
+  () => import('@/components/ReportHistoryPanel').then((m) => m.ReportHistoryPanel),
+  { ssr: false },
+);
+
 const GraphScene = dynamic(() => import("@/components/GraphScene"), { ssr: false });
 
 export default function Home() {
@@ -90,6 +101,7 @@ export default function Home() {
   
   const { tabs, activeTabId, addTab, switchProject } = useTabsStore();
   const { accentColor, setAccentColor, uiScale, setUiScale } = useThemeStore();
+  const startScan = useBackgroundJobsStore(state => state.startScan);
 
   const [settingsTab, setSettingsTab] = useState<'llms' | 'appearance'>('llms');
   const [newFileDialogOpen, setNewFileDialogOpen] = useState(false);
@@ -188,6 +200,7 @@ export default function Home() {
     try {
       const data = await scanProject(path);
       setProjectId(data.project_id);
+      startScan(data.project_id);
       fetchProjects(); // Refresh the list
     } catch (e) {
       console.error(e);
@@ -388,7 +401,7 @@ export default function Home() {
     });
   };
 
-  const launchTool = (tabId: string, title: string, type: 'insights' | 'kanban' | 'graph' | 'git-graph' | 'audit') => {
+  const launchTool = (tabId: string, title: string, type: 'insights' | 'kanban' | 'graph' | 'git-graph' | 'audit' | 'ai-history') => {
     addTab({ id: tabId, title, type });
   };
 
@@ -443,6 +456,11 @@ export default function Home() {
       case 'audit':
         if (!projectId) return null;
         return <AIAuditPanel projectId={projectId} />;
+      case 'ai-history':
+        return <ReportHistoryPanel />;
+      case 'ai-report':
+        if (!projectId) return null;
+        return <AIReportViewer projectId={projectId} reportId={activeTab.data?.reportId} markdown={activeTab.data?.markdown} />;
       default:
         return <div className="p-4">Tipo de pestaña desconocido.</div>;
     }
@@ -581,6 +599,15 @@ export default function Home() {
                   title="Auditoría IA"
                 >
                   <FolderGit2 className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-700"
+                  onClick={() => launchTool('ai-history', 'Historial IA', 'ai-history')}
+                  title="Historial IA"
+                >
+                  <Bot className="w-4 h-4" />
                 </Button>
               </div>
 

@@ -120,8 +120,8 @@ export const deleteProject = (id: string) => api.delete<{ status: string }>(`/pr
 
 // --- Graph ---
 export const getProjectGraph = (projectId: string) => api.get<GraphData>(`/projects/${projectId}/graph`);
-export const analyzeProjectGraph = async (projectId: string, model: string) => {
-  const data = await api.post<{ analysis: string }>(`/projects/${projectId}/graph/analyze`, { model });
+export const analyzeProjectGraph = async (projectId: string, model: string, fallbackModel?: string) => {
+  const data = await api.post<{ analysis: string }>(`/projects/${projectId}/graph/analyze`, { model, fallback_model: fallbackModel });
   return data.analysis;
 };
 
@@ -246,6 +246,9 @@ export const getCuratedModels = () => api.get<CuratedProvider[]>('/ai/models');
 export const getProjectInsights = (projectId: string) => api.get<ProjectInsights>(`/projects/${projectId}/insights`);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const analyzeProject = (projectId: string) => api.post<any>(`/projects/${projectId}/analyze`);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const getProjectReports = (projectId: string) => api.get<{ reports: any[] }>(`/projects/${projectId}/reports`);
+export const getProjectReport = (projectId: string, reportId: string) => api.get<{ content: string; id: string; created_at: string; ai_model_version: string }>(`/projects/${projectId}/reports/${reportId}`);
 export const fetchFimCompletion = async (prefix: string, suffix: string, language: string) => {
   try {
     return await api.post<unknown>('/ai/fim-completion', { prefix, suffix, language });
