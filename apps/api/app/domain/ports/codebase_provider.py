@@ -18,7 +18,7 @@ class CodebaseProvider(ABC):
         ...
 
     @abstractmethod
-    async def get_source_files(
+    def get_source_files(
         self, extension_filter: list[str] | None = None
     ) -> AsyncIterator[tuple[str, str]]:
         """

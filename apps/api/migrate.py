@@ -1,7 +1,7 @@
 import asyncio
 
 from app.infrastructure.db.database import Base, engine
-from app.infrastructure.db.models import AnalysisReportModel, ProjectModel, TaskModel  # noqa: F401
+from app.infrastructure.db.models import AnalysisReportModel, ProjectModel  # noqa: F401
 
 
 async def main():

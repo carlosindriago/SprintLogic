@@ -10,7 +10,7 @@ payload = {
 headers = {"Content-Type": "application/json"}
 
 try:
-    resp = requests.post(url, json=payload)
+    resp = requests.post(url, json=payload)  # type: ignore
     print("Status:", resp.status_code)
     print("Response:", resp.text)
 except Exception as e:

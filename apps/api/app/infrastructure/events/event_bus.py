@@ -12,18 +12,18 @@ class EventBus:
     """
     def __init__(self):
         # Diccionario de colas: un topic -> lista de colas (una por suscriptor)
-        self._subscribers: dict[str, list[asyncio.Queue]] = {}
+        self._subscribers: dict[str, list[asyncio.Queue[dict]]] = {}
         # Estado para el throttling: topic -> timestamp del último envío
         self._last_emitted: dict[str, float] = {}
 
-    def subscribe(self, topic: str) -> asyncio.Queue:
+    def subscribe(self, topic: str) -> asyncio.Queue[dict]:
         if topic not in self._subscribers:
             self._subscribers[topic] = []
-        queue = asyncio.Queue()
+        queue: asyncio.Queue[dict] = asyncio.Queue()
         self._subscribers[topic].append(queue)
         return queue
 
-    def unsubscribe(self, topic: str, queue: asyncio.Queue):
+    def unsubscribe(self, topic: str, queue: asyncio.Queue[dict]):
         if topic in self._subscribers and queue in self._subscribers[topic]:
             self._subscribers[topic].remove(queue)
 

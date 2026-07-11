@@ -13,7 +13,7 @@ import logging
 from collections.abc import AsyncIterator
 from pathlib import Path
 
-import aiofiles
+import aiofiles  # type: ignore
 import pathspec
 
 from app.domain.ports.codebase_provider import CodebaseProvider

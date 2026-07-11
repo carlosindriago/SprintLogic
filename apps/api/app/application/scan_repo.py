@@ -61,7 +61,7 @@ class ScanCodebaseUseCase:
         self.event_bus = event_bus
         self.graph_repo = graph_repo
 
-    async def execute(self, project_id: UUID, cancel_token: asyncio.Event = None):
+    async def execute(self, project_id: UUID, cancel_token: asyncio.Event | None = None):
         topic = f"scan:{project_id}"
         parsed_count = 0
         all_nodes = []
