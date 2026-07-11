@@ -29,6 +29,10 @@ interface LLMConfigState {
   setFimDefaultModel: (model: string) => void;
   fimFallbackModel: string;
   setFimFallbackModel: (model: string) => void;
+  analysisDefaultModel: string;
+  setAnalysisDefaultModel: (model: string) => void;
+  analysisFallbackModel: string;
+  setAnalysisFallbackModel: (model: string) => void;
 }
 
 export const useLLMConfigStore = create<LLMConfigState>()(
@@ -54,6 +58,10 @@ export const useLLMConfigStore = create<LLMConfigState>()(
       setFimDefaultModel: (model) => set({ fimDefaultModel: model }),
       fimFallbackModel: '',
       setFimFallbackModel: (model) => set({ fimFallbackModel: model }),
+      analysisDefaultModel: DEFAULT_MODEL,
+      setAnalysisDefaultModel: (model) => set({ analysisDefaultModel: model }),
+      analysisFallbackModel: '',
+      setAnalysisFallbackModel: (model) => set({ analysisFallbackModel: model }),
     }),
     {
       name: 'sprintlogic-llm-config',
@@ -63,6 +71,8 @@ export const useLLMConfigStore = create<LLMConfigState>()(
         apiKeys: state.apiKeys,
         fimDefaultModel: state.fimDefaultModel,
         fimFallbackModel: state.fimFallbackModel,
+        analysisDefaultModel: state.analysisDefaultModel,
+        analysisFallbackModel: state.analysisFallbackModel,
       }),
     },
   ),
