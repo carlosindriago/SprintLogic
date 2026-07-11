@@ -246,6 +246,8 @@ export const getCuratedModels = () => api.get<CuratedProvider[]>('/ai/models');
 export const getProjectInsights = (projectId: string) => api.get<ProjectInsights>(`/projects/${projectId}/insights`);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const analyzeProject = (projectId: string) => api.post<any>(`/projects/${projectId}/analyze`);
+export const getProjectReports = (projectId: string) => api.get<{ reports: any[] }>(`/projects/${projectId}/reports`);
+export const getProjectReport = (projectId: string, reportId: string) => api.get<any>(`/projects/${projectId}/reports/${reportId}`);
 export const fetchFimCompletion = async (prefix: string, suffix: string, language: string) => {
   try {
     return await api.post<unknown>('/ai/fim-completion', { prefix, suffix, language });
