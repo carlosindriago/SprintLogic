@@ -426,21 +426,24 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     const targetId = typeof link.target === 'object' ? link.target.id : link.target;
     
     const faded = isFaded(sourceId) && isFaded(targetId);
+    const opacityFactor = is3D ? 0.35 : 1.0; 
     
-    let baseColor = "rgba(228, 228, 231, 0.15)"; // Light gray (zinc-200 at 15% opacity)
+    let baseColor = `rgba(228, 228, 231, ${0.15 * opacityFactor})`; // Light gray (zinc-200 at 15% opacity)
     if (showCycles && link.is_cycle) {
-      baseColor = "rgba(248, 113, 113, 0.4)"; // Soft red/pink for cycles
+      baseColor = `rgba(248, 113, 113, ${0.4 * opacityFactor})`; // Soft red/pink for cycles
     } else if (link.type === "IMPORTS") {
-      baseColor = "rgba(228, 228, 231, 0.18)"; // Slightly visible light gray for imports
+      baseColor = `rgba(228, 228, 231, ${0.18 * opacityFactor})`; // Slightly visible light gray for imports
     } else {
-      baseColor = "rgba(228, 228, 231, 0.10)"; // Fainter gray for internal calls
+      baseColor = `rgba(228, 228, 231, ${0.10 * opacityFactor})`; // Fainter gray for internal calls
     }
     
     if (faded) {
-      return showCycles && link.is_cycle ? "rgba(248, 113, 113, 0.05)" : "rgba(228, 228, 231, 0.03)";
+      return showCycles && link.is_cycle 
+        ? `rgba(248, 113, 113, ${0.05 * opacityFactor})` 
+        : `rgba(228, 228, 231, ${0.03 * opacityFactor})`;
     }
     return baseColor;
-  }, [isFaded, showCycles]);
+  }, [isFaded, showCycles, is3D]);
 
   const getParticleColor = useCallback((link: any) => {
     if (showCycles && link.is_cycle) {
@@ -510,28 +513,28 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
         
         // Much clearer size differentiation for file sizes (LOC/size)
         const size = (node.size as number) || 0;
-        const scale = Math.min(Math.max(size / 1500, 8), 24);
+        const scale = Math.min(Math.max(size / 2000, 6), 16);
         sprite.scale.set(scale, scale, 1);
         return sprite;
       }
     }
 
     // 2. Class / Function / Interface: represented by sphere geometries with clear size hierarchy
-    let radius = 3;
+    let radius = 2;
     let colorHex = graphTheme.unknown;
     
     if (label === "File") {
       const size = (node.size as number) || 0;
-      radius = Math.min(Math.max(size / 1500, 5), 12);
+      radius = Math.min(Math.max(size / 2000, 3.5), 8);
       colorHex = graphTheme.file;
     } else if (label === "Class") {
-      radius = 6.5; // Classes are larger and important structural units
+      radius = 3.5; // Classes are slightly larger structural units
       colorHex = graphTheme.class;
     } else if (label === "Function") {
-      radius = 2.5; // Functions are smaller utility files/elements
+      radius = 1.2; // Functions are small orbital nodes
       colorHex = graphTheme.function;
     } else if (label === "Interface") {
-      radius = 4.5; // Interfaces sit in the middle of scale
+      radius = 2.4; // Interfaces sit in the middle
       colorHex = graphTheme.interface;
     }
 
@@ -694,22 +697,13 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
       {/* Visualization Controls Overlay (3D, Physics, Animation) */}
       <div className="absolute bottom-6 left-16 z-10 flex flex-col gap-2 p-1.5 rounded-lg shadow-lg" 
            style={{ backgroundColor: graphTheme.surfaceElevated, border: `1px solid ${graphTheme.border}` }}>
-        <div className="flex bg-[#18181b] p-0.5 rounded-md border border-[#3f3f46] justify-center items-center">
-          <button 
-            onClick={() => setIs3D(false)}
-            className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition-colors ${!is3D ? "bg-zinc-800 text-zinc-200" : "text-zinc-500 hover:text-zinc-300"}`}
-            title="Vista Plana 2D"
-          >
-            2D
-          </button>
-          <button 
-            onClick={() => setIs3D(true)}
-            className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition-colors ${is3D ? "bg-zinc-800 text-blue-400" : "text-zinc-500 hover:text-zinc-300"}`}
-            title="Vista Tridimensional 3D"
-          >
-            3D
-          </button>
-        </div>
+        <button 
+          onClick={() => setIs3D(!is3D)}
+          className={`px-2 py-1 rounded-md text-[10px] font-bold transition-colors border border-[#3f3f46] bg-[#18181b] hover:bg-zinc-800 ${is3D ? "text-blue-400" : "text-zinc-400"}`}
+          title={is3D ? "Cambiar a Vista 2D" : "Cambiar a Vista 3D"}
+        >
+          {is3D ? "Ver 2D" : "Ver 3D"}
+        </button>
         <button 
           onClick={togglePhysics}
           className={`p-1.5 rounded-md transition-colors ${isPhysicsActive ? "text-emerald-400 hover:text-emerald-300 bg-emerald-950/20" : "text-zinc-500 hover:text-zinc-300 hover:bg-[#3f3f46]"}`}
