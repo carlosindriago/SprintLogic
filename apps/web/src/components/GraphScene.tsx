@@ -64,6 +64,8 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
   const [isPhysicsActive, setIsPhysicsActive] = useState(true);
   const [glowingLinks, setGlowingLinks] = useState<Set<string>>(new Set());
   
+  const lastClickTimeRef = useRef<number>(0);
+
   const [iconsLoaded, setIconsLoaded] = useState(false);
   const iconImages = useRef<Record<string, HTMLImageElement>>({});
   
@@ -359,6 +361,23 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     });
     return map;
   }, [graphData]);
+
+  const displayGraphData = useMemo(() => {
+    if (!focusNode || !graphData || !graphData.nodes) return graphData;
+
+    // Isolate only the focused node and its neighbors
+    const neighborsSet = neighbors.get(focusNode) || new Set();
+    const visibleNodes = new Set([focusNode, ...neighborsSet]);
+
+    const filteredNodes = graphData.nodes.filter((n: any) => visibleNodes.has(n.id as string));
+    const filteredLinks = graphData.links.filter((l: any) => {
+      const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
+      const targetId = typeof l.target === 'object' ? l.target.id : l.target;
+      return visibleNodes.has(sourceId) && visibleNodes.has(targetId);
+    });
+
+    return { nodes: filteredNodes, links: filteredLinks };
+  }, [graphData, focusNode, neighbors]);
 
   const isFaded = useCallback((nodeId: string) => {
     const activeFocus = focusNode || hoverNode;
@@ -790,13 +809,13 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
         </button>
       </div>
 
-      <div ref={containerRef} className="flex-1 w-full" onClick={() => setFocusNode(null)}>
+      <div ref={containerRef} className="flex-1 w-full">
         {is3D ? (
           <ForceGraph3D
             ref={fgRef}
             width={dimensions.width}
             height={dimensions.height}
-            graphData={graphData}
+            graphData={displayGraphData}
             backgroundColor={graphTheme.background}
             nodeThreeObject={getNodeThreeObject}
             linkColor={getLinkColor}
@@ -808,18 +827,26 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
             numDimensions={3}
             cooldownTicks={100}
             onNodeClick={(node: any, event: any) => {
-              setFocusNode(node.id as string);
-              if (onNodeClick) {
-                onNodeClick({
-                  id: (node.id as string) || "",
-                  label: (node.label as "File" | "Class" | "Function") || "File",
-                  name: (node.name as string) || "",
-                  file_path: (node.file_path as string) || "",
-                  size: (node as any).size as number | undefined,
-                  metadata: (node as any).metadata as Record<string, unknown> | undefined
-                });
+              const now = Date.now();
+              const isDoubleClick = now - lastClickTimeRef.current < 400;
+              lastClickTimeRef.current = now;
+
+              if (isDoubleClick) {
+                if (onNodeClick) {
+                  onNodeClick({
+                    id: (node.id as string) || "",
+                    label: (node.label as "File" | "Class" | "Function") || "File",
+                    name: (node.name as string) || "",
+                    file_path: (node.file_path as string) || "",
+                    size: (node as any).size as number | undefined,
+                    metadata: (node as any).metadata as Record<string, unknown> | undefined
+                  });
+                }
+              } else {
+                setFocusNode(node.id as string);
               }
             }}
+            onBackgroundClick={() => setFocusNode(null)}
             onNodeHover={(node: any) => setHoverNode(node ? (node.id as string) : null)}
             enableZoomInteraction={true}
             enableNavigationControls={true}
@@ -829,7 +856,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
             ref={fgRef}
             width={dimensions.width}
             height={dimensions.height}
-            graphData={graphData}
+            graphData={displayGraphData}
             backgroundColor={graphTheme.background}
             nodeCanvasObject={paintNode}
             linkColor={getLinkColor}
@@ -850,18 +877,26 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
             linkDirectionalArrowRelPos={1}
             cooldownTicks={100}
             onNodeClick={(node: any, event: any) => {
-              setFocusNode(node.id as string);
-              if (onNodeClick) {
-                onNodeClick({
-                  id: (node.id as string) || "",
-                  label: (node.label as "File" | "Class" | "Function") || "File",
-                  name: (node.name as string) || "",
-                  file_path: (node.file_path as string) || "",
-                  size: (node as any).size as number | undefined,
-                  metadata: (node as any).metadata as Record<string, unknown> | undefined
-                });
+              const now = Date.now();
+              const isDoubleClick = now - lastClickTimeRef.current < 400;
+              lastClickTimeRef.current = now;
+
+              if (isDoubleClick) {
+                if (onNodeClick) {
+                  onNodeClick({
+                    id: (node.id as string) || "",
+                    label: (node.label as "File" | "Class" | "Function") || "File",
+                    name: (node.name as string) || "",
+                    file_path: (node.file_path as string) || "",
+                    size: (node as any).size as number | undefined,
+                    metadata: (node as any).metadata as Record<string, unknown> | undefined
+                  });
+                }
+              } else {
+                setFocusNode(node.id as string);
               }
             }}
+            onBackgroundClick={() => setFocusNode(null)}
             onNodeHover={(node: any) => setHoverNode(node ? (node.id as string) : null)}
             enableZoomInteraction={true}
             enablePanInteraction={true}
