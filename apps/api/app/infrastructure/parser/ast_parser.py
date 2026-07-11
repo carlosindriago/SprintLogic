@@ -58,10 +58,9 @@ def get_language(ext):
 
 
 from uuid import UUID
-from typing import Optional, List, Dict, Set
 
 
-def resolve_python_import(base_project_dir: Path, import_statement: str) -> Optional[Path]:
+def resolve_python_import(base_project_dir: Path, import_statement: str) -> Path | None:
     """
     Resuelve una declaración de importación de Python emulando la semántica del intérprete.
     Retorna la ruta física absoluta si el módulo existe en el proyecto local.
@@ -74,13 +73,13 @@ def resolve_python_import(base_project_dir: Path, import_statement: str) -> Opti
 
     # Traducción Semántica de Nomenclatura
     rel_path = import_statement.replace(".", "/")
-    
+
     # Filtro Nivel 2: Resolución de Archivo Físico
     # Evaluación de Módulo Directo
     module_path = base_project_dir / f"{rel_path}.py"
     if module_path.is_file():
         return module_path
-        
+
     # Evaluación de Paquete
     package_path = base_project_dir / rel_path / "__init__.py"
     if package_path.is_file():
@@ -249,15 +248,15 @@ class ASTParserService:
         # Resolve imports across files
         base_dir = Path(dir_path)
         file_paths = [n.file_path for n in all_nodes if n.label == NodeLabel.FILE]
-        
+
         for source_id, imports in file_imports.items():
             source_path_str = source_id.replace("file:", "")
             is_python = source_path_str.endswith(".py")
-            
+
             for imp in imports:
                 if not imp:
                     continue
-                    
+
                 if is_python:
                     target_path = resolve_python_import(base_dir, imp)
                     if target_path:
@@ -275,9 +274,9 @@ class ASTParserService:
                     normalized_imp = imp.replace(".", "/").lstrip("./@")
                     if not normalized_imp:
                         continue
-                        
+
                     target_stem = Path(normalized_imp).stem
-                    
+
                     for fp in file_paths:
                         fp_path = Path(fp)
                         if fp_path.stem == target_stem or fp_path.parent.name == target_stem:
