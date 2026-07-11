@@ -288,15 +288,12 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
   }, [projectId]);
 
   useEffect(() => {
-    // When switching modes (2D/3D), reset coordinates to force a clean volumetric recalculation
-    if (graphData && graphData.nodes) {
+    // When switching to 3D, break the 2D plane by adding a small random Z coordinate
+    if (graphData && graphData.nodes && is3D) {
       graphData.nodes.forEach((n: any) => {
-        delete n.x;
-        delete n.y;
-        delete n.z;
-        delete n.vx;
-        delete n.vy;
-        delete n.vz;
+        if (n.z === undefined || n.z === 0) {
+          n.z = (Math.random() - 0.5) * 150;
+        }
       });
     }
 
@@ -308,6 +305,14 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
         return link.type === 'IMPORTS' ? 240 : 80;
       });
       fgRef.current.d3ReheatSimulation();
+      
+      // Give physics a moment to push nodes apart, then fit the camera
+      const timer = setTimeout(() => {
+        if (fgRef.current) {
+          fgRef.current.zoomToFit(1000, 150);
+        }
+      }, 1200);
+      return () => clearTimeout(timer);
     }
   }, [graphData, is3D]);
 
