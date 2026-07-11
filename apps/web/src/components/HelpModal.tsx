@@ -22,16 +22,20 @@ export function HelpModal({ isOpen, onClose }: HelpModalProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
       <div 
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="help-modal-title"
         className="bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl w-full max-w-2xl overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between p-4 border-b border-zinc-800 bg-zinc-900/50">
-          <h2 className="text-lg font-semibold text-zinc-100">Cheat Sheet & Ayuda (SprintLogic IDE)</h2>
+          <h2 id="help-modal-title" className="text-lg font-semibold text-zinc-100">Cheat Sheet & Ayuda (SprintLogic IDE)</h2>
           <button 
             onClick={onClose}
-            className="text-zinc-500 hover:text-zinc-300 transition-colors p-1 rounded hover:bg-zinc-800"
+            aria-label="Close"
+            className="text-zinc-500 hover:text-zinc-300 transition-colors p-1 rounded hover:bg-zinc-800 focus-visible:ring-2 focus-visible:outline-none"
           >
-            <X className="w-5 h-5" />
+            <X aria-hidden="true" className="w-5 h-5" />
           </button>
         </div>
 
