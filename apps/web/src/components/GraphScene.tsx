@@ -284,6 +284,25 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     }
 
     const faded = isFaded(id);
+
+    // Draw Out-Degree Breathing Halo (behind the node to represent active sending)
+    if (n.out_degree > 0 && !faded) {
+      const pulse = Math.sin(Date.now() / 300) * 1.5;
+      const haloRadius = radius + 3.5 + pulse;
+      ctx.beginPath();
+      ctx.arc(n.x || 0, n.y || 0, haloRadius, 0, 2 * Math.PI, false);
+      
+      let haloColor = "rgba(100, 116, 139, 0.12)";
+      if (color.startsWith('#')) {
+        const r = parseInt(color.slice(1, 3), 16);
+        const g = parseInt(color.slice(3, 5), 16);
+        const b = parseInt(color.slice(5, 7), 16);
+        haloColor = `rgba(${r}, ${g}, ${b}, 0.16)`;
+      }
+      ctx.fillStyle = haloColor;
+      ctx.fill();
+    }
+
     ctx.globalAlpha = faded ? graphTheme.dimOpacity : 1;
 
     let isIconDrawn = false;
@@ -302,6 +321,21 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
       ctx.arc(n.x || 0, n.y || 0, radius, 0, 2 * Math.PI, false);
       ctx.fillStyle = color;
       ctx.fill();
+    }
+
+    // Draw In-Degree Expanding Ripple (for small nodes receiving flow)
+    if (n.in_degree > 0 && (label === "Function" || label === "Interface" || radius < 5) && !faded) {
+      const t = (Date.now() / 1200) % 1.0; 
+      const rippleRadius = radius + t * 8;
+      const rippleOpacity = (1 - t) * 0.45;
+      
+      ctx.beginPath();
+      ctx.arc(n.x || 0, n.y || 0, rippleRadius, 0, 2 * Math.PI, false);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 0.6;
+      ctx.globalAlpha = rippleOpacity;
+      ctx.stroke();
+      ctx.globalAlpha = faded ? graphTheme.dimOpacity : 1; 
     }
 
     // Hover tooltip info (LOC / Degrees)
