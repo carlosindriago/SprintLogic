@@ -222,10 +222,10 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
   useEffect(() => {
     // Configure D3 Force layout for a "solar system" spread
     if (fgRef.current) {
-      fgRef.current.d3Force('charge').strength(-400); // Strong repulsion to spread clusters
+      fgRef.current.d3Force('charge').strength(-1000); // Much stronger repulsion to spread nodes out
       fgRef.current.d3Force('link').distance((link: any) => {
-        // File-to-File (imports) are pushed further apart, internal classes orbit closely
-        return link.type === 'IMPORTS' ? 150 : 40;
+        // File-to-File (imports) are pushed far apart, internal classes orbit closely
+        return link.type === 'IMPORTS' ? 240 : 80;
       });
     }
   }, [graphData]);
@@ -334,22 +334,27 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     
     const faded = isFaded(sourceId) && isFaded(targetId);
     
-    let baseColor = "#38BDF8"; // default bright sky blue
+    let baseColor = "rgba(228, 228, 231, 0.15)"; // Light gray (zinc-200 at 15% opacity)
     if (showCycles && link.is_cycle) {
-      baseColor = "#FF3366"; // Neon pink/red for cycles
+      baseColor = "rgba(248, 113, 113, 0.4)"; // Soft red/pink for cycles
     } else if (link.type === "IMPORTS") {
-      baseColor = "#00E5FF"; // Neon cyan for imports
+      baseColor = "rgba(228, 228, 231, 0.18)"; // Slightly visible light gray for imports
     } else {
-      baseColor = "#10B981"; // Emerald green for calls/others
+      baseColor = "rgba(228, 228, 231, 0.10)"; // Fainter gray for internal calls
     }
     
     if (faded) {
-      return baseColor === "#FF3366" ? "rgba(255, 51, 102, 0.05)" : 
-             baseColor === "#00E5FF" ? "rgba(0, 229, 255, 0.05)" : 
-             "rgba(16, 185, 129, 0.05)";
+      return showCycles && link.is_cycle ? "rgba(248, 113, 113, 0.05)" : "rgba(228, 228, 231, 0.03)";
     }
     return baseColor;
   }, [isFaded, showCycles]);
+
+  const getParticleColor = useCallback((link: any) => {
+    if (showCycles && link.is_cycle) {
+      return "rgba(252, 165, 165, 0.8)"; // Soft light red for cycle current
+    }
+    return "rgba(203, 213, 225, 0.65)"; // Soft slate gray-blue for normal flow
+  }, [showCycles]);
 
   const getLinkWidth = useCallback((link: any) => {
     const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
@@ -357,9 +362,9 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     const faded = isFaded(sourceId) && isFaded(targetId);
     if (faded) return 0.2;
     
-    if (showCycles && link.is_cycle) return 2.0;
-    if (link.type === "IMPORTS") return 1.2;
-    return 0.8;
+    if (showCycles && link.is_cycle) return 1.8;
+    if (link.type === "IMPORTS") return 0.8;
+    return 0.5;
   }, [isFaded, showCycles]);
 
   const getLinkVisibility = useCallback((link: any) => {
@@ -539,6 +544,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
           linkColor={getLinkColor}
           linkWidth={getLinkWidth}
           linkVisibility={getLinkVisibility}
+          linkCurvature={0.15}
           linkDirectionalParticles={(link: any) => {
             const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
             const targetId = typeof link.target === 'object' ? link.target.id : link.target;
@@ -548,7 +554,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
           }}
           linkDirectionalParticleSpeed={(link: any) => (showCycles && link.is_cycle ? 0.012 : 0.005)}
           linkDirectionalParticleWidth={2}
-          linkDirectionalParticleColor={getLinkColor}
+          linkDirectionalParticleColor={getParticleColor}
           linkDirectionalArrowLength={3.5}
           linkDirectionalArrowRelPos={1}
           onNodeClick={(node: any, event: any) => {
