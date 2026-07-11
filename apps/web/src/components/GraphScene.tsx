@@ -449,7 +449,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     const targetId = typeof link.target === 'object' ? link.target.id : link.target;
     
     const faded = isFaded(sourceId) && isFaded(targetId);
-    const opacityFactor = is3D ? 0.35 : 1.0; 
+    const opacityFactor = is3D ? 0.15 : 1.0; 
     
     let baseColor = `rgba(228, 228, 231, ${0.15 * opacityFactor})`; // Light gray (zinc-200 at 15% opacity)
     if (showCycles && link.is_cycle) {
@@ -551,21 +551,21 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
       radius = Math.min(Math.max(size / 2000, 3.5), 8);
       colorHex = graphTheme.file;
     } else if (label === "Class") {
-      radius = 3.5; // Classes are slightly larger structural units
+      radius = 2.0; // Classes are slightly larger structural units
       colorHex = graphTheme.class;
     } else if (label === "Function") {
-      radius = 1.2; // Functions are small orbital nodes
+      radius = 0.8; // Functions are small orbital nodes
       colorHex = graphTheme.function;
     } else if (label === "Interface") {
-      radius = 2.4; // Interfaces sit in the middle
+      radius = 1.4; // Interfaces sit in the middle
       colorHex = graphTheme.interface;
     }
 
     const geometry = new THREE.SphereGeometry(radius, 16, 16);
-    const material = new THREE.MeshBasicMaterial({
+    const material = new THREE.MeshLambertMaterial({
       color: colorHex,
       transparent: true,
-      opacity: faded ? 0.15 : 1.0
+      opacity: faded ? 0.15 : 0.95
     });
     
     return new THREE.Mesh(geometry, material);
@@ -691,8 +691,8 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
         )}
       </div>
 
-      {/* Zoom Controls Overlay */}
-      <div className="absolute bottom-6 left-4 z-10 flex flex-col gap-2 p-1.5 rounded-lg shadow-lg" 
+      {/* Unified Graph Controls Toolbar */}
+      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 flex flex-row items-center gap-1.5 p-1.5 rounded-lg shadow-lg" 
            style={{ backgroundColor: graphTheme.surfaceElevated, border: `1px solid ${graphTheme.border}` }}>
         <button 
           onClick={handleZoomIn}
@@ -715,18 +715,20 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
         >
           <ZoomOut className="w-4 h-4" />
         </button>
-      </div>
 
-      {/* Visualization Controls Overlay (3D, Physics, Animation) */}
-      <div className="absolute bottom-6 left-16 z-10 flex flex-col gap-2 p-1.5 rounded-lg shadow-lg" 
-           style={{ backgroundColor: graphTheme.surfaceElevated, border: `1px solid ${graphTheme.border}` }}>
+        <div className="w-px h-6 bg-[#3f3f46] mx-1"></div>
+
         <button 
           onClick={() => setIs3D(!is3D)}
-          className={`px-2 py-1 rounded-md text-[10px] font-bold transition-colors border border-[#3f3f46] bg-[#18181b] hover:bg-zinc-800 ${is3D ? "text-blue-400" : "text-zinc-400"}`}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-colors border border-[#3f3f46] bg-[#18181b] hover:bg-zinc-800 ${is3D ? "text-blue-400" : "text-zinc-400"}`}
           title={is3D ? "Cambiar a Vista 2D" : "Cambiar a Vista 3D"}
         >
-          {is3D ? "Ver 2D" : "Ver 3D"}
+          {is3D ? <Box className="w-3.5 h-3.5" /> : <Layers className="w-3.5 h-3.5" />}
+          {is3D ? "3D" : "2D"}
         </button>
+        
+        <div className="w-px h-6 bg-[#3f3f46] mx-1"></div>
+
         <button 
           onClick={togglePhysics}
           className={`p-1.5 rounded-md transition-colors ${isPhysicsActive ? "text-emerald-400 hover:text-emerald-300 bg-emerald-950/20" : "text-zinc-500 hover:text-zinc-300 hover:bg-[#3f3f46]"}`}
@@ -764,8 +766,9 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
               return showCycles && link.is_cycle ? 4 : 2;
             }) : 0}
             linkDirectionalParticleSpeed={(link: any) => (showCycles && link.is_cycle ? 0.012 : 0.005)}
-            linkDirectionalParticleWidth={1.0}
+            linkDirectionalParticleWidth={0.8}
             linkDirectionalParticleColor={getParticleColor}
+            linkOpacity={0.2}
             cooldownTicks={100}
             onNodeClick={(node: any, event: any) => {
               setFocusNode(node.id as string);
