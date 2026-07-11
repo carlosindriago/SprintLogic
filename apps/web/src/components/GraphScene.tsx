@@ -284,9 +284,10 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     }
 
     const faded = isFaded(id);
+    const isZoomedOut = globalScale < 1.2; // LOD (Level of Detail) threshold
 
-    // Draw Out-Degree Breathing Halo (behind the node to represent active sending)
-    if (n.out_degree > 0 && !faded) {
+    // Draw Out-Degree Breathing Halo (behind the node to represent active sending) - Skipped if zoomed out
+    if (n.out_degree > 0 && !faded && !isZoomedOut) {
       const pulse = Math.sin(Date.now() / 300) * 1.5;
       const haloRadius = radius + 3.5 + pulse;
       ctx.beginPath();
@@ -323,8 +324,8 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
       ctx.fill();
     }
 
-    // Draw In-Degree Expanding Ripple (for small nodes receiving flow)
-    if (n.in_degree > 0 && (label === "Function" || label === "Interface" || radius < 5) && !faded) {
+    // Draw In-Degree Expanding Ripple (for small nodes receiving flow) - Skipped if zoomed out
+    if (n.in_degree > 0 && (label === "Function" || label === "Interface" || radius < 5) && !faded && !isZoomedOut) {
       const t = (Date.now() / 1200) % 1.0; 
       const rippleRadius = radius + t * 8;
       const rippleOpacity = (1 - t) * 0.45;
