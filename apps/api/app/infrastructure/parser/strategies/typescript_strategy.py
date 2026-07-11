@@ -61,3 +61,40 @@ class TypeScriptAnalyzerStrategy(LanguageAnalyzerStrategy):
         except Exception as e:
             logger.error(f"Error crítico ejecutando el subproceso de TypeScript: {str(e)}")
             raise
+
+    async def parse_skeletons(self, project_path: Path, relative_paths: list[str]) -> dict[str, Any]:
+        """
+        Calls Node.js ts_parser.js in 'skeleton' mode for specific files.
+        """
+        if not relative_paths:
+            return {}
+
+        script_path = Path(__file__).resolve().parent.parent.parent.parent.parent / "scripts" / "ts_parser.js"
+        
+        if not script_path.exists():
+            raise FileNotFoundError(f"No se encontró el parser de Node en: {script_path}")
+
+        files_arg = ",".join(relative_paths)
+        logger.info(f"Extrayendo esqueletos TypeScript para: {files_arg}")
+        
+        try:
+            process = await asyncio.create_subprocess_exec(
+                "node", str(script_path), str(project_path), "skeleton", files_arg,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                stdin=asyncio.subprocess.DEVNULL 
+            )
+
+            stdout_bytes, stderr_bytes = await process.communicate()
+
+            if process.returncode != 0:
+                error_msg = stderr_bytes.decode('utf-8', errors='replace').strip()
+                logger.error(f"El extractor de Node.js falló: {error_msg}")
+                raise RuntimeError(f"Fallo al extraer esqueletos TypeScript: {error_msg}")
+
+            output_str = stdout_bytes.decode('utf-8')
+            return json.loads(output_str)
+
+        except Exception as e:
+            logger.error(f"Error ejecutando extractor de esqueletos: {str(e)}")
+            return {}

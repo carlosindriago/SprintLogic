@@ -295,6 +295,12 @@ async def get_project_graph(project_id: str, session: AsyncSession = Depends(get
     return {"nodes": nodes_dict, "links": links_dict}
 
 
+from concurrent.futures import ProcessPoolExecutor
+from fastapi import Request
+
+def get_process_pool(request: Request) -> ProcessPoolExecutor:
+    return request.app.state.process_pool
+
 class AnalyzeGraphRequest(BaseModel):
     model: str = "gemini/gemini-2.5-flash"
     fallback_model: str | None = None
@@ -302,7 +308,10 @@ class AnalyzeGraphRequest(BaseModel):
 
 @router.post("/projects/{project_id}/graph/analyze")
 async def analyze_project_graph(
-    project_id: str, request: AnalyzeGraphRequest, session: AsyncSession = Depends(get_db_session)
+    project_id: str, 
+    request: AnalyzeGraphRequest, 
+    session: AsyncSession = Depends(get_db_session),
+    pool: ProcessPoolExecutor = Depends(get_process_pool)
 ):
     try:
         project_uuid = UUID(project_id)
@@ -327,6 +336,41 @@ async def analyze_project_graph(
     filtered_edges = [
         e for e in edges if e.source_id in valid_node_ids and e.target_id in valid_node_ids
     ]
+    
+    # --- CPU Bound Graph Metrics ---
+    import asyncio
+    from app.application.graph_metrics import _compute_graph_metrics_cpu_bound
+    
+    loop = asyncio.get_running_loop()
+    nodes_data = [{"id": n.id} for n in filtered_nodes]
+    edges_data = [{"source": e.source_id, "target": e.target_id} for e in filtered_edges]
+    
+    try:
+        metrics = await loop.run_in_executor(pool, _compute_graph_metrics_cpu_bound, nodes_data, edges_data)
+    except Exception as e:
+        logger.error("Error computing graph metrics: %s", e, exc_info=True)
+        metrics = None
+
+    # --- Enriquecimiento de Contexto a Demanda (Lazy Context Gathering) ---
+    skeletons = {}
+    if metrics:
+        anomalous_files = set()
+        for cycle in metrics.get("cyclic_dependencies", []):
+            for node_id in cycle:
+                anomalous_files.add(node_id)
+        for god in metrics.get("god_objects_in", []):
+            anomalous_files.add(god["node"])
+        for god in metrics.get("god_objects_out", []):
+            anomalous_files.add(god["node"])
+            
+        anomalous_list = list(anomalous_files)
+        if anomalous_list:
+            from app.infrastructure.parser.analyzer_factory import AnalyzerFactory
+            analyzer = AnalyzerFactory.get_analyzer(Path(project.path))
+            try:
+                skeletons = await analyzer.parse_skeletons(Path(project.path), anomalous_list)
+            except Exception as e:
+                logger.error("Error gathering skeletons: %s", e, exc_info=True)
 
     nodes_summary = []
     for n in filtered_nodes:
@@ -362,6 +406,15 @@ async def analyze_project_graph(
     if len(edges_summary) > 200:
         edges_text += f"\n... (and {len(edges_summary) - 200} more edges)"
 
+    # Inject metrics into prompt so LLM is aware
+    metrics_context = f"\n\nMÉTRICAS ESTRUCTURALES DETERMINISTAS:\n{metrics}\n" if metrics else ""
+    
+    # Inject skeletons into prompt context
+    skeletons_context = ""
+    if skeletons:
+        import json
+        skeletons_context = f"\n\nANEXO DE CONTEXTO (ESTRUCTURA DE ARCHIVOS ANÓMALOS):\n{json.dumps(skeletons, indent=2)}\n"
+
     _IRON_PROMPT_PREAMBLE = """\
 CONTEXTO DE DOMINIO (LEER ANTES DE ANALIZAR):
 Estás analizando el grafo de dependencias de "SprintLogic", una herramienta de desarrollo que lee el código fuente del usuario (AST Parsing).
@@ -390,7 +443,7 @@ Ejemplo: # Análisis: sprintLogic-monorepo - Arquitectura Hexagonal y Violación
 ---
 """
 
-    prompt = f"{_IRON_PROMPT_PREAMBLE}" + f"""Analiza la estructura de este proyecto de software basándote en su grafo de dependencias de código.
+    prompt = f"{_IRON_PROMPT_PREAMBLE}" + f"""Analiza la estructura de este proyecto de software basándote en su grafo de dependencias de código.{metrics_context}{skeletons_context}
 Ruta del proyecto: {project.path}
 Nombre del proyecto: {project.name}
 
@@ -403,8 +456,8 @@ Relaciones/Dependencias (Enlaces):
 Por favor, realiza un análisis profesional y exhaustivo del proyecto:
 1. Explica brevemente de qué trata este proyecto y qué tecnologías predominan (lenguajes, frameworks).
 2. Describe la arquitectura del código basándote en la estructura de carpetas y dependencias (Hexagonal, MVC, Monolito, etc.).
-3. Identifica posibles problemas de diseño, dependencias circulares o cuellos de botella estructurales. Cita los nodos exactos como evidencia.
-4. Sugiere mejoras específicas para la calidad del código, modularidad y mantenibilidad.
+3. Identifica posibles problemas de diseño, dependencias circulares o cuellos de botella estructurales. Cita los nodos exactos como evidencia. Considera las Métricas Estructurales e Información de Contexto si las hay.
+4. Sugiere mejoras específicas para la calidad del código, modularidad y mantenibilidad basándote estrictamente en las anomalías detectadas.
 
 Responde en formato Markdown limpio, directo y profesional. Usa títulos y listas para que sea fácil de leer."""
 
@@ -434,6 +487,7 @@ Responde en formato Markdown limpio, directo y profesional. Usa títulos y lista
             project_id=project_uuid,
             content=analysis,
             ai_model_version=used_model,
+            structural_metrics=metrics,
             created_at=datetime.utcnow()
         )
         session.add(report)

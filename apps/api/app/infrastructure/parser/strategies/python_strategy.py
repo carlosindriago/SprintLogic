@@ -53,3 +53,42 @@ class PythonAnalyzerStrategy(LanguageAnalyzerStrategy):
         except Exception as e:
             logger.error(f"Error parseando proyecto Python: {e}")
             return {"nodes": [], "edges": []}
+
+    async def parse_skeletons(self, project_path: Path, relative_paths: list[str]) -> dict[str, Any]:
+        """
+        Extract signatures and structures from Python files.
+        """
+        from app.infrastructure.parser.ast_parser import extract_nodes_from_code
+        from app.domain.graph_models import NodeLabel
+        import uuid
+        
+        skeletons = {}
+        for file_rel_path in relative_paths:
+            clean_path = file_rel_path.replace("file:", "")
+            file_abs_path = project_path / clean_path
+            if not file_abs_path.is_file():
+                continue
+                
+            try:
+                with open(file_abs_path, "rb") as f:
+                    code = f.read()
+                
+                nodes, _, imports = extract_nodes_from_code(
+                    uuid.uuid4(), str(file_abs_path), code, ".py"
+                )
+                
+                classes = [n.name for n in nodes if n.label == NodeLabel.CLASS]
+                functions = [n.name for n in nodes if n.label == NodeLabel.FUNCTION]
+                
+                code_str = code.decode("utf-8", errors="replace")
+                
+                skeletons[file_rel_path] = {
+                    "imports": list(imports),
+                    "classes": classes,
+                    "functions": functions,
+                    "full_text": code_str if len(code_str) < 2000 else "Archivo muy largo, solo se muestra estructura."
+                }
+            except Exception as e:
+                logger.error(f"Error extrayendo esqueleto Python para {file_rel_path}: {e}")
+                
+        return skeletons
