@@ -278,6 +278,18 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
   }, [projectId]);
 
   useEffect(() => {
+    // When switching modes (2D/3D), reset coordinates to force a clean volumetric recalculation
+    if (graphData && graphData.nodes) {
+      graphData.nodes.forEach((n: any) => {
+        delete n.x;
+        delete n.y;
+        delete n.z;
+        delete n.vx;
+        delete n.vy;
+        delete n.vz;
+      });
+    }
+
     // Configure D3 Force layout for a "solar system" spread
     if (fgRef.current) {
       fgRef.current.d3Force('charge').strength(-1000); // Much stronger repulsion to spread nodes out
@@ -285,8 +297,9 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
         // File-to-File (imports) are pushed far apart, internal classes orbit closely
         return link.type === 'IMPORTS' ? 240 : 80;
       });
+      fgRef.current.d3ReheatSimulation();
     }
-  }, [graphData]);
+  }, [graphData, is3D]);
 
   const lowerSearchQuery = useMemo(() => searchQuery?.toLowerCase() || "", [searchQuery]);
 
@@ -730,7 +743,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
             backgroundColor={graphTheme.background}
             nodeThreeObject={getNodeThreeObject}
             linkColor={getLinkColor}
-            linkWidth={(link: any) => getLinkWidth(link) * 1.5}
+            linkWidth={(link: any) => getLinkWidth(link) * 0.4}
             linkVisibility={getLinkVisibility}
             linkCurvature={0.15}
             linkDirectionalParticles={enableFlow ? ((link: any) => {
@@ -741,7 +754,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
               return showCycles && link.is_cycle ? 4 : 2;
             }) : 0}
             linkDirectionalParticleSpeed={(link: any) => (showCycles && link.is_cycle ? 0.012 : 0.005)}
-            linkDirectionalParticleWidth={2.5}
+            linkDirectionalParticleWidth={1.0}
             linkDirectionalParticleColor={getParticleColor}
             cooldownTicks={100}
             onNodeClick={(node: any, event: any) => {
@@ -781,7 +794,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
               return showCycles && link.is_cycle ? 4 : 2;
             }) : 0}
             linkDirectionalParticleSpeed={(link: any) => (showCycles && link.is_cycle ? 0.012 : 0.005)}
-            linkDirectionalParticleWidth={2}
+            linkDirectionalParticleWidth={1.0}
             linkDirectionalParticleColor={getParticleColor}
             linkDirectionalArrowLength={3.5}
             linkDirectionalArrowRelPos={1}
