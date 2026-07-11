@@ -3,6 +3,7 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useState, useRef, ComponentType, useMemo, useCallback } from "react";
+import * as THREE from "three";
 import { getProjectGraph, analyzeProjectGraph } from "@/lib/api";
 import { GraphData, GraphNode } from "@/types";
 import { ForceGraphProps, NodeObject, LinkObject } from "react-force-graph-2d";
@@ -64,6 +65,39 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
   
   const [iconsLoaded, setIconsLoaded] = useState(false);
   const iconImages = useRef<Record<string, HTMLImageElement>>({});
+  
+  // 3D Texture Preloader
+  const textureLoader = useMemo(() => {
+    if (typeof window === 'undefined') return null;
+    return new THREE.TextureLoader();
+  }, []);
+  const textures = useRef<Record<string, THREE.Texture>>({});
+  const [threeTexturesLoaded, setThreeTexturesLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!textureLoader) return;
+    let loadedCount = 0;
+    const extensions = Object.keys(ICON_URLS);
+    extensions.forEach((ext) => {
+      textureLoader.load(
+        ICON_URLS[ext],
+        (texture) => {
+          textures.current[ext] = texture;
+          loadedCount++;
+          if (loadedCount === extensions.length) {
+            setThreeTexturesLoaded(true);
+          }
+        },
+        undefined,
+        () => {
+          loadedCount++;
+          if (loadedCount === extensions.length) {
+            setThreeTexturesLoaded(true);
+          }
+        }
+      );
+    });
+  }, [textureLoader]);
 
   const [analyzing, setAnalyzing] = useState(false);
   const [savedAnalysis, setSavedAnalysis] = useState<string | null>(null);
@@ -446,6 +480,71 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     return true;
   }, [activeTypes, lowerSearchQuery]);
 
+  const getNodeThreeObject = useCallback((node: any) => {
+    const label = node.label as string;
+    const name = node.name as string;
+    const id = node.id as string;
+    
+    if (!activeTypes.has(label)) {
+      return new THREE.Object3D();
+    }
+    
+    if (lowerSearchQuery && !name.toLowerCase().includes(lowerSearchQuery)) {
+      return new THREE.Object3D();
+    }
+
+    const faded = isFaded(id);
+    
+    // 1. Files: represented by their language/technology sprite textures
+    if (label === "File") {
+      const ext = name.split(".").pop()?.toLowerCase() || "";
+      const texture = textures.current[ext];
+      
+      if (texture) {
+        const material = new THREE.SpriteMaterial({ 
+          map: texture,
+          transparent: true,
+          opacity: faded ? 0.15 : 1.0
+        });
+        const sprite = new THREE.Sprite(material);
+        
+        // Much clearer size differentiation for file sizes (LOC/size)
+        const size = (node.size as number) || 0;
+        const scale = Math.min(Math.max(size / 1500, 8), 24);
+        sprite.scale.set(scale, scale, 1);
+        return sprite;
+      }
+    }
+
+    // 2. Class / Function / Interface: represented by sphere geometries with clear size hierarchy
+    let radius = 3;
+    let colorHex = graphTheme.unknown;
+    
+    if (label === "File") {
+      const size = (node.size as number) || 0;
+      radius = Math.min(Math.max(size / 1500, 5), 12);
+      colorHex = graphTheme.file;
+    } else if (label === "Class") {
+      radius = 6.5; // Classes are larger and important structural units
+      colorHex = graphTheme.class;
+    } else if (label === "Function") {
+      radius = 2.5; // Functions are smaller utility files/elements
+      colorHex = graphTheme.function;
+    } else if (label === "Interface") {
+      radius = 4.5; // Interfaces sit in the middle of scale
+      colorHex = graphTheme.interface;
+    }
+
+    const geometry = new THREE.SphereGeometry(radius, 16, 16);
+    const material = new THREE.MeshBasicMaterial({
+      color: colorHex,
+      transparent: true,
+      opacity: faded ? 0.15 : 1.0
+    });
+    
+    return new THREE.Mesh(geometry, material);
+  }, [activeTypes, lowerSearchQuery, isFaded, threeTexturesLoaded]);
+
   const toggleType = (type: string) => {
     setActiveTypes(prev => {
       const next = new Set(prev);
@@ -595,13 +694,22 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
       {/* Visualization Controls Overlay (3D, Physics, Animation) */}
       <div className="absolute bottom-6 left-16 z-10 flex flex-col gap-2 p-1.5 rounded-lg shadow-lg" 
            style={{ backgroundColor: graphTheme.surfaceElevated, border: `1px solid ${graphTheme.border}` }}>
-        <button 
-          onClick={() => setIs3D(!is3D)}
-          className={`p-1.5 rounded-md transition-colors ${is3D ? "text-blue-400 hover:text-blue-300 bg-blue-900/20" : "text-zinc-400 hover:text-white hover:bg-[#3f3f46]"}`}
-          title={is3D ? "Cambiar a vista 2D" : "Cambiar a vista 3D"}
-        >
-          <Layers className="w-4 h-4" />
-        </button>
+        <div className="flex bg-[#18181b] p-0.5 rounded-md border border-[#3f3f46] justify-center items-center">
+          <button 
+            onClick={() => setIs3D(false)}
+            className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition-colors ${!is3D ? "bg-zinc-800 text-zinc-200" : "text-zinc-500 hover:text-zinc-300"}`}
+            title="Vista Plana 2D"
+          >
+            2D
+          </button>
+          <button 
+            onClick={() => setIs3D(true)}
+            className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition-colors ${is3D ? "bg-zinc-800 text-blue-400" : "text-zinc-500 hover:text-zinc-300"}`}
+            title="Vista Tridimensional 3D"
+          >
+            3D
+          </button>
+        </div>
         <button 
           onClick={togglePhysics}
           className={`p-1.5 rounded-md transition-colors ${isPhysicsActive ? "text-emerald-400 hover:text-emerald-300 bg-emerald-950/20" : "text-zinc-500 hover:text-zinc-300 hover:bg-[#3f3f46]"}`}
@@ -626,17 +734,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
             height={dimensions.height}
             graphData={graphData}
             backgroundColor={graphTheme.background}
-            nodeColor={(node: any) => {
-              const label = node.label;
-              if (!activeTypes.has(label)) return "rgba(0,0,0,0)";
-              if (lowerSearchQuery && !node.name.toLowerCase().includes(lowerSearchQuery)) return "rgba(0,0,0,0)";
-              if (isFaded(node.id)) return "rgba(156, 163, 175, 0.15)";
-              return graphTheme[label.toLowerCase() as keyof typeof graphTheme] || graphTheme.unknown;
-            }}
-            nodeVal={(node: any) => {
-              if (node.label === "File") return Math.min(Math.max((node.size || 0) / 2000, 2), 6);
-              return 3;
-            }}
+            nodeThreeObject={getNodeThreeObject}
             linkColor={getLinkColor}
             linkWidth={(link: any) => getLinkWidth(link) * 1.5}
             linkVisibility={getLinkVisibility}
