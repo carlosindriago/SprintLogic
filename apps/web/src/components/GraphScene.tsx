@@ -60,8 +60,9 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
   const [activeTypes, setActiveTypes] = useState<Set<string>>(new Set(["File", "Class", "Function", "Interface"]));
   
   const [is3D, setIs3D] = useState(false);
-  const [enableFlow, setEnableFlow] = useState(true);
+  const [enableFlow, setEnableFlow] = useState(false);
   const [isPhysicsActive, setIsPhysicsActive] = useState(true);
+  const [glowingLinks, setGlowingLinks] = useState<Set<string>>(new Set());
   
   const [iconsLoaded, setIconsLoaded] = useState(false);
   const iconImages = useRef<Record<string, HTMLImageElement>>({});
@@ -320,6 +321,28 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     }
   }, [graphData, is3D]);
 
+  useEffect(() => {
+    if (!enableFlow || !is3D || !graphData || !graphData.links) {
+      setGlowingLinks(new Set());
+      return;
+    }
+    
+    // Every 1.5 seconds, pick a random subset of links (10%) to glow
+    const interval = setInterval(() => {
+      const newGlowing = new Set<string>();
+      graphData.links.forEach((link: any) => {
+        if (Math.random() < 0.1) {
+          const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+          const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+          newGlowing.add(`${sourceId}-${targetId}`);
+        }
+      });
+      setGlowingLinks(newGlowing);
+    }, 1500);
+    
+    return () => clearInterval(interval);
+  }, [enableFlow, is3D, graphData]);
+
   const lowerSearchQuery = useMemo(() => searchQuery?.toLowerCase() || "", [searchQuery]);
 
   const neighbors = useMemo(() => {
@@ -458,24 +481,30 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     const targetId = typeof link.target === 'object' ? link.target.id : link.target;
     
     const faded = isFaded(sourceId) && isFaded(targetId);
-    const opacityFactor = is3D ? 0.15 : 1.0; 
+    const opacityFactor = is3D ? 0.6 : 1.0; 
     
-    let baseColor = `rgba(228, 228, 231, ${0.15 * opacityFactor})`; // Light gray (zinc-200 at 15% opacity)
+    // In 3D, glowing lines when flow is enabled
+    const isGlowing = is3D && enableFlow && glowingLinks.has(`${sourceId}-${targetId}`);
+    if (isGlowing && !faded) {
+      return "rgba(96, 165, 250, 0.85)"; // Bright blue glow for animation
+    }
+    
+    let baseColor = `rgba(228, 228, 231, ${0.25 * opacityFactor})`; // Light gray (zinc-200 at 25% opacity)
     if (showCycles && link.is_cycle) {
-      baseColor = `rgba(248, 113, 113, ${0.4 * opacityFactor})`; // Soft red/pink for cycles
+      baseColor = `rgba(248, 113, 113, ${0.5 * opacityFactor})`; // Soft red/pink for cycles
     } else if (link.type === "IMPORTS") {
-      baseColor = `rgba(228, 228, 231, ${0.18 * opacityFactor})`; // Slightly visible light gray for imports
+      baseColor = `rgba(228, 228, 231, ${0.3 * opacityFactor})`; // Slightly visible light gray for imports
     } else {
-      baseColor = `rgba(228, 228, 231, ${0.10 * opacityFactor})`; // Fainter gray for internal calls
+      baseColor = `rgba(228, 228, 231, ${0.20 * opacityFactor})`; // Fainter gray for internal calls
     }
     
     if (faded) {
       return showCycles && link.is_cycle 
         ? `rgba(248, 113, 113, ${0.05 * opacityFactor})` 
-        : `rgba(228, 228, 231, ${0.03 * opacityFactor})`;
+        : `rgba(228, 228, 231, ${0.05 * opacityFactor})`;
     }
     return baseColor;
-  }, [isFaded, showCycles, is3D]);
+  }, [isFaded, showCycles, is3D, enableFlow, glowingLinks]);
 
   const getParticleColor = useCallback((link: any) => {
     if (showCycles && link.is_cycle) {
@@ -488,12 +517,17 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
     const targetId = typeof link.target === 'object' ? link.target.id : link.target;
     const faded = isFaded(sourceId) && isFaded(targetId);
+    
+    if (is3D && enableFlow && glowingLinks.has(`${sourceId}-${targetId}`) && !faded) {
+      return 1.8; // Thicker when glowing in 3D
+    }
+    
     if (faded) return 0.2;
     
-    if (showCycles && link.is_cycle) return 1.8;
-    if (link.type === "IMPORTS") return 0.8;
-    return 0.5;
-  }, [isFaded, showCycles]);
+    if (showCycles && link.is_cycle) return 1.5;
+    if (hoverNode === sourceId || hoverNode === targetId) return 1.5;
+    return link.type === "IMPORTS" ? 0.8 : 0.4;
+  }, [isFaded, hoverNode, showCycles, is3D, enableFlow, glowingLinks]);
 
   const getLinkVisibility = useCallback((link: any) => {
     const sourceNode = link.source;
@@ -765,21 +799,11 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
             backgroundColor={graphTheme.background}
             nodeThreeObject={getNodeThreeObject}
             linkColor={getLinkColor}
-            linkWidth={(link: any) => getLinkWidth(link) * 0.4}
+            linkWidth={(link: any) => getLinkWidth(link) * (is3D ? 0.8 : 0.4)}
             linkVisibility={getLinkVisibility}
             linkCurvature={0.15}
-            linkDirectionalParticles={enableFlow ? ((link: any) => {
-              const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
-              const targetId = typeof link.target === 'object' ? link.target.id : link.target;
-              const faded = isFaded(sourceId) && isFaded(targetId);
-              if (faded) return 0;
-              return showCycles && link.is_cycle ? 4 : 2;
-            }) : 0}
-            linkDirectionalParticleSpeed={(link: any) => (showCycles && link.is_cycle ? 0.012 : 0.005)}
-            linkDirectionalParticleWidth={0.8}
-            linkDirectionalParticleResolution={4}
-            linkDirectionalParticleColor={getParticleColor}
-            linkOpacity={0.2}
+            linkDirectionalParticles={0}
+            linkOpacity={0.4}
             numDimensions={3}
             cooldownTicks={100}
             onNodeClick={(node: any, event: any) => {
