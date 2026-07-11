@@ -1,4 +1,6 @@
 import os
+import sys
+from pathlib import Path
 
 import tree_sitter
 
@@ -56,6 +58,36 @@ def get_language(ext):
 
 
 from uuid import UUID
+from typing import Optional, List, Dict, Set
+
+
+def resolve_python_import(base_project_dir: Path, import_statement: str) -> Optional[Path]:
+    """
+    Resuelve una declaración de importación de Python emulando la semántica del intérprete.
+    Retorna la ruta física absoluta si el módulo existe en el proyecto local.
+    Retorna None si pertenece a la librería estándar o es un paquete de terceros.
+    """
+    # Filtro Nivel 1: Bloqueo de la Librería Estándar
+    base_module = import_statement.split(".")[0]
+    if base_module in sys.stdlib_module_names:
+        return None
+
+    # Traducción Semántica de Nomenclatura
+    rel_path = import_statement.replace(".", "/")
+    
+    # Filtro Nivel 2: Resolución de Archivo Físico
+    # Evaluación de Módulo Directo
+    module_path = base_project_dir / f"{rel_path}.py"
+    if module_path.is_file():
+        return module_path
+        
+    # Evaluación de Paquete
+    package_path = base_project_dir / rel_path / "__init__.py"
+    if package_path.is_file():
+        return package_path
+
+    # Filtro Nivel 3: Exclusión de Dependencias de Terceros
+    return None
 
 
 def extract_nodes_from_code(project_id: UUID, file_path: str, code: bytes, ext: str):
@@ -215,16 +247,21 @@ class ASTParserService:
                         pass
 
         # Resolve imports across files
+        base_dir = Path(dir_path)
         file_paths = [n.file_path for n in all_nodes if n.label == NodeLabel.FILE]
+        
         for source_id, imports in file_imports.items():
+            source_path_str = source_id.replace("file:", "")
+            is_python = source_path_str.endswith(".py")
+            
             for imp in imports:
-                normalized_imp = imp.replace(".", "/").lstrip("./@")
-                if not normalized_imp:
+                if not imp:
                     continue
-                for fp in file_paths:
-                    base_fp = os.path.splitext(fp)[0]
-                    if base_fp.endswith(normalized_imp) or normalized_imp in fp:
-                        target_id = f"file:{fp}"
+                    
+                if is_python:
+                    target_path = resolve_python_import(base_dir, imp)
+                    if target_path:
+                        target_id = f"file:{target_path}"
                         if source_id != target_id:
                             all_edges.append(
                                 GraphEdge(
@@ -234,6 +271,27 @@ class ASTParserService:
                                     type=EdgeType.IMPORTS,
                                 )
                             )
+                else:
+                    normalized_imp = imp.replace(".", "/").lstrip("./@")
+                    if not normalized_imp:
+                        continue
+                        
+                    target_stem = Path(normalized_imp).stem
+                    
+                    for fp in file_paths:
+                        fp_path = Path(fp)
+                        if fp_path.stem == target_stem or fp_path.parent.name == target_stem:
+                            target_id = f"file:{fp}"
+                            if source_id != target_id:
+                                all_edges.append(
+                                    GraphEdge(
+                                        project_id=project_id,
+                                        source_id=source_id,
+                                        target_id=target_id,
+                                        type=EdgeType.IMPORTS,
+                                    )
+                                )
+                                break
         # Deduplicate edges to prevent DB IntegrityError (UNIQUE constraint failed)
         unique_edges = {}
         for edge in all_edges:
