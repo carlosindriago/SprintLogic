@@ -481,7 +481,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     const targetId = typeof link.target === 'object' ? link.target.id : link.target;
     
     const faded = isFaded(sourceId) && isFaded(targetId);
-    const opacityFactor = is3D ? 0.6 : 1.0; 
+    const opacityFactor = is3D ? 0.8 : 0.3; 
     
     // In 3D, glowing lines when flow is enabled
     const isGlowing = is3D && enableFlow && glowingLinks.has(`${sourceId}-${targetId}`);
@@ -493,9 +493,9 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     if (showCycles && link.is_cycle) {
       baseColor = `rgba(248, 113, 113, ${0.5 * opacityFactor})`; // Soft red/pink for cycles
     } else if (link.type === "IMPORTS") {
-      baseColor = `rgba(228, 228, 231, ${0.3 * opacityFactor})`; // Slightly visible light gray for imports
+      baseColor = `rgba(228, 228, 231, ${0.35 * opacityFactor})`; // Slightly visible light gray for imports
     } else {
-      baseColor = `rgba(228, 228, 231, ${0.20 * opacityFactor})`; // Fainter gray for internal calls
+      baseColor = `rgba(228, 228, 231, ${0.15 * opacityFactor})`; // Fainter gray for internal calls
     }
     
     if (faded) {
