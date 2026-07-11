@@ -7,7 +7,9 @@ import { getProjectGraph, analyzeProjectGraph } from "@/lib/api";
 import { GraphData, GraphNode } from "@/types";
 import { ForceGraphProps, NodeObject, LinkObject } from "react-force-graph-2d";
 import { graphTheme } from "@/lib/graph-theme";
-import { Search, RotateCcw, ZoomIn, ZoomOut, Maximize, Brain, AlertTriangle, Copy, Download, Check } from "lucide-react";
+import { Search, RotateCcw, ZoomIn, ZoomOut, Maximize, Brain, AlertTriangle } from "lucide-react";
+import { useTabsStore } from "../store/tabsStore";
+import { useLLMConfigStore } from "../store/llmConfigStore";
 
 // Dynamically import react-force-graph-2d to avoid SSR issues
 const ForceGraph2D = dynamic<any>(
@@ -32,26 +34,7 @@ const ICON_URLS: Record<string, string> = {
   sh: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/bash/bash-original.svg"
 };
 
-function renderMarkdown(text: string) {
-  return text.split('\n').map((line, idx) => {
-    if (line.startsWith('### ')) {
-      return <h4 key={idx} className="text-zinc-100 font-semibold text-sm mt-3 mb-1">{line.slice(4)}</h4>;
-    }
-    if (line.startsWith('## ')) {
-      return <h3 key={idx} className="text-zinc-100 font-bold text-base mt-4 mb-2 border-b border-[#3f3f46] pb-1">{line.slice(3)}</h3>;
-    }
-    if (line.startsWith('# ')) {
-      return <h2 key={idx} className="text-zinc-100 font-extrabold text-lg mt-5 mb-3">{line.slice(2)}</h2>;
-    }
-    if (line.startsWith('- ')) {
-      return <li key={idx} className="list-disc ml-5 my-0.5 text-zinc-300">{line.slice(2)}</li>;
-    }
-    if (line.trim() === '') {
-      return <div key={idx} className="h-2" />;
-    }
-    return <p key={idx} className="my-1 text-zinc-300">{line}</p>;
-  });
-}
+
 
 interface GraphSceneProps {
   projectId: string | null;
@@ -73,11 +56,11 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
   const [iconsLoaded, setIconsLoaded] = useState(false);
   const iconImages = useRef<Record<string, HTMLImageElement>>({});
 
-  const [analysisText, setAnalysisText] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [savedAnalysis, setSavedAnalysis] = useState<string | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
-  const [copied, setCopied] = useState(false);
+  
+  const addTab = useTabsStore((state) => state.addTab);
 
   // Compute codebase statistics
   const stats = useMemo(() => {
@@ -135,16 +118,23 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     if (!projectId) return;
     setAnalyzing(true);
     try {
-      const savedModel = localStorage.getItem("default_ai_model") || "gemini/gemini-2.5-flash";
-      const result = await analyzeProjectGraph(projectId, savedModel);
+      const defaultModel = useLLMConfigStore.getState().analysisDefaultModel;
+      const fallbackModel = useLLMConfigStore.getState().analysisFallbackModel;
+      
+      const result = await analyzeProjectGraph(
+        projectId, 
+        defaultModel,
+        fallbackModel === 'none' || fallbackModel === '' ? undefined : fallbackModel
+      );
       
       // Save analysis and current signature
       localStorage.setItem(`graph_analysis_${projectId}`, result);
       localStorage.setItem(`graph_analysis_sig_${projectId}`, currentSignature);
       
       setSavedAnalysis(result);
-      setAnalysisText(result);
       setHasChanges(false);
+      
+      addTab({ id: 'ai-history', title: 'Historial IA', type: 'ai-history' });
     } catch (err) {
       console.error(err);
       alert("Error al analizar el grafo con IA");
@@ -154,32 +144,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
   };
 
   const handleShowAnalysis = () => {
-    if (savedAnalysis) {
-      setAnalysisText(savedAnalysis);
-    }
-  };
-
-  const handleCopy = async () => {
-    if (!analysisText) return;
-    try {
-      await navigator.clipboard.writeText(analysisText);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const handleExport = () => {
-    if (!analysisText) return;
-    const blob = new Blob([analysisText], { type: "text/markdown;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", "analisis_grafo_sprintlogic.md");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    addTab({ id: 'ai-history', title: 'Historial IA', type: 'ai-history' });
   };
 
   useEffect(() => {
@@ -577,60 +542,6 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
           enablePanInteraction={true}
         />
       </div>
-
-      {/* Analysis Modal */}
-      {analysisText && (
-        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-6" onClick={() => setAnalysisText(null)}>
-          <div 
-            className="bg-[#18181b] border border-[#3f3f46] w-full max-w-2xl max-h-[80vh] flex flex-col rounded-lg shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between px-6 py-4 border-b border-[#3f3f46]">
-              <div className="flex items-center gap-2">
-                <Brain className="w-5 h-5 text-blue-400" />
-                <h3 className="text-md font-bold text-zinc-100">Análisis Estructural con IA</h3>
-              </div>
-              <div className="flex items-center gap-2">
-                <button 
-                  onClick={handleCopy}
-                  className="flex items-center gap-1.5 text-zinc-400 hover:text-zinc-200 text-xs px-2.5 py-1.5 rounded-md bg-[#27272a] hover:bg-[#3f3f46] transition-colors"
-                  title="Copiar al portapapeles"
-                >
-                  {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
-                  {copied ? "Copiado" : "Copiar"}
-                </button>
-                <button 
-                  onClick={handleExport}
-                  className="flex items-center gap-1.5 text-zinc-400 hover:text-zinc-200 text-xs px-2.5 py-1.5 rounded-md bg-[#27272a] hover:bg-[#3f3f46] transition-colors"
-                  title="Exportar como .md"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  Exportar
-                </button>
-                <button 
-                  onClick={() => setAnalysisText(null)}
-                  className="text-zinc-400 hover:text-zinc-200 text-xs font-semibold px-2.5 py-1.5 rounded-md bg-[#27272a] hover:bg-[#3f3f46] transition-colors border border-[#3f3f46]"
-                >
-                  Cerrar
-                </button>
-              </div>
-            </div>
-
-            {hasChanges && (
-              <div className="bg-yellow-950/30 border-b border-yellow-900/40 px-6 py-2.5 text-xs text-yellow-400/90 flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 shrink-0 text-yellow-500" />
-                <span>Se detectaron cambios en el código. Te sugerimos "Volver a Analizar" para actualizar el reporte.</span>
-              </div>
-            )}
-
-            <div className="flex-1 overflow-y-auto p-6 custom-scrollbar text-zinc-300 text-sm leading-relaxed max-w-none">
-              <div className="whitespace-pre-wrap font-sans">
-                {renderMarkdown(analysisText)}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

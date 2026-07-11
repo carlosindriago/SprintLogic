@@ -143,6 +143,7 @@ export const ScanProgressBar: React.FC<ScanProgressBarProps> = ({ projectId }) =
   useEffect(() => {
     if (scanJob?.status === 'abort_requested') {
       localAbortControllerRef.current?.abort();
+      // eslint-disable-next-line
       setPhase('aborted');
       setScanStatus(projectId, 'aborted');
       toast.info('Scan cancelled');
