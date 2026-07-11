@@ -20,13 +20,22 @@ logging.basicConfig(
     stream=sys.stderr,
 )
 
-app = FastAPI(title="sprintLogic API")
+from contextlib import asynccontextmanager
+from concurrent.futures import ProcessPoolExecutor
+import multiprocessing
 
-
-@app.on_event("startup")
-async def startup() -> None:
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
     await init_fts5()
+    # Initialize the CPU-bound process pool
+    # Use max_workers=2 to avoid killing small developer machines, but you can use multiprocessing.cpu_count() - 1
+    app.state.process_pool = ProcessPoolExecutor(max_workers=2)
+    yield
+    # Shutdown
+    app.state.process_pool.shutdown(wait=True)
 
+app = FastAPI(title="sprintLogic API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

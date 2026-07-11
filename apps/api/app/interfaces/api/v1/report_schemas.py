@@ -4,6 +4,13 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 
+class StructuralAnomalyReport(BaseModel):
+    cyclic_dependencies: list[list[str]]
+    god_objects_in: list[dict]
+    god_objects_out: list[dict]
+    isolated_components: int
+
+
 class AnalysisReportResponse(BaseModel):
     """
     DTO for a single AI analysis report.
@@ -12,6 +19,7 @@ class AnalysisReportResponse(BaseModel):
     project_id: UUID = Field(..., description="The project this report belongs to")
     content: str = Field(..., description="The markdown content of the AI report")
     ai_model_version: str = Field(..., description="The AI model that generated this report")
+    structural_metrics: dict | None = Field(None, description="Deterministic graph metrics computed via NetworkX")
     created_at: datetime = Field(..., description="Timestamp when the report was created")
 
     class Config:
