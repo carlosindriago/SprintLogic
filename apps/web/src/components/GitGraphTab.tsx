@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Download, Upload, Check, GitCommit, RefreshCw, Archive, FileText, FilePlus, FileMinus, ChevronDown, Plus, AlertTriangle, GitBranch, Trash, GitPullRequest, Globe, Sparkles } from 'lucide-react';
@@ -72,6 +72,7 @@ export default function GitGraphTab({ projectId }: { projectId: string }) {
     is_local_only?: boolean;
   }>>([]);
   const [loading, setLoading] = useState(true);
+  const otherBranches = useMemo(() => allBranches.filter(b => b.name !== activeBranch), [allBranches, activeBranch]);
   const [commitMessage, setCommitMessage] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
   const [isGeneratingMessage, setIsGeneratingMessage] = useState(false);
@@ -828,7 +829,7 @@ export default function GitGraphTab({ projectId }: { projectId: string }) {
                 <SelectValue placeholder="Selecciona la rama de origen" />
               </SelectTrigger>
               <SelectContent className="bg-zinc-800 border-zinc-700 text-zinc-200">
-                {allBranches.filter(b => b.name !== activeBranch).map((b) => (
+                {otherBranches.map((b) => (
                   <SelectItem key={b.name} value={b.name}>{b.name}</SelectItem>
                 ))}
               </SelectContent>
@@ -858,7 +859,7 @@ export default function GitGraphTab({ projectId }: { projectId: string }) {
                 <SelectValue placeholder="Seleccionar rama a eliminar" />
               </SelectTrigger>
               <SelectContent className="bg-zinc-800 border-zinc-700 text-zinc-200 max-h-64">
-                {allBranches.filter(b => b.name !== activeBranch).map(b => (
+                {otherBranches.map(b => (
                   <SelectItem key={b.name} value={b.name} className="hover:bg-zinc-700 cursor-pointer">
                     {b.name}
                   </SelectItem>
