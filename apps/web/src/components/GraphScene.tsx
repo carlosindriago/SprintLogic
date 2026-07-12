@@ -824,11 +824,16 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
               className="w-full text-left px-4 py-2 text-zinc-300 hover:bg-blue-600 hover:text-white transition-colors flex items-center gap-2"
               onClick={(e) => {
                 e.stopPropagation();
-                setFocusNode(contextMenu.node.id as string);
+                if (focusNode === contextMenu.node.id) {
+                  setFocusNode(null);
+                } else {
+                  setFocusNode(contextMenu.node.id as string);
+                }
                 setContextMenu(null);
               }}
             >
-              <ScanSearch className="w-4 h-4" /> Aislar Nodo
+              <ScanSearch className="w-4 h-4" /> 
+              {focusNode === contextMenu.node.id ? "Restaurar Grafo" : "Aislar Nodo"}
             </button>
             <button 
               className="w-full text-left px-4 py-2 text-zinc-300 hover:bg-blue-600 hover:text-white transition-colors flex items-center gap-2"
