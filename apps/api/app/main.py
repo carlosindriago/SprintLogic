@@ -20,9 +20,9 @@ logging.basicConfig(
     stream=sys.stderr,
 )
 
-from contextlib import asynccontextmanager
 from concurrent.futures import ProcessPoolExecutor
-import multiprocessing
+from contextlib import asynccontextmanager
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

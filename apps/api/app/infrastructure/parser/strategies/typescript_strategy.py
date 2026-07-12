@@ -27,12 +27,12 @@ class TypeScriptAnalyzerStrategy(LanguageAnalyzerStrategy):
         """
         # Ruta al micro-script empaquetado (asumiendo que está en la carpeta scripts)
         script_path = Path(__file__).resolve().parent.parent.parent.parent.parent / "scripts" / "ts_parser.js"
-        
+
         if not script_path.exists():
             raise FileNotFoundError(f"No se encontró el parser de Node en: {script_path}")
 
         logger.info(f"Iniciando subproceso Node.js para analizar TypeScript en: {project_path}")
-        
+
         try:
             # CEDEMOS EL CONTROL AL EVENT LOOP
             # stdin=asyncio.subprocess.DEVNULL evita que el subproceso se cuelgue esperando entrada
@@ -40,7 +40,7 @@ class TypeScriptAnalyzerStrategy(LanguageAnalyzerStrategy):
                 "node", str(script_path), str(project_path),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                stdin=asyncio.subprocess.DEVNULL 
+                stdin=asyncio.subprocess.DEVNULL
             )
 
             # COMMUNICATE: La única forma segura de evitar Deadlocks por buffers llenos
@@ -70,19 +70,19 @@ class TypeScriptAnalyzerStrategy(LanguageAnalyzerStrategy):
             return {}
 
         script_path = Path(__file__).resolve().parent.parent.parent.parent.parent / "scripts" / "ts_parser.js"
-        
+
         if not script_path.exists():
             raise FileNotFoundError(f"No se encontró el parser de Node en: {script_path}")
 
         files_arg = ",".join(relative_paths)
         logger.info(f"Extrayendo esqueletos TypeScript para: {files_arg}")
-        
+
         try:
             process = await asyncio.create_subprocess_exec(
                 "node", str(script_path), str(project_path), "skeleton", files_arg,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                stdin=asyncio.subprocess.DEVNULL 
+                stdin=asyncio.subprocess.DEVNULL
             )
 
             stdout_bytes, stderr_bytes = await process.communicate()

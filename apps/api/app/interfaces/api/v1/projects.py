@@ -296,7 +296,9 @@ async def get_project_graph(project_id: str, session: AsyncSession = Depends(get
 
 
 from concurrent.futures import ProcessPoolExecutor
+
 from fastapi import Request
+
 
 def get_process_pool(request: Request) -> ProcessPoolExecutor:
     return request.app.state.process_pool
@@ -308,8 +310,8 @@ class AnalyzeGraphRequest(BaseModel):
 
 @router.post("/projects/{project_id}/graph/analyze")
 async def analyze_project_graph(
-    project_id: str, 
-    request: AnalyzeGraphRequest, 
+    project_id: str,
+    request: AnalyzeGraphRequest,
     session: AsyncSession = Depends(get_db_session),
     pool: ProcessPoolExecutor = Depends(get_process_pool)
 ):
@@ -336,15 +338,16 @@ async def analyze_project_graph(
     filtered_edges = [
         e for e in edges if e.source_id in valid_node_ids and e.target_id in valid_node_ids
     ]
-    
+
     # --- CPU Bound Graph Metrics ---
     import asyncio
+
     from app.application.graph_metrics import _compute_graph_metrics_cpu_bound
-    
+
     loop = asyncio.get_running_loop()
     nodes_data = [{"id": n.id} for n in filtered_nodes]
     edges_data = [{"source": e.source_id, "target": e.target_id} for e in filtered_edges]
-    
+
     try:
         metrics = await loop.run_in_executor(pool, _compute_graph_metrics_cpu_bound, nodes_data, edges_data)
     except Exception as e:
@@ -362,7 +365,7 @@ async def analyze_project_graph(
             anomalous_files.add(god["node"])
         for god in metrics.get("god_objects_out", []):
             anomalous_files.add(god["node"])
-            
+
         anomalous_list = list(anomalous_files)
         if anomalous_list:
             from app.infrastructure.parser.analyzer_factory import AnalyzerFactory
@@ -408,7 +411,7 @@ async def analyze_project_graph(
 
     # Inject metrics into prompt so LLM is aware
     metrics_context = f"\n\nMÉTRICAS ESTRUCTURALES DETERMINISTAS:\n{metrics}\n" if metrics else ""
-    
+
     # Inject skeletons into prompt context
     skeletons_context = ""
     if skeletons:

@@ -1,19 +1,20 @@
 import networkx as nx
 
+
 def _compute_graph_metrics_cpu_bound(nodes_data: list, edges_data: list) -> dict:
     """
-    Computes graph metrics deterministically. 
+    Computes graph metrics deterministically.
     Runs in a separate ProcessPoolExecutor so it doesn't block the Event Loop.
     """
     G = nx.DiGraph()
     # Safely extract IDs to avoid unhashable dict error
     G.add_nodes_from(n["id"] for n in nodes_data)
     G.add_edges_from([(e["source"], e["target"]) for e in edges_data])
-    
+
     # 1. Cyclic dependencies with length bound to avoid exponential trap
     # simple_cycles with length_bound is available in networkx >= 3.0
     cycles = list(nx.simple_cycles(G, length_bound=5))
-    
+
     # 2. God Objects (In-Degree)
     in_degrees = sorted(G.in_degree(), key=lambda x: x[1], reverse=True)
     god_objects_in = []
