@@ -3,17 +3,23 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useState, useRef, ComponentType, useMemo, useCallback } from "react";
+import * as THREE from "three";
 import { getProjectGraph, analyzeProjectGraph } from "@/lib/api";
 import { GraphData, GraphNode } from "@/types";
 import { ForceGraphProps, NodeObject, LinkObject } from "react-force-graph-2d";
 import { graphTheme } from "@/lib/graph-theme";
-import { Search, RotateCcw, ZoomIn, ZoomOut, Maximize, Brain, AlertTriangle } from "lucide-react";
+import { Search, RotateCcw, ZoomIn, ZoomOut, Maximize, Brain, AlertTriangle, Play, Pause, Zap, ZapOff, Box, Layers, ScanSearch, FileCode } from "lucide-react";
 import { useTabsStore } from "../store/tabsStore";
 import { useLLMConfigStore } from "../store/llmConfigStore";
 
-// Dynamically import react-force-graph-2d to avoid SSR issues
+// Dynamically import react-force-graph to avoid SSR issues
 const ForceGraph2D = dynamic<any>(
   () => import("react-force-graph-2d").then((mod) => mod.default as any),
+  { ssr: false }
+);
+
+const ForceGraph3D = dynamic<any>(
+  () => import("react-force-graph-3d").then((mod) => mod.default as any),
   { ssr: false }
 );
  
@@ -45,7 +51,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
   const [graphData, setGraphData] = useState<GraphData>({ nodes: [], links: [] });
   const containerRef = useRef<HTMLDivElement>(null);
   const fgRef = useRef<any>(null);
-  const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
+  const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
  
   const [hoverNode, setHoverNode] = useState<string | null>(null);
   const [focusNode, setFocusNode] = useState<string | null>(null);
@@ -53,8 +59,54 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
   const [showCycles, setShowCycles] = useState(false);
   const [activeTypes, setActiveTypes] = useState<Set<string>>(new Set(["File", "Class", "Function", "Interface"]));
   
+  const [is3D, setIs3D] = useState(false);
+  const [enableFlow, setEnableFlow] = useState(false);
+  const [isPhysicsActive, setIsPhysicsActive] = useState(true);
+  const [glowingLinks, setGlowingLinks] = useState<Set<string>>(new Set());
+  
+  const lastClickTimeRef = useRef<number>(0);
+  const [contextMenu, setContextMenu] = useState<{ visible: boolean, x: number, y: number, node: any } | null>(null);
+
+  useEffect(() => {
+    const handleClick = () => setContextMenu(null);
+    document.addEventListener('click', handleClick);
+    return () => document.removeEventListener('click', handleClick);
+  }, []);
   const [iconsLoaded, setIconsLoaded] = useState(false);
   const iconImages = useRef<Record<string, HTMLImageElement>>({});
+  
+  // 3D Texture Preloader
+  const textureLoader = useMemo(() => {
+    if (typeof window === 'undefined') return null;
+    return new THREE.TextureLoader();
+  }, []);
+  const textures = useRef<Record<string, THREE.Texture>>({});
+  const [threeTexturesLoaded, setThreeTexturesLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!textureLoader) return;
+    let loadedCount = 0;
+    const extensions = Object.keys(ICON_URLS);
+    extensions.forEach((ext) => {
+      textureLoader.load(
+        ICON_URLS[ext],
+        (texture) => {
+          textures.current[ext] = texture;
+          loadedCount++;
+          if (loadedCount === extensions.length) {
+            setThreeTexturesLoaded(true);
+          }
+        },
+        undefined,
+        () => {
+          loadedCount++;
+          if (loadedCount === extensions.length) {
+            setThreeTexturesLoaded(true);
+          }
+        }
+      );
+    });
+  }, [textureLoader]);
 
   const [analyzing, setAnalyzing] = useState(false);
   const [savedAnalysis, setSavedAnalysis] = useState<string | null>(null);
@@ -171,13 +223,23 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
  
   const handleZoomIn = () => {
     if (fgRef.current) {
-      fgRef.current.zoom(fgRef.current.zoom() * 1.5, 400);
+      if (is3D) {
+        const { x, y, z } = fgRef.current.cameraPosition();
+        fgRef.current.cameraPosition({ x: x * 0.7, y: y * 0.7, z: z * 0.7 }, undefined, 400);
+      } else {
+        fgRef.current.zoom(fgRef.current.zoom() * 1.5, 400);
+      }
     }
   };
  
   const handleZoomOut = () => {
     if (fgRef.current) {
-      fgRef.current.zoom(fgRef.current.zoom() / 1.5, 400);
+      if (is3D) {
+        const { x, y, z } = fgRef.current.cameraPosition();
+        fgRef.current.cameraPosition({ x: x * 1.5, y: y * 1.5, z: z * 1.5 }, undefined, 400);
+      } else {
+        fgRef.current.zoom(fgRef.current.zoom() / 1.5, 400);
+      }
     }
   };
  
@@ -185,6 +247,21 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     if (fgRef.current) {
       fgRef.current.zoomToFit(400, 50);
     }
+  };
+
+  const togglePhysics = () => {
+    setIsPhysicsActive(prev => {
+      const next = !prev;
+      const graph = fgRef.current;
+      if (graph) {
+        if (next) {
+          graph.resumeAnimation();
+        } else {
+          graph.pauseAnimation();
+        }
+      }
+      return next;
+    });
   };
 
   useEffect(() => {
@@ -220,15 +297,62 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
   }, [projectId]);
 
   useEffect(() => {
-    // Configure D3 Force layout for a "solar system" spread
-    if (fgRef.current) {
-      fgRef.current.d3Force('charge').strength(-400); // Strong repulsion to spread clusters
-      fgRef.current.d3Force('link').distance((link: any) => {
-        // File-to-File (imports) are pushed further apart, internal classes orbit closely
-        return link.type === 'IMPORTS' ? 150 : 40;
+    // Whenever we toggle between 2D and 3D, clear all coordinates
+    // so the physics engine rebuilds the layout perfectly for the new dimension
+    // instead of inheriting the previous flattened or extruded layout.
+    if (graphData && graphData.nodes) {
+      graphData.nodes.forEach((n: any) => {
+         delete n.x;
+         delete n.y;
+         delete n.z;
+         delete n.vx;
+         delete n.vy;
+         delete n.vz;
       });
     }
-  }, [graphData]);
+  }, [graphData, is3D]);
+
+  useEffect(() => {
+    // Configure D3 Force layout for a "solar system" spread
+    if (fgRef.current && dimensions.width > 0 && dimensions.height > 0) {
+      fgRef.current.d3Force('charge').strength(-1000); // Much stronger repulsion to spread nodes out
+      fgRef.current.d3Force('link').distance((link: any) => {
+        // File-to-File (imports) are pushed far apart, internal classes orbit closely
+        return link.type === 'IMPORTS' ? 240 : 80;
+      });
+      fgRef.current.d3ReheatSimulation();
+      
+      // Give physics a moment to push nodes apart, then fit the camera
+      const timer = setTimeout(() => {
+        if (fgRef.current) {
+          fgRef.current.zoomToFit(1000, 150);
+        }
+      }, 1200);
+      return () => clearTimeout(timer);
+    }
+  }, [graphData, is3D, dimensions.width, dimensions.height]);
+
+  useEffect(() => {
+    if (!enableFlow || !is3D || !graphData || !graphData.links) {
+      setGlowingLinks(new Set());
+      return;
+    }
+    
+    // Every 1.5 seconds, pick a random subset of links (10%) to glow
+    const interval = setInterval(() => {
+      const newGlowing = new Set<string>();
+      graphData.links.forEach((link: any) => {
+        if (Math.random() < 0.1) {
+          const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+          const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+          newGlowing.add(`${sourceId}-${targetId}`);
+        }
+      });
+      setGlowingLinks(newGlowing);
+    }, 1500);
+    
+    return () => clearInterval(interval);
+  }, [enableFlow, is3D, graphData]);
 
   const lowerSearchQuery = useMemo(() => searchQuery?.toLowerCase() || "", [searchQuery]);
 
@@ -245,6 +369,23 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     });
     return map;
   }, [graphData]);
+
+  const displayGraphData = useMemo(() => {
+    if (!focusNode || !graphData || !graphData.nodes) return graphData;
+
+    // Isolate only the focused node and its neighbors
+    const neighborsSet = neighbors.get(focusNode) || new Set();
+    const visibleNodes = new Set([focusNode, ...neighborsSet]);
+
+    const filteredNodes = graphData.nodes.filter((n: any) => visibleNodes.has(n.id as string));
+    const filteredLinks = graphData.links.filter((l: any) => {
+      const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
+      const targetId = typeof l.target === 'object' ? l.target.id : l.target;
+      return visibleNodes.has(sourceId) && visibleNodes.has(targetId);
+    });
+
+    return { nodes: filteredNodes, links: filteredLinks };
+  }, [graphData, focusNode, neighbors]);
 
   const isFaded = useCallback((nodeId: string) => {
     const activeFocus = focusNode || hoverNode;
@@ -284,6 +425,26 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     }
 
     const faded = isFaded(id);
+    const isZoomedOut = globalScale < 1.2; // LOD (Level of Detail) threshold
+
+    // Draw Out-Degree Breathing Halo (behind the node to represent active sending) - Skipped if zoomed out
+    if (n.out_degree > 0 && !faded && !isZoomedOut) {
+      const pulse = Math.sin(Date.now() / 300) * 1.5;
+      const haloRadius = radius + 3.5 + pulse;
+      ctx.beginPath();
+      ctx.arc(n.x || 0, n.y || 0, haloRadius, 0, 2 * Math.PI, false);
+      
+      let haloColor = "rgba(100, 116, 139, 0.12)";
+      if (color.startsWith('#')) {
+        const r = parseInt(color.slice(1, 3), 16);
+        const g = parseInt(color.slice(3, 5), 16);
+        const b = parseInt(color.slice(5, 7), 16);
+        haloColor = `rgba(${r}, ${g}, ${b}, 0.16)`;
+      }
+      ctx.fillStyle = haloColor;
+      ctx.fill();
+    }
+
     ctx.globalAlpha = faded ? graphTheme.dimOpacity : 1;
 
     let isIconDrawn = false;
@@ -302,6 +463,21 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
       ctx.arc(n.x || 0, n.y || 0, radius, 0, 2 * Math.PI, false);
       ctx.fillStyle = color;
       ctx.fill();
+    }
+
+    // Draw In-Degree Expanding Ripple (for small nodes receiving flow) - Skipped if zoomed out
+    if (n.in_degree > 0 && (label === "Function" || label === "Interface" || radius < 5) && !faded && !isZoomedOut) {
+      const t = (Date.now() / 1200) % 1.0; 
+      const rippleRadius = radius + t * 8;
+      const rippleOpacity = (1 - t) * 0.45;
+      
+      ctx.beginPath();
+      ctx.arc(n.x || 0, n.y || 0, rippleRadius, 0, 2 * Math.PI, false);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 0.6;
+      ctx.globalAlpha = rippleOpacity;
+      ctx.stroke();
+      ctx.globalAlpha = faded ? graphTheme.dimOpacity : 1; 
     }
 
     // Hover tooltip info (LOC / Degrees)
@@ -328,45 +504,144 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     ctx.globalAlpha = 1; // reset
   }, [activeTypes, lowerSearchQuery, isFaded, hoverNode, focusNode]);
 
-  const paintLink = useCallback((link: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
+  const getLinkColor = useCallback((link: any) => {
+    const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+    const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+    
+    const faded = isFaded(sourceId) && isFaded(targetId);
+    const opacityFactor = is3D ? 0.8 : 0.3; 
+    
+    // In 3D, glowing lines when flow is enabled
+    const isGlowing = is3D && enableFlow && glowingLinks.has(`${sourceId}-${targetId}`);
+    if (isGlowing && !faded) {
+      return "rgba(96, 165, 250, 0.85)"; // Bright blue glow for animation
+    }
+    
+    let baseColor = `rgba(228, 228, 231, ${0.25 * opacityFactor})`; // Light gray (zinc-200 at 25% opacity)
+    if (showCycles && link.is_cycle) {
+      baseColor = `rgba(248, 113, 113, ${0.5 * opacityFactor})`; // Soft red/pink for cycles
+    } else if (link.type === "IMPORTS") {
+      baseColor = `rgba(228, 228, 231, ${0.35 * opacityFactor})`; // Slightly visible light gray for imports
+    } else {
+      baseColor = `rgba(228, 228, 231, ${0.15 * opacityFactor})`; // Fainter gray for internal calls
+    }
+    
+    if (faded) {
+      return showCycles && link.is_cycle 
+        ? `rgba(248, 113, 113, ${0.05 * opacityFactor})` 
+        : `rgba(228, 228, 231, ${0.05 * opacityFactor})`;
+    }
+    return baseColor;
+  }, [isFaded, showCycles, is3D, enableFlow, glowingLinks]);
+
+  const getParticleColor = useCallback((link: any) => {
+    if (showCycles && link.is_cycle) {
+      return "rgba(252, 165, 165, 0.8)"; // Soft light red for cycle current
+    }
+    return "rgba(203, 213, 225, 0.65)"; // Soft slate gray-blue for normal flow
+  }, [showCycles]);
+
+  const getLinkWidth = useCallback((link: any) => {
+    const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+    const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+    const faded = isFaded(sourceId) && isFaded(targetId);
+    
+    if (is3D && enableFlow && glowingLinks.has(`${sourceId}-${targetId}`) && !faded) {
+      return 1.8; // Thicker when glowing in 3D
+    }
+    
+    if (faded) return 0.2;
+    
+    if (showCycles && link.is_cycle) return 1.5;
+    if (hoverNode === sourceId || hoverNode === targetId) return 1.5;
+    return link.type === "IMPORTS" ? 0.8 : 0.4;
+  }, [isFaded, hoverNode, showCycles, is3D, enableFlow, glowingLinks]);
+
+  const getLinkVisibility = useCallback((link: any) => {
     const sourceNode = link.source;
     const targetNode = link.target;
+    if (!sourceNode || !targetNode) return false;
     
-    if (!sourceNode || !targetNode || sourceNode.x === undefined || targetNode.x === undefined) return;
+    const sourceLabel = typeof sourceNode === 'object' ? sourceNode.label : null;
+    const targetLabel = typeof targetNode === 'object' ? targetNode.label : null;
     
-    const sourceLabel = sourceNode.label as string;
-    const targetLabel = targetNode.label as string;
+    if (sourceLabel && !activeTypes.has(sourceLabel)) return false;
+    if (targetLabel && !activeTypes.has(targetLabel)) return false;
     
-    if (!activeTypes.has(sourceLabel) || !activeTypes.has(targetLabel)) return;
-
     if (lowerSearchQuery) {
-      const sourceName = sourceNode.name as string;
-      const targetName = targetNode.name as string;
-      if (!sourceName.toLowerCase().includes(lowerSearchQuery) &&
-          !targetName.toLowerCase().includes(lowerSearchQuery)) return;
-    }
-
-    const faded = isFaded(sourceNode.id as string) && isFaded(targetNode.id as string);
-    ctx.globalAlpha = faded ? graphTheme.dimOpacity : 1;
-
-    ctx.beginPath();
-    ctx.moveTo(sourceNode.x, sourceNode.y);
-    ctx.lineTo(targetNode.x, targetNode.y);
-
-    if (showCycles && link.is_cycle) {
-      ctx.strokeStyle = graphTheme.edgeCycle;
-      ctx.lineWidth = 1 / globalScale;
-    } else if (link.type === "IMPORTS") {
-      ctx.strokeStyle = graphTheme.edgeImport;
-      ctx.lineWidth = 0.6 / globalScale;
-    } else {
-      ctx.strokeStyle = graphTheme.edgeCall;
-      ctx.lineWidth = 0.4 / globalScale;
+      const sourceName = (typeof sourceNode === 'object' ? sourceNode.name : '').toLowerCase();
+      const targetName = (typeof targetNode === 'object' ? targetNode.name : '').toLowerCase();
+      if (!sourceName.includes(lowerSearchQuery) && !targetName.includes(lowerSearchQuery)) return false;
     }
     
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-  }, [activeTypes, lowerSearchQuery, isFaded, showCycles]);
+    return true;
+  }, [activeTypes, lowerSearchQuery]);
+
+  const getNodeThreeObject = useCallback((node: any) => {
+    const label = node.label as string;
+    const name = node.name as string;
+    const id = node.id as string;
+    
+    if (!activeTypes.has(label)) {
+      return new THREE.Object3D();
+    }
+    
+    if (lowerSearchQuery && !name.toLowerCase().includes(lowerSearchQuery)) {
+      return new THREE.Object3D();
+    }
+
+    const faded = isFaded(id);
+    
+    // 1. Files: represented by their language/technology sprite textures
+    if (label === "File") {
+      const ext = name.split(".").pop()?.toLowerCase() || "";
+      const texture = textures.current[ext];
+      
+      if (texture) {
+        const material = new THREE.SpriteMaterial({ 
+          map: texture,
+          transparent: true,
+          opacity: faded ? 0.15 : 1.0
+        });
+        const sprite = new THREE.Sprite(material);
+        
+        // Much clearer size differentiation for file sizes (LOC/size)
+        const size = (node.size as number) || 0;
+        const scale = Math.min(Math.max(size / 2000, 6), 16);
+        sprite.scale.set(scale, scale, 1);
+        return sprite;
+      }
+    }
+
+    // 2. Class / Function / Interface: represented by sphere geometries with clear size hierarchy
+    let radius = 2;
+    let colorHex = graphTheme.unknown;
+    
+    if (label === "File") {
+      const size = (node.size as number) || 0;
+      radius = Math.min(Math.max(size / 2000, 3.5), 8);
+      colorHex = graphTheme.file;
+    } else if (label === "Class") {
+      radius = 2.0; // Classes are slightly larger structural units
+      colorHex = graphTheme.class;
+    } else if (label === "Function") {
+      radius = 0.8; // Functions are small orbital nodes
+      colorHex = graphTheme.function;
+    } else if (label === "Interface") {
+      radius = 1.4; // Interfaces sit in the middle
+      colorHex = graphTheme.interface;
+    }
+
+    // Use lower segment count (8x8) instead of (16x16) for much better 3D performance
+    const geometry = new THREE.SphereGeometry(radius, 8, 8);
+    const material = new THREE.MeshLambertMaterial({
+      color: colorHex,
+      transparent: true,
+      opacity: faded ? 0.15 : 0.95
+    });
+    
+    return new THREE.Mesh(geometry, material);
+  }, [activeTypes, lowerSearchQuery, isFaded, threeTexturesLoaded]);
 
   const toggleType = (type: string) => {
     setActiveTypes(prev => {
@@ -378,7 +653,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
   };
 
   return (
-    <div className="w-full h-full flex flex-col relative" style={{ backgroundColor: graphTheme.background }}>
+    <div className="flex-1 w-full flex flex-col relative" style={{ backgroundColor: graphTheme.background }}>
       {/* Controls Overlay */}
       <div className="absolute top-4 left-4 z-10 flex flex-col gap-3 p-4 rounded-lg shadow-lg" 
            style={{ backgroundColor: graphTheme.surfaceElevated, border: `1px solid ${graphTheme.border}` }}>
@@ -488,59 +763,210 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
         )}
       </div>
 
-      {/* Zoom Controls Overlay */}
-      <div className="absolute bottom-6 left-4 z-10 flex flex-col gap-2 p-1.5 rounded-lg shadow-lg" 
+      {/* Unified Graph Controls Toolbar */}
+      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 flex flex-row items-center rounded-lg shadow-lg overflow-hidden" 
            style={{ backgroundColor: graphTheme.surfaceElevated, border: `1px solid ${graphTheme.border}` }}>
         <button 
           onClick={handleZoomIn}
-          className="p-1.5 rounded-md transition-colors text-zinc-400 hover:text-white hover:bg-[#3f3f46]"
+          className="p-2 transition-colors text-zinc-400 hover:text-white hover:bg-[#3f3f46]"
           title="Acercar (Zoom In)"
         >
           <ZoomIn className="w-4 h-4" />
         </button>
         <button 
           onClick={handleFitView}
-          className="p-1.5 rounded-md transition-colors text-zinc-400 hover:text-white hover:bg-[#3f3f46]"
+          className="p-2 border-l border-[#3f3f46] transition-colors text-zinc-400 hover:text-white hover:bg-[#3f3f46]"
           title="Ajustar a la pantalla"
         >
           <Maximize className="w-4 h-4" />
         </button>
         <button 
           onClick={handleZoomOut}
-          className="p-1.5 rounded-md transition-colors text-zinc-400 hover:text-white hover:bg-[#3f3f46]"
+          className="p-2 border-l border-[#3f3f46] transition-colors text-zinc-400 hover:text-white hover:bg-[#3f3f46]"
           title="Alejar (Zoom Out)"
         >
           <ZoomOut className="w-4 h-4" />
         </button>
+
+        <button 
+          onClick={() => setIs3D(!is3D)}
+          className={`flex items-center gap-1.5 px-4 py-2 text-xs font-bold transition-colors border-l border-[#3f3f46] hover:bg-zinc-800 ${is3D ? "text-blue-400" : "text-zinc-400"}`}
+          title={is3D ? "Cambiar a Análisis 2D" : "Cambiar a Análisis 3D"}
+        >
+          {is3D ? <Box className="w-3.5 h-3.5" /> : <Layers className="w-3.5 h-3.5" />}
+          {is3D ? "Análisis 3D" : "Análisis 2D"}
+        </button>
+        
+        <button 
+          onClick={togglePhysics}
+          className={`p-2 border-l border-[#3f3f46] transition-colors ${isPhysicsActive ? "text-emerald-400 hover:text-emerald-300 bg-emerald-950/20" : "text-zinc-500 hover:text-zinc-300 hover:bg-[#3f3f46]"}`}
+          title={isPhysicsActive ? "Pausar Simulación Física" : "Reanudar Simulación Física"}
+        >
+          {isPhysicsActive ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+        </button>
+        <button 
+          onClick={() => setEnableFlow(!enableFlow)}
+          className={`p-2 border-l border-[#3f3f46] transition-colors ${enableFlow ? "text-yellow-400 hover:text-yellow-300 bg-yellow-950/20" : "text-zinc-500 hover:text-zinc-300 hover:bg-[#3f3f46]"}`}
+          title={enableFlow ? "Desactivar Flujo de Corriente" : "Activar Flujo de Corriente"}
+        >
+          {enableFlow ? <Zap className="w-4 h-4" /> : <ZapOff className="w-4 h-4" />}
+        </button>
       </div>
 
-      <div ref={containerRef} className="flex-1 w-full" onClick={() => setFocusNode(null)}>
-        <ForceGraph2D
-          ref={fgRef}
-          width={dimensions.width}
-          height={dimensions.height}
-          graphData={graphData}
-          backgroundColor={graphTheme.background}
-          nodeCanvasObject={paintNode}
-          linkCanvasObjectMode={() => "replace"}
-          linkCanvasObject={paintLink}
-          onNodeClick={(node: any, event: any) => {
-            setFocusNode(node.id as string);
-            if (onNodeClick) {
-              onNodeClick({
-                id: (node.id as string) || "",
-                label: (node.label as "File" | "Class" | "Function") || "File",
-                name: (node.name as string) || "",
-                file_path: (node.file_path as string) || "",
-                size: (node as any).size as number | undefined,
-                metadata: (node as any).metadata as Record<string, unknown> | undefined
+      <div ref={containerRef} className="flex-1 w-full">
+        {contextMenu && contextMenu.visible && (
+          <div 
+            className="fixed z-50 bg-[#18181b] border border-[#3f3f46] rounded-md shadow-xl py-1 w-48 text-sm overflow-hidden"
+            style={{ left: contextMenu.x, top: contextMenu.y }}
+            onContextMenu={(e) => e.preventDefault()}
+          >
+            <button 
+              className="w-full text-left px-4 py-2 text-zinc-300 hover:bg-blue-600 hover:text-white transition-colors flex items-center gap-2"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (focusNode === contextMenu.node.id) {
+                  setFocusNode(null);
+                } else {
+                  setFocusNode(contextMenu.node.id as string);
+                }
+                setContextMenu(null);
+              }}
+            >
+              <ScanSearch className="w-4 h-4" /> 
+              {focusNode === contextMenu.node.id ? "Restaurar Grafo" : "Aislar Nodo"}
+            </button>
+            <button 
+              className="w-full text-left px-4 py-2 text-zinc-300 hover:bg-blue-600 hover:text-white transition-colors flex items-center gap-2"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (onNodeClick) {
+                  onNodeClick({
+                    id: (contextMenu.node.id as string) || "",
+                    label: (contextMenu.node.label as "File" | "Class" | "Function") || "File",
+                    name: (contextMenu.node.name as string) || "",
+                    file_path: (contextMenu.node.file_path as string) || "",
+                    size: (contextMenu.node as any).size as number | undefined,
+                    metadata: (contextMenu.node as any).metadata as Record<string, unknown> | undefined
+                  });
+                }
+                setContextMenu(null);
+              }}
+            >
+              <FileCode className="w-4 h-4" /> Abrir Archivo
+            </button>
+          </div>
+        )}
+
+        {dimensions.width > 0 && dimensions.height > 0 && (
+          is3D ? (
+            <ForceGraph3D
+              ref={fgRef}
+              width={dimensions.width}
+              height={dimensions.height}
+              graphData={displayGraphData}
+            backgroundColor={graphTheme.background}
+            nodeThreeObject={getNodeThreeObject}
+            linkColor={getLinkColor}
+            linkWidth={(link: any) => getLinkWidth(link) * (is3D ? 0.8 : 0.4)}
+            linkVisibility={getLinkVisibility}
+            linkCurvature={0.15}
+            linkDirectionalParticles={0}
+            linkOpacity={0.4}
+            numDimensions={3}
+            cooldownTicks={100}
+            onNodeClick={(node: any, event: any) => {
+              const now = Date.now();
+              const isDoubleClick = now - lastClickTimeRef.current < 400;
+              lastClickTimeRef.current = now;
+
+              if (isDoubleClick) {
+                if (onNodeClick) {
+                  onNodeClick({
+                    id: (node.id as string) || "",
+                    label: (node.label as "File" | "Class" | "Function") || "File",
+                    name: (node.name as string) || "",
+                    file_path: (node.file_path as string) || "",
+                    size: (node as any).size as number | undefined,
+                    metadata: (node as any).metadata as Record<string, unknown> | undefined
+                  });
+                }
+              } else {
+                setFocusNode(node.id as string);
+              }
+            }}
+            onBackgroundClick={() => setFocusNode(null)}
+            onNodeRightClick={(node: any, event: any) => {
+              setContextMenu({
+                visible: true,
+                x: event.clientX,
+                y: event.clientY,
+                node
               });
-            }
-          }}
-          onNodeHover={(node: any) => setHoverNode(node ? (node.id as string) : null)}
-          enableZoomInteraction={true}
-          enablePanInteraction={true}
-        />
+            }}
+            onNodeHover={(node: any) => setHoverNode(node ? (node.id as string) : null)}
+            enableZoomInteraction={true}
+            enableNavigationControls={true}
+          />
+        ) : (
+          <ForceGraph2D
+            ref={fgRef}
+            width={dimensions.width}
+            height={dimensions.height}
+            graphData={displayGraphData}
+            backgroundColor={graphTheme.background}
+            nodeCanvasObject={paintNode}
+            linkColor={getLinkColor}
+            linkWidth={getLinkWidth}
+            linkVisibility={getLinkVisibility}
+            linkCurvature={0.15}
+            linkDirectionalParticles={enableFlow ? ((link: any) => {
+              const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+              const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+              const faded = isFaded(sourceId) && isFaded(targetId);
+              if (faded) return 0;
+              return showCycles && link.is_cycle ? 4 : 2;
+            }) : 0}
+            linkDirectionalParticleSpeed={(link: any) => (showCycles && link.is_cycle ? 0.012 : 0.005)}
+            linkDirectionalParticleWidth={1.0}
+            linkDirectionalParticleColor={getParticleColor}
+            linkDirectionalArrowLength={3.5}
+            linkDirectionalArrowRelPos={1}
+            cooldownTicks={100}
+            onNodeClick={(node: any, event: any) => {
+              const now = Date.now();
+              const isDoubleClick = now - lastClickTimeRef.current < 400;
+              lastClickTimeRef.current = now;
+
+              if (isDoubleClick) {
+                if (onNodeClick) {
+                  onNodeClick({
+                    id: (node.id as string) || "",
+                    label: (node.label as "File" | "Class" | "Function") || "File",
+                    name: (node.name as string) || "",
+                    file_path: (node.file_path as string) || "",
+                    size: (node as any).size as number | undefined,
+                    metadata: (node as any).metadata as Record<string, unknown> | undefined
+                  });
+                }
+              } else {
+                setFocusNode(node.id as string);
+              }
+            }}
+            onBackgroundClick={() => setFocusNode(null)}
+            onNodeRightClick={(node: any, event: any) => {
+              setContextMenu({
+                visible: true,
+                x: event.clientX,
+                y: event.clientY,
+                node
+              });
+            }}
+            onNodeHover={(node: any) => setHoverNode(node ? (node.id as string) : null)}
+            enableZoomInteraction={true}
+            enablePanInteraction={true}
+          />
+          )
+        )}
       </div>
     </div>
   );

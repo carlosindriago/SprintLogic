@@ -117,12 +117,12 @@ export default function EditorTab({
           if (!useFimStore.getState().fimEnabled) return { items: [] };
 
           // Guard 2: Cancellation-aware debounce
-          // Wrap in a promise that resolves on timeout OR rejects on cancellation
-          await new Promise<void>((resolve, reject) => {
+          // Wrap in a promise that resolves on timeout OR resolves early on cancellation
+          await new Promise<void>((resolve) => {
             const timer = setTimeout(resolve, 300);
             token.onCancellationRequested(() => {
               clearTimeout(timer);
-              reject(new DOMException('Debounce cancelled', 'AbortError'));
+              resolve();
             });
           });
 
@@ -341,6 +341,7 @@ export default function EditorTab({
         localStorage.setItem(`coach_health_${currentHash}`, JSON.stringify(healthResponse));
       }
     } catch (error: any) {
+      if (error.name === 'AbortError') return;
       console.error('[Code Coach Health] Error:', error);
       const errorMessage = error instanceof Error ? error.message : String(error);
       setCoachOverview({
@@ -447,6 +448,7 @@ export default function EditorTab({
       setAllMentorshipAdvice(mentorshipResponse);
       
     } catch (error: any) {
+      if (error.name === 'AbortError') return;
       console.error('[Code Coach Mentorship] Error:', error);
       setAvailableAdviceLines([]);
     } finally {
