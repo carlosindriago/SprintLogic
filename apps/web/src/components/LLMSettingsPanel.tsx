@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { toast } from "sonner";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -161,10 +161,10 @@ function ProviderConfig({
     ? defaultModel.split("/").slice(1).join("/")
     : "";
 
-  const filteredModels = curatedModels.filter(m => 
+  const filteredModels = useMemo(() => curatedModels.filter(m =>
     m.name.toLowerCase().includes(modelSearch.toLowerCase()) || 
     m.id.toLowerCase().includes(modelSearch.toLowerCase())
-  );
+  ), [curatedModels, modelSearch]);
 
   return (
     <div className="flex flex-col gap-8 p-6 max-w-2xl">
@@ -432,17 +432,17 @@ function FimConfigSection({ providers }: { providers: CuratedProvider[] }) {
     }
   };
 
-  const allModels = providers.flatMap(p => p.models.map(m => ({ ...m, provider: p.provider, provider_id: p.provider_id })));
+  const allModels = useMemo(() => providers.flatMap(p => p.models.map(m => ({ ...m, provider: p.provider, provider_id: p.provider_id }))), [providers]);
   
-  const filteredModelsMain = allModels.filter(m => 
+  const filteredModelsMain = useMemo(() => allModels.filter(m =>
     m.name.toLowerCase().includes(modelSearchMain.toLowerCase()) || 
     m.id.toLowerCase().includes(modelSearchMain.toLowerCase())
-  );
+  ), [allModels, modelSearchMain]);
   
-  const filteredModelsFallback = allModels.filter(m => 
+  const filteredModelsFallback = useMemo(() => allModels.filter(m =>
     m.name.toLowerCase().includes(modelSearchFallback.toLowerCase()) || 
     m.id.toLowerCase().includes(modelSearchFallback.toLowerCase())
-  );
+  ), [allModels, modelSearchFallback]);
 
   return (
     <div className="flex flex-col gap-8 p-6 max-w-2xl">
@@ -663,17 +663,17 @@ function AnalysisConfigSection({ providers }: { providers: CuratedProvider[] }) 
   const [modelSearchMain, setModelSearchMain] = useState("");
   const [modelSearchFallback, setModelSearchFallback] = useState("");
 
-  const allModels = providers.flatMap(p => p.models.map(m => ({ ...m, provider: p.provider, provider_id: p.provider_id })));
+  const allModels = useMemo(() => providers.flatMap(p => p.models.map(m => ({ ...m, provider: p.provider, provider_id: p.provider_id }))), [providers]);
   
-  const filteredModelsMain = allModels.filter(m => 
+  const filteredModelsMain = useMemo(() => allModels.filter(m =>
     m.name.toLowerCase().includes(modelSearchMain.toLowerCase()) || 
     m.id.toLowerCase().includes(modelSearchMain.toLowerCase())
-  );
+  ), [allModels, modelSearchMain]);
   
-  const filteredModelsFallback = allModels.filter(m => 
+  const filteredModelsFallback = useMemo(() => allModels.filter(m =>
     m.name.toLowerCase().includes(modelSearchFallback.toLowerCase()) || 
     m.id.toLowerCase().includes(modelSearchFallback.toLowerCase())
-  );
+  ), [allModels, modelSearchFallback]);
 
   return (
     <div className="flex flex-col gap-8 p-6 max-w-2xl">
