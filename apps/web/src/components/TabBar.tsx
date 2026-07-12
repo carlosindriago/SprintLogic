@@ -136,7 +136,7 @@ function CloseConfirmModal({
                 onClick={onDiscard}
                 className="px-3 py-1.5 text-xs rounded-md bg-red-600 hover:bg-red-500 text-white font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-red-500/50 flex items-center gap-1.5"
               >
-                <Trash2 className="w-3.5 h-3.5" />
+                <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                 Discard permanently
               </button>
             </div>
@@ -161,7 +161,7 @@ function CloseConfirmModal({
               disabled={isSaving}
               className="px-3 py-1.5 text-xs rounded-md bg-blue-600 hover:bg-blue-500 text-white font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/50 flex items-center gap-1.5 disabled:opacity-40"
             >
-              <Save className="w-3.5 h-3.5" />
+              <Save className="w-3.5 h-3.5" aria-hidden="true" />
               {isSaving ? 'Saving...' : 'Save'}
             </button>
           </div>
@@ -304,7 +304,7 @@ export default function TabBar({ onToggleAi, aiOpen, onNewFile, projectId }: Tab
                 )}
                 onClick={(e) => handleCloseRequest(e, tab)}
               >
-                <X className="w-3.5 h-3.5" />
+                <X className="w-3.5 h-3.5" aria-hidden="true" />
               </button>
             )}
           </div>
@@ -313,15 +313,17 @@ export default function TabBar({ onToggleAi, aiOpen, onNewFile, projectId }: Tab
         {onNewFile && (
           <button
             onClick={onNewFile}
+            aria-label="New file"
             className="flex items-center gap-1.5 px-2.5 py-2 text-xs font-medium transition-colors text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800"
             title="Nuevo Archivo (Ctrl+N)"
           >
-            <FilePlus className="w-3.5 h-3.5" />
+            <FilePlus className="w-3.5 h-3.5" aria-hidden="true" />
           </button>
         )}
         {onToggleAi && (
           <button
             onClick={onToggleAi}
+            aria-label="Toggle SprintLogic AI"
             className={cn(
               "flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors border-l border-zinc-800/50",
               aiOpen
@@ -330,7 +332,7 @@ export default function TabBar({ onToggleAi, aiOpen, onNewFile, projectId }: Tab
             )}
             title="SprintLogic AI"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 21 1.9-5.7a8.5 8.5 0 1 1 3.8 3.8z"/></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m3 21 1.9-5.7a8.5 8.5 0 1 1 3.8 3.8z"/></svg>
             <span>AI</span>
           </button>
         )}
