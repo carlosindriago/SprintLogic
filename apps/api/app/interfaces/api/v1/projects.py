@@ -350,8 +350,8 @@ async def analyze_project_graph(
 
     try:
         metrics = await loop.run_in_executor(pool, _compute_graph_metrics_cpu_bound, nodes_data, edges_data)
-    except Exception as e:
-        logger.error("Error computing graph metrics: %s", e, exc_info=True)
+    except Exception as err:
+        logger.error("Error computing graph metrics: %s", err, exc_info=True)
         metrics = None
 
     # --- Enriquecimiento de Contexto a Demanda (Lazy Context Gathering) ---
@@ -372,8 +372,8 @@ async def analyze_project_graph(
             analyzer = AnalyzerFactory.get_analyzer(Path(project.path))
             try:
                 skeletons = await analyzer.parse_skeletons(Path(project.path), anomalous_list)
-            except Exception as e:
-                logger.error("Error gathering skeletons: %s", e, exc_info=True)
+            except Exception as err:
+                logger.error("Error gathering skeletons: %s", err, exc_info=True)
 
     nodes_summary = []
     for n in filtered_nodes:

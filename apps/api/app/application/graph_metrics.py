@@ -1,4 +1,4 @@
-import networkx as nx
+import networkx as nx  # type: ignore
 
 
 def _compute_graph_metrics_cpu_bound(nodes_data: list, edges_data: list) -> dict:
