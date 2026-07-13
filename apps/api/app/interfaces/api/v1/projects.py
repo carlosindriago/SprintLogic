@@ -367,7 +367,7 @@ async def analyze_project_graph(
 
     except Exception as e:
         logger.error("Analysis failed: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.get("/projects/{project_id}/reports")
