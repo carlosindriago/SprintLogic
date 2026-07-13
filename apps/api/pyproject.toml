@@ -24,8 +24,13 @@ dependencies = [
   "tree-sitter-go",
   "tree-sitter-html",
   "tree-sitter-css",
+  "tree-sitter-markdown>=0.3.0",
+  "onnxruntime>=1.19.0",
+  "tokenizers>=0.20.0",
+  "numpy>=1.26.0",
   "ruff>=0.9.0",
   "sse-starlette>=3.0.0",
+  "networkx>=3.0.0",
 ]
 
 [build-system]

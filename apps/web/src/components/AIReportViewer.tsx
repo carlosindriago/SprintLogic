@@ -3,9 +3,9 @@
 import React, { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { useTabsStore } from "../store/tabsStore";
 import { getProjectReport } from "../lib/api";
 import { Skeleton } from "@/components/ui/skeleton";
+import { MarkdownLink } from "./MarkdownLink";
 
 import { Copy, Check, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,6 @@ interface AIReportViewerProps {
 }
 
 export function AIReportViewer({ projectId, reportId, markdown: initialMarkdown }: AIReportViewerProps) {
-  const addTab = useTabsStore((state) => state.addTab);
   const [content, setContent] = useState<string | null>(initialMarkdown || null);
   const [loading, setLoading] = useState<boolean>(!initialMarkdown && !!reportId);
   const [error, setError] = useState<string | null>(null);
@@ -171,34 +170,7 @@ export function AIReportViewer({ projectId, reportId, markdown: initialMarkdown 
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
             components={{
-              a: ({ href, children, ...props }) => {
-                if (href?.startsWith("ide://")) {
-                  const filePath = href.replace("ide://", "");
-                  return (
-                    <a
-                      {...props}
-                      href="#"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        addTab({
-                          id: `editor-${filePath}`,
-                          title: filePath.split("/").pop() || filePath,
-                          type: "editor",
-                          data: { filePath },
-                        });
-                      }}
-                      className="inline-flex items-center gap-1 font-medium bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 px-1.5 py-0.5 rounded transition-colors border border-blue-500/20 cursor-pointer"
-                    >
-                      {children}
-                    </a>
-                  );
-                }
-                return (
-                  <a href={href} target="_blank" rel="noopener noreferrer" className="font-medium underline underline-offset-4" {...props}>
-                    {children}
-                  </a>
-                );
-              },
+              a: MarkdownLink,
             }}
           >
             {content}

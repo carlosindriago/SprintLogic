@@ -211,7 +211,7 @@ export interface KanbanColumn {
   id: string;
   title: string;
   color: string;
-  rule?: 'manual' | 'pomodoro' | 'auto-on-test-fail' | 'auto-on-test-pass';
+  rule?: 'manual' | 'auto-on-test-fail' | 'auto-on-test-pass';
 }
 
 export interface WBSTask {
@@ -326,4 +326,21 @@ export const fetchTechScan = async (
     model,
     fallback_model: fallbackModel
   });
+};
+
+export interface UndocumentedExport {
+  name: string;
+  signature: string;
+  start_line: number;
+  start_column: number;
+  end_line: number;
+  end_column: number;
+}
+
+export const auditCode = async (code: string, language: string): Promise<UndocumentedExport[]> => {
+  return await api.post<UndocumentedExport[]>('/editor/audit', { code, language });
+};
+
+export const generateDocs = async (signature: string): Promise<{ jsdoc: string }> => {
+  return await api.post<{ jsdoc: string }>('/editor/generate_docs', { signature });
 };

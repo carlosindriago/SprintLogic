@@ -44,7 +44,6 @@ export interface Task {
   affected_nodes?: string[];
   raw_line: number;
   commit?: string;
-  pomodoros?: number;
   time_spent?: number;
   priority?: "Low" | "Medium" | "High";
   tags?: string[];

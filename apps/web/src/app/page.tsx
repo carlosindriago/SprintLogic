@@ -39,12 +39,13 @@ import { useTabsStore } from '@/store/tabsStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useProjectStore } from '@/store/projectStore';
 import { useBackgroundJobsStore } from '@/store/backgroundJobsStore';
+import { useChatStore } from '@/store/chatStore';
 import TabBar from '@/components/TabBar';
 import { useThemeStore, AccentColor, UiScale } from '@/store/themeStore';
 import GitStatusWidget from '@/components/GitStatusWidget';
 import GitGraphTab from '@/components/GitGraphTab';
 import InsightDashboard from '@/components/InsightDashboard';
-import PomodoroTimer from "@/components/PomodoroTimer";
+
 import NewFileDialog from "@/components/NewFileDialog";
 import ProjectInsightsPanel from "@/components/ProjectInsightsPanel";
 import AnalysisReportDialog from "@/components/AnalysisReportDialog";
@@ -98,6 +99,7 @@ export default function Home() {
   const [addProjectOpen, setAddProjectOpen] = useState(false);
   const isVimEnabled = useSettingsStore((s) => s.isVimEnabled);
   const setVimEnabled = useSettingsStore((s) => s.setVimEnabled);
+  const { isDraftMode } = useChatStore();
   
   const { tabs, activeTabId, addTab, switchProject } = useTabsStore();
   const { accentColor, setAccentColor, uiScale, setUiScale } = useThemeStore();
@@ -151,9 +153,7 @@ export default function Home() {
       setCheatSheetOpen((prev) => !prev);
     };
     window.addEventListener("toggle-cheat-sheet", handleToggleCheatSheet);
-    return () => {
-      window.removeEventListener("toggle-cheat-sheet", handleToggleCheatSheet);
-    };
+    return () => window.removeEventListener("toggle-cheat-sheet", handleToggleCheatSheet);
   }, []);
 
   const handleSearchSelect = (result: { path: string; line?: number | null }) => {
@@ -888,9 +888,9 @@ export default function Home() {
 
       {/* RIGHT AI SIDEBAR — fixed width, css transitioned */}
       <div 
-        className={`flex-shrink-0 flex flex-col transition-all duration-300 ease-in-out border-zinc-800/50 bg-[#151515] overflow-hidden ${rightSidebarOpen ? 'w-[400px] border-l' : 'w-0 border-l-0'}`}
+        className={`flex-shrink-0 flex flex-col transition-all duration-300 ease-in-out border-zinc-800/50 bg-[#151515] overflow-hidden ${isDraftMode ? 'w-full absolute inset-0 z-50' : (rightSidebarOpen ? 'w-[400px] border-l' : 'w-0 border-l-0')}`}
       >
-        <div className="w-[400px] flex-1 flex flex-col min-h-0 overflow-hidden">
+        <div className={`flex-1 flex flex-col min-h-0 overflow-hidden ${isDraftMode ? 'w-full' : 'w-[400px]'}`}>
           <div className="flex items-center gap-2 px-4 py-2 border-b border-zinc-800/50 bg-[#0a0a0a]">
             <span className="text-sm font-medium text-zinc-300">SprintLogic AI</span>
             <div className="ml-auto flex items-center gap-1">
@@ -919,7 +919,7 @@ export default function Home() {
         </div>
       </div>
 
-      <PomodoroTimer projectId={projectId} />
+
 
         <Dialog open={renameDialogOpen} onOpenChange={setRenameDialogOpen}>
           <DialogContent className="bg-zinc-900 border-zinc-700 text-zinc-200 sm:max-w-sm">

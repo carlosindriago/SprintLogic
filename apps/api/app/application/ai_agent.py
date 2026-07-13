@@ -132,6 +132,80 @@ class AIAgent:
                     },
                 },
             },
+            {
+                "type": "function",
+                "function": {
+                    "name": "generate_task_spec",
+                    "description": "Propose a new TASK specification draft. Use this to enforce TDD by defining the task before writing code.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "task_id": {
+                                "type": "string",
+                                "description": "The ID of the task, e.g., 'TASK-402'",
+                            },
+                            "title": {
+                                "type": "string",
+                                "description": "The title of the task",
+                            },
+                            "domain": {
+                                "type": "string",
+                                "description": "The domain/module of the project this task belongs to",
+                            },
+                            "context": {
+                                "type": "string",
+                                "description": "Background context and architectural reasoning",
+                            },
+                            "requirements": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "id": {"type": "string", "description": "e.g., 'REQ-1'"},
+                                        "description": {"type": "string", "description": "The detailed technical requirement"}
+                                    },
+                                    "required": ["id", "description"]
+                                },
+                                "description": "List of explicit requirements"
+                            }
+                        },
+                        "required": ["task_id", "title", "domain", "context", "requirements"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "generate_adr",
+                    "description": "Propose a new Architecture Decision Record draft. Use this when a structural decision is made.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "adr_id": {
+                                "type": "string",
+                                "description": "The ADR ID, e.g., 'ADR-001'",
+                            },
+                            "title": {
+                                "type": "string",
+                                "description": "Title of the architectural decision",
+                            },
+                            "context": {
+                                "type": "string",
+                                "description": "Context and problem statement",
+                            },
+                            "decision": {
+                                "type": "string",
+                                "description": "The decision made",
+                            },
+                            "consequences": {
+                                "type": "string",
+                                "description": "Positive and negative consequences of the decision",
+                            }
+                        },
+                        "required": ["adr_id", "title", "context", "decision", "consequences"],
+                    },
+                },
+            },
         ]
 
         self._project_root: str | None = None
@@ -267,6 +341,26 @@ class AIAgent:
                 docs = await Context7Client.search(query, api_key)
                 return docs if docs else "No documentation found for that query."
 
+            elif name == "generate_task_spec":
+                payload = {
+                    "action": "propose_draft",
+                    "filepath": f".sprintlogic/specs/{args.get('task_id', 'TASK-000')}.md",
+                    "type": "task",
+                    "content": args,
+                    "tool_call_id": tool_call.id
+                }
+                return f"__DRAFT_PROPOSAL__:{json.dumps(payload)}"
+
+            elif name == "generate_adr":
+                payload = {
+                    "action": "propose_draft",
+                    "filepath": f"docs/adr/{args.get('adr_id', 'ADR-000')}.md",
+                    "type": "adr",
+                    "content": args,
+                    "tool_call_id": tool_call.id
+                }
+                return f"__DRAFT_PROPOSAL__:{json.dumps(payload)}"
+
         return "Unknown tool."
 
     async def _get_project_root(self) -> str | None:
@@ -298,25 +392,17 @@ class AIAgent:
         if not root:
             return ""
         return (
-            f"Eres SprintLogic AI, el arquitecto de software integrado en el IDE del usuario. "
-            f"NO ERES UN ASISTENTE WEB GENÉRICO. "
-            f"El usuario está trabajando en el proyecto alojado localmente en {root}. "
-            f"Tienes capacidad de leer archivos y buscar en el proyecto a través de las herramientas proporcionadas. "
-            f"REGLAS DE COMPORTAMIENTO ESTRICTAS:\n"
-            f"REGLA 1: Si consultas la memoria del proyecto (mem_search) y está vacía "
-            f"('No memories found'), NO le digas eso al usuario. En su lugar, usa inmediatamente "
-            f"search_codebase o read_local_file para analizar archivos clave "
-            f"(package.json, Cargo.toml, pyproject.toml, main.py, index.ts, etc.) y deducir "
-            f"la respuesta por ti mismo.\n"
-            f"REGLA 2: Cuando el usuario use el comando /architecture, tu obligación es usar "
-            f"tus herramientas para escanear la estructura del proyecto (search_codebase) y "
-            f"leer archivos de configuración clave (read_local_file), y generar un documento "
-            f"arquitectónico detallado basado en tus hallazgos reales.\n"
-            f"REGLA 3: NUNCA muestres al usuario resultados crudos de herramientas como "
-            f"'No memories found' o 'No context found'. Siempre reformula los resultados "
-            f"en una respuesta útil y accionable, usando los datos que SÍ encontraste.\n"
-            f"REGLA 4: Si una herramienta falla, intenta otra aproximación. No te rindas "
-            f"sin haber intentado al menos search_codebase y read_local_file."
+            f"Eres SprintLogic AI (El Crisol), el arquitecto de software socrático integrado en el IDE del usuario.\n"
+            f"Proyecto alojado en: {root}\n\n"
+            f"=== IRON PROMPT (MANDATO SOCRÁTICO) ===\n"
+            f"1. NO eres un asistente sumiso. Eres un compañero de debate implacable.\n"
+            f"2. Exige justificaciones para decisiones arquitectónicas. Obliga al usuario a pensar en Edge Cases.\n"
+            f"3. Eres el Enforcer de TDD y Docs-as-Code. ANTES de escribir código de producción, "
+            f"debes exigir o proponer la creación de un TASK-spec usando la herramienta `generate_task_spec`.\n"
+            f"4. Si el usuario toma una decisión estructural importante, usa `generate_adr` para proponer un registro.\n"
+            f"5. NO devuelvas bloques de texto gigantes con Markdown de tareas. Usa SIEMPRE las herramientas `generate_task_spec` "
+            f"y `generate_adr` para proponer borradores que el usuario revisará en su editor interactivo.\n"
+            f"6. Si usas herramientas de lectura y no hay resultados, busca alternativas. NUNCA digas 'No memories found'."
         )
 
     def _get_provider(self, model: str) -> str:
@@ -361,6 +447,11 @@ class AIAgent:
 
                 for tool_call in message.tool_calls:
                     tool_response_str = await self._handle_tool_call(tool_call)
+
+                    # Intercept drafts and short-circuit to emit to frontend
+                    if tool_response_str.startswith("__DRAFT_PROPOSAL__:"):
+                        return tool_response_str
+
                     messages.append(
                         {
                             "role": "tool",

@@ -6,6 +6,7 @@ import { QueryProvider } from "@/components/QueryProvider";
 import { Toaster } from "sonner";
 import Script from "next/script";
 import { GlobalActivityOverlay } from "@/components/GlobalActivityOverlay";
+import { StatusBar } from "@/components/StatusBar";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -32,7 +33,7 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">
+      <body className="h-screen w-screen flex flex-col overflow-hidden bg-zinc-950 text-zinc-50">
         <Script
           id="unhandled-rejections"
           dangerouslySetInnerHTML={{
@@ -50,9 +51,14 @@ export default function RootLayout({
           }}
         />
         <QueryProvider>
-          <ThemeProvider>{children}</ThemeProvider>
+          <ThemeProvider>
+            <main className="flex-1 overflow-hidden flex flex-col relative">
+              {children}
+            </main>
+          </ThemeProvider>
         </QueryProvider>
         <GlobalActivityOverlay />
+        <StatusBar />
         <Toaster theme="dark" position="bottom-right" />
       </body>
     </html>
