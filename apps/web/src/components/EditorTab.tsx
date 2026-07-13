@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import Editor, { type OnMount, useMonaco } from '@monaco-editor/react';
 import type { editor as monacoEditor, Uri } from 'monaco-editor';
-import { getFileContent, saveFileContent, API_BASE_URL, fetchHealthOverview, fetchContextualMentorship, fetchTechScan, getGitStatus } from '@/lib/api';
+import { getFileContent, saveFileContent, API_BASE_URL, fetchHealthOverview, fetchContextualMentorship, fetchTechScan, getGitStatus, auditCode, generateDocs, UndocumentedExport } from '@/lib/api';
 import { draftStore } from '@/lib/draftStore';
 import { useQuery } from '@tanstack/react-query';
 import { cn, hashString } from '@/lib/utils';
@@ -14,6 +14,7 @@ import { useFocusStore } from '@/store/focusStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useLLMConfigStore } from '@/store/llmConfigStore';
 import { useFimStore } from '@/store/fimStore';
+import { useTddStore } from '@/store/tddStore';
 import type { GraphNode } from '@/types';
 import { Code2, ChevronRight, Pencil, Eye, MousePointer2, GraduationCap, Save, SaveAll, Sparkles, Loader2 } from 'lucide-react';
 import FimHintBar from './FimHintBar';
@@ -23,6 +24,16 @@ import { CoachSidebar } from "./CoachSidebar";
 import { CodeCoachOverview, CodeCoachMarker } from "@/lib/api";
 import { toast } from 'sonner';
 import { GroqFimAdapter } from '@/lib/services/GroqFimAdapter';
+
+// Global error handler to suppress Monaco's internal "Canceled" unhandled rejections
+if (typeof window !== 'undefined') {
+  window.addEventListener('unhandledrejection', (event) => {
+    if (event.reason && event.reason.name === 'Canceled') {
+      // Suppress Monaco's internal cancellation errors from bubbling to the console
+      event.preventDefault();
+    }
+  });
+}
 
 interface LintDiagnostic {
   line: number;
@@ -95,7 +106,11 @@ export default function EditorTab({
   const [initialValue, setInitialValue] = useState('');
   const [draftModifiedLines, setDraftModifiedLines] = useState<number[]>([]);
   const [isConflictMode, setIsConflictMode] = useState(false);
+  const [undocumentedExports, setUndocumentedExports] = useState<UndocumentedExport[]>([]);
+  const [isGeneratingDocFor, setIsGeneratingDocFor] = useState<string | null>(null);
   const aiAbortControllerRef = useRef<AbortController | null>(null);
+
+  const isTddLocked = useTddStore((state) => state.locks[node.file_path] === 'locked');
 
   // Initialize AbortController
   useEffect(() => {
@@ -219,6 +234,50 @@ export default function EditorTab({
 
     return () => provider.dispose();
   }, [monaco, allMentorshipAdvice, node.name]);
+
+  useEffect(() => {
+    if (!monaco || !undocumentedExports || undocumentedExports.length === 0) return;
+
+    const language = '*';
+    const provider = monaco.languages.registerCodeActionProvider(language, {
+      provideCodeActions: (model, range, context, token) => {
+        const actions: any[] = [];
+        const currentLine = range.startLineNumber;
+
+        undocumentedExports.forEach(exp => {
+          if (currentLine >= exp.start_line && currentLine <= exp.end_line) {
+            actions.push({
+              title: `💡 Generar JSDoc con SprintLogic IA para '${exp.name}'`,
+              kind: 'quickfix',
+              isPreferred: true,
+              edit: {
+                edits: [] // The actual edit will be handled by our command or we can just trigger it
+              },
+              command: {
+                id: 'sprintlogic.generateDocs',
+                title: 'Generar Docs',
+                arguments: [exp]
+              }
+            });
+          }
+        });
+
+        return {
+          actions: actions,
+          dispose: () => {}
+        };
+      }
+    });
+
+    const commandDisposable = monaco.editor.registerCommand('sprintlogic.generateDocs', (accessor, exp: UndocumentedExport) => {
+      handleGenerateDoc(exp);
+    });
+
+    return () => {
+      provider.dispose();
+      commandDisposable.dispose();
+    };
+  }, [monaco, undocumentedExports]);
 
   const isCoachEnabled = useSettingsStore((s) => s.isFimEnabled);
   const setIsCoachEnabled = useSettingsStore((s) => s.setFimEnabled);
@@ -461,6 +520,34 @@ export default function EditorTab({
     }
   }, [fimDefaultModelRef, fimFallbackModelRef, node.file_path]);
 
+  const runAstAudit = useCallback(async (model: monacoEditor.ITextModel) => {
+    if (model.isDisposed()) return;
+    const content = model.getValue();
+    const language = node.file_path?.split('.').pop() || 'typescript';
+    if (['ts', 'tsx', 'js', 'jsx', 'typescript', 'javascript'].includes(language)) {
+      try {
+        const exports = await auditCode(content, language);
+        if (!model.isDisposed()) {
+          setUndocumentedExports(exports);
+          if (monacoRef.current) {
+            const monaco = monacoRef.current;
+            const markers = exports.map(exp => ({
+              severity: monaco.MarkerSeverity.Warning,
+              message: 'Generar JSDoc con SprintLogic IA',
+              startLineNumber: exp.start_line,
+              startColumn: exp.start_column,
+              endLineNumber: exp.end_line,
+              endColumn: exp.end_column
+            }));
+            monaco.editor.setModelMarkers(model, 'ast-auditor', markers);
+          }
+        }
+      } catch (err) {
+        console.error("Error in AST Audit:", err);
+      }
+    }
+  }, [node.file_path]);
+
   const forceSenseiAnalysis = useCallback(() => {
     isDirtyRef.current = true;
     setIsDirty(true);
@@ -469,8 +556,9 @@ export default function EditorTab({
     if (model && !model.isDisposed()) {
       runHealthAnalysis(model, true);
       runCoachAnalysis(model, editorRef.current as monacoEditor.IStandaloneCodeEditor);
+      runAstAudit(model);
     }
-  }, [runCoachAnalysis, runHealthAnalysis]);
+  }, [runCoachAnalysis, runHealthAnalysis, runAstAudit]);
 
   useEffect(() => {
     const handler = () => forceSenseiAnalysis();
@@ -512,9 +600,10 @@ export default function EditorTab({
       const model = editorRef.current.getModel();
       if (model && !model.isDisposed()) {
         runHealthAnalysis(model, false);
+        runAstAudit(model);
       }
     }
-  }, [isEditorReady, isCoachEnabled, node.file_path, runHealthAnalysis, isConflictMode]);
+  }, [isEditorReady, isCoachEnabled, node.file_path, runHealthAnalysis, runAstAudit, isConflictMode]);
 
   // Hot Exit: apply amber gutter decorations on draft-modified lines
   useEffect(() => {
@@ -544,7 +633,56 @@ export default function EditorTab({
     };
   }, [isEditorReady, draftModifiedLines]);
 
+  const handleGenerateDoc = async (exp: UndocumentedExport) => {
+    setIsGeneratingDocFor(exp.name);
+    
+    const editor = editorRef.current;
+    const monaco = monacoRef.current;
+    
+    if (!editor || !monaco) {
+      setIsGeneratingDocFor(null);
+      return;
+    }
+    
+    const model = editor.getModel();
+    if (!model) {
+      setIsGeneratingDocFor(null);
+      return;
+    }
 
+    // 1. Crear un Tracked Range (GPS invisible) antes de la operación asíncrona
+    const decorationId = model.deltaDecorations([], [{
+      range: new monaco.Range(exp.start_line, 1, exp.start_line, 1),
+      options: { 
+        isWholeLine: true 
+      }
+    }]);
+
+    try {
+      const { jsdoc } = await generateDocs(exp.signature);
+      
+      // 2. Recuperar la coordenada actualizada después del delay
+      const updatedRange = model.getDecorationRange(decorationId[0]);
+      const targetLine = updatedRange ? updatedRange.startLineNumber : exp.start_line;
+      
+      editor.executeEdits("ai-coach", [{
+        range: new monaco.Range(targetLine, 1, targetLine, 1),
+        text: jsdoc + '\n',
+        forceMoveMarkers: true
+      }]);
+      
+      // Re-run AST Audit
+      runAstAudit(model);
+      toast.success("Docstring inyectado correctamente.");
+    } catch (err) {
+      toast.error("Error al generar documentación.");
+      console.error(err);
+    } finally {
+      // 3. Destruir el Tracked Range
+      model.deltaDecorations(decorationId, []);
+      setIsGeneratingDocFor(null);
+    }
+  };
 
   const vimStatusRef = useRef<HTMLDivElement | null>(null);
   const originalContentRef = useRef('');
@@ -558,6 +696,7 @@ export default function EditorTab({
   const dirtyCheckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const backupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const astAuditTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleSaveRef = useRef<(saveAs?: string) => Promise<void>>(async () => {});
   const isSavingRef = useRef(false);
   const coachTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -635,6 +774,7 @@ export default function EditorTab({
         }
       }
       if (dirtyCheckTimerRef.current) clearTimeout(dirtyCheckTimerRef.current);
+      if (astAuditTimerRef.current) clearTimeout(astAuditTimerRef.current);
       if (coachTimerRef.current) clearTimeout(coachTimerRef.current);
       if (vimObserverRef.current) {
         vimObserverRef.current.disconnect();
@@ -914,7 +1054,9 @@ export default function EditorTab({
     wordWrap: "on" as const,
     padding: { top: 16 },
     inlineSuggest: { enabled: true },
-  }), []);
+    readOnly: isTddLocked,
+    domReadOnly: isTddLocked,
+  }), [isTddLocked]);
 
   const handleEditorDidMount: OnMount = useCallback((editor, monaco) => {
     console.log('[MONACO BOOT] handleEditorDidMount disparado. vimMode=', vimMode, 'path=', node.file_path);
@@ -1024,6 +1166,14 @@ export default function EditorTab({
             runCoachAnalysis(model, editor);
           }
         }, 3500);
+      }
+
+      if (astAuditTimerRef.current) clearTimeout(astAuditTimerRef.current);
+      if (model && !model.isDisposed()) {
+        // 1 second debounce for AST Auditor as requested by the user
+        astAuditTimerRef.current = setTimeout(() => {
+          runAstAudit(model);
+        }, 1000);
       }
 
       if (dirtyCheckTimerRef.current) clearTimeout(dirtyCheckTimerRef.current);
@@ -1261,17 +1411,23 @@ export default function EditorTab({
         </div>
       )}
 
-      <div className="flex-1 relative overflow-hidden min-h-0 min-w-0">
-        {isCoachEnabled ? (
-          <div className="absolute inset-0 flex flex-row w-full h-full">
-            <div className="flex-1 relative h-full overflow-hidden">
-              <Editor
-                key={editorPath}
-                height="100%"
-                theme="vs-dark"
-                path={editorPath}
-                defaultValue={initialValue}
-                onMount={handleEditorDidMount}
+      <div className="flex-1 flex flex-col relative overflow-hidden min-h-0 min-w-0">
+        {isTddLocked && (
+          <div className="w-full bg-red-900/90 text-red-100 text-[11px] uppercase tracking-wider font-bold py-1.5 px-3 flex items-center justify-center border-b border-red-700/50 shadow-md z-20 shrink-0">
+            🔒 TDD Guard Activo: Escribe el test primero para desbloquear este archivo.
+          </div>
+        )}
+        <div className="flex-1 relative min-h-0 w-full">
+          {isCoachEnabled ? (
+            <div className="absolute inset-0 flex flex-row w-full h-full">
+              <div className="flex-1 relative h-full overflow-hidden">
+                <Editor
+                  key={editorPath}
+                  height="100%"
+                  theme="vs-dark"
+                  path={editorPath}
+                  defaultValue={initialValue}
+                  onMount={handleEditorDidMount}
                 options={editorOptions}
                 loading={null}
               />
@@ -1294,7 +1450,7 @@ export default function EditorTab({
                 overview={coachOverview}
                 allMentorshipAdvice={allMentorshipAdvice}
                 activeLineNumber={activeLineNumber}
-                fileMetadata={{ lineCount, gitStatus: gitStatusLabel }}
+                fileMetadata={gitStatusData && gitStatusLabel ? { lineCount, gitStatus: gitStatusLabel } : undefined}
                 availableAdviceLines={availableAdviceLines}
                 isEditorDirty={isDirty}
                 isConflictMode={isConflictMode}
@@ -1310,11 +1466,12 @@ export default function EditorTab({
               path={editorPath}
               defaultValue={initialValue}
               onMount={handleEditorDidMount}
-              options={editorOptions}
-              loading={null}
-            />
-          </div>
-        )}
+                options={editorOptions}
+                loading={null}
+              />
+            </div>
+          )}
+        </div>
       </div>
       <ContextHUD
         editorRef={editorRef}

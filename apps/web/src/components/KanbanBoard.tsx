@@ -35,8 +35,7 @@ interface KanbanBoardProps {
 
 function SortableTask({ 
   task, 
-  onNodeClick, 
-  onStartPomodoro 
+  onNodeClick
 }: { 
   task: Task; 
   onNodeClick?: (nodeId: string) => void; 
