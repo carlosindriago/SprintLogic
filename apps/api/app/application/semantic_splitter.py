@@ -12,8 +12,9 @@ class SemanticMarkdownSplitter:
         self.chunk_overlap = chunk_overlap
         self.hierarchy_template = hierarchy_template
 
+        self.parser: tree_sitter.Parser | None = None
         try:
-            import tree_sitter_markdown as tsm
+            import tree_sitter_markdown as tsm  # type: ignore
             self.parser = tree_sitter.Parser()
             self.parser.language = tree_sitter.Language(tsm.language())
         except Exception as e:
@@ -31,7 +32,7 @@ class SemanticMarkdownSplitter:
         if not tree.root_node.children:
             return []
 
-        current_breadcrumbs = []
+        current_breadcrumbs: list[str] = []
         current_chunk_text = ""
 
         for node in tree.root_node.children:

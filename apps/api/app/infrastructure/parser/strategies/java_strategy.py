@@ -107,18 +107,18 @@ class JavaAnalyzerStrategy(LanguageAnalyzerStrategy):
             wildcard_imports: list[str] = [current_package] if current_package else []
             wildcard_imports.append("java.lang")
 
-            captures = []
+            captures_pass2: list[tuple[str, Any, int]] = []
             for pattern_index, captures_dict in cursor.matches(tree.root_node):
                 for capture_name, nodes_list in captures_dict.items():
                     for node in nodes_list:
-                        captures.append((capture_name, node, pattern_index))
+                        captures_pass2.append((capture_name, node, pattern_index))
 
             pattern_has_wildcard = set()
-            for capture_name, node, pattern_index in captures:
+            for capture_name, node, pattern_index in captures_pass2:
                 if capture_name == "import.wildcard":
                     pattern_has_wildcard.add(pattern_index)
 
-            for capture_name, node, pattern_index in captures:
+            for capture_name, node, pattern_index in captures_pass2:
                 if not node.text:
                     continue
                 if capture_name == "import.name":
@@ -129,7 +129,7 @@ class JavaAnalyzerStrategy(LanguageAnalyzerStrategy):
                         class_name = import_fqn.split('.')[-1]
                         explicit_imports[class_name] = import_fqn
 
-            for capture_name, node, pattern_index in captures:
+            for capture_name, node, pattern_index in captures_pass2:
                 if not node.text:
                     continue
 

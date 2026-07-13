@@ -1,0 +1,30 @@
+Metadata-Version: 2.4
+Name: sprintlogic-api
+Version: 0.1.0
+Summary: FastAPI backend for sprintLogic
+Requires-Python: >=3.12
+Requires-Dist: fastapi>=0.115.0
+Requires-Dist: uvicorn[standard]>=0.30.0
+Requires-Dist: pytest>=8.0.0
+Requires-Dist: pytest-asyncio>=0.23.0
+Requires-Dist: sqlalchemy>=2.0.0
+Requires-Dist: httpx>=0.28.0
+Requires-Dist: alembic>=1.16.0
+Requires-Dist: aiosqlite>=0.20.0
+Requires-Dist: sqlite-vec>=0.1.6
+Requires-Dist: cachetools>=5.5.0
+Requires-Dist: keyring>=25.0.0
+Requires-Dist: litellm>=1.0.0
+Requires-Dist: tree-sitter>=0.23.0
+Requires-Dist: tree-sitter-python>=0.23.0
+Requires-Dist: tree-sitter-typescript>=0.23.0
+Requires-Dist: tree-sitter-java
+Requires-Dist: tree-sitter-php
+Requires-Dist: tree-sitter-go
+Requires-Dist: tree-sitter-html
+Requires-Dist: tree-sitter-css
+Requires-Dist: ruff>=0.9.0
+Requires-Dist: sse-starlette>=3.0.0
+Provides-Extra: dev
+Requires-Dist: ruff>=0.9.0; extra == "dev"
+Requires-Dist: mypy>=1.15.0; extra == "dev"

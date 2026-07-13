@@ -1,6 +1,6 @@
 import hashlib
 
-import numpy as np
+import numpy as np  # type: ignore
 from sqlalchemy import text
 
 from app.application.semantic_splitter import SemanticMarkdownSplitter

@@ -85,18 +85,18 @@ class ASTAuditor:
 
             if "func.name" in captures:
                 name_node = captures["func.name"][0]
-                name = name_node.text.decode('utf8')
+                name = name_node.text.decode('utf8') if name_node.text else ""
                 params_nodes = captures.get("func.params")
-                params = params_nodes[0].text.decode('utf8') if params_nodes else "()"
+                params = params_nodes[0].text.decode('utf8') if params_nodes and params_nodes[0].text else "()"
                 ret_nodes = captures.get("func.return")
-                ret_type = ret_nodes[0].text.decode('utf8') if ret_nodes else ""
+                ret_type = ret_nodes[0].text.decode('utf8') if ret_nodes and ret_nodes[0].text else ""
             elif "var.name" in captures:
                 name_node = captures["var.name"][0]
-                name = name_node.text.decode('utf8')
+                name = name_node.text.decode('utf8') if name_node.text else ""
                 params_nodes = captures.get("var.params")
-                params = params_nodes[0].text.decode('utf8') if params_nodes else "()"
+                params = params_nodes[0].text.decode('utf8') if params_nodes and params_nodes[0].text else "()"
                 ret_nodes = captures.get("var.return")
-                ret_type = ret_nodes[0].text.decode('utf8') if ret_nodes else ""
+                ret_type = ret_nodes[0].text.decode('utf8') if ret_nodes and ret_nodes[0].text else ""
 
             if not name_node:
                 name_node = export_node

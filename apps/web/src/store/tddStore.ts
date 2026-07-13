@@ -17,8 +17,8 @@ export const useTddStore = create<TddState>((set) => ({
         const data = await response.json();
         set({ locks: data.locks });
       }
-    } catch {
-      set({ status: 'error', isScanning: false });
+    } catch (e) {
+      console.error('Error fetching locks:', e);
     }
   },
   initializeSseListener: (taskId) => {

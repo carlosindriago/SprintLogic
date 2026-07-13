@@ -2,9 +2,9 @@ import asyncio
 from pathlib import Path
 from typing import Optional
 
-import numpy as np
-import onnxruntime as ort
-from tokenizers import Tokenizer
+import numpy as np  # type: ignore
+import onnxruntime as ort  # type: ignore
+from tokenizers import Tokenizer  # type: ignore
 
 
 class VectorEngine:

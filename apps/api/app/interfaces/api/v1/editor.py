@@ -84,14 +84,17 @@ class GenerateDocResponse(BaseModel):
 @router.post("/generate_docs", response_model=GenerateDocResponse)
 async def generate_docs(request: GenerateDocRequest):
     try:
-        from app.application.ai_agent import agent
+        from app.application.ai_agent import AIAgent
+        from app.infrastructure.db.database import AsyncSessionLocal
 
         prompt = f"""Escribe ÚNICAMENTE un comentario JSDoc válido y profesional para la siguiente firma de función/variable exportada.
 NO inventes lógica interna. Usa el formato /** ... */.
 Firma: {request.signature}
 Solo devuelve el bloque JSDoc, sin bloques de código markdown, sin texto adicional."""
 
-        response = await agent.chat([{"role": "user", "content": prompt}])
+        async with AsyncSessionLocal() as session:
+            agent = AIAgent(session=session)
+            response = await agent.chat([{"role": "user", "content": prompt}], model="gemini/gemini-2.5-flash")
         # Clean up markdown code blocks if the LLM adds them
         jsdoc = response.strip()
         if jsdoc.startswith("```"):
