@@ -97,7 +97,7 @@ async def chat_with_ai(request: ChatRequest, session: AsyncSession = Depends(get
             agent = AIAgent(session=session, project_id=request.project_id)
             async for chunk_str in agent.chat_stream(request.messages, model=request.model):
                 yield f"data: {chunk_str}\n\n"
-                
+
             yield f"data: {json.dumps({'text': '', 'is_done': True})}\n\n"
         except Exception as e:
             error_str = str(e)

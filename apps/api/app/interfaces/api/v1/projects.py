@@ -51,6 +51,7 @@ router = APIRouter()
 # ── Request models not yet moved to project_schemas ───────────────────────────
 # (file/editor-specific schemas; keep here until they get their own module)
 
+
 class FileContentUpdate(BaseModel):
     content: str
     base_hash: str | None = None
@@ -113,6 +114,7 @@ async def scan_project(
         message="The AST parsing is running in the background.",
     )
 
+
 @router.get("/projects/{project_id}/scan/stream")
 async def stream_scan_progress(project_id: str):
     async def event_generator():
@@ -133,10 +135,11 @@ async def stream_scan_progress(project_id: str):
     return EventSourceResponse(event_generator())
 
 
-
 @router.put("/projects/{project_id}", response_model=ProjectResponse)
 async def update_project(
-    project_id: str, request: UpdateProjectRequestDTO, session: AsyncSession = Depends(get_db_session)
+    project_id: str,
+    request: UpdateProjectRequestDTO,
+    session: AsyncSession = Depends(get_db_session),
 ) -> ProjectResponse:
     try:
         project_uuid = UUID(project_id)
@@ -151,9 +154,10 @@ async def update_project(
     return ProjectResponse.model_validate(project, from_attributes=True)
 
 
-
 @router.delete("/projects/{project_id}", response_model=ProjectDeletedResponse)
-async def delete_project(project_id: str, session: AsyncSession = Depends(get_db_session)) -> ProjectDeletedResponse:
+async def delete_project(
+    project_id: str, session: AsyncSession = Depends(get_db_session)
+) -> ProjectDeletedResponse:
     try:
         project_uuid = UUID(project_id)
     except ValueError:
@@ -303,6 +307,7 @@ from fastapi import Request
 def get_process_pool(request: Request) -> ProcessPoolExecutor:
     return request.app.state.process_pool
 
+
 class AnalyzeGraphRequest(BaseModel):
     model: str = "gemini/gemini-2.5-flash"
     fallback_model: str | None = None
@@ -313,9 +318,7 @@ from fastapi.responses import StreamingResponse
 
 @router.post("/projects/{project_id}/graph/analyze")
 async def analyze_project_graph(
-    project_id: str,
-    request: AnalyzeGraphRequest,
-    session: AsyncSession = Depends(get_db_session)
+    project_id: str, request: AnalyzeGraphRequest, session: AsyncSession = Depends(get_db_session)
 ):
     try:
         project_uuid = UUID(project_id)
@@ -342,7 +345,7 @@ async def analyze_project_graph(
             JavaAnalyzerStrategy(),
             PhpAnalyzerStrategy(),
             PythonAnalyzerStrategy(),
-            TypeScriptAnalyzerStrategy()
+            TypeScriptAnalyzerStrategy(),
         ]
 
         usecase = ScanCodebaseUseCase(strategies)
@@ -371,9 +374,7 @@ async def analyze_project_graph(
 
 
 @router.get("/projects/{project_id}/reports")
-async def get_project_reports(
-    project_id: str, session: AsyncSession = Depends(get_db_session)
-):
+async def get_project_reports(project_id: str, session: AsyncSession = Depends(get_db_session)):
     try:
         project_uuid = UUID(project_id)
     except ValueError:
@@ -415,8 +416,9 @@ async def get_project_report(
     from app.interfaces.api.v1.report_schemas import AnalysisReportResponse
 
     result = await session.execute(
-        select(AnalysisReportModel)
-        .where(AnalysisReportModel.id == report_uuid, AnalysisReportModel.project_id == project_uuid)
+        select(AnalysisReportModel).where(
+            AnalysisReportModel.id == report_uuid, AnalysisReportModel.project_id == project_uuid
+        )
     )
     report = result.scalar_one_or_none()
 
@@ -529,6 +531,7 @@ async def get_project_file_content(
         raise HTTPException(status_code=404, detail="File not found")
 
     import hashlib
+
     try:
         with open(candidate, "rb") as f:
             raw_content = f.read()
@@ -569,6 +572,7 @@ async def update_project_file_content(
         raise HTTPException(status_code=404, detail="File not found")
 
     import hashlib
+
     try:
         # Optimistic Concurrency Control (ETag logic)
         if payload.base_hash:
@@ -576,7 +580,9 @@ async def update_project_file_content(
                 current_raw = f.read()
             current_hash = hashlib.sha256(current_raw).hexdigest()
             if current_hash != payload.base_hash:
-                raise HTTPException(status_code=409, detail="File has been modified externally since last read")
+                raise HTTPException(
+                    status_code=409, detail="File has been modified externally since last read"
+                )
 
         with open(candidate, "w", encoding="utf-8") as f:
             f.write(payload.content)
@@ -1227,7 +1233,9 @@ async def save_kanban_config(
 
 
 @router.get("/projects/{project_id}/notes")
-async def get_project_sticky_notes(project_id: str, session: AsyncSession = Depends(get_db_session)):
+async def get_project_sticky_notes(
+    project_id: str, session: AsyncSession = Depends(get_db_session)
+):
     try:
         project_uuid = UUID(project_id)
     except ValueError:
@@ -1239,6 +1247,7 @@ async def get_project_sticky_notes(project_id: str, session: AsyncSession = Depe
         raise HTTPException(status_code=404, detail="Project not found")
 
     import json
+
     json_path = os.path.join(project.path, f"{project_id}.json")
 
     notes = []
@@ -1270,6 +1279,7 @@ async def update_project_sticky_notes(
         raise HTTPException(status_code=404, detail="Project not found")
 
     import json
+
     json_path = os.path.join(project.path, f"{project_id}.json")
 
     data = {}
@@ -1477,8 +1487,10 @@ Debes responder ÚNICAMENTE con un objeto JSON válido con la siguiente estructu
         raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
-@router.get("/projects/{project_id}/insights")
-async def get_project_insights(project_id: str, session: AsyncSession = Depends(get_db_session)):
+@router.get("/projects/{project_id}/insights/flow")
+async def get_project_flow_insights(
+    project_id: str, session: AsyncSession = Depends(get_db_session)
+):
     try:
         project_uuid = UUID(project_id)
     except ValueError:
@@ -1489,17 +1501,121 @@ async def get_project_insights(project_id: str, session: AsyncSession = Depends(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    # 1. Tareas por estado
+    deep_flow_hours = 0.0
+    idle_breaks = 0
+    golden_ratio = {"thinking": 0, "coding": 0, "testing": 0}
+    heatmap = []
+
+    try:
+        flow_query = text("""
+            WITH lagged AS (
+                SELECT 
+                    window_start_ms,
+                    window_end_ms,
+                    LAG(window_end_ms) OVER (ORDER BY window_start_ms) as prev_end_ms
+                FROM telemetry_pings
+                WHERE timestamp >= date('now', 'start of day')
+            ),
+            gaps AS (
+                SELECT 
+                    window_start_ms,
+                    window_end_ms,
+                    prev_end_ms,
+                    CASE WHEN prev_end_ms IS NULL OR (window_start_ms - prev_end_ms) > 300000 THEN 1 ELSE 0 END as is_gap
+                FROM lagged
+            ),
+            sessions AS (
+                SELECT 
+                    window_start_ms,
+                    window_end_ms,
+                    SUM(is_gap) OVER (ORDER BY window_start_ms) as session_id
+                FROM gaps
+            ),
+            session_durations AS (
+                SELECT 
+                    session_id,
+                    (MAX(window_end_ms) - MIN(window_start_ms)) as duration_ms
+                FROM sessions
+                GROUP BY session_id
+            )
+            SELECT 
+                (SELECT SUM(duration_ms) FROM session_durations) / 3600000.0 as deep_flow_hours,
+                (SELECT SUM(is_gap) FROM gaps WHERE prev_end_ms IS NOT NULL) as idle_breaks
+        """)
+        flow_result = await session.execute(flow_query)
+        flow_row = flow_result.fetchone()
+        if flow_row:
+            deep_flow_hours = round(flow_row[0] or 0.0, 2)
+            idle_breaks = max(0, flow_row[1] or 0)
+
+        ratio_query = text("""
+            SELECT 
+                SUM(thinking_ms) as t,
+                SUM(coding_ms) as c,
+                SUM(testing_ms) as ts
+            FROM telemetry_pings
+            WHERE timestamp >= date('now', 'start of day')
+        """)
+        ratio_result = await session.execute(ratio_query)
+        r_row = ratio_result.fetchone()
+        if r_row:
+            golden_ratio = {
+                "thinking": r_row[0] or 0,
+                "coding": r_row[1] or 0,
+                "testing": r_row[2] or 0,
+            }
+
+        heatmap_query = text("""
+            SELECT 
+                strftime('%H', timestamp) as hour,
+                SUM(thinking_ms + coding_ms + testing_ms) as total_ms
+            FROM telemetry_pings
+            WHERE timestamp >= date('now', 'start of day')
+            GROUP BY hour
+            ORDER BY hour
+        """)
+        heatmap_result = await session.execute(heatmap_query)
+        for row in heatmap_result.fetchall():
+            if row[0]:
+                heatmap.append({"hour": f"{row[0]}:00", "activity": row[1] or 0})
+    except Exception as e:
+        import logging
+
+        logging.error(f"Telemetry query failed: {e}")
+
+    return {
+        "deep_flow_hours": deep_flow_hours,
+        "idle_breaks": idle_breaks,
+        "golden_ratio": golden_ratio,
+        "heatmap": heatmap,
+    }
+
+
+@router.get("/projects/{project_id}/insights/repo")
+async def get_project_repo_insights(
+    project_id: str, session: AsyncSession = Depends(get_db_session)
+):
+    try:
+        project_uuid = UUID(project_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+
+    repo = SQLAlchemyProjectRepository(session)
+    project = await repo.get_project(project_uuid)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
     tasks_by_state = {"todo": 0, "in-progress": 0, "done": 0}
     try:
-        tasks = kanban_sync.read_tasks(project.path)
+        import asyncio
+
+        tasks = await asyncio.to_thread(kanban_sync.read_tasks, project.path)
         for t in tasks:
             if t["status"] in tasks_by_state:
                 tasks_by_state[t["status"]] += 1
     except Exception:
         pass
 
-    # 2. Distribución de archivos/lenguajes (Query GraphNodeModel)
     from sqlalchemy import select
 
     from app.infrastructure.db.models import GraphNodeModel
@@ -1514,11 +1630,9 @@ async def get_project_insights(project_id: str, session: AsyncSession = Depends(
             ext = ext[1:].lower()
             extensions[ext] = extensions.get(ext, 0) + 1
 
-    # Sort extensions by count descending
     sorted_items = sorted(extensions.items(), key=lambda item: item[1], reverse=True)
     sorted_exts = [{"name": k, "value": v} for k, v in sorted_items]
 
-    # 3. Total de Commits, Ramas activas y Logs recientes
     git_gateway = LocalGitGateway()
     total_commits = 0
     active_branches = 0
@@ -1542,9 +1656,8 @@ async def get_project_insights(project_id: str, session: AsyncSession = Depends(
 
     return {
         "tasks_by_state": tasks_by_state,
-        "language_distribution": sorted_exts[:5],
+        "language_distribution": sorted_exts,
         "total_commits": total_commits,
         "active_branches": active_branches,
-        "velocity": int(tasks_by_state.get("done", 0) * 1.5),
         "recent_commits": recent_commits,
     }
