@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable react/no-unescaped-entities */
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { CodeCoachOverview, CodeCoachMarker } from "@/lib/api";
-import { RefreshCw, ShieldAlert, FileCode2, Activity, Lightbulb, Loader2, FileText, Keyboard, Copy, Check, ChevronDown, XCircle, AlertTriangle, Info } from "lucide-react";
+import { CodeCoachOverview, CodeCoachMarker, UndocumentedExport } from "@/lib/api";
+import { RefreshCw, ShieldAlert, FileCode2, Activity, Lightbulb, Loader2, FileText, Keyboard, Copy, Check, ChevronDown, XCircle, AlertTriangle, Info, BookOpen } from "lucide-react";
 import { SiTypescript, SiReact, SiPython, SiNextdotjs, SiFastapi, SiTailwindcss, SiNodedotjs, SiDocker, SiPostgresql, SiHtml5, SiCss, SiGnubash } from 'react-icons/si';
 import { VscCode } from 'react-icons/vsc';
 import { Button } from "@/components/ui/button";

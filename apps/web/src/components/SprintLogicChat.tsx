@@ -3,13 +3,18 @@ import { Button } from "@/components/ui/button";
 import ReactMarkdown from "react-markdown";
 import { KeyRound, Cpu, Send, Loader2, Terminal } from "lucide-react";
 import { useLLMConfigStore } from "@/store/llmConfigStore";
+import { useChatStore } from "@/store/chatStore";
+import DraftReviewer from "./DraftReviewer";
 import { API_BASE_URL } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { MarkdownLink } from "./MarkdownLink";
 
 interface ChatMessage {
-  role: "user" | "assistant" | "system";
+  role: "user" | "assistant" | "system" | "tool";
   content: string;
   isError?: boolean;
+  tool_call_id?: string;
+  name?: string;
 }
 
 interface SprintLogicChatProps {
@@ -27,6 +32,7 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
   const defaultModel = useLLMConfigStore((s) => s.defaultModel);
   const setDefaultModel = useLLMConfigStore((s) => s.setDefaultModel);
   const activeModel = useMemo(() => asValidModel(defaultModel), [defaultModel]);
+  const { isDraftMode, setDraftMode, draftPayload, clearDraftMode } = useChatStore();
   const [sessionModel, setSessionModel] = useState<string | null>(null);
 
   const currentModel = sessionModel ?? activeModel;
@@ -104,16 +110,35 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
     );
   }
 
-  const sendMessage = async () => {
+  const sendMessage = async (overrideMessage?: ChatMessage) => {
     const trimmed = input.trim();
-    if (!trimmed || !currentModel) return;
+    
+    // Feedback loop rejection
+    if (!overrideMessage && isDraftMode && draftPayload) {
+      if (!trimmed) return;
+      const rejectPayload: ChatMessage = {
+        role: "tool",
+        tool_call_id: draftPayload.tool_call_id,
+        name: draftPayload.type === 'task' ? 'generate_task_spec' : 'generate_adr',
+        content: `El usuario rechazó el borrador con este comentario: ${trimmed}. Genera una nueva versión.`
+      };
+      clearDraftMode();
+      setInput("");
+      return sendMessage(rejectPayload);
+    }
 
-    const newMessages: ChatMessage[] = [
+    if (!trimmed && !overrideMessage) return;
+    if (!currentModel) return;
+
+    const newMessages: ChatMessage[] = overrideMessage ? [
+      ...messages,
+      overrideMessage
+    ] : [
       ...messages,
       { role: "user", content: trimmed },
     ];
     setMessages(newMessages);
-    setInput("");
+    if (!overrideMessage) setInput("");
     setLoading(true);
     setUsage(null);
 
@@ -149,6 +174,29 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
               if (parsed.error) isError = true;
               if (parsed.text !== undefined) {
                 streamedText = parsed.text;
+                
+                if (streamedText.startsWith("__DRAFT_PROPOSAL__:")) {
+                  try {
+                    const jsonStr = streamedText.replace("__DRAFT_PROPOSAL__:", "");
+                    const payload = JSON.parse(jsonStr);
+                    setDraftMode(payload);
+                    setMessages((prev) => {
+                      const next = [...prev];
+                      const last = next[next.length - 1];
+                      const msg: ChatMessage = { role: "assistant", content: `Generando borrador de ${payload.type === 'task' ? 'especificación' : 'ADR'}... Esperando revisión del usuario.` };
+                      if (last?.role === "assistant") {
+                        next[next.length - 1] = msg;
+                      } else {
+                        next.push(msg);
+                      }
+                      return next;
+                    });
+                  } catch (e) {
+                    console.error("Failed to parse draft proposal", e);
+                  }
+                  continue; // Skip rendering raw JSON
+                }
+
                 setMessages((prev) => {
                   const next = [...prev];
                   const last = next[next.length - 1];
@@ -224,7 +272,8 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#0f0f0f] text-zinc-200">
+    <div className="flex h-full w-full bg-[#0f0f0f] text-zinc-200">
+      <div className={`flex flex-col h-full transition-all duration-300 ${isDraftMode ? 'w-[30%] border-r border-zinc-800' : 'w-full'}`}>
       <div className="flex items-center gap-2 px-3 py-2 border-b border-zinc-800/50 bg-[#0a0a0a] shrink-0">
         <Cpu className="w-4 h-4 text-blue-400" aria-hidden="true" />
         <span className="text-xs font-semibold text-zinc-300">SprintLogic AI</span>
@@ -284,6 +333,7 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
             {m.role === 'assistant' ? (
               <ReactMarkdown
                 components={{
+                  a: MarkdownLink,
                   code: ({ children }) => (
                     <code className="bg-zinc-900 px-1 py-0.5 rounded text-[11px] text-blue-300 font-mono">
                       {children}
@@ -358,7 +408,7 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
             />
           <button
             aria-label="Enviar mensaje"
-            onClick={sendMessage}
+            onClick={() => sendMessage()}
             disabled={loading || !input.trim() || !currentModel}
             title={currentModel ? "Enviar mensaje" : "Seleccioná un modelo para enviar mensajes"}
             className="text-zinc-400 hover:text-white disabled:opacity-30 shrink-0"
@@ -368,6 +418,12 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
         </div>
         </div>
       </div>
+      </div>
+      {isDraftMode && (
+        <div className="w-[70%] h-full flex flex-col bg-[#1e1e1e]">
+          <DraftReviewer onSubmitResponse={(msg) => sendMessage(JSON.parse(msg))} />
+        </div>
+      )}
     </div>
   );
 }
