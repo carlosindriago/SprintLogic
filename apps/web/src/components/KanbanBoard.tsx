@@ -40,7 +40,6 @@ function SortableTask({
 }: { 
   task: Task; 
   onNodeClick?: (nodeId: string) => void; 
-  onStartPomodoro?: (task: Task) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id });
 
@@ -92,10 +91,9 @@ function SortableTask({
                 {task.commit.substring(0, 7)}
               </span>
             )}
-            {(task.pomodoros || task.time_spent) ? (
+            {task.time_spent ? (
               <span className="flex items-center gap-1 bg-zinc-900 text-zinc-400 border border-zinc-700 px-1.5 py-0.5 rounded">
                 <Clock className="w-3 h-3 text-zinc-500" />
-                {task.pomodoros ? `🍅 ${task.pomodoros}` : ""}
                 {task.time_spent ? ` (${formatTime(task.time_spent)})` : ""}
               </span>
             ) : null}
@@ -123,19 +121,7 @@ function SortableTask({
             </div>
           )}
 
-          {/* Action button to trigger Pomodoro */}
-          {task.status !== 'done' && (
-            <button 
-              onClick={(e) => {
-                e.stopPropagation();
-                if (onStartPomodoro) onStartPomodoro(task);
-              }}
-              className="mt-1 flex items-center justify-center gap-1 text-[9px] py-1 rounded bg-[#27272a] hover:bg-[#3f3f46] text-zinc-300 transition-colors"
-            >
-              <Play className="w-2.5 h-2.5 text-zinc-400" />
-              Iniciar Pomodoro
-            </button>
-          )}
+
         </CardContent>
       </Card>
     </div>
@@ -167,7 +153,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
   const [editingColumns, setEditingColumns] = useState<KanbanColumn[]>([]);
   const [newColTitle, setNewColTitle] = useState("");
   const [newColColor, setNewColColor] = useState("border-zinc-500");
-  const [newColRule, setNewColRule] = useState<'manual' | 'pomodoro' | 'auto-on-test-fail' | 'auto-on-test-pass'>('manual');
+  const [newColRule, setNewColRule] = useState<'manual' | 'auto-on-test-fail' | 'auto-on-test-pass'>('manual');
   const [colError, setColError] = useState<string | null>(null);
 
   // WBS Planner States
@@ -207,8 +193,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
         priority: t.priority,
         tags: t.tags,
         raw_line: -1,
-        time_spent: 0,
-        pomodoros: 0
+        time_spent: 0
       }));
 
       const mergedTasks = [...tasks, ...newTasks];
@@ -340,11 +325,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
     });
   };
 
-  // Start Pomodoro Callback (dispatches a global window event for the layout widget)
-  const handleStartPomodoro = (task: Task) => {
-    const event = new CustomEvent("start-pomodoro", { detail: { task } });
-    window.dispatchEvent(event);
-  };
+
 
   // Add Column Handler
   const handleAddColumn = () => {
@@ -487,7 +468,6 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
                           key={task.id}
                           task={task}
                           onNodeClick={onNodeClick}
-                          onStartPomodoro={handleStartPomodoro}
                         />
                       ))}
                     </div>
@@ -621,7 +601,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
                       onChange={(e) => setNewColRule(e.target.value as any)}
                     >
                       <option value="manual">Manual (100% control)</option>
-                      <option value="pomodoro">Pomodoro (Inicia al arrancar)</option>
+
                       <option value="auto-on-test-fail">Test (Auto si falla test)</option>
                       <option value="auto-on-test-pass">Done (Auto si commit + test OK)</option>
                     </select>
