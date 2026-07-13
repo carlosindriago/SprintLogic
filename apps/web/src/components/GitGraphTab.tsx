@@ -452,11 +452,11 @@ export default function GitGraphTab({ projectId }: { projectId: string }) {
     return <FileText className="w-4 h-4 text-yellow-500" />;
   };
 
-  const rows: CommitRow[] = commits.map((c, i) => ({
+  const rows: CommitRow[] = useMemo(() => commits.map((c, i) => ({
     commit: c,
     y: HEADER_OFFSET + i * ROW_HEIGHT + ROW_HEIGHT / 2,
     isLatest: i === 0,
-  }));
+  })), [commits]);
 
   const svgHeight = HEADER_OFFSET + commits.length * ROW_HEIGHT + 24;
 
