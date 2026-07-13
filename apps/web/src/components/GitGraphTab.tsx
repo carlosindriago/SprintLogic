@@ -558,8 +558,8 @@ export default function GitGraphTab({ projectId }: { projectId: string }) {
           <Button variant="outline" size="sm" onClick={() => handleOpenGitIgnore()} disabled={actionLoading} className="bg-zinc-800 border-zinc-700/50 hover:bg-zinc-700">
             <FileText className="w-4 h-4 mr-2" /> .gitignore
           </Button>
-          <Button variant="ghost" size="icon" onClick={refreshAll} disabled={loading} className="text-zinc-400 hover:text-white">
-            <RefreshCw className={`w-4 h-4 ${loading || isSyncLoading ? 'animate-spin' : ''}`} />
+          <Button variant="ghost" size="icon" onClick={refreshAll} disabled={loading} className="text-zinc-400 hover:text-white" aria-label="Refresh Git status">
+            <RefreshCw className={`w-4 h-4 ${loading || isSyncLoading ? 'animate-spin' : ''}`} aria-hidden="true" />
           </Button>
         </div>
         <div className="w-px h-6 bg-zinc-700 mx-2" />
@@ -578,8 +578,9 @@ export default function GitGraphTab({ projectId }: { projectId: string }) {
             disabled={isMergeInProgress || isGeneratingMessage}
             onClick={handleGenerateCommitMessage}
             title="Generar mensaje con IA"
+            aria-label="Generate commit message with AI"
           >
-            <Sparkles className={`w-3.5 h-3.5 ${isGeneratingMessage ? 'animate-pulse text-amber-400' : ''}`} />
+            <Sparkles className={`w-3.5 h-3.5 ${isGeneratingMessage ? 'animate-pulse text-amber-400' : ''}`} aria-hidden="true" />
           </Button>
           <Button
             size="sm"
