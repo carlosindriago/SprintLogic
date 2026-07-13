@@ -673,7 +673,6 @@ export default function EditorTab({
         forceMoveMarkers: true
       }]);
       
-      // eslint-disable-next-line react-hooks/exhaustive-deps
       runAstAudit(model);
       toast.success("Docstring inyectado correctamente.");
     } catch (err) {

@@ -200,8 +200,9 @@ function ProviderConfig({
               size="icon"
               className="bg-zinc-800/50 border-zinc-700/50 hover:bg-red-950/40 hover:text-red-400 hover:border-red-900/60 h-9 px-3"
               onClick={handleDeleteKey}
+              aria-label="Delete key"
             >
-              <Trash2 className="w-4 h-4" />
+              <Trash2 className="w-4 h-4" aria-hidden="true" />
             </Button>
           </div>
         ) : (
@@ -359,8 +360,9 @@ function Context7Section({
               size="sm"
               className="bg-zinc-800/50 border-zinc-700/50 hover:bg-red-950/40 hover:text-red-400 hover:border-red-900/60 h-9 px-3"
               onClick={handleClear}
+              aria-label="Clear"
             >
-              <Trash2 className="w-4 h-4" />
+              <Trash2 className="w-4 h-4" aria-hidden="true" />
             </Button>
           </div>
         ) : (
