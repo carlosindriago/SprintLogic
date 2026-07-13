@@ -3,6 +3,9 @@ from pathlib import Path
 from app.domain.ports.language_analyzer import LanguageAnalyzerStrategy
 from app.infrastructure.parser.strategies.python_strategy import PythonAnalyzerStrategy
 from app.infrastructure.parser.strategies.typescript_strategy import TypeScriptAnalyzerStrategy
+from app.infrastructure.parser.strategies.go_strategy import GoAnalyzerStrategy
+from app.infrastructure.parser.strategies.php_strategy import PhpAnalyzerStrategy
+from app.infrastructure.parser.strategies.java_strategy import JavaAnalyzerStrategy
 
 
 class UnsupportedLanguageError(Exception):
@@ -21,17 +24,19 @@ class AnalyzerFactory:
         Evaluate the project root directory and return the appropriate strategy.
         """
         # Instantiate available strategies
-        typescript_strategy = TypeScriptAnalyzerStrategy()
-        python_strategy = PythonAnalyzerStrategy()
+        strategies = [
+            PythonAnalyzerStrategy(),
+            TypeScriptAnalyzerStrategy(),
+            GoAnalyzerStrategy(),
+            PhpAnalyzerStrategy(),
+            JavaAnalyzerStrategy(),
+        ]
 
-        # Check compatibility in order of priority or specific signatures
-        if typescript_strategy.is_compatible(project_path):
-            return typescript_strategy
-
-        if python_strategy.is_compatible(project_path):
-            return python_strategy
+        for strategy in strategies:
+            if strategy.is_compatible(project_path):
+                return strategy
 
         # Default fallback to Python strategy for backwards compatibility
         # with the current ASTParserService that supports multiple languages natively.
         # Once we migrate all languages, we should strictly raise the error.
-        return python_strategy
+        return PythonAnalyzerStrategy()

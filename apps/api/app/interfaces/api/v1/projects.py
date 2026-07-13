@@ -308,12 +308,13 @@ class AnalyzeGraphRequest(BaseModel):
     fallback_model: str | None = None
 
 
+from fastapi.responses import StreamingResponse
+
 @router.post("/projects/{project_id}/graph/analyze")
 async def analyze_project_graph(
     project_id: str,
     request: AnalyzeGraphRequest,
-    session: AsyncSession = Depends(get_db_session),
-    pool: ProcessPoolExecutor = Depends(get_process_pool)
+    session: AsyncSession = Depends(get_db_session)
 ):
     try:
         project_uuid = UUID(project_id)
@@ -324,183 +325,46 @@ async def analyze_project_graph(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid project ID format")
 
-    graph_repo = SQLAlchemyGraphRepository(session)
-    nodes = await graph_repo.get_nodes_by_project(project_uuid)
-    edges = await graph_repo.get_edges_by_project(project_uuid)
-
-    project_path = os.path.abspath(project.path)
-
-    # Filter nodes by project path to ensure we don't mix projects
-    filtered_nodes = [n for n in nodes if os.path.abspath(n.file_path).startswith(project_path)]
-    valid_node_ids = {n.id for n in filtered_nodes}
-
-    # Filter edges to only include those between valid nodes
-    filtered_edges = [
-        e for e in edges if e.source_id in valid_node_ids and e.target_id in valid_node_ids
-    ]
-
-    # --- CPU Bound Graph Metrics ---
-    import asyncio
-
-    from app.application.graph_metrics import _compute_graph_metrics_cpu_bound
-
-    loop = asyncio.get_running_loop()
-    nodes_data = [{"id": n.id} for n in filtered_nodes]
-    edges_data = [{"source": e.source_id, "target": e.target_id} for e in filtered_edges]
-
     try:
-        metrics = await loop.run_in_executor(pool, _compute_graph_metrics_cpu_bound, nodes_data, edges_data)
-    except Exception as err:
-        logger.error("Error computing graph metrics: %s", err, exc_info=True)
-        metrics = None
-
-    # --- Enriquecimiento de Contexto a Demanda (Lazy Context Gathering) ---
-    skeletons = {}
-    if metrics:
-        anomalous_files = set()
-        for cycle in metrics.get("cyclic_dependencies", []):
-            for node_id in cycle:
-                anomalous_files.add(node_id)
-        for god in metrics.get("god_objects_in", []):
-            anomalous_files.add(god["node"])
-        for god in metrics.get("god_objects_out", []):
-            anomalous_files.add(god["node"])
-
-        anomalous_list = list(anomalous_files)
-        if anomalous_list:
-            from app.infrastructure.parser.analyzer_factory import AnalyzerFactory
-            analyzer = AnalyzerFactory.get_analyzer(Path(project.path))
+        from app.infrastructure.parser.strategies.go_strategy import GoAnalyzerStrategy
+        from app.infrastructure.parser.strategies.java_strategy import JavaAnalyzerStrategy
+        from app.infrastructure.parser.strategies.php_strategy import PhpAnalyzerStrategy
+        from app.infrastructure.parser.strategies.python_strategy import PythonAnalyzerStrategy
+        from app.infrastructure.parser.strategies.typescript_strategy import TypeScriptAnalyzerStrategy
+        from app.application.scan_codebase import ScanCodebaseUseCase
+        from app.infrastructure.llm.litellm_gateway import LiteLLMGateway
+        
+        strategies = [
+            GoAnalyzerStrategy(),
+            JavaAnalyzerStrategy(),
+            PhpAnalyzerStrategy(),
+            PythonAnalyzerStrategy(),
+            TypeScriptAnalyzerStrategy()
+        ]
+        
+        usecase = ScanCodebaseUseCase(strategies)
+        scan_data = await usecase.execute(project.path)
+        
+        gateway = LiteLLMGateway(model_name=request.model)
+        
+        async def event_generator():
             try:
-                skeletons = await analyzer.parse_skeletons(Path(project.path), anomalous_list)
-            except Exception as err:
-                logger.error("Error gathering skeletons: %s", err, exc_info=True)
-
-    nodes_summary = []
-    for n in filtered_nodes:
-        label_val = n.label.value if hasattr(n.label, "value") else n.label
-        try:
-            rel_path = os.path.relpath(n.file_path, project_path)
-        except Exception:
-            rel_path = n.file_path
-        nodes_summary.append(f"- {rel_path} ({label_val}): {n.name}")
-
-    edges_summary = []
-    for e in filtered_edges:
-        edge_type = e.type.value if hasattr(e.type, "value") else e.type
-        src_node = next((n for n in filtered_nodes if n.id == e.source_id), None)
-        tgt_node = next((n for n in filtered_nodes if n.id == e.target_id), None)
-        if src_node and tgt_node:
-            try:
-                src_rel = os.path.relpath(src_node.file_path, project_path)
-                tgt_rel = os.path.relpath(tgt_node.file_path, project_path)
-            except Exception:
-                src_rel = src_node.file_path
-                tgt_rel = tgt_node.file_path
-            edges_summary.append(
-                f"- {src_rel} ({src_node.name}) {edge_type} {tgt_rel} ({tgt_node.name})"
-            )
-
-    # Limit summary sizes to avoid prompt overflow
-    nodes_text = "\n".join(nodes_summary[:200])
-    if len(nodes_summary) > 200:
-        nodes_text += f"\n... (and {len(nodes_summary) - 200} more nodes)"
-
-    edges_text = "\n".join(edges_summary[:200])
-    if len(edges_summary) > 200:
-        edges_text += f"\n... (and {len(edges_summary) - 200} more edges)"
-
-    # Inject metrics into prompt so LLM is aware
-    metrics_context = f"\n\nMÉTRICAS ESTRUCTURALES DETERMINISTAS:\n{metrics}\n" if metrics else ""
-
-    # Inject skeletons into prompt context
-    skeletons_context = ""
-    if skeletons:
-        import json
-        skeletons_context = f"\n\nANEXO DE CONTEXTO (ESTRUCTURA DE ARCHIVOS ANÓMALOS):\n{json.dumps(skeletons, indent=2)}\n"
-
-    _IRON_PROMPT_PREAMBLE = """\
-CONTEXTO DE DOMINIO (LEER ANTES DE ANALIZAR):
-Estás analizando el grafo de dependencias de "SprintLogic", una herramienta de desarrollo que lee el código fuente del usuario (AST Parsing).
-Regla de Física #1: El backend en Python frecuentemente lee (File I/O) archivos del frontend (.css, .tsx, .ts) para analizarlos.
-Regla de Física #2: Leer un archivo NO es importarlo. Python no puede importar CSS o React. Si ves una conexión entre el backend y el frontend, ASUME por defecto que es una operación de lectura/escaneo, NO una violación de dependencias cruzadas.
-Regla de Física #3 (Dirección de la Dependencia): En la lista de enlaces, el formato "A IMPORTS B" o "A CALLS B" significa ESTRICTAMENTE que el archivo A depende del archivo B (A importa o invoca a B). NUNCA inviertas esta relación en tu redacción. Si A importa a B, el flujo es A -> B.
-
-MARCO DE EVIDENCIA ESTRICTO:
-Tu trabajo es identificar vulnerabilidades arquitectónicas, pero estás sujeto a un rigor científico absoluto. Sigue estas reglas al emitir tu reporte:
-
-- Cero Suposiciones: No deduzcas intenciones. Si ves un acoplamiento, descríbelo. Si crees que es un "import" entre lenguajes incompatibles, detente y reclasifícalo como operación de I/O.
-- Evidencia Requerida: Si vas a reportar un error crítico (como un God Object o una violación de la Arquitectura Limpia), debes citar los nombres exactos de los nodos o módulos que lo prueban.
-- Humildad Epistémica: Si el grafo es ambiguo o una conexión no tiene sentido lógico en el lenguaje objetivo, tu respuesta obligatoria debe ser: "El grafo muestra una relación entre X y Y, pero debido a la incompatibilidad de lenguajes, esto probablemente representa una operación de lectura/parseo y no una dependencia de módulo. Se requiere validación manual."
-- Lenguaje Categórico: Nunca uses frases como "Me parece que", "Podría ser", "Yo creo". Usa "El grafo indica", "Se observa", o "La evidencia es insuficiente para concluir".
-
-REGLA DE ENLACES MÁGICOS (OBLIGATORIA):
-Siempre que menciones un archivo o componente de código en tu reporte, DEBES crear un enlace clickeable usando el protocolo ide://.
-Formato: [NombreDelArchivo](ide://ruta/relativa/al/archivo)
-Ejemplo correcto: El archivo [main.py](ide://apps/api/main.py) tiene una dependencia circular.
-Ejemplo incorrecto: El archivo `apps/api/main.py` tiene...
-¡NO USES acentos graves (```) para los nombres de archivo si puedes usar enlaces ide://!
-
-INSTRUCCIÓN DE TÍTULO (OBLIGATORIA):
-Tu reporte DEBE comenzar en la primera línea con un título H1 (un solo #) que sea MUY descriptivo e insightful sobre el hallazgo más crítico de la arquitectura.
-Ejemplo: # Análisis: sprintLogic-monorepo - Arquitectura Hexagonal y Violación de Clean Architecture
----
-"""
-
-    prompt = f"{_IRON_PROMPT_PREAMBLE}" + f"""Analiza la estructura de este proyecto de software basándote en su grafo de dependencias de código.{metrics_context}{skeletons_context}
-Ruta del proyecto: {project.path}
-Nombre del proyecto: {project.name}
-
-Componentes del Grafo (Nodos):
-{nodes_text}
-
-Relaciones/Dependencias (Enlaces):
-{edges_text}
-
-Por favor, realiza un análisis profesional y exhaustivo del proyecto:
-1. Explica brevemente de qué trata este proyecto y qué tecnologías predominan (lenguajes, frameworks).
-2. Describe la arquitectura del código basándote en la estructura de carpetas y dependencias (Hexagonal, MVC, Monolito, etc.).
-3. Identifica posibles problemas de diseño, dependencias circulares o cuellos de botella estructurales. Cita los nodos exactos como evidencia. Considera las Métricas Estructurales e Información de Contexto si las hay.
-4. Sugiere mejoras específicas para la calidad del código, modularidad y mantenibilidad basándote estrictamente en las anomalías detectadas.
-
-Responde en formato Markdown limpio, directo y profesional. Usa títulos y listas para que sea fácil de leer."""
-
-    import uuid
-    from datetime import datetime
-
-    from app.infrastructure.ai.llm_gateway import LiteLLMGateway
-    from app.infrastructure.db.models import AnalysisReportModel
-
-    llm_gateway = LiteLLMGateway()
-
-    try:
-        try:
-            analysis = llm_gateway.generate_completion(prompt=prompt, model=request.model)
-            used_model = request.model
-        except Exception as first_err:
-            if request.fallback_model and request.fallback_model != "none":
-                logger.warning(f"Failed with {request.model}, falling back to {request.fallback_model}. Error: {first_err}")
-                analysis = llm_gateway.generate_completion(prompt=prompt, model=request.fallback_model)
-                used_model = request.fallback_model
-            else:
-                raise first_err
-
-        # Save to database
-        report = AnalysisReportModel(
-            id=uuid.uuid4(),
-            project_id=project_uuid,
-            content=analysis,
-            ai_model_version=used_model,
-            structural_metrics=metrics,
-            created_at=datetime.utcnow()
-        )
-        session.add(report)
-        await session.commit()
-
-        from app.interfaces.api.v1.report_schemas import AnalysisReportResponse
-        return AnalysisReportResponse.model_validate(report, from_attributes=True)
+                async for chunk in gateway.analyze_anomalies_stream(
+                    project.name, project.path, scan_data["metrics"], scan_data["skeletons"]
+                ):
+                    yield chunk
+            except asyncio.CancelledError:
+                logger.warning("Streaming cancelled by client.")
+                raise
+            except Exception as e:
+                logger.error(f"Error streaming LLM response: {e}")
+                raise
+                
+        return StreamingResponse(event_generator(), media_type="text/plain")
+        
     except Exception as e:
-        logger.error("Fallo en la llamada a la IA failed: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail="An internal error occurred")
+        logger.error("Analysis failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/projects/{project_id}/reports")
