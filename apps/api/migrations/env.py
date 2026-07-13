@@ -43,6 +43,16 @@ def run_migrations_online() -> None:
         poolclass=pool.NullPool,
     )
 
+    from sqlalchemy import event
+    import sqlite_vec
+
+    @event.listens_for(connectable, "connect")
+    def _set_sqlite_pragmas(dbapi_connection, _connection_record):
+        dbapi_connection.enable_load_extension(True)
+        dbapi_connection.load_extension(sqlite_vec.loadable_path())
+        dbapi_connection.enable_load_extension(False)
+
+
     with connectable.connect() as connection:
         context.configure(
             connection=connection, target_metadata=target_metadata, render_as_batch=True
