@@ -6,3 +6,4 @@
 * When adding manual memoization like `useMemo`, ensure the dependency array exactly matches the inferred dependencies to satisfy `eslint-plugin-react-compiler` and prevent compilation errors (e.g., "Existing memoization could not be preserved").
 * If a derived object property is used (e.g., `data?.language_distribution`), the compiler may infer the root object `data` as the dependency. Make sure the manual dependency array includes the root object `data` in such cases.
 * Always define hooks before conditional early returns to obey Rules of Hooks. Use optional chaining (like `data?.xyz`) in the hook if the data might be undefined during loading states.
+Learned to strictly avoid creating package-lock files like pnpm-lock.yaml in sub-workspaces when testing/installing dependencies to avoid breaking monorepo setup.
