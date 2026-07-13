@@ -23,7 +23,7 @@ export const StatusBar: React.FC = () => {
       if (!timeRef.current) return;
       
       // Accedemos al estado de Zustand de forma imperativa
-      const { buckets, currentPhase, isIdle } = useTelemetryStore.getState();
+      const { buckets, currentPhase, isIdle, currentContinuousFlowMs } = useTelemetryStore.getState();
       
       const thinking = formatTime(buckets.THINKING);
       const coding = formatTime(buckets.CODING);
@@ -33,7 +33,15 @@ export const StatusBar: React.FC = () => {
       let phaseIndicator = '🧠 PENSANDO';
       if (currentPhase === 'CODING') phaseIndicator = '🔴 CODIFICANDO';
       if (currentPhase === 'TESTING') phaseIndicator = '🟢 TESTEANDO';
-      if (isIdle) phaseIndicator = '💤 AUSENTE (IDLE)';
+      
+      const isFlowing = currentContinuousFlowMs >= 1200000; // 20 min
+      if (isFlowing) {
+        phaseIndicator = '🔥 FLOW STATE';
+      }
+
+      if (isIdle) {
+        phaseIndicator = isFlowing ? '💤 AUSENTE (GRACIA)' : '💤 AUSENTE (IDLE)';
+      }
       
       // Inyección directa en el nodo del DOM
       timeRef.current.textContent = `${phaseIndicator}  |  🧠 ${thinking}  |  🔴 ${coding}  |  🟢 ${testing}`;
