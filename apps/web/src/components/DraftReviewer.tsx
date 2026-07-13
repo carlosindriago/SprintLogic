@@ -26,10 +26,11 @@ ${context}
 ## Requerimientos
 `;
       if (requirements && Array.isArray(requirements)) {
-        requirements.forEach((req: any) => {
+        requirements.forEach((req: { id: string; description: string }) => {
           md += `- **${req.id}**: ${req.description}\n`;
         });
       }
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setContent(md);
     } else if (draftPayload?.type === 'adr') {
       const { adr_id, title, context, decision, consequences } = draftPayload.content;
@@ -64,7 +65,7 @@ ${consequences}
       onSubmitResponse(JSON.stringify(payload));
       clearDraftMode();
       toast.success('Borrador firmado y comprometido exitosamente.');
-    } catch (e) {
+    } catch {
       toast.error('Error al guardar el borrador');
     }
   };

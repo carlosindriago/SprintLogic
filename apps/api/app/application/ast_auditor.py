@@ -1,6 +1,7 @@
-import tree_sitter_typescript as tsts
-from tree_sitter import Language, Parser, Node, Query, QueryCursor
 from dataclasses import dataclass
+
+import tree_sitter_typescript as tsts
+from tree_sitter import Language, Parser, Query, QueryCursor
 
 TS_LANGUAGE = Language(tsts.language_typescript())
 parser = Parser(TS_LANGUAGE)
@@ -27,7 +28,7 @@ class ASTAuditor:
               parameters: (formal_parameters) @func.params
               return_type: (type_annotation)? @func.return
             )
-            
+
             (lexical_declaration
               (variable_declarator
                 name: (identifier) @var.name
@@ -52,7 +53,7 @@ class ASTAuditor:
 
     def audit_code(self, source_code: bytes) -> list[UndocumentedExport]:
         tree = parser.parse(source_code)
-        
+
         # 1. Find all exports with comments
         doc_cursor = QueryCursor(self.doc_query)
         doc_matches = doc_cursor.matches(tree.root_node)
@@ -66,13 +67,13 @@ class ASTAuditor:
         # 2. Find all export targets
         export_cursor = QueryCursor(self.export_query)
         export_matches = export_cursor.matches(tree.root_node)
-        
+
         results = []
         for match in export_matches:
             captures = match[1]
             export_nodes = captures.get("export_target")
             export_node = export_nodes[0] if export_nodes else None
-            
+
             if not export_node or export_node.id in documented_nodes:
                 continue
 
@@ -101,7 +102,7 @@ class ASTAuditor:
                 name_node = export_node
 
             signature = f"{name} = {params}{ret_type}"
-            
+
             # Line is 1-indexed for Monaco, col is 1-indexed
             results.append(UndocumentedExport(
                 name=name,
@@ -111,7 +112,7 @@ class ASTAuditor:
                 end_line=name_node.end_point.row + 1,
                 end_column=name_node.end_point.column + 1
             ))
-            
+
         return results
 
 ast_auditor = ASTAuditor()

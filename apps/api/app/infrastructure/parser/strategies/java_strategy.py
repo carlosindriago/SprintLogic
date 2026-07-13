@@ -4,6 +4,7 @@ from typing import Any
 
 from app.domain.ports.language_analyzer import LanguageAnalyzerStrategy
 
+
 class JavaAnalyzerStrategy(LanguageAnalyzerStrategy):
     def __init__(self) -> None:
         import tree_sitter_java
@@ -26,12 +27,12 @@ class JavaAnalyzerStrategy(LanguageAnalyzerStrategy):
             """
             (import_declaration (scoped_identifier) @import.name)
             (import_declaration (scoped_identifier) @import.name (asterisk) @import.wildcard)
-            
+
             (class_declaration (superclass (type_identifier) @class.extends))
             (class_declaration (super_interfaces (type_list (type_identifier) @class.implements)))
-            
+
             (object_creation_expression type: (type_identifier) @instantiation.class)
-            
+
             (method_invocation object: (identifier) @call.obj name: (identifier) @call.method)
             """
         )
@@ -58,10 +59,10 @@ class JavaAnalyzerStrategy(LanguageAnalyzerStrategy):
         file_packages = {}
 
         from tree_sitter import QueryCursor
-        
+
         for filepath in java_files:
             rel_path = filepath.relative_to(project_path).as_posix()
-            
+
             nodes.append({
                 "id": f"file:{rel_path}",
                 "label": filepath.name,
@@ -73,16 +74,16 @@ class JavaAnalyzerStrategy(LanguageAnalyzerStrategy):
             code = filepath.read_bytes()
             tree = self.parser.parse(code)
             parsed_trees[rel_path] = tree
-            
+
             cursor = QueryCursor(self.pass1_query)
             current_package = ""
-            
+
             captures = []
             for pattern_index, captures_dict in cursor.matches(tree.root_node):
                 for capture_name, nodes_list in captures_dict.items():
                     for node in nodes_list:
                         captures.append((capture_name, node))
-                        
+
             for capture_name, node in captures:
                 if not node.text:
                     continue
@@ -99,24 +100,24 @@ class JavaAnalyzerStrategy(LanguageAnalyzerStrategy):
             rel_path = filepath.relative_to(project_path).as_posix()
             tree = parsed_trees[rel_path]
             current_package = file_packages.get(rel_path, "")
-            
+
             cursor = QueryCursor(self.pass2_query)
-            
+
             explicit_imports: dict[str, str] = {}
             wildcard_imports: list[str] = [current_package] if current_package else []
-            wildcard_imports.append("java.lang") 
-            
+            wildcard_imports.append("java.lang")
+
             captures = []
             for pattern_index, captures_dict in cursor.matches(tree.root_node):
                 for capture_name, nodes_list in captures_dict.items():
                     for node in nodes_list:
                         captures.append((capture_name, node, pattern_index))
-                        
+
             pattern_has_wildcard = set()
             for capture_name, node, pattern_index in captures:
                 if capture_name == "import.wildcard":
                     pattern_has_wildcard.add(pattern_index)
-                    
+
             for capture_name, node, pattern_index in captures:
                 if not node.text:
                     continue
@@ -131,15 +132,15 @@ class JavaAnalyzerStrategy(LanguageAnalyzerStrategy):
             for capture_name, node, pattern_index in captures:
                 if not node.text:
                     continue
-                
+
                 target_class = None
                 if capture_name in ("class.extends", "class.implements", "instantiation.class", "call.obj"):
                     target_class = node.text.decode('utf8')
-                    
+
                     if capture_name == "call.obj":
                         if target_class[0].islower() or target_class == "this" or target_class == "super":
                             continue
-                            
+
                     target_fqn = None
                     if target_class in explicit_imports:
                         target_fqn = explicit_imports[target_class]
@@ -149,7 +150,7 @@ class JavaAnalyzerStrategy(LanguageAnalyzerStrategy):
                             if test_fqn in symbol_table:
                                 target_fqn = test_fqn
                                 break
-                    
+
                     if target_fqn and target_fqn in symbol_table:
                         target_file = symbol_table[target_fqn]
                         if target_file != f"file:{rel_path}":
@@ -158,9 +159,9 @@ class JavaAnalyzerStrategy(LanguageAnalyzerStrategy):
                                 "target_id": target_file,
                                 "type": "depends_on"
                             })
-                            
+
         unique_edges = {f"{e['source_id']}->{e['target_id']}": e for e in edges}
-        
+
         return {
             "nodes": nodes,
             "edges": list(unique_edges.values())

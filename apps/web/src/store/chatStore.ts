@@ -4,7 +4,7 @@ export interface DraftPayload {
   action: string;
   filepath: string;
   type: string;
-  content: any;
+  content: Record<string, unknown>;
   tool_call_id: string;
 }
 

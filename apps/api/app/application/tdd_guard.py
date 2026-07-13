@@ -1,16 +1,16 @@
 import os
-import re
 from pathlib import Path
-from typing import List, Optional, Tuple
 
 import tree_sitter
+
 from app.infrastructure.parser.ast_parser import get_language
+
 
 class TddGuardValidator:
     def __init__(self, project_path: Path):
         self.project_path = project_path
 
-    def validate_task(self, task_id: str, test_files: List[Path]) -> Tuple[bool, List[str]]:
+    def validate_task(self, task_id: str, test_files: list[Path]) -> tuple[bool, list[str]]:
         """
         Valida archivos físicos en disco (usado por el editor en tiempo real).
         """
@@ -20,9 +20,9 @@ class TddGuardValidator:
                 files_in_memory.append((str(test_file), test_file.read_bytes()))
         return self.validate_task_from_memory(task_id, files_in_memory)
 
-    def get_future_state_tests(self) -> List[Tuple[str, bytes]]:
+    def get_future_state_tests(self) -> list[tuple[str, bytes]]:
         """
-        Motor de Fusión (Merge Engine): Lee el estado futuro del repositorio extrayendo 
+        Motor de Fusión (Merge Engine): Lee el estado futuro del repositorio extrayendo
         todos los archivos de test directamente desde el Index (Staging Area) de Git.
         """
         import subprocess
@@ -32,16 +32,16 @@ class TddGuardValidator:
             result = subprocess.run(['git', 'ls-files'], cwd=self.project_path, capture_output=True, text=True)
             if result.returncode != 0:
                 return []
-            
+
             all_files = result.stdout.splitlines()
             test_files = [f for f in all_files if ("test" in f or "spec" in f) and f.endswith((".ts", ".tsx", ".py", ".js"))]
-            
+
             if not test_files:
                 return []
-                
+
             # Modo Batched: Enviar todas las rutas por stdin a git cat-file
             batch_input = "\n".join([f":{f}" for f in test_files]) + "\n"
-            
+
             process = subprocess.Popen(
                 ['git', 'cat-file', '--batch'],
                 cwd=self.project_path,
@@ -49,9 +49,9 @@ class TddGuardValidator:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL
             )
-            
+
             stdout_data, _ = process.communicate(input=batch_input.encode('utf-8'))
-            
+
             # Parsear la salida de cat-file --batch
             # Formato esperado: <oid> blob <size>\n<contents>\n
             idx = 0
@@ -59,10 +59,10 @@ class TddGuardValidator:
                 header_end = stdout_data.find(b'\n', idx)
                 if header_end == -1:
                     break
-                    
+
                 header = stdout_data[idx:header_end].decode('utf-8', errors='ignore')
                 parts = header.split()
-                
+
                 if len(parts) >= 3 and parts[1] == "blob":
                     size = int(parts[2])
                     content_start = header_end + 1
@@ -73,13 +73,13 @@ class TddGuardValidator:
                 else:
                     # Si el archivo está marcado como "missing", simplemente lo saltamos
                     idx = header_end + 1
-                    
+
         except Exception:
             pass
-            
+
         return files_in_memory
 
-    def validate_task_from_memory(self, task_id: str, files_in_memory: List[Tuple[str, bytes]]) -> Tuple[bool, List[str]]:
+    def validate_task_from_memory(self, task_id: str, files_in_memory: list[tuple[str, bytes]]) -> tuple[bool, list[str]]:
         """
         Valida si los buffers de memoria proporcionados cumplen con el contrato del TDD Guard.
         Esta es la función clave para leer desde el Git Staging Area (`git show :file`) sin tocar disco.
@@ -95,7 +95,7 @@ class TddGuardValidator:
 
             parser = tree_sitter.Parser()
             parser.language = lang
-            
+
             tree = parser.parse(code)
 
             if self._check_tree_for_task(tree.root_node, code, task_id):
@@ -105,7 +105,7 @@ class TddGuardValidator:
         if not found_valid_test:
             errors.append(f"No se encontró un test válido con aserciones para la tarea {task_id}.")
             return False, errors
-            
+
         return True, []
 
     def _check_tree_for_task(self, root_node, code: bytes, task_id: str) -> bool:
@@ -116,9 +116,9 @@ class TddGuardValidator:
             nonlocal valid
             if valid:
                 return
-                
+
             is_test_block = False
-            
+
             if node.type == "call_expression":
                 # TS/JS: it('...', () => {}) or test('...', () => {})
                 func_node = node.child_by_field_name("function")
@@ -137,7 +137,7 @@ class TddGuardValidator:
             if is_test_block:
                 # 1. Extraer el docblock precedente
                 docblock = self._get_preceding_docblock(node, code)
-                
+
                 # Para Python, el docstring podría estar DENTRO de la función como primer statement
                 if not docblock and node.type == "function_definition":
                     body = node.child_by_field_name("body")
@@ -158,12 +158,12 @@ class TddGuardValidator:
         traverse(root_node)
         return valid
 
-    def _get_preceding_docblock(self, node, code: bytes) -> Optional[str]:
+    def _get_preceding_docblock(self, node, code: bytes) -> str | None:
         # Subimos al expression_statement si existe, ya que it() es un call_expression envuelto
         target = node
         while target and target.parent and target.parent.type == "expression_statement":
             target = target.parent
-            
+
         curr = target.prev_named_sibling
         comments = []
         while curr:
@@ -172,18 +172,18 @@ class TddGuardValidator:
                 curr = curr.prev_named_sibling
             else:
                 break
-                
+
         # Unimos todos los comentarios consecutivos encontrados (orden invertido porque fuimos hacia atrás)
         return "\n".join(reversed(comments)) if comments else None
 
     def _has_assertion(self, node, code: bytes) -> bool:
         has_assert = False
-        
+
         def traverse(n):
             nonlocal has_assert
             if has_assert:
                 return
-            
+
             # TS/JS: expect(...)
             if n.type == "call_expression":
                 func_node = n.child_by_field_name("function")
@@ -192,12 +192,12 @@ class TddGuardValidator:
                     if name == "expect" or name.startswith("expect."):
                         has_assert = True
                         return
-                        
+
             # Python: assert ...
             if n.type == "assert_statement":
                 has_assert = True
                 return
-                
+
             for child in n.children:
                 traverse(child)
 

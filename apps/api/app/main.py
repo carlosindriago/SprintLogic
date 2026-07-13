@@ -21,11 +21,12 @@ logging.basicConfig(
     stream=sys.stderr,
 )
 
+import os
+import signal
+import threading
 from concurrent.futures import ProcessPoolExecutor
 from contextlib import asynccontextmanager
-import threading
-import signal
-import os
+
 
 def kill_zombie_on_parent_death():
     try:
@@ -69,10 +70,11 @@ app.include_router(editor_router, prefix="/api/v1/editor")
 app.include_router(ai_router, prefix="/api/v1/ai")
 
 
-import os
 from pathlib import Path
-from fastapi.staticfiles import StaticFiles
+
 from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+
 
 @app.get("/health")
 async def healthcheck() -> dict[str, str]:
@@ -106,15 +108,16 @@ async def custom_404_handler(request, exc):
     # Only serve index.html for non-API routes (SPA Catch-All)
     if request.url.path.startswith("/api/"):
         return JSONResponse({"detail": "Not Found"}, status_code=404)
-        
+
     index_file = static_dir / "index.html"
     if index_file.exists():
         return FileResponse(index_file)
     return JSONResponse({"detail": "Frontend not found"}, status_code=404)
 
 if __name__ == "__main__":
-    import uvicorn
     import multiprocessing
+
+    import uvicorn
     # When running via PyInstaller, multiprocessing needs this to prevent fork bombs
     multiprocessing.freeze_support()
     uvicorn.run(app, host="127.0.0.1", port=8000)

@@ -1,10 +1,10 @@
+from pathlib import Path
+
 import pytest
 
 from app.application.scan_codebase import ScanCodebaseUseCase
-from app.domain.graph_models import GraphEdge, GraphNode
-from app.domain.graph_repository import GraphRepository
-
 from app.domain.ports.language_analyzer import LanguageAnalyzerStrategy
+
 
 class FakeStrategy(LanguageAnalyzerStrategy):
     def is_compatible(self, path: Path) -> bool:

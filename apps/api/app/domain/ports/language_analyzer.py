@@ -30,18 +30,18 @@ class LanguageAnalyzerStrategy(ABC):
         """
         if not hasattr(self, "parser"):
             return {}
-            
+
         skeletons = {}
         for rel_path in relative_paths:
             filepath = project_path / rel_path
             if not filepath.exists():
                 continue
-                
+
             code = filepath.read_bytes()
             tree = self.parser.parse(code)
-            
+
             file_skeletons = []
-            
+
             def traverse(node):
                 # Recolectar imports/uses para mantener contexto
                 if node.type in [
@@ -50,7 +50,7 @@ class LanguageAnalyzerStrategy(ABC):
                 ]:
                     file_skeletons.append(node.text.decode('utf8', errors='ignore'))
                     return
-                    
+
                 # Identify declaration nodes
                 if node.type in [
                     'function_declaration', 'method_declaration', 'class_declaration', 'type_declaration',
@@ -62,7 +62,7 @@ class LanguageAnalyzerStrategy(ABC):
                         if child.type in block_types:
                             block_node = child
                             break
-                    
+
                     if block_node:
                         sig = code[node.start_byte:block_node.start_byte].decode('utf8', errors='ignore').strip()
                         file_skeletons.append(sig + " { ... }")
@@ -72,8 +72,8 @@ class LanguageAnalyzerStrategy(ABC):
                 else:
                     for child in node.children:
                         traverse(child)
-                        
+
             traverse(tree.root_node)
             skeletons[rel_path] = "\n".join(file_skeletons)
-            
+
         return skeletons

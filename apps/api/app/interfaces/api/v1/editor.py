@@ -2,6 +2,7 @@ import ast
 
 from fastapi import APIRouter
 from pydantic import BaseModel
+
 from app.application.ast_auditor import ast_auditor
 
 router = APIRouter()
@@ -84,8 +85,8 @@ class GenerateDocResponse(BaseModel):
 async def generate_docs(request: GenerateDocRequest):
     try:
         from app.application.ai_agent import agent
-        
-        prompt = f"""Escribe ÚNICAMENTE un comentario JSDoc válido y profesional para la siguiente firma de función/variable exportada. 
+
+        prompt = f"""Escribe ÚNICAMENTE un comentario JSDoc válido y profesional para la siguiente firma de función/variable exportada.
 NO inventes lógica interna. Usa el formato /** ... */.
 Firma: {request.signature}
 Solo devuelve el bloque JSDoc, sin bloques de código markdown, sin texto adicional."""
@@ -97,11 +98,11 @@ Solo devuelve el bloque JSDoc, sin bloques de código markdown, sin texto adicio
             lines = jsdoc.split("\n")
             if len(lines) > 2:
                 jsdoc = "\n".join(lines[1:-1])
-        
+
         # Ensure it ends with a newline so it formats well
         if not jsdoc.endswith("\n"):
             jsdoc += "\n"
-            
+
         return GenerateDocResponse(jsdoc=jsdoc)
     except Exception as e:
         print(f"Error generating docs: {e}")

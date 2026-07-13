@@ -157,8 +157,8 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => ({
             windowStartTime: windowEnd,
           }));
         }
-      } catch (e) {
-        // Fallo silenciado: No restamos nada. El próximo ciclo de 5 mins reenviará el acumulado intacto.
+      } catch {
+        // Ignorar errores en flush
       }
     }
   }

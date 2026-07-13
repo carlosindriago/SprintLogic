@@ -1,9 +1,10 @@
 import asyncio
 import json
 import logging
-from typing import Any, AsyncGenerator
+from collections.abc import AsyncGenerator
+from typing import Any
 
-from litellm import acompletion # type: ignore
+from litellm import acompletion  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +19,7 @@ class LiteLLMGateway:
         metrics: dict[str, Any],
         skeletons: dict[str, Any]
     ) -> AsyncGenerator[str, None]:
-        
+
         _IRON_PROMPT_PREAMBLE = """\
 CONTEXTO DE DOMINIO (LEER ANTES DE ANALIZAR):
 Estás analizando el grafo de dependencias de un proyecto.
@@ -34,10 +35,10 @@ Tu trabajo es identificar vulnerabilidades arquitectónicas, pero estás sujeto 
 - Humildad Epistémica: Si el grafo es ambiguo o una conexión no tiene sentido lógico en el lenguaje objetivo, tu respuesta obligatoria debe ser: "El grafo muestra una relación entre X y Y, pero debido a la incompatibilidad de lenguajes, esto probablemente representa una operación de lectura/parseo y no una dependencia de módulo. Se requiere validación manual."
 - Lenguaje Categórico: Nunca uses frases como "Me parece que", "Podría ser", "Yo creo". Usa "El grafo indica", "Se observa", o "La evidencia es insuficiente para concluir".
 """
-        
+
         metrics_xml = "<networkx_metrics>\n" + json.dumps(metrics, indent=2) + "\n</networkx_metrics>"
         skeletons_xml = "<code_skeletons>\n" + json.dumps(skeletons, indent=2) + "\n</code_skeletons>"
-        
+
         prompt = (
             f"{_IRON_PROMPT_PREAMBLE}\n"
             f"Analiza la estructura de este proyecto de software basándote en su grafo de dependencias de código y estructuras AST extraídas.\n"

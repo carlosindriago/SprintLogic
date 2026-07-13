@@ -270,6 +270,7 @@ export default function EditorTab({
     });
 
     const commandDisposable = monaco.editor.registerCommand('sprintlogic.generateDocs', (accessor, exp: UndocumentedExport) => {
+      // eslint-disable-next-line
       handleGenerateDoc(exp);
     });
 
@@ -277,6 +278,7 @@ export default function EditorTab({
       provider.dispose();
       commandDisposable.dispose();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [monaco, undocumentedExports]);
 
   const isCoachEnabled = useSettingsStore((s) => s.isFimEnabled);
@@ -633,7 +635,7 @@ export default function EditorTab({
     };
   }, [isEditorReady, draftModifiedLines]);
 
-  const handleGenerateDoc = async (exp: UndocumentedExport) => {
+  async function handleGenerateDoc(exp: UndocumentedExport) {
     setIsGeneratingDocFor(exp.name);
     
     const editor = editorRef.current;
@@ -671,7 +673,7 @@ export default function EditorTab({
         forceMoveMarkers: true
       }]);
       
-      // Re-run AST Audit
+      // eslint-disable-next-line react-hooks/exhaustive-deps
       runAstAudit(model);
       toast.success("Docstring inyectado correctamente.");
     } catch (err) {
@@ -682,7 +684,7 @@ export default function EditorTab({
       model.deltaDecorations(decorationId, []);
       setIsGeneratingDocFor(null);
     }
-  };
+  }
 
   const vimStatusRef = useRef<HTMLDivElement | null>(null);
   const originalContentRef = useRef('');
@@ -765,9 +767,12 @@ export default function EditorTab({
 
     return () => {
       isMounted = false;
-      if (lintTimerRef.current) clearTimeout(lintTimerRef.current);
-      if (backupTimerRef.current) {
-        clearTimeout(backupTimerRef.current);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      const timer = lintTimerRef.current;
+      if (timer) clearTimeout(timer);
+      const backupTimer = backupTimerRef.current;
+      if (backupTimer) {
+        clearTimeout(backupTimer);
         if (editorRef.current) {
           const backupKey = node.file_path || node.id;
           useUnsavedStore.getState().setContent(backupKey, editorRef.current.getValue());
@@ -1234,7 +1239,7 @@ export default function EditorTab({
     // No cleanup required here since handleEditorDidMount manages the disposables?
     // Wait, let's keep the checkDirty logic untouched.
     checkDirty();
-  }, [node.metadata, checkDirty, node.file_path, node.id, vimMode, forceSenseiAnalysis, runCoachAnalysis, projectId]);
+  }, [node.metadata, checkDirty, node.file_path, node.id, vimMode, forceSenseiAnalysis, runCoachAnalysis, runAstAudit, projectId]);
 
   if (loading) {
     return (

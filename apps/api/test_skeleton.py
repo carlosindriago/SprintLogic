@@ -1,17 +1,17 @@
 import tree_sitter_go
 import tree_sitter_java
 import tree_sitter_php
-import tree_sitter_python
 from tree_sitter import Language, Parser
+
 
 def get_skeleton(code: bytes, lang: Language) -> str:
     parser = Parser(lang)
     tree = parser.parse(code)
-    
+
     # We want to find function/class declarations and print their signatures
     # A generic traverse
     skeletons = []
-    
+
     def traverse(node):
         # Identify declaration nodes
         if node.type in [
@@ -25,7 +25,7 @@ def get_skeleton(code: bytes, lang: Language) -> str:
                 if child.type in block_types:
                     block_node = child
                     break
-            
+
             if block_node:
                 sig = code[node.start_byte:block_node.start_byte].decode('utf8').strip()
                 skeletons.append(sig + " { ... }")
@@ -37,7 +37,7 @@ def get_skeleton(code: bytes, lang: Language) -> str:
                 print(f"PHP NODE: {node.type}")
             for child in node.children:
                 traverse(child)
-                
+
     traverse(tree.root_node)
     return "\n".join(skeletons)
 

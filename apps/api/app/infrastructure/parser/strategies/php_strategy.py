@@ -4,6 +4,7 @@ from typing import Any
 
 from app.domain.ports.language_analyzer import LanguageAnalyzerStrategy
 
+
 class PhpAnalyzerStrategy(LanguageAnalyzerStrategy):
     def __init__(self) -> None:
         import tree_sitter_php
@@ -17,30 +18,30 @@ class PhpAnalyzerStrategy(LanguageAnalyzerStrategy):
         self.query = Query(self.php_language,
             """
             (namespace_definition (namespace_name) @file.namespace)
-            
-            (namespace_use_declaration 
-              (namespace_use_clause 
+
+            (namespace_use_declaration
+              (namespace_use_clause
                 (qualified_name) @use.fqn
                 (name)? @use.alias
               )
             )
-            
+
             (class_declaration
               name: (name) @class.name
             )
             (class_declaration
               (base_clause (name) @class.extends)
             )
-            
-            (object_creation_expression 
+
+            (object_creation_expression
               (name) @instantiation.class
             )
-            (object_creation_expression 
+            (object_creation_expression
               (qualified_name) @instantiation.class
             )
-            
-            (scoped_call_expression 
-              scope: (name) @static.class 
+
+            (scoped_call_expression
+              scope: (name) @static.class
               name: (name) @static.method
             )
             """
@@ -66,10 +67,10 @@ class PhpAnalyzerStrategy(LanguageAnalyzerStrategy):
     def _resolve_fqn(self, class_name: str, file_alias_map: dict[str, str], current_namespace: str) -> str:
         if class_name.startswith('\\'):
             return class_name # Global namespace, handled by caller
-            
+
         if class_name in file_alias_map:
             return file_alias_map[class_name]
-            
+
         if current_namespace:
             return f"{current_namespace}\\{class_name}"
         return class_name
@@ -91,12 +92,12 @@ class PhpAnalyzerStrategy(LanguageAnalyzerStrategy):
             return {"nodes": [], "edges": []}
 
         psr4_map = self._parse_composer(project_path)
-        
+
         from tree_sitter import QueryCursor
 
         for filepath in php_files:
             rel_path = filepath.relative_to(project_path).as_posix()
-            
+
             # Filter out vendor directory entirely
             if rel_path.startswith("vendor/"):
                 continue
@@ -111,18 +112,18 @@ class PhpAnalyzerStrategy(LanguageAnalyzerStrategy):
 
             code = filepath.read_bytes()
             tree = self.parser.parse(code)
-            
+
             cursor = QueryCursor(self.query)
-            
+
             current_namespace = ""
             file_alias_map: dict[str, str] = {}
-            
+
             captures = []
             for pattern_index, captures_dict in cursor.matches(tree.root_node):
                 for capture_name, nodes_list in captures_dict.items():
                     for node in nodes_list:
                         captures.append((capture_name, node))
-                        
+
             last_fqn = None
             last_default_alias = None
             for capture_name, node in captures:
@@ -147,12 +148,12 @@ class PhpAnalyzerStrategy(LanguageAnalyzerStrategy):
             for capture_name, node in captures:
                 if not node.text:
                     continue
-                
+
                 target_class = None
-                
+
                 if capture_name in ("class.extends", "class.implements", "instantiation.class"):
                     target_class = node.text.decode('utf8')
-                    
+
                 elif capture_name == "static.class":
                     target_class = node.text.decode('utf8')
                     if target_class[0].islower() or target_class in ("self", "static", "parent"):
@@ -161,10 +162,10 @@ class PhpAnalyzerStrategy(LanguageAnalyzerStrategy):
                 if target_class:
                     if target_class.startswith('\\'):
                         continue
-                        
+
                     fqn = self._resolve_fqn(target_class, file_alias_map, current_namespace)
                     target_path = self._fqn_to_path(fqn, psr4_map)
-                    
+
                     if target_path:
                         edges.append({
                             "source_id": f"file:{rel_path}",

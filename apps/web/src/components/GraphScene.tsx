@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react/no-unescaped-entities, react-hooks/set-state-in-effect */
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/set-state-in-effect */
 "use client";
 
 import dynamic from "next/dynamic";
@@ -641,7 +641,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     });
     
     return new THREE.Mesh(geometry, material);
-  }, [activeTypes, lowerSearchQuery, isFaded, threeTexturesLoaded]);
+  }, [activeTypes, lowerSearchQuery, isFaded]);
 
   const toggleType = (type: string) => {
     setActiveTypes(prev => {

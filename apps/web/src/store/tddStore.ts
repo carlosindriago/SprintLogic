@@ -17,8 +17,8 @@ export const useTddStore = create<TddState>((set) => ({
         const data = await response.json();
         set({ locks: data.locks });
       }
-    } catch (e) {
-      console.error(e);
+    } catch {
+      set({ status: 'error', isScanning: false });
     }
   },
   initializeSseListener: (taskId) => {
@@ -32,7 +32,9 @@ export const useTddStore = create<TddState>((set) => ({
         set((state) => ({
           locks: { ...state.locks, [file]: 'unlocked' }
         }));
-      } catch (e) {}
+      } catch {
+        // ignore
+      }
     });
   }
 }));

@@ -310,6 +310,7 @@ class AnalyzeGraphRequest(BaseModel):
 
 from fastapi.responses import StreamingResponse
 
+
 @router.post("/projects/{project_id}/graph/analyze")
 async def analyze_project_graph(
     project_id: str,
@@ -326,14 +327,16 @@ async def analyze_project_graph(
         raise HTTPException(status_code=400, detail="Invalid project ID format")
 
     try:
+        from app.application.scan_codebase import ScanCodebaseUseCase
+        from app.infrastructure.llm.litellm_gateway import LiteLLMGateway
         from app.infrastructure.parser.strategies.go_strategy import GoAnalyzerStrategy
         from app.infrastructure.parser.strategies.java_strategy import JavaAnalyzerStrategy
         from app.infrastructure.parser.strategies.php_strategy import PhpAnalyzerStrategy
         from app.infrastructure.parser.strategies.python_strategy import PythonAnalyzerStrategy
-        from app.infrastructure.parser.strategies.typescript_strategy import TypeScriptAnalyzerStrategy
-        from app.application.scan_codebase import ScanCodebaseUseCase
-        from app.infrastructure.llm.litellm_gateway import LiteLLMGateway
-        
+        from app.infrastructure.parser.strategies.typescript_strategy import (
+            TypeScriptAnalyzerStrategy,
+        )
+
         strategies = [
             GoAnalyzerStrategy(),
             JavaAnalyzerStrategy(),
@@ -341,12 +344,12 @@ async def analyze_project_graph(
             PythonAnalyzerStrategy(),
             TypeScriptAnalyzerStrategy()
         ]
-        
+
         usecase = ScanCodebaseUseCase(strategies)
         scan_data = await usecase.execute(project.path)
-        
+
         gateway = LiteLLMGateway(model_name=request.model)
-        
+
         async def event_generator():
             try:
                 async for chunk in gateway.analyze_anomalies_stream(
@@ -359,9 +362,9 @@ async def analyze_project_graph(
             except Exception as e:
                 logger.error(f"Error streaming LLM response: {e}")
                 raise
-                
+
         return StreamingResponse(event_generator(), media_type="text/plain")
-        
+
     except Exception as e:
         logger.error("Analysis failed: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

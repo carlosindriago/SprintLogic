@@ -1,11 +1,11 @@
 from pathlib import Path
 
 from app.domain.ports.language_analyzer import LanguageAnalyzerStrategy
+from app.infrastructure.parser.strategies.go_strategy import GoAnalyzerStrategy
+from app.infrastructure.parser.strategies.java_strategy import JavaAnalyzerStrategy
+from app.infrastructure.parser.strategies.php_strategy import PhpAnalyzerStrategy
 from app.infrastructure.parser.strategies.python_strategy import PythonAnalyzerStrategy
 from app.infrastructure.parser.strategies.typescript_strategy import TypeScriptAnalyzerStrategy
-from app.infrastructure.parser.strategies.go_strategy import GoAnalyzerStrategy
-from app.infrastructure.parser.strategies.php_strategy import PhpAnalyzerStrategy
-from app.infrastructure.parser.strategies.java_strategy import JavaAnalyzerStrategy
 
 
 class UnsupportedLanguageError(Exception):

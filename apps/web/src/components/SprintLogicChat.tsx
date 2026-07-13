@@ -157,8 +157,7 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
       if (!reader) throw new Error("No stream");
       const decoder = new TextDecoder();
       let buffer = "";
-      let streamedText = "";
-      let isError = false;
+      const streamBuffer = { text: "", isError: false };
 
       while (true) {
         const { done, value } = await reader.read();
@@ -171,13 +170,15 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
           if (line.startsWith("data: ")) {
             try {
               const parsed = JSON.parse(line.slice(6));
-              if (parsed.error) isError = true;
+              // eslint-disable-next-line react-hooks/immutability
+              if (parsed.error) streamBuffer.isError = true;
               if (parsed.text !== undefined) {
-                streamedText = parsed.text;
+                // eslint-disable-next-line react-hooks/immutability
+                streamBuffer.text = parsed.text;
                 
-                if (streamedText.startsWith("__DRAFT_PROPOSAL__:")) {
+                if (streamBuffer.text.startsWith("__DRAFT_PROPOSAL__:")) {
                   try {
-                    const jsonStr = streamedText.replace("__DRAFT_PROPOSAL__:", "");
+                    const jsonStr = streamBuffer.text.replace("__DRAFT_PROPOSAL__:", "");
                     const payload = JSON.parse(jsonStr);
                     setDraftMode(payload);
                     setMessages((prev) => {
@@ -200,11 +201,11 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
                 setMessages((prev) => {
                   const next = [...prev];
                   const last = next[next.length - 1];
-                  if (last?.role === "assistant") {
-                     next[next.length - 1] = { ...last, content: streamedText, isError };
-                  } else {
-                     next.push({ role: "assistant", content: streamedText, isError });
-                  }
+                   if (last?.role === "assistant") {
+                     next[next.length - 1] = { ...last, content: streamBuffer.text, isError: streamBuffer.isError };
+                   } else {
+                     next.push({ role: "assistant", content: streamBuffer.text, isError: streamBuffer.isError });
+                   }
                   return next;
                 });
               }

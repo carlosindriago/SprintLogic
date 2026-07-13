@@ -1,12 +1,13 @@
 import asyncio
-import json
 from pathlib import Path
-from app.infrastructure.parser.strategies.php_strategy import PhpAnalyzerStrategy
+
 from app.infrastructure.parser.strategies.java_strategy import JavaAnalyzerStrategy
+from app.infrastructure.parser.strategies.php_strategy import PhpAnalyzerStrategy
+
 
 async def test():
     root = Path(__file__).parent.resolve()
-    
+
     # Test PHP
     php_path = root / "tests" / "fixtures" / "php_sample"
     php_strat = PhpAnalyzerStrategy()

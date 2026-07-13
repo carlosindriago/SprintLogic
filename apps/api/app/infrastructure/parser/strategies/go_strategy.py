@@ -44,16 +44,16 @@ class GoAnalyzerStrategy(LanguageAnalyzerStrategy):
             """
             (import_spec name: (package_identifier) @import.alias path: (interpreted_string_literal) @import.path)
             (import_spec path: (interpreted_string_literal) @import.path)
-            
+
             (call_expression function: (identifier) @call.local)
-            
+
             (call_expression
               function: (selector_expression
                 operand: (identifier) @call.pkg_or_obj
                 field: (field_identifier) @call.field
               )
             )
-            
+
             (type_identifier) @type.use
             """
         )
@@ -140,10 +140,10 @@ class GoAnalyzerStrategy(LanguageAnalyzerStrategy):
             folder_rel_path = filepath.parent.relative_to(project_path).as_posix()
             if folder_rel_path == ".":
                 folder_rel_path = ""
-                
-            my_package = folder_to_pkg.get(folder_rel_path, "")
+
+            folder_to_pkg.get(folder_rel_path, "")
             tree = parsed_trees[rel_path]
-            
+
             cursor = QueryCursor(self.pass2_query)
             # Diccionario temporal del archivo para mapear alias -> package_name_real
             file_alias_map: dict[str, str] = {}
@@ -156,23 +156,23 @@ class GoAnalyzerStrategy(LanguageAnalyzerStrategy):
                         if capture_name == "import.path":
                             # El import literal tiene comillas (ej. '"github.com/carlos/sprintlogic/internal/db"')
                             import_str = node.text.decode('utf8').strip('"')
-                            
+
                             if module_prefix and import_str.startswith(module_prefix):
                                 # Import interno! Quitamos el prefijo
                                 # Si el module es 'github.com/my/proj', y el import es 'github.com/my/proj/pkg'
                                 target_folder = import_str[len(module_prefix):].strip('/')
-                                
+
                                 target_pkg_name = folder_to_pkg.get(target_folder)
                                 if target_pkg_name:
                                     # Por defecto, el alias es la última parte de la ruta
                                     default_alias = target_folder.split('/')[-1]
                                     # Mapeamos alias -> RUTA FISICA DE LA CARPETA (la clave infalible)
                                     file_alias_map[default_alias] = target_folder
-                                    
+
                         elif capture_name == "import.alias":
                             # Si capturamos un alias, deberíamos vincularlo al import path siguiente.
-                            pass 
-        
+                            pass
+
                         elif capture_name == "call.local":
                             symbol = node.text.decode('utf8')
                             # Llamada implícita, buscamos en nuestra propia carpeta
@@ -184,7 +184,7 @@ class GoAnalyzerStrategy(LanguageAnalyzerStrategy):
                                         "target_id": tgt,
                                         "type": "calls"
                                     })
-        
+
                         elif capture_name == "call.field":
                             # Si es pkg.Call(), `call.field` es Call, y `call.pkg_or_obj` fue el nodo anterior.
                             parent = node.parent
@@ -193,7 +193,7 @@ class GoAnalyzerStrategy(LanguageAnalyzerStrategy):
                                 if operand and operand.text:
                                     alias = operand.text.decode('utf8')
                                     symbol = node.text.decode('utf8')
-                                    
+
                                     # ¿Es un alias de paquete conocido?
                                     if alias in file_alias_map:
                                         target_folder = file_alias_map[alias]

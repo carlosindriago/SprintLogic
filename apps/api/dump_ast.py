@@ -1,7 +1,9 @@
 import sys
-import tree_sitter_php
+
 import tree_sitter_java
+import tree_sitter_php
 from tree_sitter import Language, Parser
+
 
 def dump_ast(node, depth=0):
     indent = "  " * depth
