@@ -38,8 +38,9 @@ def kill_zombie_on_parent_death():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Activar el asesino de Zombis (Cordón umbilical STDIN)
-    threading.Thread(target=kill_zombie_on_parent_death, daemon=True).start()
+    # Activar el asesino de Zombis (Cordón umbilical STDIN) solo en prod/Tauri
+    if os.getenv("SPRINTLOGIC_DESKTOP") == "1":
+        threading.Thread(target=kill_zombie_on_parent_death, daemon=True).start()
 
     # Startup
     await init_fts5()
