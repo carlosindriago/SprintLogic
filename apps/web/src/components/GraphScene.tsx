@@ -6,7 +6,7 @@ import * as THREE from "three";
 import { getProjectGraph } from "@/lib/api";
 import { API_BASE_URL } from "@/lib/api";
 import { GraphData, GraphNode, GraphEdge } from "@/types";
-import { ForceGraphProps, NodeObject, LinkObject } from "react-force-graph-2d";
+import { ForceGraphProps, NodeObject } from "react-force-graph-2d";
 import { graphTheme } from "@/lib/graph-theme";
 import { Search, RotateCcw, ZoomIn, ZoomOut, Maximize, Brain, AlertTriangle, Play, Pause, Zap, ZapOff, Box, Layers, ScanSearch, FileCode } from "lucide-react";
 import { useTabsStore } from "../store/tabsStore";
@@ -19,6 +19,9 @@ interface ForceNode extends GraphNode {
   vx?: number;
   vy?: number;
   vz?: number;
+  fx?: number;
+  fy?: number;
+  fz?: number;
 }
 
 interface ForceLink extends GraphEdge {
@@ -64,7 +67,8 @@ interface GraphSceneProps {
 export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) {
   const [graphData, setGraphData] = useState<GraphData>({ nodes: [], links: [] });
   const containerRef = useRef<HTMLDivElement>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- force-graph MutableRefObject generics incompatible
+  // ForceGraphMethods generic chain is incompatible with custom ForceNode/ForceLink
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const fgRef = useRef<any>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
  
