@@ -489,13 +489,11 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     let radius = 3;
     let color = graphTheme.unknown;
 
-    const degree = (n.in_degree || 0) + (n.out_degree || 0);
+    const degree = n.in_degree || 0;
     const degreeRadius = 1 + Math.log2(1 + degree) * 1.6;
 
     if (label === "File") {
-      const size = (n.size as number) || 0;
-      radius = Math.min(Math.max(size / 2000, 4), 10);
-      radius = Math.max(radius, degreeRadius);
+      radius = Math.max(4, degreeRadius);
       color = graphTheme.file;
     } else if (label === "Class") {
       radius = Math.max(5, degreeRadius);
@@ -507,6 +505,9 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
       radius = Math.max(5, degreeRadius);
       color = graphTheme.interface;
     }
+
+    const outDegree = n.out_degree || 0;
+    const hasHighOutDegree = outDegree >= 10;
 
     const faded = isFaded(id);
     const isZoomedOut = globalScale < 1.2; // LOD (Level of Detail) threshold
@@ -547,6 +548,14 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
       ctx.arc(n.x || 0, n.y || 0, radius, 0, 2 * Math.PI, false);
       ctx.fillStyle = color;
       ctx.fill();
+    }
+
+    if (hasHighOutDegree && !faded && !isZoomedOut) {
+      ctx.beginPath();
+      ctx.arc(n.x || 0, n.y || 0, radius + 1.5, 0, 2 * Math.PI, false);
+      ctx.strokeStyle = "rgba(239, 68, 68, 0.7)";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
     }
 
     // Draw In-Degree Expanding Ripple (for small nodes receiving flow) - Skipped if zoomed out
