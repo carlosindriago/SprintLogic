@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { ChevronRight, ChevronDown, Folder, FilePlus, FolderPlus, AlertCircle, AlertTriangle, Pencil, Copy, Trash2 } from 'lucide-react';
 import { getProjectFiles } from '@/lib/api';
 import { FileTreeNode } from '@/types';
@@ -36,6 +36,14 @@ const TreeNode: React.FC<{
   const [showMarkers, setShowMarkers] = useState(false);
   const isDirty = useUnsavedStore((s) => s.files[node.path] !== undefined);
   const paddingLeft = `${depth * 12 + 8}px`;
+
+  const nodeMarkers = allFiles[node.path]?.markers;
+  const sortedMarkers = useMemo(() => {
+    if (!nodeMarkers) return [];
+    return [...nodeMarkers].sort((a, b) => b.severity - a.severity || a.line - b.line);
+  }, [nodeMarkers]);
+
+  const handleToggleMarkers = useCallback(() => setShowMarkers((v) => !v), []);
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -116,17 +124,14 @@ const TreeNode: React.FC<{
         {isDirty && <div className="w-2 h-2 rounded-full bg-blue-500 ml-2" title="Sin guardar" />}
         <FileMarkerBadge
           filePath={node.path}
-          onToggle={() => setShowMarkers((v) => !v)}
+          onToggle={handleToggleMarkers}
           expanded={showMarkers}
         />
       </div>
 
       {showMarkers && allFiles[node.path] && (
         <div style={{ paddingLeft: `${depth * 12 + 40}px` }} className="pb-1">
-          {[...allFiles[node.path].markers]
-            .sort((a, b) => b.severity - a.severity || a.line - b.line)
-            .slice(0, 12)
-            .map((m, i) => (
+          {sortedMarkers.slice(0, 12).map((m, i) => (
               <div
                 key={i}
                 className="flex items-start gap-1 py-0.5 text-[11px] cursor-pointer hover:bg-zinc-800/50 rounded px-1 group/marker"

@@ -7,3 +7,4 @@
 * If a derived object property is used (e.g., `data?.language_distribution`), the compiler may infer the root object `data` as the dependency. Make sure the manual dependency array includes the root object `data` in such cases.
 * Always define hooks before conditional early returns to obey Rules of Hooks. Use optional chaining (like `data?.xyz`) in the hook if the data might be undefined during loading states.
 Learned to strictly avoid creating package-lock files like pnpm-lock.yaml in sub-workspaces when testing/installing dependencies to avoid breaking monorepo setup.
+- **React Component Performance:** Always memoize expensive array operations (like `.sort()` or `.filter()`) inside components that are rendered frequently (such as nodes in a file tree) using `useMemo`. Also, memoize simple toggle callbacks with `useCallback` to maintain referential equality and prevent unnecessary child re-renders.
