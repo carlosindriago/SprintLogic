@@ -1509,7 +1509,7 @@ async def get_project_flow_insights(
     try:
         flow_query = text("""
             WITH lagged AS (
-                SELECT 
+                SELECT
                     window_start_ms,
                     window_end_ms,
                     LAG(window_end_ms) OVER (ORDER BY window_start_ms) as prev_end_ms
@@ -1517,7 +1517,7 @@ async def get_project_flow_insights(
                 WHERE timestamp >= date('now', 'start of day')
             ),
             gaps AS (
-                SELECT 
+                SELECT
                     window_start_ms,
                     window_end_ms,
                     prev_end_ms,
@@ -1525,20 +1525,20 @@ async def get_project_flow_insights(
                 FROM lagged
             ),
             sessions AS (
-                SELECT 
+                SELECT
                     window_start_ms,
                     window_end_ms,
                     SUM(is_gap) OVER (ORDER BY window_start_ms) as session_id
                 FROM gaps
             ),
             session_durations AS (
-                SELECT 
+                SELECT
                     session_id,
                     (MAX(window_end_ms) - MIN(window_start_ms)) as duration_ms
                 FROM sessions
                 GROUP BY session_id
             )
-            SELECT 
+            SELECT
                 (SELECT SUM(duration_ms) FROM session_durations) / 3600000.0 as deep_flow_hours,
                 (SELECT SUM(is_gap) FROM gaps WHERE prev_end_ms IS NOT NULL) as idle_breaks
         """)
@@ -1549,7 +1549,7 @@ async def get_project_flow_insights(
             idle_breaks = max(0, flow_row[1] or 0)
 
         ratio_query = text("""
-            SELECT 
+            SELECT
                 SUM(thinking_ms) as t,
                 SUM(coding_ms) as c,
                 SUM(testing_ms) as ts
@@ -1566,7 +1566,7 @@ async def get_project_flow_insights(
             }
 
         heatmap_query = text("""
-            SELECT 
+            SELECT
                 strftime('%H', timestamp) as hour,
                 SUM(thinking_ms + coding_ms + testing_ms) as total_ms
             FROM telemetry_pings

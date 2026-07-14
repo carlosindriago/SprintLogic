@@ -1,10 +1,11 @@
+import uuid
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
-from app.infrastructure.parser.ast_parser import ParsedNode
-from sqlalchemy.ext.asyncio import AsyncSession
+
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.infrastructure.db.models import ASTNodeMapModel, ASTVectorModel
-import uuid
 
 
 @dataclass
@@ -32,7 +33,7 @@ class ASTContextBuilder:
             )
         )
         results = (await self.session.execute(stmt)).all()
-        
+
         nodes = []
         for map_model, vec_model in results:
             # We must parse node_type and parent_fqn from the FQN (or we should have stored it)
@@ -48,13 +49,13 @@ class ASTContextBuilder:
                     node_type = "import"
                 elif "[var]" in parts[-1]:
                     node_type = "var"
-                    
+
             parent_fqn = "::".join(parts[:-1]) if len(parts) > 1 else ""
-            
+
             # Start line extraction (a hack if we didn't store it, ideally we'd store it in ASTNodeMapModel)
             # For this MVP, we just use 0 to group them hierarchically first.
             # A real implementation would store start_line in ASTNodeMapModel to sort properly.
-            
+
             nodes.append(ContextNode(
                 fqn=map_model.fqn,
                 content=vec_model.content,
@@ -81,7 +82,7 @@ class ASTContextBuilder:
 
         # Ecosistema: Imports + Constants
         ecosystem_nodes = [n for n in all_nodes if n.node_type in ('import', 'var') and n.parent_fqn == file_path]
-        
+
         ecosystem_content = []
         for node in ecosystem_nodes:
             if node.node_type == 'var':
@@ -92,23 +93,23 @@ class ASTContextBuilder:
         # Firmas Hermanas: Topological Pruning
         # 1. Filtro A: Familia Directa (Mismo parent)
         candidates = [n for n in all_nodes if n.parent_fqn == target.parent_fqn and n.fqn != target.fqn and n.node_type in ('def', 'class')]
-        
+
         # 2. Filtro B: Localidad Espacial
         # Asumiendo que start_line está disponible (sort by distance)
         candidates.sort(key=lambda x: abs(target.start_line - x.start_line))
-        
+
         # 3. La Guillotina: Top 15
         top_15 = candidates[:15]
-        
+
         # 4. Re-ensamblado cronológico
         top_15.sort(key=lambda x: x.start_line)
 
         # Build XML
         root = ET.Element("contexto_ast")
-        
+
         ecosystem = ET.SubElement(root, "ecosistema")
         ecosystem.text = "\n".join(ecosystem_content)
-        
+
         firmas = ET.SubElement(root, "firmas_hermanas")
         firmas_text = []
         for n in top_15:
@@ -117,8 +118,8 @@ class ASTContextBuilder:
             signature = "\n".join([line for line in lines if not line.strip().startswith("#") and "def " in line or "class " in line])
             firmas_text.append(signature + " ...")
         firmas.text = "\n".join(firmas_text)
-        
+
         codigo = ET.SubElement(root, "codigo_objetivo", fqn=target.fqn)
         codigo.text = target.content
-        
+
         return ET.tostring(root, encoding="unicode")

@@ -5,17 +5,16 @@ Revises: e785b38accca
 Create Date: 2026-07-13 14:22:46.281679
 
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = 'a9456940b7d5'
-down_revision: Union[str, Sequence[str], None] = 'e785b38accca'
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = 'e785b38accca'
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -42,7 +41,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(op.f("ix_ast_vectors_node_hash"), "ast_vectors", ["node_hash"], unique=True)
-    
+
     op.execute("CREATE VIRTUAL TABLE IF NOT EXISTS vec_ast_nodes USING vec0(embedding float[384])")
 
 

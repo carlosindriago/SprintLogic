@@ -90,9 +90,9 @@ def resolve_python_import(base_project_dir: Path, import_statement: str) -> Path
 
 
 import hashlib
-import re
-from dataclasses import dataclass
 import json
+from dataclasses import dataclass
+
 
 def compute_ast_hash(node_code: str) -> str:
     # Remove only edge whitespaces to avoid corrupting string literals inside the code
@@ -116,18 +116,18 @@ class TreeSitterParser:
             code_bytes = code.encode("utf-8")
         else:
             code_bytes = code
-            
+
         lang = get_language(ext)
         if not lang:
             return [], set()
-            
+
         parser = tree_sitter.Parser()
         parser.language = lang
         tree = parser.parse(code_bytes)
-        
+
         parsed_nodes = []
         imports = set()
-        
+
         def traverse(node, current_fqn: str):
             if "import" in node.type or "require" in node.type:
                 for child in node.children:
@@ -143,7 +143,7 @@ class TreeSitterParser:
             node_type = None
             name = None
             fqn = current_fqn
-            
+
             if node.type in ("class_definition", "class_declaration"):
                 node_type = "class"
                 for child in node.children:
@@ -152,7 +152,7 @@ class TreeSitterParser:
                         break
                 if name:
                     fqn = f"{current_fqn}::[{node_type}]{name}"
-            
+
             elif node.type in ("function_definition", "function_declaration", "method_definition"):
                 node_type = "def"
                 for child in node.children:
@@ -161,7 +161,7 @@ class TreeSitterParser:
                         break
                 if name:
                     fqn = f"{current_fqn}::[{node_type}]{name}"
-            
+
             if name and node_type:
                 content = code_bytes[node.start_byte:node.end_byte].decode('utf-8')
                 node_hash = compute_ast_hash(content)
@@ -175,10 +175,10 @@ class TreeSitterParser:
                     hash=node_hash,
                     parent_fqn=current_fqn
                 ))
-                
+
             for child in node.children:
                 traverse(child, fqn)
-                
+
         traverse(tree.root_node, file_path)
         return parsed_nodes, imports
 
@@ -186,10 +186,10 @@ class TreeSitterParser:
 def extract_nodes_from_code(project_id: UUID, file_path: str, code: bytes, ext: str):
     parser = TreeSitterParser()
     parsed_nodes, imports = parser.parse_code(code, file_path, ext)
-    
+
     nodes = []
     edges = []
-    
+
     file_node_id = f"file:{file_path}"
     lines = code.split(b'\n')
     nodes.append(
@@ -228,7 +228,7 @@ def extract_nodes_from_code(project_id: UUID, file_path: str, code: bytes, ext: 
                 type=EdgeType.CONTAINS
             )
         )
-        
+
     return nodes, edges, imports
 
 

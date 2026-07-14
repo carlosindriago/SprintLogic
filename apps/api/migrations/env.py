@@ -43,8 +43,8 @@ def run_migrations_online() -> None:
         poolclass=pool.NullPool,
     )
 
-    from sqlalchemy import event
     import sqlite_vec
+    from sqlalchemy import event
 
     @event.listens_for(connectable, "connect")
     def _set_sqlite_pragmas(dbapi_connection, _connection_record):

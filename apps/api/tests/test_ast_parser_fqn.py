@@ -1,6 +1,5 @@
-import hashlib
-import re
-from app.infrastructure.parser.ast_parser import TreeSitterParser, ParsedNode
+from app.infrastructure.parser.ast_parser import TreeSitterParser
+
 
 def test_ast_fqn_and_hashing():
     code = """
