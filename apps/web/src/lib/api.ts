@@ -80,13 +80,12 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     let errorMessage = `HTTP Error ${response.status}`;
     const responseText = await response.text();
     try {
-      // Intentamos extraer el detalle exacto que manda FastAPI en 'detail'
       const errorData = JSON.parse(responseText);
       errorMessage = errorData.detail || errorData.message || errorMessage;
     } catch {
       errorMessage = responseText || errorMessage;
     }
-    throw new ApiError(response.status, errorMessage);
+    throw new ApiError(response.status, `[${url}] ${errorMessage}`);
   }
 
   // Manejo de respuestas vacías (ej. HTTP 204 No Content)
@@ -244,7 +243,7 @@ export const deleteProviderKey = (provider: string) => api.delete<{ status: stri
 export const getCuratedModels = () => api.get<CuratedProvider[]>('/ai/models');
 
 // --- AI / Analysis ---
-export const getProjectInsights = (projectId: string) => api.get<ProjectInsights>(`/projects/${projectId}/insights`);
+export const getProjectInsights = (projectId: string) => api.get<ProjectInsights>(`/projects/${projectId}/insights/repo`);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const analyzeProject = (projectId: string) => api.post<any>(`/projects/${projectId}/analyze`);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
