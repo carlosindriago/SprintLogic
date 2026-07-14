@@ -13,6 +13,7 @@ class TelemetryPayload(BaseModel):
     thinking_ms: int
     coding_ms: int
     testing_ms: int
+    project_id: str | None = None
 
 @router.post("/session", status_code=status.HTTP_201_CREATED)
 async def ingest_telemetry_ping(
@@ -21,18 +22,20 @@ async def ingest_telemetry_ping(
 ):
     """
     Ingests a telemetry ping from the IDE containing absolute window times
-    and the accumulated time buckets.
+    and the accumulated time buckets. Optionally scoped to a project.
     """
     await session.execute(
         text(
             """
             INSERT INTO telemetry_pings (
+                project_id,
                 window_start_ms,
                 window_end_ms,
                 thinking_ms,
                 coding_ms,
                 testing_ms
             ) VALUES (
+                :project_id,
                 :window_start,
                 :window_end,
                 :thinking_ms,
@@ -42,6 +45,7 @@ async def ingest_telemetry_ping(
             """
         ),
         {
+            "project_id": payload.project_id,
             "window_start": payload.window_start,
             "window_end": payload.window_end,
             "thinking_ms": payload.thinking_ms,

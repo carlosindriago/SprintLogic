@@ -26,7 +26,6 @@ class DeltaSyncOrchestrator:
 
         # 1. Comprobación temprana (Early Exit) si el archivo no ha cambiado
         async with AsyncSessionLocal() as session:
-            conn = await session.connection()
             result = await session.execute(
                 text("SELECT id FROM adr_chunks WHERE filepath = :filepath AND file_hash = :file_hash LIMIT 1"),
                 {"filepath": filepath, "file_hash": file_hash}
@@ -50,7 +49,6 @@ class DeltaSyncOrchestrator:
 
         # 4. Transacción Atómica "Los Dos Mundos"
         async with AsyncSessionLocal() as session:
-            conn = await session.connection()
             async with session.begin():
                 # A. Identificar IDs antiguos (rowid) para borrarlos de la tabla virtual
                 result = await session.execute(

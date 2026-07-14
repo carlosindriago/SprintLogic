@@ -51,7 +51,6 @@ class EventBus:
         queue = self.subscribe(topic)
         try:
             while True:
-                # Esperamos nuevos eventos en la cola de este suscriptor
                 data = await queue.get()
                 yield data
                 queue.task_done()
@@ -59,5 +58,22 @@ class EventBus:
                     break
         finally:
             self.unsubscribe(topic, queue)
+
+    async def persistent_event_generator(self, topic: str) -> AsyncGenerator[dict, None]:
+        """Generador asíncrono para conexiones SSE de larga duración.
+        No se detiene con eventos 'completed' — solo termina cuando el cliente
+        se desconecta (CancelledError)."""
+        queue = self.subscribe(topic)
+        try:
+            while True:
+                data = await queue.get()
+                yield data
+                queue.task_done()
+        finally:
+            self.unsubscribe(topic, queue)
+
+    def subscriber_count(self, topic: str) -> int:
+        """Número de suscriptores activos en un topic."""
+        return len(self._subscribers.get(topic, []))
 
 global_event_bus = EventBus()

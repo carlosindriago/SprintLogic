@@ -100,11 +100,29 @@ async def init_fts5() -> None:
                 "CREATE TABLE IF NOT EXISTS telemetry_pings ("
                 "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
                 "  timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,"
+                "  project_id TEXT,"
                 "  window_start_ms INTEGER NOT NULL,"
                 "  window_end_ms INTEGER NOT NULL,"
                 "  thinking_ms INTEGER NOT NULL DEFAULT 0,"
                 "  coding_ms INTEGER NOT NULL DEFAULT 0,"
                 "  testing_ms INTEGER NOT NULL DEFAULT 0"
+                ")"
+            )
+        )
+        # Migration: add project_id to existing tables
+        try:
+            await conn.execute(
+                text("ALTER TABLE telemetry_pings ADD COLUMN project_id TEXT")
+            )
+        except Exception:
+            pass  # column already exists
+        await conn.execute(
+            text(
+                "CREATE TABLE IF NOT EXISTS daemon_locks ("
+                "  project_id TEXT NOT NULL,"
+                "  rule TEXT NOT NULL,"
+                "  last_fired_at TEXT NOT NULL,"
+                "  PRIMARY KEY (project_id, rule)"
                 ")"
             )
         )

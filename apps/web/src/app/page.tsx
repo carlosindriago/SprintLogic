@@ -9,6 +9,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -201,10 +202,15 @@ export default function Home() {
       const data = await scanProject(path);
       setProjectId(data.project_id);
       startScan(data.project_id);
-      fetchProjects(); // Refresh the list
-    } catch (e) {
+      fetchProjects();
+    } catch (e: unknown) {
       console.error(e);
-      alert("Error scanning project");
+      const apiErr = e as { status?: number; message?: string };
+      if (apiErr.status === 409) {
+        toast.error(apiErr.message || "El proyecto ya existe");
+      } else {
+        toast.error("Error al escanear el proyecto");
+      }
     } finally {
       setLoading(false);
     }
@@ -214,6 +220,7 @@ export default function Home() {
   const [projectToEdit, setProjectToEdit] = useState<Project | null>(null);
   const [editProjectName, setEditProjectName] = useState("");
   const [editProjectPath, setEditProjectPath] = useState("");
+  const [deleteConfirm, setDeleteConfirm] = useState<Project | null>(null);
 
   const handleEditProject = async () => {
     if (!projectToEdit) return;
@@ -227,18 +234,23 @@ export default function Home() {
     }
   };
 
-  const handleDeleteProject = async (proj: Project) => {
-    if (confirm(`¿Estás seguro de que deseas borrar el proyecto "${proj.name}"?`)) {
-      try {
-        await deleteProject(proj.id);
-        if (projectId === proj.id) {
-          setProjectId(null);
-        }
-        await fetchProjects();
-      } catch (e) {
-        console.error(e);
-        alert("Error al borrar el proyecto");
+  const handleDeleteProject = (proj: Project) => {
+    setDeleteConfirm(proj);
+  };
+
+  const confirmDeleteProject = async (proj: Project) => {
+    try {
+      await deleteProject(proj.id);
+      if (projectId === proj.id) {
+        setProjectId(null);
       }
+      await fetchProjects();
+      toast.success(`Proyecto "${proj.name}" eliminado de la lista`);
+    } catch (e) {
+      console.error(e);
+      toast.error("Error al borrar el proyecto");
+    } finally {
+      setDeleteConfirm(null);
     }
   };
 
@@ -761,6 +773,33 @@ export default function Home() {
                       Guardar Cambios
                     </Button>
                   </div>
+                </DialogContent>
+              </Dialog>
+
+              <Dialog open={!!deleteConfirm} onOpenChange={(open) => !open && setDeleteConfirm(null)}>
+                <DialogContent className="sm:max-w-[400px] bg-zinc-900 text-zinc-200 border-zinc-800/50">
+                  <DialogHeader>
+                    <DialogTitle>Eliminar proyecto</DialogTitle>
+                    <DialogDescription className="text-zinc-400">
+                      ¿Estás seguro de que deseas eliminar el proyecto "{deleteConfirm?.name}"?
+                      Solo se eliminará de la lista, los archivos en disco no se borrarán.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <DialogFooter className="gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => setDeleteConfirm(null)}
+                      className="bg-zinc-800 border-zinc-700/50 hover:bg-zinc-700 text-zinc-300"
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      onClick={() => deleteConfirm && confirmDeleteProject(deleteConfirm)}
+                      className="bg-red-600 hover:bg-red-500 text-white"
+                    >
+                      Eliminar
+                    </Button>
+                  </DialogFooter>
                 </DialogContent>
               </Dialog>
 
