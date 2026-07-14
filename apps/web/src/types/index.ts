@@ -78,7 +78,25 @@ export interface LanguageDistributionItem {
   value: number;
 }
 
-export interface ProjectInsights {
+export interface HeatmapMatrixCell {
+  date: string;
+  hour: string;
+  activity: number;
+}
+
+export interface ProjectFlowInsights {
+  deep_flow_hours: number;
+  idle_breaks: number;
+  golden_ratio: {
+    thinking: number;
+    coding: number;
+    testing: number;
+  };
+  heatmap: { hour: string; activity: number }[];
+  heatmap_matrix: HeatmapMatrixCell[];
+}
+
+export interface ProjectRepoInsights {
   tasks_by_state: {
     todo: number;
     "in-progress": number;

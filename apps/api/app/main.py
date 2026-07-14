@@ -44,9 +44,12 @@ async def lifespan(app: FastAPI):
 
     # Startup
     await init_fts5()
-    # Initialize the CPU-bound process pool
-    # Use max_workers=2 to avoid killing small developer machines, but you can use multiprocessing.cpu_count() - 1
     app.state.process_pool = ProcessPoolExecutor(max_workers=2)
+
+    from app.application.telemetry_daemon import TelemetryDaemon
+    from app.infrastructure.events.event_bus import global_event_bus
+
+    app.state.telemetry_daemon = TelemetryDaemon(global_event_bus)
     yield
     # Shutdown
     app.state.process_pool.shutdown(wait=True)

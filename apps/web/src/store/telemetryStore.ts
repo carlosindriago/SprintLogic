@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { API_BASE_URL } from '@/lib/api';
+import { useProjectStore } from './projectStore';
 
 export type Phase = 'THINKING' | 'CODING' | 'TESTING' | 'IDLE';
 
@@ -112,6 +113,7 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => ({
 
     const windowEnd = Date.now();
     const windowStart = currentState.windowStartTime;
+    const activeProjectId = useProjectStore.getState().projectId;
 
     const payloadObj = {
       window_start: windowStart,
@@ -119,6 +121,7 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => ({
       thinking_ms: snapshot.THINKING,
       coding_ms: snapshot.CODING,
       testing_ms: snapshot.TESTING,
+      project_id: activeProjectId,
     };
     const payload = JSON.stringify(payloadObj);
     

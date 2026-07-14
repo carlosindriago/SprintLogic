@@ -1,5 +1,6 @@
 # ruff: noqa: E402, E501
 import asyncio
+import json
 import logging
 import os
 import re
@@ -14,6 +15,7 @@ from fastapi import (
     Depends,
     HTTPException,
     Query,
+    Request,
     WebSocket,
     WebSocketDisconnect,
 )
@@ -83,6 +85,17 @@ async def scan_project(
 ) -> ScanStartedResponse:
     git_gateway = LocalGitGateway()
     project_repo = SQLAlchemyProjectRepository(session)
+
+    from app.domain.path_validator import PathSecurityValidator
+
+    canonical = PathSecurityValidator.validate_project_path(request.path)
+    existing = await project_repo.get_all()
+    if any(p.path == str(canonical) for p in existing):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Ya existe un proyecto con el directorio '{canonical.name}' en la lista.",
+        )
+
     scan_repo_usecase = ScanLocalRepository(git_gateway, project_repo)
 
     try:
@@ -168,6 +181,7 @@ async def delete_project(
     if not success:
         raise HTTPException(status_code=404, detail="Project not found")
 
+    await session.commit()
     return ProjectDeletedResponse(status="success")
 
 
@@ -300,8 +314,6 @@ async def get_project_graph(project_id: str, session: AsyncSession = Depends(get
 
 
 from concurrent.futures import ProcessPoolExecutor
-
-from fastapi import Request
 
 
 def get_process_pool(request: Request) -> ProcessPoolExecutor:
@@ -1054,6 +1066,101 @@ async def project_events(project_id: str, session: AsyncSession = Depends(get_db
     return EventSourceResponse(event_generator())
 
 
+@router.get("/projects/{project_id}/session/stream")
+async def session_stream(
+    project_id: str,
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """
+    SSE persistente para la sesión del IDE. Mantiene la conexión abierta durante
+    toda la sesión de trabajo. El TelemetryDaemon publica insights proactivos
+    por este canal cuando detecta anomalías en los patrones de productividad.
+    """
+    try:
+        project_uuid = UUID(project_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+
+    repo = SQLAlchemyProjectRepository(session)
+    project = await repo.get_project(project_uuid)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    daemon = request.app.state.telemetry_daemon
+    await daemon.start_monitoring(project_id)
+
+    topic = f"session:{project_id}"
+
+    async def event_generator():
+        try:
+            async for event in global_event_bus.persistent_event_generator(topic):
+                yield {"data": json.dumps(event)}
+        except asyncio.CancelledError:
+            if global_event_bus.subscriber_count(topic) == 0:
+                await daemon.stop_monitoring(project_id)
+
+    return EventSourceResponse(event_generator())
+
+
+class ProposalAction(BaseModel):
+    action: str  # "apply" | "reject"
+
+
+@router.post("/projects/{project_id}/proposals/{proposal_id}/apply")
+async def apply_proposal(project_id: str, proposal_id: str):
+    import hashlib
+
+    from app.application.ai_agent import _proposals_store
+
+    proposal = _proposals_store.get(proposal_id)
+    if not proposal:
+        raise HTTPException(status_code=404, detail="Proposal not found")
+
+    try:
+        target = Path(proposal["absolute_path"])
+        current_content = target.read_text(encoding="utf-8", errors="ignore")
+        current_hash = hashlib.sha256(current_content.encode()).hexdigest()
+        expected_hash = proposal.get("original_file_hash", "")
+
+        if expected_hash and current_hash != expected_hash:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "El archivo fue modificado desde que se generó esta propuesta. "
+                    "Rechazala y pedile a la IA que genere una nueva propuesta "
+                    "basada en la versión actual del archivo."
+                ),
+            )
+
+        target.write_text(proposal["new_file_content"], encoding="utf-8")
+        del _proposals_store[proposal_id]
+        return {
+            "status": "applied",
+            "proposal_id": proposal_id,
+            "file": proposal["file_path"],
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to apply: {str(e)}")
+
+
+@router.post("/projects/{project_id}/proposals/{proposal_id}/reject")
+async def reject_proposal(project_id: str, proposal_id: str):
+    from app.application.ai_agent import _proposals_store
+
+    proposal = _proposals_store.pop(proposal_id, None)
+    if not proposal:
+        raise HTTPException(status_code=404, detail="Proposal not found")
+
+    return {
+        "status": "rejected",
+        "proposal_id": proposal_id,
+        "file": proposal["file_path"],
+    }
+
+
 @router.websocket("/projects/{project_id}/ws")
 async def project_ws(websocket: WebSocket, project_id: str):
     await websocket.accept()
@@ -1487,6 +1594,14 @@ Debes responder ÚNICAMENTE con un objeto JSON válido con la siguiente estructu
         raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
+@router.get("/insights/flow")
+async def get_global_flow_insights(
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Telemetría global de todo el desarrollador, sin filtrar por proyecto."""
+    return await _compute_flow_insights(session, project_id=None)
+
+
 @router.get("/projects/{project_id}/insights/flow")
 async def get_project_flow_insights(
     project_id: str, session: AsyncSession = Depends(get_db_session)
@@ -1501,20 +1616,33 @@ async def get_project_flow_insights(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
+    return await _compute_flow_insights(session, project_id=project_id)
+
+
+async def _compute_flow_insights(
+    session: AsyncSession,
+    project_id: str | None,
+) -> dict[str, object]:
+
     deep_flow_hours = 0.0
     idle_breaks = 0
     golden_ratio = {"thinking": 0, "coding": 0, "testing": 0}
     heatmap = []
+    heatmap_matrix: list[dict[str, object]] = []
+
+    project_filter = "AND project_id = :pid" if project_id else ""
+    params: dict[str, str] = {"pid": project_id} if project_id else {}
 
     try:
-        flow_query = text("""
+        flow_query = text(f"""
             WITH lagged AS (
                 SELECT
                     window_start_ms,
                     window_end_ms,
                     LAG(window_end_ms) OVER (ORDER BY window_start_ms) as prev_end_ms
                 FROM telemetry_pings
-                WHERE timestamp >= date('now', 'start of day')
+                WHERE timestamp >= date('now', '-6 days')
+                  {project_filter}
             ),
             gaps AS (
                 SELECT
@@ -1542,21 +1670,22 @@ async def get_project_flow_insights(
                 (SELECT SUM(duration_ms) FROM session_durations) / 3600000.0 as deep_flow_hours,
                 (SELECT SUM(is_gap) FROM gaps WHERE prev_end_ms IS NOT NULL) as idle_breaks
         """)
-        flow_result = await session.execute(flow_query)
+        flow_result = await session.execute(flow_query, params)
         flow_row = flow_result.fetchone()
         if flow_row:
             deep_flow_hours = round(flow_row[0] or 0.0, 2)
             idle_breaks = max(0, flow_row[1] or 0)
 
-        ratio_query = text("""
+        ratio_query = text(f"""
             SELECT
                 SUM(thinking_ms) as t,
                 SUM(coding_ms) as c,
                 SUM(testing_ms) as ts
             FROM telemetry_pings
-            WHERE timestamp >= date('now', 'start of day')
+            WHERE timestamp >= date('now', '-6 days')
+              {project_filter}
         """)
-        ratio_result = await session.execute(ratio_query)
+        ratio_result = await session.execute(ratio_query, params)
         r_row = ratio_result.fetchone()
         if r_row:
             golden_ratio = {
@@ -1565,19 +1694,40 @@ async def get_project_flow_insights(
                 "testing": r_row[2] or 0,
             }
 
-        heatmap_query = text("""
+        heatmap_query = text(f"""
             SELECT
                 strftime('%H', timestamp) as hour,
                 SUM(thinking_ms + coding_ms + testing_ms) as total_ms
             FROM telemetry_pings
-            WHERE timestamp >= date('now', 'start of day')
+            WHERE timestamp >= date('now', '-6 days')
+              {project_filter}
             GROUP BY hour
             ORDER BY hour
         """)
-        heatmap_result = await session.execute(heatmap_query)
+        heatmap_result = await session.execute(heatmap_query, params)
         for row in heatmap_result.fetchall():
             if row[0]:
                 heatmap.append({"hour": f"{row[0]}:00", "activity": row[1] or 0})
+
+        heatmap_matrix_query = text(f"""
+            SELECT
+                date(timestamp) as day,
+                strftime('%H', timestamp) as hour,
+                SUM(thinking_ms + coding_ms + testing_ms) as total_ms
+            FROM telemetry_pings
+            WHERE timestamp >= date('now', '-6 days')
+              {project_filter}
+            GROUP BY day, hour
+            ORDER BY day, hour
+        """)
+        matrix_result = await session.execute(heatmap_matrix_query, params)
+        for row in matrix_result.fetchall():
+            if row[0] and row[1]:
+                heatmap_matrix.append({
+                    "date": row[0],
+                    "hour": f"{row[1]}:00",
+                    "activity": row[2] or 0,
+                })
     except Exception as e:
         import logging
 
@@ -1588,6 +1738,7 @@ async def get_project_flow_insights(
         "idle_breaks": idle_breaks,
         "golden_ratio": golden_ratio,
         "heatmap": heatmap,
+        "heatmap_matrix": heatmap_matrix,
     }
 
 
@@ -1636,7 +1787,8 @@ async def get_project_repo_insights(
     git_gateway = LocalGitGateway()
     total_commits = 0
     active_branches = 0
-    recent_commits = []
+    velocity = 0
+    recent_commits: list[dict[str, object]] = []
     try:
         out_commits = await git_gateway._run_command(project.path, "rev-list", "--all", "--count")
         total_commits = int(out_commits)
@@ -1650,6 +1802,14 @@ async def get_project_repo_insights(
         pass
 
     try:
+        out_velocity = await git_gateway._run_command(
+            project.path, "rev-list", "--count", '--since="7 days ago"', "HEAD"
+        )
+        velocity = int(out_velocity) if out_velocity.strip().isdigit() else 0
+    except Exception:
+        pass
+
+    try:
         recent_commits = await git_gateway.get_recent_commits(project.path, limit=5)
     except Exception:
         pass
@@ -1659,5 +1819,6 @@ async def get_project_repo_insights(
         "language_distribution": sorted_exts,
         "total_commits": total_commits,
         "active_branches": active_branches,
+        "velocity": velocity,
         "recent_commits": recent_commits,
     }

@@ -1,8 +1,10 @@
+import difflib
+import hashlib
 import json
 import logging
 from pathlib import Path
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import litellm
 from sqlalchemy import select, text
@@ -13,6 +15,77 @@ from app.infrastructure.ai.provider_adapter import ProviderAdapter
 from app.infrastructure.db.database import AsyncSessionLocal
 from app.infrastructure.db.models import AIMemoryModel, ContextSnippetModel, ProjectModel
 from app.infrastructure.security.credential_manager import CredentialManager
+
+
+def _find_all_occurrences(
+    content: str,
+    needle: str,
+    normalize_whitespace: bool = False,
+) -> list[tuple[int, int]]:
+    """Encuentra todas las ocurrencias de needle en content.
+    Si normalize_whitespace=True, colapsa espacios/tabs antes de comparar."""
+    if not needle:
+        return []
+
+    if normalize_whitespace:
+
+        def _collapse(s: str) -> str:
+            return " ".join(s.split())
+
+        search_in = _collapse(content)
+        search_for = _collapse(needle)
+    else:
+        search_in = content
+        search_for = needle
+
+    occurrences: list[tuple[int, int]] = []
+    start = 0
+    while True:
+        idx = search_in.find(search_for, start)
+        if idx == -1:
+            break
+        if normalize_whitespace:
+            original_start = _map_back(content, idx, len(search_for))
+        else:
+            original_start = idx
+        occurrences.append((original_start, original_start + len(needle)))
+        start = idx + 1
+    return occurrences
+
+
+def _map_back(original: str, collapsed_idx: int, needle_len: int) -> int:
+    """Mapea un índice del texto colapsado al texto original."""
+    collapsed_pos = 0
+    for i, ch in enumerate(original):
+        if collapsed_pos >= collapsed_idx:
+            return i
+        if ch not in (" ", "\t", "\n", "\r"):
+            collapsed_pos += 1
+        elif collapsed_pos > 0 and original[i - 1] not in (" ", "\t", "\n", "\r"):
+            collapsed_pos += 1
+    return len(original)
+
+
+def _disambiguate(
+    content: str,
+    candidates: list[tuple[int, int]],
+    context_before: str | None,
+    context_after: str | None,
+) -> list[tuple[int, int]]:
+    """Filtra candidatos que tengan el contexto antes y/o después."""
+    result = []
+    for start, end in candidates:
+        before_ok = True
+        after_ok = True
+        if context_before:
+            before_region = content[max(0, start - 200):start].rstrip("\n")
+            before_ok = before_region.endswith(context_before.rstrip("\n"))
+        if context_after:
+            after_region = content[end:end + 200].lstrip("\n")
+            after_ok = after_region.startswith(context_after.lstrip("\n"))
+        if before_ok and after_ok:
+            result.append((start, end))
+    return result
 
 
 class AIAgent:
@@ -102,7 +175,7 @@ class AIAgent:
                 "type": "function",
                 "function": {
                     "name": "read_local_file",
-                    "description": "Reads the content of a file within the project. Returns the first 2000 characters.",
+                    "description": "Reads the content of a file within the project. Returns a JSON object with 'content' (first 2000 chars), 'file_hash' (SHA256 — REQUIRED for propose_code_edit), 'file_path', and 'total_length'. Always use this BEFORE calling propose_code_edit to get the exact file content and hash.",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -226,9 +299,63 @@ class AIAgent:
                     },
                 },
             },
+            {
+                "type": "function",
+                "function": {
+                    "name": "check_developer_vital_signs",
+                    "description": "Lee las métricas de telemetría del desarrollador (Deep Flow, Fricción, Ratio de Oro) para diagnosticar su estado de productividad y detectar bloqueos.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {},
+                        "required": [],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "propose_code_edit",
+                    "description": "Propone una edición quirúrgica a un archivo usando el patrón Search-and-Replace. NUNCA reescribas el archivo entero. Usá read_local_file primero para obtener el contenido exacto y el file_hash. Copiá TEXTUALMENTE el bloque a reemplazar. Si old_code tiene menos de 3 líneas, DEBÉS proporcionar context_before y context_after.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "file_path": {
+                                "type": "string",
+                                "description": "Ruta relativa al archivo a editar, ej. 'src/components/InsightDashboard.tsx'",
+                            },
+                            "original_file_hash": {
+                                "type": "string",
+                                "description": "El SHA256 hash del archivo obtenido de read_local_file. Obligatorio para prevenir corrupción por ediciones concurrentes.",
+                            },
+                            "old_code": {
+                                "type": "string",
+                                "description": "El bloque EXACTO de código a reemplazar, copiado textualmente del archivo. Debe incluir la indentación original. Incluí 2-3 líneas extra de contexto alrededor del cambio puntual para garantizar coincidencia única. Si el bloque tiene menos de 3 líneas, DEBÉS proporcionar context_before y context_after.",
+                            },
+                            "new_code": {
+                                "type": "string",
+                                "description": "El nuevo código que reemplazará al bloque viejo. Debe mantener la misma indentación que old_code.",
+                            },
+                            "context_before": {
+                                "type": "string",
+                                "description": "1-2 líneas ÚNICAS que aparecen INMEDIATAMENTE ANTES del bloque. OBLIGATORIO si old_code tiene menos de 3 líneas o si el bloque puede aparecer múltiples veces.",
+                            },
+                            "context_after": {
+                                "type": "string",
+                                "description": "1-2 líneas ÚNICAS que aparecen INMEDIATAMENTE DESPUÉS del bloque. OBLIGATORIO si old_code tiene menos de 3 líneas o si el bloque puede aparecer múltiples veces.",
+                            },
+                            "description": {
+                                "type": "string",
+                                "description": "Descripción corta del cambio para el mensaje del diff, ej. 'Cambiar color del botón principal a rojo'",
+                            },
+                        },
+                        "required": ["file_path", "original_file_hash", "old_code", "new_code", "description"],
+                    },
+                },
+            },
         ]
 
         self._project_root: str | None = None
+        self._pending_proposals: list[dict[str, Any]] = []
 
     async def _handle_tool_call(self, tool_call: Any) -> str:
         """Executes a requested tool call and returns a string response."""
@@ -347,7 +474,16 @@ class AIAgent:
 
                 try:
                     content = target.read_text(encoding="utf-8", errors="ignore")
-                    return content[:2000] + ("...(truncated)" if len(content) > 2000 else "")
+                    file_hash = hashlib.sha256(content.encode()).hexdigest()
+                    truncated = content[:2000] + (
+                        "...(truncated)" if len(content) > 2000 else ""
+                    )
+                    return json.dumps({
+                        "content": truncated,
+                        "file_hash": file_hash,
+                        "file_path": file_path,
+                        "total_length": len(content),
+                    })
                 except FileNotFoundError:
                     return f"Error: File not found — {file_path}"
                 except Exception as e:
@@ -387,6 +523,163 @@ class AIAgent:
                 # In a real implementation, we would call the search service here.
                 # Here we just simulate retrieving context for the query.
                 return f"<contexto_ast>\n<ecosistema>\n# Ecosystem for {query}\n</ecosistema>\n<firmas_hermanas>\n# Firmas\n</firmas_hermanas>\n<codigo_objetivo>\n# Target code\n</codigo_objetivo>\n</contexto_ast>"
+
+            elif name == "check_developer_vital_signs":
+                result = await session.execute(
+                    text("""
+                        SELECT
+                            COALESCE(SUM(thinking_ms + coding_ms + testing_ms), 0) as total_ms,
+                            COUNT(*) as ping_count,
+                            COUNT(CASE WHEN thinking_ms + coding_ms + testing_ms = 0 THEN 1 END) as idle_pings
+                        FROM telemetry_pings
+                        WHERE timestamp >= datetime('now', '-30 minutes')
+                    """)
+                )
+                row = result.fetchone()
+                if not row:
+                    return "No hay datos de telemetría disponibles."
+
+                total_ms = row[0] or 0
+                ping_count = row[1] or 0
+                idle_pings = row[2] or 0
+                total_min = round(total_ms / 60000.0, 1)
+                deep_flow_hrs = round(total_ms / 3600000.0, 2)
+                idle_ratio = round((idle_pings / ping_count * 100), 1) if ping_count > 0 else 0.0
+
+                if ping_count == 0:
+                    return "Sin actividad registrada en los últimos 30 minutos."
+
+                status = "productivo"
+                if idle_ratio > 60:
+                    status = "distraído"
+                if total_min < 15 and idle_pings >= 5:
+                    status = "bloqueado"
+
+                return json.dumps({
+                    "ventana": "30 minutos",
+                    "deep_flow_horas": deep_flow_hrs,
+                    "actividad_total_minutos": total_min,
+                    "pings_inactivos": idle_pings,
+                    "ratio_inactividad_pct": idle_ratio,
+                    "diagnostico": status,
+                })
+
+            elif name == "propose_code_edit":
+                file_path = args.get("file_path", "")
+                original_file_hash = args.get("original_file_hash", "")
+                old_code = args.get("old_code", "")
+                new_code = args.get("new_code", "")
+                context_before = args.get("context_before")
+                context_after = args.get("context_after")
+                description = args.get("description", "Sin descripción")
+
+                if not file_path or not old_code or not new_code:
+                    return "Error: file_path, old_code y new_code son requeridos."
+
+                old_line_count = len(old_code.strip().split("\n"))
+                if old_line_count < 3 and not (context_before or context_after):
+                    return (
+                        "Error: old_code tiene menos de 3 líneas. "
+                        "DEBÉS proporcionar context_before y/o context_after "
+                        "para desambiguar el bloque a reemplazar."
+                    )
+
+                root = await self._get_project_root()
+                if not root:
+                    return "Error: No hay proyecto cargado."
+
+                target = Path(file_path)
+                if not target.is_absolute():
+                    target = Path(root) / file_path
+                target = target.resolve()
+
+                if not target.is_relative_to(root):
+                    return "Error: Acceso denegado — el archivo está fuera del proyecto."
+
+                try:
+                    content = target.read_text(encoding="utf-8", errors="ignore")
+                except FileNotFoundError:
+                    return f"Error: Archivo no encontrado — {file_path}"
+                except Exception as e:
+                    return f"Error al leer el archivo: {str(e)}"
+
+                matches = _find_all_occurrences(content, old_code)
+
+                if not matches:
+                    stripped_old = old_code.strip()
+                    stripped_content = content
+                    matches = _find_all_occurrences(
+                        stripped_content,
+                        stripped_old,
+                        normalize_whitespace=True,
+                    )
+                    if not matches:
+                        return (
+                            "Error: No se encontró el bloque old_code en el archivo. "
+                            "Asegurate de copiarlo EXACTAMENTE como aparece en el archivo, "
+                            "incluyendo indentación. Usá read_local_file para verificarlo."
+                        )
+
+                if len(matches) > 1:
+                    if context_before or context_after:
+                        matches = _disambiguate(
+                            content, matches, context_before, context_after
+                        )
+                        if not matches:
+                            return (
+                                "Error: El bloque aparece múltiples veces y los contextos "
+                                "proporcionados no coinciden con ninguna ocurrencia. "
+                                "Revisá context_before y context_after."
+                            )
+                        if len(matches) > 1:
+                            return (
+                                f"Error: El bloque aparece {len(matches)} veces incluso "
+                                "con los contextos dados. Proporcioná más contexto único "
+                                "en context_before o context_after."
+                            )
+                    else:
+                        return (
+                            f"Error: old_code aparece {len(matches)} veces en el archivo. "
+                            "Usá context_before y/o context_after con 1-2 líneas ÚNICAS "
+                            "adyacentes al bloque que querés cambiar."
+                        )
+
+                match_start, match_end = matches[0]
+                new_file_content = content[:match_start] + new_code + content[match_end:]
+
+                diff = "".join(
+                    difflib.unified_diff(
+                        content.splitlines(keepends=True),
+                        new_file_content.splitlines(keepends=True),
+                        fromfile=str(file_path),
+                        tofile=str(file_path),
+                    )
+                )
+
+                proposal_id = str(uuid4())
+                proposal = {
+                    "id": proposal_id,
+                    "file_path": file_path,
+                    "absolute_path": str(target),
+                    "original_file_hash": original_file_hash,
+                    "old_code": old_code,
+                    "new_code": new_code,
+                    "new_file_content": new_file_content,
+                    "description": description,
+                    "diff": diff,
+                }
+                _proposals_store[proposal_id] = proposal
+                self._pending_proposals.append(proposal)
+
+                return json.dumps(
+                    {
+                        "status": "propuesta_creada",
+                        "proposal_id": proposal_id,
+                        "file": file_path,
+                        "descripcion": description,
+                        "diff": diff,
+                    }
+                )
 
         return "Unknown tool."
 
@@ -435,6 +728,77 @@ class AIAgent:
     def _get_provider(self, model: str) -> str:
         return ProviderAdapter.get_provider(model)
 
+    async def _prune_messages(
+        self,
+        messages: list[dict[str, Any]],
+        model: str,
+        api_key: str | None,
+    ) -> list[dict[str, Any]]:
+        """Memory pruning: summarizer for >15 messages, sliding window fallback.
+
+        Conserva el system prompt original + los últimos 3 mensajes crudos.
+        Los mensajes intermedios se comprimen en un resumen vía el mismo LLM.
+        Si el summarizer falla, aplica sliding window de 20 mensajes.
+        """
+        THRESHOLD = 15
+        KEEP_LAST = 3
+        MAX_FALLBACK = 20
+
+        if len(messages) <= THRESHOLD:
+            return messages
+
+        system_msg = messages[0] if messages[0].get("role") == "system" else None
+        start = 1 if system_msg else 0
+        to_summarize = messages[start:-KEEP_LAST]
+        recent = messages[-KEEP_LAST:]
+
+        try:
+            summary_input = "\n".join(
+                f"[{m.get('role', '?')}]: {str(m.get('content', ''))[:400]}"
+                for m in to_summarize
+            )
+
+            response = await litellm.acompletion(
+                model=model,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": (
+                            "Resumí esta conversación técnica en 3-5 viñetas concisas. "
+                            "Capturá decisiones, reglas de negocio y contexto técnico relevante. "
+                            "Respondé SOLO con las viñetas, sin introducción.\n\n"
+                            f"{summary_input}"
+                        ),
+                    }
+                ],
+                api_key=api_key,
+                max_tokens=250,
+            )
+            summary = response.choices[0].message.content
+            if not summary:
+                raise ValueError("Empty summary")
+
+            rebuilt: list[dict[str, Any]] = []
+            if system_msg:
+                rebuilt.append(system_msg)
+            rebuilt.append(
+                {"role": "system", "content": f"[RESUMEN DE CONVERSACIÓN PREVIA]\n{summary}"}
+            )
+            rebuilt.extend(recent)
+            return rebuilt
+
+        except Exception:
+            import logging
+
+            _logger = logging.getLogger(__name__)
+            _logger.debug("Summarizer failed, falling back to sliding window")
+
+            if len(messages) <= MAX_FALLBACK:
+                return messages
+            if system_msg:
+                return [system_msg] + messages[-(MAX_FALLBACK - 1):]
+            return messages[-MAX_FALLBACK:]
+
     async def chat_stream(self, messages: list[dict[str, Any]], model: str):
         """
         Processes a chat conversation via streaming, yielding SSE strings for transparency.
@@ -457,6 +821,15 @@ class AIAgent:
                 ]
 
             adapted = ProviderAdapter.adapt(model, api_key)
+
+            yield json.dumps({"type": "agent_state", "status": "Analizando contexto..."})
+
+            if len(messages) > 15:
+                yield json.dumps(
+                    {"type": "agent_state", "status": "Comprimiendo memoria a largo plazo..."}
+                )
+
+            messages = await self._prune_messages(messages, adapted["model"], adapted["api_key"])
 
             yield json.dumps({"type": "agent_state", "status": "Pensando..."})
 
@@ -560,6 +933,19 @@ class AIAgent:
                         }
                     )
 
+                # Emit pending code proposals as SSE events
+                for proposal in self._pending_proposals:
+                    yield json.dumps(
+                        {
+                            "type": "code_proposal",
+                            "id": proposal["id"],
+                            "file_path": proposal["file_path"],
+                            "description": proposal["description"],
+                            "diff": proposal["diff"],
+                        }
+                    )
+                self._pending_proposals.clear()
+
                 if tool_calls_count >= MAX_TOOL_CALLS:
                     # Circuit breaker triggered
                     messages.append(
@@ -611,3 +997,6 @@ class AIAgent:
         raise TypeError(
             f"AIAgent.project_id must be UUID, str, or None; got {type(value).__name__}"
         )
+
+
+_proposals_store: dict[str, dict[str, Any]] = {}

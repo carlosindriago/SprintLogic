@@ -4,7 +4,8 @@ import {
   FileTreeNode,
   CommitDetails,
   Task,
-  ProjectInsights,
+  ProjectRepoInsights,
+  ProjectFlowInsights,
   GitStatus
 } from '../types';
 
@@ -243,7 +244,9 @@ export const deleteProviderKey = (provider: string) => api.delete<{ status: stri
 export const getCuratedModels = () => api.get<CuratedProvider[]>('/ai/models');
 
 // --- AI / Analysis ---
-export const getProjectInsights = (projectId: string) => api.get<ProjectInsights>(`/projects/${projectId}/insights/repo`);
+export const getGlobalFlowInsights = () => api.get<ProjectFlowInsights>('/insights/flow');
+export const getProjectFlowInsights = (projectId: string) => api.get<ProjectFlowInsights>(`/projects/${projectId}/insights/flow`);
+export const getProjectRepoInsights = (projectId: string) => api.get<ProjectRepoInsights>(`/projects/${projectId}/insights/repo`);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const analyzeProject = (projectId: string) => api.post<any>(`/projects/${projectId}/analyze`);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

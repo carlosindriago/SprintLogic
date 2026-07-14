@@ -5,6 +5,7 @@ import { KeyRound, Cpu, Send, Loader2, Terminal } from "lucide-react";
 import { useLLMConfigStore } from "@/store/llmConfigStore";
 import { useChatStore } from "@/store/chatStore";
 import DraftReviewer from "./DraftReviewer";
+import ProposalCard from "./ProposalCard";
 import { API_BASE_URL } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { MarkdownLink } from "./MarkdownLink";
@@ -43,6 +44,9 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [usage, setUsage] = useState<{ completion_tokens?: number; total_tokens?: number } | null>(null);
+  const [proposals, setProposals] = useState<
+    { id: string; filePath: string; description: string; diff: string }[]
+  >([]);
   const [availableModels, setAvailableModels] = useState<{
     provider: string;
     provider_id: string;
@@ -170,6 +174,20 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
           if (line.startsWith("data: ")) {
             try {
               const parsed = JSON.parse(line.slice(6));
+
+              if (parsed.type === "code_proposal") {
+                setProposals((prev) => [
+                  ...prev,
+                  {
+                    id: parsed.id,
+                    filePath: parsed.file_path,
+                    description: parsed.description,
+                    diff: parsed.diff,
+                  },
+                ]);
+                continue;
+              }
+
               // eslint-disable-next-line react-hooks/immutability
               if (parsed.error) streamBuffer.isError = true;
               if (parsed.text !== undefined) {
@@ -353,6 +371,17 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
               <div className="whitespace-pre-wrap">{m.content}</div>
             )}
           </div>
+        ))}
+
+        {proposals.map((p) => (
+          <ProposalCard
+            key={p.id}
+            id={p.id}
+            projectId={projectId ?? ''}
+            filePath={p.filePath}
+            description={p.description}
+            diff={p.diff}
+          />
         ))}
 
         {loading && (
