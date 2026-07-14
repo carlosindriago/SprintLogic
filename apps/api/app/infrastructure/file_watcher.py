@@ -193,7 +193,7 @@ class FileWatcherService:
         if not os.path.exists(path):
             raise ValueError(f"Path does not exist: {path}")
 
-        queue = asyncio.Queue()
+        queue: asyncio.Queue = asyncio.Queue()
         self._queues[project_id] = queue
 
         watch_task = asyncio.create_task(self._watch_loop(project_id, path))

@@ -475,7 +475,7 @@ class AIAgent:
                 )
 
                 full_content = ""
-                tool_calls_accum = []
+                tool_calls_accum: list[dict[str, Any]] = []
 
                 async for chunk in response:
                     delta = chunk.choices[0].delta
