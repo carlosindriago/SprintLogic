@@ -38,9 +38,10 @@ engine = create_async_engine(
 def _set_sqlite_pragmas(dbapi_connection, _connection_record):
     """Enable WAL mode, NORMAL sync, and load extensions."""
     # Load sqlite-vec extension directly on the raw sqlite3 connection
-    dbapi_connection.enable_load_extension(True)
-    dbapi_connection.load_extension(sqlite_vec.loadable_path())
-    dbapi_connection.enable_load_extension(False)
+    raw_sqlite3 = dbapi_connection._connection._conn
+    raw_sqlite3.enable_load_extension(True)
+    raw_sqlite3.load_extension(sqlite_vec.loadable_path())
+    raw_sqlite3.enable_load_extension(False)
 
     cursor = dbapi_connection.cursor()
     cursor.execute("PRAGMA journal_mode=WAL")
