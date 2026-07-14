@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/set-state-in-effect */
 "use client";
 
 import dynamic from "next/dynamic";
@@ -6,21 +5,35 @@ import { useEffect, useState, useRef, ComponentType, useMemo, useCallback, useLa
 import * as THREE from "three";
 import { getProjectGraph } from "@/lib/api";
 import { API_BASE_URL } from "@/lib/api";
-import { GraphData, GraphNode } from "@/types";
+import { GraphData, GraphNode, GraphEdge } from "@/types";
 import { ForceGraphProps, NodeObject, LinkObject } from "react-force-graph-2d";
 import { graphTheme } from "@/lib/graph-theme";
 import { Search, RotateCcw, ZoomIn, ZoomOut, Maximize, Brain, AlertTriangle, Play, Pause, Zap, ZapOff, Box, Layers, ScanSearch, FileCode } from "lucide-react";
 import { useTabsStore } from "../store/tabsStore";
 import { useLLMConfigStore } from "../store/llmConfigStore";
 
+interface ForceNode extends GraphNode {
+  x?: number;
+  y?: number;
+  z?: number;
+  vx?: number;
+  vy?: number;
+  vz?: number;
+}
+
+interface ForceLink extends GraphEdge {
+  source: string | ForceNode;
+  target: string | ForceNode;
+}
+
 // Dynamically import react-force-graph to avoid SSR issues
-const ForceGraph2D = dynamic<any>(
-  () => import("react-force-graph-2d").then((mod) => mod.default as any),
+const ForceGraph2D = dynamic(
+  () => import("react-force-graph-2d"),
   { ssr: false }
 );
 
-const ForceGraph3D = dynamic<any>(
-  () => import("react-force-graph-3d").then((mod) => mod.default as any),
+const ForceGraph3D = dynamic(
+  () => import("react-force-graph-3d"),
   { ssr: false }
 );
  
@@ -51,6 +64,7 @@ interface GraphSceneProps {
 export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) {
   const [graphData, setGraphData] = useState<GraphData>({ nodes: [], links: [] });
   const containerRef = useRef<HTMLDivElement>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- force-graph MutableRefObject generics incompatible
   const fgRef = useRef<any>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
  
@@ -67,7 +81,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
   
   const lastClickTimeRef = useRef<number>(0);
   const initialFitDone = useRef(false);
-  const [contextMenu, setContextMenu] = useState<{ visible: boolean, x: number, y: number, node: any } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ visible: boolean; x: number; y: number; node: ForceNode } | null>(null);
 
   useEffect(() => {
     const handleClick = () => setContextMenu(null);
@@ -929,6 +943,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
         )}
 
         {is3D ? (
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             <ForceGraph3D
               ref={fgRef}
               width={dimensions.width || 800}
@@ -974,10 +989,9 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
               });
             }}
             onNodeHover={(node: any) => setHoverNode(node ? (node.id as string) : null)}
-            enableZoomInteraction={true}
-            enableNavigationControls={true}
           />
         ) : (
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           <ForceGraph2D
             ref={fgRef}
             width={dimensions.width || 800}
