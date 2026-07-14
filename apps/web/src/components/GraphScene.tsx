@@ -489,18 +489,22 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     let radius = 3;
     let color = graphTheme.unknown;
 
+    const degree = (n.in_degree || 0) + (n.out_degree || 0);
+    const degreeRadius = 1 + Math.log2(1 + degree) * 1.6;
+
     if (label === "File") {
       const size = (n.size as number) || 0;
       radius = Math.min(Math.max(size / 2000, 4), 10);
+      radius = Math.max(radius, degreeRadius);
       color = graphTheme.file;
     } else if (label === "Class") {
-      radius = 5;
+      radius = Math.max(5, degreeRadius);
       color = graphTheme.class;
     } else if (label === "Function") {
-      radius = 4;
+      radius = Math.max(4, degreeRadius);
       color = graphTheme.function;
     } else if (label === "Interface") {
-      radius = 5;
+      radius = Math.max(5, degreeRadius);
       color = graphTheme.interface;
     }
 
