@@ -101,6 +101,11 @@ if not next_assets_dir.exists():
 # Mount Next.js _next assets explicitly to ensure they are served correctly
 app.mount("/_next", StaticFiles(directory=str(next_assets_dir)), name="next_assets")
 
+# Catch-all for API routes BEFORE mounting StaticFiles to prevent returning Next.js 404.html
+@app.api_route("/api/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
+async def api_catch_all(request, path: str):
+    return JSONResponse({"detail": "Not Found"}, status_code=404)
+
 # Mount root static files (HTML, favicon, etc)
 app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="static")
 
