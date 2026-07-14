@@ -1120,7 +1120,8 @@ async def apply_proposal(project_id: str, proposal_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to apply: {str(e)}")
+        logger.error("Failed to apply proposal: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.post("/projects/{project_id}/proposals/{proposal_id}/reject")
