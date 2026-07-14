@@ -2,9 +2,10 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useState, useRef, ComponentType, useMemo, useCallback } from "react";
+import { useEffect, useState, useRef, ComponentType, useMemo, useCallback, useLayoutEffect } from "react";
 import * as THREE from "three";
-import { getProjectGraph, analyzeProjectGraph } from "@/lib/api";
+import { getProjectGraph } from "@/lib/api";
+import { API_BASE_URL } from "@/lib/api";
 import { GraphData, GraphNode } from "@/types";
 import { ForceGraphProps, NodeObject, LinkObject } from "react-force-graph-2d";
 import { graphTheme } from "@/lib/graph-theme";
@@ -65,6 +66,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
   const [glowingLinks, setGlowingLinks] = useState<Set<string>>(new Set());
   
   const lastClickTimeRef = useRef<number>(0);
+  const initialFitDone = useRef(false);
   const [contextMenu, setContextMenu] = useState<{ visible: boolean, x: number, y: number, node: any } | null>(null);
 
   useEffect(() => {
@@ -109,6 +111,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
   }, [textureLoader]);
 
   const [analyzing, setAnalyzing] = useState(false);
+  const [analyzingText, setAnalyzingText] = useState("");
   const [savedAnalysis, setSavedAnalysis] = useState<string | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
   
@@ -169,29 +172,62 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
   const handleAnalyze = async () => {
     if (!projectId) return;
     setAnalyzing(true);
+    setAnalyzingText("");
     try {
       const defaultModel = useLLMConfigStore.getState().analysisDefaultModel;
       const fallbackModel = useLLMConfigStore.getState().analysisFallbackModel;
-      
-      const result = await analyzeProjectGraph(
-        projectId, 
-        defaultModel,
-        fallbackModel === 'none' || fallbackModel === '' ? undefined : fallbackModel
-      );
-      
-      // Save analysis and current signature
-      localStorage.setItem(`graph_analysis_${projectId}`, result);
-      localStorage.setItem(`graph_analysis_sig_${projectId}`, currentSignature);
-      
-      setSavedAnalysis(result);
-      setHasChanges(false);
-      
-      addTab({ id: 'ai-history', title: 'Historial IA', type: 'ai-history' });
+
+      const res = await fetch(`${API_BASE_URL}/projects/${projectId}/graph/analyze`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: defaultModel,
+          fallback_model: fallbackModel === 'none' || fallbackModel === '' ? undefined : fallbackModel,
+        }),
+      });
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error("No stream");
+
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let fullText = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              const parsed = JSON.parse(line.slice(6));
+              if (parsed.type === "message_chunk") {
+                fullText += parsed.text;
+                setAnalyzingText(fullText);
+              }
+            } catch { /* skip */ }
+          }
+        }
+      }
+
+      if (fullText) {
+        localStorage.setItem(`graph_analysis_${projectId}`, fullText);
+        localStorage.setItem(`graph_analysis_sig_${projectId}`, currentSignature);
+        setSavedAnalysis(fullText);
+        setHasChanges(false);
+        addTab({ id: 'ai-history', title: 'Historial IA', type: 'ai-history' });
+      }
     } catch (err) {
       console.error(err);
       alert("Error al analizar el grafo con IA");
     } finally {
       setAnalyzing(false);
+      setAnalyzingText("");
     }
   };
 
@@ -264,18 +300,39 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     });
   };
 
-  useEffect(() => {
-    const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        setDimensions({
-          width: entry.contentRect.width,
-          height: entry.contentRect.height,
-        });
+  useLayoutEffect(() => {
+    if (containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        setDimensions({ width: rect.width, height: rect.height });
       }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    let rafId: number;
+    const observer = new ResizeObserver((entries) => {
+      cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        for (const entry of entries) {
+          const w = entry.contentRect.width;
+          const h = entry.contentRect.height;
+          if (w > 0 && h > 0) {
+            setDimensions((prev) =>
+              prev.width === w && prev.height === h ? prev : { width: w, height: h }
+            );
+          }
+        }
+      });
     });
 
-    if (containerRef.current) observer.observe(containerRef.current);
-    return () => observer.disconnect();
+    observer.observe(containerRef.current);
+    return () => {
+      observer.disconnect();
+      cancelAnimationFrame(rafId);
+    };
   }, []);
 
   useEffect(() => {
@@ -296,10 +353,12 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     return () => { active = false; };
   }, [projectId]);
 
+  const prevIs3D = useRef(is3D);
+
   useEffect(() => {
-    // Whenever we toggle between 2D and 3D, clear all coordinates
-    // so the physics engine rebuilds the layout perfectly for the new dimension
-    // instead of inheriting the previous flattened or extruded layout.
+    if (prevIs3D.current === is3D) return;
+    prevIs3D.current = is3D;
+
     if (graphData && graphData.nodes) {
       graphData.nodes.forEach((n: any) => {
          delete n.x;
@@ -310,27 +369,34 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
          delete n.vz;
       });
     }
-  }, [graphData, is3D]);
+  }, [is3D]);
+
+  const hasGraphData = useMemo(
+    () => graphData && graphData.nodes && graphData.nodes.length > 0,
+    [graphData]
+  );
 
   useEffect(() => {
-    // Configure D3 Force layout for a "solar system" spread
-    if (fgRef.current && dimensions.width > 0 && dimensions.height > 0) {
-      fgRef.current.d3Force('charge').strength(-1000); // Much stronger repulsion to spread nodes out
-      fgRef.current.d3Force('link').distance((link: any) => {
-        // File-to-File (imports) are pushed far apart, internal classes orbit closely
-        return link.type === 'IMPORTS' ? 240 : 80;
-      });
-      fgRef.current.d3ReheatSimulation();
-      
-      // Give physics a moment to push nodes apart, then fit the camera
-      const timer = setTimeout(() => {
-        if (fgRef.current) {
-          fgRef.current.zoomToFit(1000, 150);
-        }
-      }, 1200);
-      return () => clearTimeout(timer);
-    }
-  }, [graphData, is3D, dimensions.width, dimensions.height]);
+    if (!fgRef.current || dimensions.width === 0) return;
+
+    fgRef.current.d3Force('charge').strength(-400);
+    fgRef.current.d3Force('link').distance((link: any) => {
+      return link.type === 'IMPORTS' ? 300 : 120;
+    });
+  }, [dimensions.width]);
+
+  useEffect(() => {
+    if (!fgRef.current || !hasGraphData) return;
+    if (dimensions.width === 0) return;
+
+    initialFitDone.current = false;
+
+    fgRef.current.d3Force('charge').strength(-400);
+    fgRef.current.d3Force('link').distance((link: any) => {
+      return link.type === 'IMPORTS' ? 300 : 120;
+    });
+    fgRef.current.d3ReheatSimulation();
+  }, [hasGraphData, is3D]);
 
   useEffect(() => {
     if (!enableFlow || !is3D || !graphData || !graphData.links) {
@@ -653,7 +719,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
   };
 
   return (
-    <div className="flex-1 w-full flex flex-col relative" style={{ backgroundColor: graphTheme.background }}>
+    <div className="flex-1 w-full flex flex-col relative min-h-0" style={{ backgroundColor: graphTheme.background }}>
       {/* Controls Overlay */}
       <div className="absolute top-4 left-4 z-10 flex flex-col gap-3 p-4 rounded-lg shadow-lg" 
            style={{ backgroundColor: graphTheme.surfaceElevated, border: `1px solid ${graphTheme.border}` }}>
@@ -759,6 +825,11 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
               <Brain className="w-3.5 h-3.5" />
               {analyzing ? "Analizando..." : "Análisis IA del Grafo"}
             </button>
+            {analyzing && analyzingText && (
+              <div className="max-h-32 overflow-y-auto text-[11px] text-zinc-400 leading-relaxed bg-[#0a0a0a] rounded-md p-2 border border-[#3f3f46]">
+                {analyzingText.slice(-500)}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -813,7 +884,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
         </button>
       </div>
 
-      <div ref={containerRef} className="flex-1 w-full">
+      <div ref={containerRef} className="flex-1 w-full min-h-0 z-0">
         {contextMenu && contextMenu.visible && (
           <div 
             className="fixed z-50 bg-[#18181b] border border-[#3f3f46] rounded-md shadow-xl py-1 w-48 text-sm overflow-hidden"
@@ -857,12 +928,11 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
           </div>
         )}
 
-        {dimensions.width > 0 && dimensions.height > 0 && (
-          is3D ? (
+        {is3D ? (
             <ForceGraph3D
               ref={fgRef}
-              width={dimensions.width}
-              height={dimensions.height}
+              width={dimensions.width || 800}
+              height={dimensions.height || 600}
               graphData={displayGraphData}
             backgroundColor={graphTheme.background}
             nodeThreeObject={getNodeThreeObject}
@@ -910,8 +980,8 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
         ) : (
           <ForceGraph2D
             ref={fgRef}
-            width={dimensions.width}
-            height={dimensions.height}
+            width={dimensions.width || 800}
+            height={dimensions.height || 600}
             graphData={displayGraphData}
             backgroundColor={graphTheme.background}
             nodeCanvasObject={paintNode}
@@ -964,8 +1034,13 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
             onNodeHover={(node: any) => setHoverNode(node ? (node.id as string) : null)}
             enableZoomInteraction={true}
             enablePanInteraction={true}
+            onEngineStop={() => {
+              if (fgRef.current && !initialFitDone.current) {
+                initialFitDone.current = true;
+                fgRef.current.zoomToFit(800, 100);
+              }
+            }}
           />
-          )
         )}
       </div>
     </div>

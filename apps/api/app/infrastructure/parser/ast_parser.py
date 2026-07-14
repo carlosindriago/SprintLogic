@@ -199,7 +199,9 @@ def extract_nodes_from_code(project_id: UUID, file_path: str, code: bytes, ext: 
             label=NodeLabel.FILE,
             name=os.path.basename(file_path),
             file_path=file_path,
-            meta_data=json.dumps({"start_line": 1, "end_line": len(lines)})
+            meta_data=json.dumps({"start_line": 1, "end_line": len(lines)}),
+            file_size=len(code),
+            loc=len(lines),
         )
     )
 

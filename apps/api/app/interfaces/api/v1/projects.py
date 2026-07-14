@@ -223,44 +223,15 @@ async def get_project_graph(project_id: str, session: AsyncSession = Depends(get
         out_degree[e.source_id] += 1
         adj[e.source_id].append(e.target_id)
 
-    # Tarjan's SCC to find cycles
-    index_counter = [0]
-    index = {}
-    lowlink = {}
-    stack = []
-    on_stack = set()
-    sccs = []
+    # NetworkX SCC — O(V+E) linear time, iterative, no stack overflow
+    import networkx as nx
 
-    def strongconnect(v):
-        index[v] = index_counter[0]
-        lowlink[v] = index_counter[0]
-        index_counter[0] += 1
-        stack.append(v)
-        on_stack.add(v)
+    G = nx.DiGraph()  # type: ignore[var-annotated]
+    for e in filtered_edges:
+        G.add_edge(e.source_id, e.target_id)
 
-        for w in adj[v]:
-            if w not in index:
-                strongconnect(w)
-                lowlink[v] = min(lowlink[v], lowlink[w])
-            elif w in on_stack:
-                lowlink[v] = min(lowlink[v], index[w])
-
-        if lowlink[v] == index[v]:
-            scc = set()
-            while True:
-                w = stack.pop()
-                on_stack.remove(w)
-                scc.add(w)
-                if w == v:
-                    break
-            sccs.append(scc)
-
-    for v in adj:
-        if v not in index:
-            strongconnect(v)
-
-    node_to_scc = {}
-    for i, scc in enumerate(sccs):
+    node_to_scc: dict[str, int] = {}
+    for i, scc in enumerate(nx.strongly_connected_components(G)):
         if len(scc) > 1:
             for v in scc:
                 node_to_scc[v] = i
@@ -285,13 +256,8 @@ async def get_project_graph(project_id: str, session: AsyncSession = Depends(get
             "out_degree": out_degree.get(n.id, 0),
         }
         if label_val == "File":
-            try:
-                node_dict["size"] = os.path.getsize(n.file_path)
-                with open(n.file_path, encoding="utf-8") as f:
-                    node_dict["loc"] = sum(1 for _ in f)
-            except Exception:
-                node_dict["size"] = 1000  # default fallback
-                node_dict["loc"] = 0
+            node_dict["size"] = n.file_size or 1000
+            node_dict["loc"] = n.loc or 0
         nodes_dict.append(node_dict)
 
     links_dict = []
@@ -342,43 +308,54 @@ async def analyze_project_graph(
         raise HTTPException(status_code=400, detail="Invalid project ID format")
 
     try:
-        from app.application.scan_codebase import ScanCodebaseUseCase
-        from app.infrastructure.llm.litellm_gateway import LiteLLMGateway
-        from app.infrastructure.parser.strategies.go_strategy import GoAnalyzerStrategy
-        from app.infrastructure.parser.strategies.java_strategy import JavaAnalyzerStrategy
-        from app.infrastructure.parser.strategies.php_strategy import PhpAnalyzerStrategy
-        from app.infrastructure.parser.strategies.python_strategy import PythonAnalyzerStrategy
-        from app.infrastructure.parser.strategies.typescript_strategy import (
-            TypeScriptAnalyzerStrategy,
+        import networkx as nx
+
+        graph_repo = SQLAlchemyGraphRepository(session)
+        nodes = await graph_repo.get_nodes_by_project(project_uuid)
+        edges = await graph_repo.get_edges_by_project(project_uuid)
+
+        project_path = os.path.abspath(project.path)
+        filtered_nodes = [n for n in nodes if os.path.abspath(n.file_path).startswith(project_path)]
+
+        valid_ids = {n.id for n in filtered_nodes}
+        filtered_edges = [e for e in edges if e.source_id in valid_ids and e.target_id in valid_ids]
+
+        G = nx.DiGraph()  # type: ignore[var-annotated]
+        for n in filtered_nodes:
+            G.add_node(n.id, label=n.label.value if hasattr(n.label, "value") else n.label)
+        for e in filtered_edges:
+            G.add_edge(e.source_id, e.target_id)
+
+        import asyncio as _asyncio
+
+        from app.application.graph_metrics import _compute_graph_metrics_cpu_bound
+
+        nx_edges = [{"source": e.source_id, "target": e.target_id} for e in filtered_edges]
+        metrics = await _asyncio.to_thread(
+            _compute_graph_metrics_cpu_bound,
+            [{"id": n.id, "label": n.label.value if hasattr(n.label, "value") else str(n.label)} for n in filtered_nodes],
+            nx_edges,
         )
 
-        strategies = [
-            GoAnalyzerStrategy(),
-            JavaAnalyzerStrategy(),
-            PhpAnalyzerStrategy(),
-            PythonAnalyzerStrategy(),
-            TypeScriptAnalyzerStrategy(),
-        ]
-
-        usecase = ScanCodebaseUseCase(strategies)
-        scan_data = await usecase.execute(project.path)
+        from app.infrastructure.llm.litellm_gateway import LiteLLMGateway
 
         gateway = LiteLLMGateway(model_name=request.model)
 
         async def event_generator():
             try:
                 async for chunk in gateway.analyze_anomalies_stream(
-                    project.name, project.path, scan_data["metrics"], scan_data["skeletons"]
+                    project.name, project.path, metrics, {}
                 ):
-                    yield chunk
-            except asyncio.CancelledError:
+                    yield f"data: {json.dumps({'type': 'message_chunk', 'text': chunk})}\n\n"
+                yield f"data: {json.dumps({'type': 'done'})}\n\n"
+            except _asyncio.CancelledError:
                 logger.warning("Streaming cancelled by client.")
                 raise
             except Exception as e:
                 logger.error(f"Error streaming LLM response: {e}")
-                raise
+                yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
 
-        return StreamingResponse(event_generator(), media_type="text/plain")
+        return StreamingResponse(event_generator(), media_type="text/event-stream")
 
     except Exception as e:
         logger.error("Analysis failed: %s", e, exc_info=True)

@@ -25,6 +25,8 @@ class GraphNode:
     name: str
     file_path: str
     meta_data: str = "{}"
+    file_size: int | None = None
+    loc: int | None = None
 
 
 @dataclass

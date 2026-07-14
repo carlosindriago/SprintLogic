@@ -41,6 +41,7 @@ build-backend = "setuptools.build_meta"
 dev = [
   "ruff>=0.9.0",
   "mypy>=1.15.0",
+  "types-networkx",
 ]
 
 [tool.ruff]
