@@ -781,7 +781,7 @@ export default function Home() {
                   <DialogHeader>
                     <DialogTitle>Eliminar proyecto</DialogTitle>
                     <DialogDescription className="text-zinc-400">
-                      ¿Estás seguro de que deseas eliminar el proyecto "{deleteConfirm?.name}"?
+                      ¿Estás seguro de que deseas eliminar el proyecto &quot;{deleteConfirm?.name}&quot;?
                       Solo se eliminará de la lista, los archivos en disco no se borrarán.
                     </DialogDescription>
                   </DialogHeader>
