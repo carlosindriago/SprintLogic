@@ -78,12 +78,13 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 
   if (!response.ok) {
     let errorMessage = `HTTP Error ${response.status}`;
+    const responseText = await response.text();
     try {
       // Intentamos extraer el detalle exacto que manda FastAPI en 'detail'
-      const errorData = await response.json();
+      const errorData = JSON.parse(responseText);
       errorMessage = errorData.detail || errorData.message || errorMessage;
     } catch {
-      errorMessage = (await response.text()) || errorMessage;
+      errorMessage = responseText || errorMessage;
     }
     throw new ApiError(response.status, errorMessage);
   }
