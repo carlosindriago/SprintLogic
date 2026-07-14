@@ -6,7 +6,7 @@ def _compute_graph_metrics_cpu_bound(nodes_data: list, edges_data: list) -> dict
     Computes graph metrics deterministically.
     Runs in a separate ProcessPoolExecutor so it doesn't block the Event Loop.
     """
-    G = nx.DiGraph()
+    G = nx.DiGraph()  # type: ignore[var-annotated]
     # Safely extract IDs to avoid unhashable dict error
     G.add_nodes_from(n["id"] for n in nodes_data)
     G.add_edges_from([(e["source"], e["target"]) for e in edges_data])

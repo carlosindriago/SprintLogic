@@ -226,7 +226,7 @@ async def get_project_graph(project_id: str, session: AsyncSession = Depends(get
     # NetworkX SCC — O(V+E) linear time, iterative, no stack overflow
     import networkx as nx
 
-    G = nx.DiGraph()
+    G = nx.DiGraph()  # type: ignore[var-annotated]
     for e in filtered_edges:
         G.add_edge(e.source_id, e.target_id)
 
@@ -320,7 +320,7 @@ async def analyze_project_graph(
         valid_ids = {n.id for n in filtered_nodes}
         filtered_edges = [e for e in edges if e.source_id in valid_ids and e.target_id in valid_ids]
 
-        G = nx.DiGraph()
+        G = nx.DiGraph()  # type: ignore[var-annotated]
         for n in filtered_nodes:
             G.add_node(n.id, label=n.label.value if hasattr(n.label, "value") else n.label)
         for e in filtered_edges:
