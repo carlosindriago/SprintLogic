@@ -5,7 +5,7 @@ from sqlalchemy import text
 
 from app.application.semantic_splitter import SemanticMarkdownSplitter
 from app.infrastructure.ai.vector_engine import VectorEngine
-from app.infrastructure.db.database import AsyncSessionLocal, load_sqlite_vec
+from app.infrastructure.db.database import AsyncSessionLocal
 
 
 class DeltaSyncOrchestrator:
@@ -27,7 +27,6 @@ class DeltaSyncOrchestrator:
         # 1. Comprobación temprana (Early Exit) si el archivo no ha cambiado
         async with AsyncSessionLocal() as session:
             conn = await session.connection()
-            await load_sqlite_vec(conn)
             result = await session.execute(
                 text("SELECT id FROM adr_chunks WHERE filepath = :filepath AND file_hash = :file_hash LIMIT 1"),
                 {"filepath": filepath, "file_hash": file_hash}
@@ -52,7 +51,6 @@ class DeltaSyncOrchestrator:
         # 4. Transacción Atómica "Los Dos Mundos"
         async with AsyncSessionLocal() as session:
             conn = await session.connection()
-            await load_sqlite_vec(conn)
             async with session.begin():
                 # A. Identificar IDs antiguos (rowid) para borrarlos de la tabla virtual
                 result = await session.execute(

@@ -33,7 +33,7 @@ class FileWatcherService:
 
         from sqlalchemy import delete, select
 
-        from app.infrastructure.db.database import AsyncSessionLocal, load_sqlite_vec
+        from app.infrastructure.db.database import AsyncSessionLocal
         from app.infrastructure.db.models import ASTNodeMapModel
         from app.infrastructure.parser.ast_parser import TreeSitterParser
 
@@ -55,7 +55,7 @@ class FileWatcherService:
 
         # 2. EJECUCIÓN: Transacción relámpago
         async with AsyncSessionLocal() as session:
-            await load_sqlite_vec(session)
+            pass
 
             async with session.begin():
                 for filepath, current_fqns in parsed_data.items():

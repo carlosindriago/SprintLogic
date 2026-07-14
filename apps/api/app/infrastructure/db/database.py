@@ -37,6 +37,11 @@ engine = create_async_engine(
 @event.listens_for(engine.sync_engine, "connect")
 def _set_sqlite_pragmas(dbapi_connection, _connection_record):
     """Enable WAL mode, NORMAL sync, and load extensions."""
+    # Load sqlite-vec extension directly on the raw sqlite3 connection
+    dbapi_connection.enable_load_extension(True)
+    dbapi_connection.load_extension(sqlite_vec.loadable_path())
+    dbapi_connection.enable_load_extension(False)
+
     cursor = dbapi_connection.cursor()
     cursor.execute("PRAGMA journal_mode=WAL")
     cursor.execute("PRAGMA synchronous=NORMAL")
@@ -48,28 +53,14 @@ AsyncSessionLocal = async_sessionmaker(
 )
 
 
-async def load_sqlite_vec(conn) -> None:
-    """Helper to load sqlite-vec extension on a specific async connection."""
-    raw = await conn.get_raw_connection()
-    aiosqlite_conn = raw.driver_connection
-    if aiosqlite_conn and not getattr(aiosqlite_conn, "_vec_loaded", False):
-        await aiosqlite_conn.enable_load_extension(True)
-        await aiosqlite_conn.load_extension(sqlite_vec.loadable_path())
-        await aiosqlite_conn.enable_load_extension(False)
-        aiosqlite_conn._vec_loaded = True
-
-
 async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
     async with AsyncSessionLocal() as session:
-        conn = await session.connection()
-        await load_sqlite_vec(conn)
         yield session
 
 
 async def init_fts5() -> None:
     """Create FTS5 virtual tables for search and agent memory."""
     async with engine.begin() as conn:
-        await load_sqlite_vec(conn)
         await conn.execute(
             text(
                 "CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5("
