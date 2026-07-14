@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import JSON, DateTime, ForeignKey, String
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String
 from sqlalchemy import Enum as SQLAlchemyEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -31,6 +31,8 @@ class GraphNodeModel(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     file_path: Mapped[str] = mapped_column(String(1024), nullable=False)
     meta_data: Mapped[str | None] = mapped_column(String, nullable=True)
+    file_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    loc: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
 class GraphEdgeModel(Base):

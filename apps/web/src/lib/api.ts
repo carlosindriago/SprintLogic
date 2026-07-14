@@ -121,10 +121,6 @@ export const deleteProject = (id: string) => api.delete<{ status: string }>(`/pr
 
 // --- Graph ---
 export const getProjectGraph = (projectId: string) => api.get<GraphData>(`/projects/${projectId}/graph`);
-export const analyzeProjectGraph = async (projectId: string, model: string, fallbackModel?: string) => {
-  const data = await api.post<{ analysis: string }>(`/projects/${projectId}/graph/analyze`, { model, fallback_model: fallbackModel });
-  return data.analysis;
-};
 
 // --- Files ---
 export const getProjectFiles = (projectId: string) => api.get<FileTreeNode>(`/projects/${projectId}/files`);

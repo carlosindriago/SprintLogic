@@ -116,6 +116,14 @@ async def init_fts5() -> None:
             )
         except Exception:
             pass  # column already exists
+        # Migration: add file_size and loc to graph_nodes
+        for col in ("file_size", "loc"):
+            try:
+                await conn.execute(
+                    text(f"ALTER TABLE graph_nodes ADD COLUMN {col} INTEGER")
+                )
+            except Exception:
+                pass
         await conn.execute(
             text(
                 "CREATE TABLE IF NOT EXISTS daemon_locks ("

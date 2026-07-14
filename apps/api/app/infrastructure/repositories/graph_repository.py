@@ -20,6 +20,9 @@ class SQLAlchemyGraphRepository(GraphRepository):
                 label=node.label,
                 name=node.name,
                 file_path=node.file_path,
+                meta_data=node.meta_data,
+                file_size=node.file_size,
+                loc=node.loc,
             )
             self.session.add(node_model)
         await self.session.commit()
@@ -51,7 +54,9 @@ class SQLAlchemyGraphRepository(GraphRepository):
         models = result.scalars().all()
         return [
             GraphNode(
-                id=m.id, project_id=m.project_id, label=m.label, name=m.name, file_path=m.file_path
+                id=m.id, project_id=m.project_id, label=m.label, name=m.name,
+                file_path=m.file_path, meta_data=m.meta_data or "{}",
+                file_size=m.file_size, loc=m.loc,
             )
             for m in models
         ]
