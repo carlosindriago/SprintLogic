@@ -89,6 +89,27 @@ class ContextSnippetModel(Base):
     # The actual vectors will be stored in a raw sqlite-vec virtual table `vec_context_snippets`
     # linked by rowid = ContextSnippetModel.id
 
+class ASTNodeMapModel(Base):
+    __tablename__ = "ast_node_map"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    project_id: Mapped[UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    file_path: Mapped[str] = mapped_column(String(1024), nullable=False)
+    fqn: Mapped[str] = mapped_column(String(1024), nullable=False, index=True)
+    node_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+
+
+class ASTVectorModel(Base):
+    __tablename__ = "ast_vectors"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    node_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    content: Mapped[str] = mapped_column(String, nullable=False)
+    # The actual vectors will be stored in a raw sqlite-vec virtual table `vec_ast_nodes`
+    # linked by rowid = ASTVectorModel.id
+
 class AnalysisReportModel(Base):
     __tablename__ = "analysis_reports"
 

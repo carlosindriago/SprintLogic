@@ -32,11 +32,17 @@ def my_function():
     assert method_node is not None
 
     assert len(edges) == 3
-    for edge in edges:
-        assert edge.source_id == file_node.id
-        assert edge.type == EdgeType.CONTAINS
 
-    target_ids = {e.target_id for e in edges}
-    assert class_node.id in target_ids
-    assert func_node.id in target_ids
-    assert method_node.id in target_ids
+    # Edges should represent the hierarchical structure
+    # 1. file -> class
+    # 2. file -> function
+    # 3. class -> method
+
+    edge_map = {(e.source_id, e.target_id): e.type for e in edges}
+
+    assert (file_node.id, class_node.id) in edge_map
+    assert (file_node.id, func_node.id) in edge_map
+    assert (class_node.id, method_node.id) in edge_map
+
+    for edge_type in edge_map.values():
+        assert edge_type == EdgeType.CONTAINS

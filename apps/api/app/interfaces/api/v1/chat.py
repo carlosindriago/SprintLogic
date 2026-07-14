@@ -95,8 +95,9 @@ async def chat_with_ai(request: ChatRequest, session: AsyncSession = Depends(get
     async def generate():
         try:
             agent = AIAgent(session=session, project_id=request.project_id)
-            response_text = await agent.chat(request.messages, model=request.model)
-            yield f"data: {json.dumps({'text': response_text, 'is_done': False})}\n\n"
+            async for chunk_str in agent.chat_stream(request.messages, model=request.model):
+                yield f"data: {chunk_str}\n\n"
+
             yield f"data: {json.dumps({'text': '', 'is_done': True})}\n\n"
         except Exception as e:
             error_str = str(e)
@@ -106,7 +107,12 @@ async def chat_with_ai(request: ChatRequest, session: AsyncSession = Depends(get
             else:
                 yield f"data: {json.dumps({'text': f'Error interno: {error_str}', 'is_done': True, 'error': True})}\n\n"
 
-    return StreamingResponse(generate(), media_type="text/event-stream")
+    headers = {
+        "Cache-Control": "no-cache, no-transform",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no",
+    }
+    return StreamingResponse(generate(), media_type="text/event-stream", headers=headers)
 
 
 class MentorRequest(BaseModel):

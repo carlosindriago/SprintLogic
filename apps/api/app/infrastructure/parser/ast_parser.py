@@ -89,119 +89,146 @@ def resolve_python_import(base_project_dir: Path, import_statement: str) -> Path
     return None
 
 
-def extract_nodes_from_code(project_id: UUID, file_path: str, code: bytes, ext: str):
-    lang = get_language(ext)
-    if not lang:
-        return [], [], []
+import hashlib
+import json
+from dataclasses import dataclass
 
-    parser = tree_sitter.Parser()
-    parser.language = lang
-    tree = parser.parse(code)
+
+def compute_ast_hash(node_code: str) -> str:
+    # Remove only edge whitespaces to avoid corrupting string literals inside the code
+    normalized = node_code.strip()
+    return hashlib.sha256(normalized.encode('utf-8')).hexdigest()
+
+@dataclass
+class ParsedNode:
+    fqn: str
+    node_type: str
+    name: str
+    start_line: int
+    end_line: int
+    content: str
+    hash: str
+    parent_fqn: str
+
+class TreeSitterParser:
+    def parse_code(self, code: str | bytes, file_path: str, ext: str = ".py") -> tuple[list[ParsedNode], set[str]]:
+        if isinstance(code, str):
+            code_bytes = code.encode("utf-8")
+        else:
+            code_bytes = code
+
+        lang = get_language(ext)
+        if not lang:
+            return [], set()
+
+        parser = tree_sitter.Parser()
+        parser.language = lang
+        tree = parser.parse(code_bytes)
+
+        parsed_nodes = []
+        imports = set()
+
+        def traverse(node, current_fqn: str):
+            if "import" in node.type or "require" in node.type:
+                for child in node.children:
+                    if "string" in child.type:
+                        imp = code_bytes[child.start_byte : child.end_byte].decode("utf-8").strip("\"'")
+                        if imp:
+                            imports.add(imp)
+                    elif child.type in ("dotted_name", "identifier"):
+                        imp = code_bytes[child.start_byte : child.end_byte].decode("utf-8")
+                        if imp:
+                            imports.add(imp)
+
+            node_type = None
+            name = None
+            fqn = current_fqn
+
+            if node.type in ("class_definition", "class_declaration"):
+                node_type = "class"
+                for child in node.children:
+                    if child.type in ("identifier", "type_identifier"):
+                        name = code_bytes[child.start_byte:child.end_byte].decode('utf-8')
+                        break
+                if name:
+                    fqn = f"{current_fqn}::[{node_type}]{name}"
+
+            elif node.type in ("function_definition", "function_declaration", "method_definition"):
+                node_type = "def"
+                for child in node.children:
+                    if child.type in ("identifier", "property_identifier"):
+                        name = code_bytes[child.start_byte:child.end_byte].decode('utf-8')
+                        break
+                if name:
+                    fqn = f"{current_fqn}::[{node_type}]{name}"
+
+            if name and node_type:
+                content = code_bytes[node.start_byte:node.end_byte].decode('utf-8')
+                node_hash = compute_ast_hash(content)
+                parsed_nodes.append(ParsedNode(
+                    fqn=fqn,
+                    node_type=node_type,
+                    name=name,
+                    start_line=node.start_point[0] + 1,
+                    end_line=node.end_point[0] + 1,
+                    content=content,
+                    hash=node_hash,
+                    parent_fqn=current_fqn
+                ))
+
+            for child in node.children:
+                traverse(child, fqn)
+
+        traverse(tree.root_node, file_path)
+        return parsed_nodes, imports
+
+
+def extract_nodes_from_code(project_id: UUID, file_path: str, code: bytes, ext: str):
+    parser = TreeSitterParser()
+    parsed_nodes, imports = parser.parse_code(code, file_path, ext)
 
     nodes = []
     edges = []
-    imports = set()
-
-    import json
 
     file_node_id = f"file:{file_path}"
-    file_node = GraphNode(
-        id=file_node_id,
-        project_id=project_id,
-        label=NodeLabel.FILE,
-        name=os.path.basename(file_path),
-        file_path=file_path,
-        meta_data=json.dumps(
-            {
-                "start_line": tree.root_node.start_point[0] + 1,
-                "end_line": tree.root_node.end_point[0] + 1,
-            }
-        ),
+    lines = code.split(b'\n')
+    nodes.append(
+        GraphNode(
+            id=file_node_id,
+            project_id=project_id,
+            label=NodeLabel.FILE,
+            name=os.path.basename(file_path),
+            file_path=file_path,
+            meta_data=json.dumps({"start_line": 1, "end_line": len(lines)})
+        )
     )
-    nodes.append(file_node)
 
-    def traverse(node):
-        if "import" in node.type or "require" in node.type:
-            for child in node.children:
-                if "string" in child.type:
-                    imp = code[child.start_byte : child.end_byte].decode("utf-8").strip("\"'")
-                    if imp:
-                        imports.add(imp)
-                elif child.type in ("dotted_name", "identifier"):
-                    imp = code[child.start_byte : child.end_byte].decode("utf-8")
-                    if imp:
-                        imports.add(imp)
+    for pnode in parsed_nodes:
+        nodes.append(
+            GraphNode(
+                id=pnode.fqn,
+                project_id=project_id,
+                label=NodeLabel.CLASS if pnode.node_type == "class" else NodeLabel.FUNCTION,
+                name=pnode.name,
+                file_path=file_path,
+                meta_data=json.dumps({
+                    "start_line": pnode.start_line,
+                    "end_line": pnode.end_line,
+                    "fqn": pnode.fqn,
+                    "hash": pnode.hash,
+                })
+            )
+        )
+        parent_id = file_node_id if pnode.parent_fqn == file_path else pnode.parent_fqn
+        edges.append(
+            GraphEdge(
+                project_id=project_id,
+                source_id=parent_id,
+                target_id=pnode.fqn,
+                type=EdgeType.CONTAINS
+            )
+        )
 
-        if node.type in ("class_definition", "class_declaration"):
-            name_node = None
-            for child in node.children:
-                if child.type in ("identifier", "type_identifier"):
-                    name_node = child
-                    break
-            if name_node:
-                class_name = code[name_node.start_byte : name_node.end_byte].decode("utf-8")
-                class_id = f"class:{file_path}:{class_name}"
-                nodes.append(
-                    GraphNode(
-                        id=class_id,
-                        project_id=project_id,
-                        label=NodeLabel.CLASS,
-                        name=class_name,
-                        file_path=file_path,
-                        meta_data=json.dumps(
-                            {
-                                "start_line": node.start_point[0] + 1,
-                                "end_line": node.end_point[0] + 1,
-                            }
-                        ),
-                    )
-                )
-                edges.append(
-                    GraphEdge(
-                        project_id=project_id,
-                        source_id=file_node_id,
-                        target_id=class_id,
-                        type=EdgeType.CONTAINS,
-                    )
-                )
-
-        elif node.type in ("function_definition", "function_declaration", "method_definition"):
-            name_node = None
-            for child in node.children:
-                if child.type in ("identifier", "property_identifier"):
-                    name_node = child
-                    break
-            if name_node:
-                func_name = code[name_node.start_byte : name_node.end_byte].decode("utf-8")
-                func_id = f"function:{file_path}:{func_name}"
-                nodes.append(
-                    GraphNode(
-                        id=func_id,
-                        project_id=project_id,
-                        label=NodeLabel.FUNCTION,
-                        name=func_name,
-                        file_path=file_path,
-                        meta_data=json.dumps(
-                            {
-                                "start_line": node.start_point[0] + 1,
-                                "end_line": node.end_point[0] + 1,
-                            }
-                        ),
-                    )
-                )
-                edges.append(
-                    GraphEdge(
-                        project_id=project_id,
-                        source_id=file_node_id,
-                        target_id=func_id,
-                        type=EdgeType.CONTAINS,
-                    )
-                )
-
-        for child in node.children:
-            traverse(child)
-
-    traverse(tree.root_node)
     return nodes, edges, imports
 
 

@@ -94,7 +94,15 @@ Solo devuelve el bloque JSDoc, sin bloques de código markdown, sin texto adicio
 
         async with AsyncSessionLocal() as session:
             agent = AIAgent(session=session)
-            response = await agent.chat([{"role": "user", "content": prompt}], model="gemini/gemini-2.5-flash")
+            response = ""
+            async for chunk_str in agent.chat_stream([{"role": "user", "content": prompt}], model="gemini/gemini-2.5-flash"):
+                try:
+                    import json
+                    chunk = json.loads(chunk_str)
+                    if chunk.get("type") == "message_chunk":
+                        response += chunk.get("text", "")
+                except Exception:
+                    pass
         # Clean up markdown code blocks if the LLM adds them
         jsdoc = response.strip()
         if jsdoc.startswith("```"):

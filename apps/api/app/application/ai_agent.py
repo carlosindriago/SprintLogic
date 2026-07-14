@@ -162,12 +162,15 @@ class AIAgent:
                                     "type": "object",
                                     "properties": {
                                         "id": {"type": "string", "description": "e.g., 'REQ-1'"},
-                                        "description": {"type": "string", "description": "The detailed technical requirement"}
+                                        "description": {
+                                            "type": "string",
+                                            "description": "The detailed technical requirement",
+                                        },
                                     },
-                                    "required": ["id", "description"]
+                                    "required": ["id", "description"],
                                 },
-                                "description": "List of explicit requirements"
-                            }
+                                "description": "List of explicit requirements",
+                            },
                         },
                         "required": ["task_id", "title", "domain", "context", "requirements"],
                     },
@@ -200,9 +203,26 @@ class AIAgent:
                             "consequences": {
                                 "type": "string",
                                 "description": "Positive and negative consequences of the decision",
-                            }
+                            },
                         },
                         "required": ["adr_id", "title", "context", "decision", "consequences"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "explore_architecture",
+                    "description": "Explora la arquitectura de SprintLogic buscando código relevante (Topological Pruning).",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "Consulta semántica (e.g. 'JWT token validation logic')",
+                            }
+                        },
+                        "required": ["query"],
                     },
                 },
             },
@@ -347,7 +367,7 @@ class AIAgent:
                     "filepath": f".sprintlogic/specs/{args.get('task_id', 'TASK-000')}.md",
                     "type": "task",
                     "content": args,
-                    "tool_call_id": tool_call.id
+                    "tool_call_id": tool_call.id,
                 }
                 return f"__DRAFT_PROPOSAL__:{json.dumps(payload)}"
 
@@ -357,9 +377,16 @@ class AIAgent:
                     "filepath": f"docs/adr/{args.get('adr_id', 'ADR-000')}.md",
                     "type": "adr",
                     "content": args,
-                    "tool_call_id": tool_call.id
+                    "tool_call_id": tool_call.id,
                 }
                 return f"__DRAFT_PROPOSAL__:{json.dumps(payload)}"
+            elif name == "explore_architecture":
+                query = args.get("query", "")
+
+                # Mock integration for ONNX/SQLite-Vec (since we don't have the actual ONNX pipeline wired here)
+                # In a real implementation, we would call the search service here.
+                # Here we just simulate retrieving context for the query.
+                return f"<contexto_ast>\n<ecosistema>\n# Ecosystem for {query}\n</ecosistema>\n<firmas_hermanas>\n# Firmas\n</firmas_hermanas>\n<codigo_objetivo>\n# Target code\n</codigo_objetivo>\n</contexto_ast>"
 
         return "Unknown tool."
 
@@ -408,99 +435,159 @@ class AIAgent:
     def _get_provider(self, model: str) -> str:
         return ProviderAdapter.get_provider(model)
 
-    async def chat(self, messages: list[dict[str, str]], model: str) -> str:
+    async def chat_stream(self, messages: list[dict[str, Any]], model: str):
         """
-        Processes a chat conversation and allows the AI to call tools before returning a final response.
+        Processes a chat conversation via streaming, yielding SSE strings for transparency.
+        Includes an Agent Loop Governor (Max 3 steps, Intent Caching).
         """
         try:
             provider = self._get_provider(model)
             api_key = CredentialManager.get_api_key(provider)
 
             if not api_key and provider != "openrouter" and "ollama" not in model.lower():
-                raise ValueError(f"API Key for {provider} not configured.")
+                yield json.dumps(
+                    {"type": "error", "message": f"API Key for {provider} not configured."}
+                )
+                return
 
-            # Inject project context as system message
             system_msg = await self._build_system_message()
             if system_msg:
                 messages = [{"role": "system", "content": system_msg}] + [
                     m for m in messages if m.get("role") != "system"
                 ]
 
-            # Prepare LiteLLM call
             adapted = ProviderAdapter.adapt(model, api_key)
-            response = await litellm.acompletion(
-                model=adapted["model"],
-                messages=messages,
-                tools=self.tools,
-                api_key=adapted["api_key"],
-                **adapted["kwargs"],
-            )
 
-            if not response.choices or len(response.choices) == 0:
-                return "Error: No response from LLM."
+            yield json.dumps({"type": "agent_state", "status": "Pensando..."})
 
-            message = response.choices[0].message
+            MAX_TOOL_CALLS = 3
+            tool_calls_count = 0
+            intent_cache = set()
 
-            # If model wants to call tools
-            if getattr(message, "tool_calls", None):
-                messages.append(message.model_dump())
+            while tool_calls_count < MAX_TOOL_CALLS:
+                response = await litellm.acompletion(
+                    model=adapted["model"],
+                    messages=messages,
+                    tools=self.tools,
+                    api_key=adapted["api_key"],
+                    stream=True,
+                    **adapted["kwargs"],
+                )
 
-                for tool_call in message.tool_calls:
-                    tool_response_str = await self._handle_tool_call(tool_call)
+                full_content = ""
+                tool_calls_accum: list[dict[str, Any]] = []
 
-                    # Intercept drafts and short-circuit to emit to frontend
-                    if tool_response_str.startswith("__DRAFT_PROPOSAL__:"):
-                        return tool_response_str
+                async for chunk in response:
+                    delta = chunk.choices[0].delta
+                    if delta.content:
+                        full_content += delta.content
+                        yield json.dumps({"type": "message_chunk", "text": delta.content})
+
+                    if getattr(delta, "tool_calls", None):
+                        if not tool_calls_accum:
+                            yield json.dumps(
+                                {"type": "agent_state", "status": "Preparando herramientas..."}
+                            )
+
+                        for tc in delta.tool_calls:
+                            # Reconstruct tool calls from stream chunks
+                            while len(tool_calls_accum) <= tc.index:
+                                tool_calls_accum.append(
+                                    {
+                                        "id": "",
+                                        "type": "function",
+                                        "function": {"name": "", "arguments": ""},
+                                    }
+                                )
+
+                            if tc.id:
+                                tool_calls_accum[tc.index]["id"] += tc.id
+                            if tc.function.name:
+                                tool_calls_accum[tc.index]["function"]["name"] += tc.function.name
+                            if tc.function.arguments:
+                                tool_calls_accum[tc.index]["function"]["arguments"] += (
+                                    tc.function.arguments
+                                )
+
+                if not tool_calls_accum:
+                    # No more tools, we are done
+                    break
+
+                # We have tools to execute
+                tool_calls_count += 1
+                messages.append(
+                    {"role": "assistant", "content": full_content, "tool_calls": tool_calls_accum}
+                )
+
+                for tc in tool_calls_accum:
+                    func_name = tc["function"]["name"]
+                    func_args_str = tc["function"]["arguments"]
+
+                    yield json.dumps(
+                        {"type": "tool_call", "tool": func_name, "query": func_args_str}
+                    )
+
+                    # Intent cache check
+                    intent_key = f"{func_name}:{func_args_str}"
+                    if intent_key in intent_cache:
+                        tool_response_str = "Error: Ya has buscado esto. Usa la información que ya tienes o cambia tu enfoque."
+                    else:
+                        intent_cache.add(intent_key)
+
+                        # Use a mock object to match LiteLLM structure expected by _handle_tool_call
+                        class MockToolCall:
+                            def __init__(self, t):
+                                self.id = t["id"]
+
+                                class Func:
+                                    name = t["function"]["name"]
+                                    arguments = t["function"]["arguments"]
+
+                                self.function = Func()
+
+                        tool_response_str = await self._handle_tool_call(MockToolCall(tc))
+
+                    yield json.dumps(
+                        {"type": "tool_result", "status": f"Contexto de {func_name} inyectado."}
+                    )
 
                     messages.append(
                         {
                             "role": "tool",
-                            "tool_call_id": tool_call.id,
-                            "name": tool_call.function.name,
+                            "tool_call_id": tc["id"],
+                            "name": func_name,
                             "content": tool_response_str,
                         }
                     )
 
-                second_response = await litellm.acompletion(
-                    model=adapted["model"],
-                    messages=messages,
-                    api_key=adapted["api_key"],
-                    **adapted["kwargs"],
-                )
-
-                if second_response.choices and len(second_response.choices) > 0:
-                    content = getattr(second_response.choices[0].message, "content", "")
-                    if content:
-                        return str(content)
-
-                # Fallback: retry without tools when second call returns empty
-                try:
+                if tool_calls_count >= MAX_TOOL_CALLS:
+                    # Circuit breaker triggered
+                    messages.append(
+                        {
+                            "role": "system",
+                            "content": "Límite de exploración alcanzado. Responde al usuario basándote estrictamente en el contexto XML proporcionado hasta ahora.",
+                        }
+                    )
+                    # Loop will terminate on next check, but we need one last completion
                     fallback = await litellm.acompletion(
                         model=adapted["model"],
                         messages=messages,
                         api_key=adapted["api_key"],
+                        stream=True,
                         **adapted["kwargs"],
                     )
-                    if fallback.choices and len(fallback.choices) > 0:
-                        content = getattr(fallback.choices[0].message, "content", "")
-                        if content:
-                            return str(content)
-                except Exception:
-                    pass
+                    async for chunk in fallback:
+                        delta = chunk.choices[0].delta
+                        if delta.content:
+                            yield json.dumps({"type": "message_chunk", "text": delta.content})
+                    break
 
-                return (
-                    "Analicé el código solicitado usando las herramientas disponibles. "
-                    "Los resultados fueron procesados pero el modelo no pudo generar "
-                    "una respuesta final estructurada. Por favor, intentá una consulta "
-                    "más específica o preguntá sobre un archivo en particular."
-                )
-
-            return str(getattr(message, "content", "") or "")
-
-        except Exception:
+        except Exception as e:
             _logger = logging.getLogger(__name__)
             _logger.exception("AI agent execution failed")
-            raise
+            yield json.dumps(
+                {"type": "error", "message": f"Falla catastrófica en el núcleo: {str(e)}"}
+            )
 
     @staticmethod
     def _coerce_project_id(value: UUID | str | None) -> UUID | None:
