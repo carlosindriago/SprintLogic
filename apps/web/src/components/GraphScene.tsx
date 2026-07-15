@@ -2,13 +2,12 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useState, useRef, ComponentType, useMemo, useCallback, useLayoutEffect } from "react";
-import * as THREE from "three";
 import { getProjectGraph } from "@/lib/api";
 import { API_BASE_URL } from "@/lib/api";
 import { GraphData, GraphNode, GraphEdge } from "@/types";
 import { ForceGraphProps, NodeObject } from "react-force-graph-2d";
 import { graphTheme } from "@/lib/graph-theme";
-import { Search, RotateCcw, ZoomIn, ZoomOut, Maximize, Brain, AlertTriangle, Play, Pause, Zap, ZapOff, Box, Layers, ScanSearch, FileCode } from "lucide-react";
+import { Search, RotateCcw, ZoomIn, ZoomOut, Maximize, Brain, AlertTriangle, Play, Pause, Zap, ZapOff, ScanSearch, FileCode } from "lucide-react";
 import { useTabsStore } from "../store/tabsStore";
 import { useLLMConfigStore } from "../store/llmConfigStore";
 
@@ -34,11 +33,6 @@ const ForceGraph2D = dynamic(
   () => import("react-force-graph-2d"),
   { ssr: false }
 );
-
-const ForceGraph3D = dynamic(
-  () => import("react-force-graph-3d"),
-  { ssr: false }
-);
  
 const ICON_URLS: Record<string, string> = {
   py: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/python/python-original.svg",
@@ -57,6 +51,23 @@ const ICON_URLS: Record<string, string> = {
   sh: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/bash/bash-original.svg"
 };
 
+const MODULE_COLORS = [
+  "#3b82f6", "#ef4444", "#10b981", "#f59e0b", "#8b5cf6",
+  "#ec4899", "#06b6d4", "#f97316", "#84cc16", "#6366f1",
+  "#14b8a6", "#e11d48", "#a855f7", "#0ea5e9", "#d946ef",
+];
+
+function getModuleColor(folder: string): string {
+  if (!folder || folder === "/") return "#6b7280";
+  const parts = folder.split("/").filter(Boolean);
+  const topModule = parts.slice(0, 2).join("/");
+  let hash = 0;
+  for (let i = 0; i < topModule.length; i++) {
+    hash = ((hash << 5) - hash) + topModule.charCodeAt(i);
+    hash |= 0;
+  }
+  return MODULE_COLORS[Math.abs(hash) % MODULE_COLORS.length];
+}
 
 
 interface GraphSceneProps {
@@ -78,7 +89,6 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
   const [showCycles, setShowCycles] = useState(false);
   const [activeTypes, setActiveTypes] = useState<Set<string>>(new Set(["File", "Class", "Function", "Interface"]));
   
-  const [is3D, setIs3D] = useState(false);
   const [enableFlow, setEnableFlow] = useState(false);
   const [isPhysicsActive, setIsPhysicsActive] = useState(true);
   const [glowingLinks, setGlowingLinks] = useState<Set<string>>(new Set());
@@ -94,39 +104,6 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
   }, []);
   const [iconsLoaded, setIconsLoaded] = useState(false);
   const iconImages = useRef<Record<string, HTMLImageElement>>({});
-  
-  // 3D Texture Preloader
-  const textureLoader = useMemo(() => {
-    if (typeof window === 'undefined') return null;
-    return new THREE.TextureLoader();
-  }, []);
-  const textures = useRef<Record<string, THREE.Texture>>({});
-  const [threeTexturesLoaded, setThreeTexturesLoaded] = useState(false);
-
-  useEffect(() => {
-    if (!textureLoader) return;
-    let loadedCount = 0;
-    const extensions = Object.keys(ICON_URLS);
-    extensions.forEach((ext) => {
-      textureLoader.load(
-        ICON_URLS[ext],
-        (texture) => {
-          textures.current[ext] = texture;
-          loadedCount++;
-          if (loadedCount === extensions.length) {
-            setThreeTexturesLoaded(true);
-          }
-        },
-        undefined,
-        () => {
-          loadedCount++;
-          if (loadedCount === extensions.length) {
-            setThreeTexturesLoaded(true);
-          }
-        }
-      );
-    });
-  }, [textureLoader]);
 
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzingText, setAnalyzingText] = useState("");
@@ -277,7 +254,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
  
   const handleZoomIn = () => {
     if (fgRef.current) {
-      if (is3D) {
+      if (false) {
         const { x, y, z } = fgRef.current.cameraPosition();
         fgRef.current.cameraPosition({ x: x * 0.7, y: y * 0.7, z: z * 0.7 }, undefined, 400);
       } else {
@@ -288,7 +265,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
  
   const handleZoomOut = () => {
     if (fgRef.current) {
-      if (is3D) {
+      if (false) {
         const { x, y, z } = fgRef.current.cameraPosition();
         fgRef.current.cameraPosition({ x: x * 1.5, y: y * 1.5, z: z * 1.5 }, undefined, 400);
       } else {
@@ -371,24 +348,6 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     return () => { active = false; };
   }, [projectId]);
 
-  const prevIs3D = useRef(is3D);
-
-  useEffect(() => {
-    if (prevIs3D.current === is3D) return;
-    prevIs3D.current = is3D;
-
-    if (graphData && graphData.nodes) {
-      graphData.nodes.forEach((n: any) => {
-         delete n.x;
-         delete n.y;
-         delete n.z;
-         delete n.vx;
-         delete n.vy;
-         delete n.vz;
-      });
-    }
-  }, [is3D]);
-
   const hasGraphData = useMemo(
     () => graphData && graphData.nodes && graphData.nodes.length > 0,
     [graphData]
@@ -414,10 +373,10 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
       return link.type === 'IMPORTS' ? 300 : 120;
     });
     fgRef.current.d3ReheatSimulation();
-  }, [hasGraphData, is3D]);
+  }, [hasGraphData]);
 
   useEffect(() => {
-    if (!enableFlow || !is3D || !graphData || !graphData.links) {
+    if (!enableFlow || !graphData || !graphData.links) {
       setGlowingLinks(new Set());
       return;
     }
@@ -436,7 +395,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     }, 1500);
     
     return () => clearInterval(interval);
-  }, [enableFlow, is3D, graphData]);
+  }, [enableFlow, graphData]);
 
   const lowerSearchQuery = useMemo(() => searchQuery?.toLowerCase() || "", [searchQuery]);
 
@@ -496,18 +455,20 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     const degree = n.in_degree || 0;
     const degreeRadius = 1 + Math.log2(1 + degree) * 1.6;
 
+    const moduleColor = getModuleColor(n.folder || "");
+
     if (label === "File") {
       radius = Math.max(4, degreeRadius);
-      color = graphTheme.file;
+      color = moduleColor;
     } else if (label === "Class") {
       radius = Math.max(5, degreeRadius);
-      color = graphTheme.class;
+      color = moduleColor;
     } else if (label === "Function") {
       radius = Math.max(4, degreeRadius);
-      color = graphTheme.function;
+      color = moduleColor;
     } else if (label === "Interface") {
       radius = Math.max(5, degreeRadius);
-      color = graphTheme.interface;
+      color = moduleColor;
     }
 
     const outDegree = n.out_degree || 0;
@@ -606,10 +567,10 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     const targetId = typeof link.target === 'object' ? link.target.id : link.target;
     
     const faded = isFaded(sourceId) && isFaded(targetId);
-    const opacityFactor = is3D ? 0.8 : 0.3; 
+    const opacityFactor = 0.3; 
     
     // In 3D, glowing lines when flow is enabled
-    const isGlowing = is3D && enableFlow && glowingLinks.has(`${sourceId}-${targetId}`);
+    const isGlowing = glowingLinks.has(`${sourceId}-${targetId}`);
     if (isGlowing && !faded) {
       return "rgba(96, 165, 250, 0.85)"; // Bright blue glow for animation
     }
@@ -629,7 +590,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
         : `rgba(228, 228, 231, ${0.05 * opacityFactor})`;
     }
     return baseColor;
-  }, [isFaded, showCycles, is3D, enableFlow, glowingLinks]);
+  }, [isFaded, showCycles, glowingLinks]);
 
   const getParticleColor = useCallback((link: any) => {
     if (showCycles && link.is_cycle) {
@@ -643,7 +604,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     const targetId = typeof link.target === 'object' ? link.target.id : link.target;
     const faded = isFaded(sourceId) && isFaded(targetId);
     
-    if (is3D && enableFlow && glowingLinks.has(`${sourceId}-${targetId}`) && !faded) {
+    if (glowingLinks.has(`${sourceId}-${targetId}`) && !faded) {
       return 1.8; // Thicker when glowing in 3D
     }
     
@@ -652,7 +613,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     if (showCycles && link.is_cycle) return 1.5;
     if (hoverNode === sourceId || hoverNode === targetId) return 1.5;
     return link.type === "IMPORTS" ? 0.8 : 0.4;
-  }, [isFaded, hoverNode, showCycles, is3D, enableFlow, glowingLinks]);
+  }, [isFaded, hoverNode, showCycles, glowingLinks]);
 
   const getLinkVisibility = useCallback((link: any) => {
     const sourceNode = link.source;
@@ -673,72 +634,6 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     
     return true;
   }, [activeTypes, lowerSearchQuery]);
-
-  const getNodeThreeObject = useCallback((node: any) => {
-    const label = node.label as string;
-    const name = node.name as string;
-    const id = node.id as string;
-    
-    if (!activeTypes.has(label)) {
-      return new THREE.Object3D();
-    }
-    
-    if (lowerSearchQuery && !name.toLowerCase().includes(lowerSearchQuery)) {
-      return new THREE.Object3D();
-    }
-
-    const faded = isFaded(id);
-    
-    // 1. Files: represented by their language/technology sprite textures
-    if (label === "File") {
-      const ext = name.split(".").pop()?.toLowerCase() || "";
-      const texture = textures.current[ext];
-      
-      if (texture) {
-        const material = new THREE.SpriteMaterial({ 
-          map: texture,
-          transparent: true,
-          opacity: faded ? 0.15 : 1.0
-        });
-        const sprite = new THREE.Sprite(material);
-        
-        // Much clearer size differentiation for file sizes (LOC/size)
-        const size = (node.size as number) || 0;
-        const scale = Math.min(Math.max(size / 2000, 6), 16);
-        sprite.scale.set(scale, scale, 1);
-        return sprite;
-      }
-    }
-
-    // 2. Class / Function / Interface: represented by sphere geometries with clear size hierarchy
-    let radius = 2;
-    let colorHex = graphTheme.unknown;
-    
-    if (label === "File") {
-      const size = (node.size as number) || 0;
-      radius = Math.min(Math.max(size / 2000, 3.5), 8);
-      colorHex = graphTheme.file;
-    } else if (label === "Class") {
-      radius = 2.0; // Classes are slightly larger structural units
-      colorHex = graphTheme.class;
-    } else if (label === "Function") {
-      radius = 0.8; // Functions are small orbital nodes
-      colorHex = graphTheme.function;
-    } else if (label === "Interface") {
-      radius = 1.4; // Interfaces sit in the middle
-      colorHex = graphTheme.interface;
-    }
-
-    // Use lower segment count (8x8) instead of (16x16) for much better 3D performance
-    const geometry = new THREE.SphereGeometry(radius, 8, 8);
-    const material = new THREE.MeshLambertMaterial({
-      color: colorHex,
-      transparent: true,
-      opacity: faded ? 0.15 : 0.95
-    });
-    
-    return new THREE.Mesh(geometry, material);
-  }, [activeTypes, lowerSearchQuery, isFaded]);
 
   const toggleType = (type: string) => {
     setActiveTypes(prev => {
@@ -890,14 +785,6 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
           <ZoomOut className="w-4 h-4" />
         </button>
 
-        <button 
-          onClick={() => setIs3D(!is3D)}
-          className={`flex items-center gap-1.5 px-4 py-2 text-xs font-bold transition-colors border-l border-[#3f3f46] hover:bg-zinc-800 ${is3D ? "text-blue-400" : "text-zinc-400"}`}
-          title={is3D ? "Cambiar a Análisis 2D" : "Cambiar a Análisis 3D"}
-        >
-          {is3D ? <Box className="w-3.5 h-3.5" /> : <Layers className="w-3.5 h-3.5" />}
-          {is3D ? "Análisis 3D" : "Análisis 2D"}
-        </button>
         
         <button 
           onClick={togglePhysics}
@@ -959,55 +846,6 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
           </div>
         )}
 
-        {is3D ? (
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            <ForceGraph3D
-              ref={fgRef}
-              width={dimensions.width || 800}
-              height={dimensions.height || 600}
-              graphData={displayGraphData}
-            backgroundColor={graphTheme.background}
-            nodeThreeObject={getNodeThreeObject}
-            linkColor={getLinkColor}
-            linkWidth={(link: any) => getLinkWidth(link) * (is3D ? 0.8 : 0.4)}
-            linkVisibility={getLinkVisibility}
-            linkCurvature={0.15}
-            linkDirectionalParticles={0}
-            linkOpacity={0.4}
-            numDimensions={3}
-            cooldownTicks={100}
-            onNodeClick={(node: any, event: any) => {
-              const now = Date.now();
-              const isDoubleClick = now - lastClickTimeRef.current < 400;
-              lastClickTimeRef.current = now;
-
-              if (isDoubleClick) {
-                if (onNodeClick) {
-                  onNodeClick({
-                    id: (node.id as string) || "",
-                    label: (node.label as "File" | "Class" | "Function") || "File",
-                    name: (node.name as string) || "",
-                    file_path: (node.file_path as string) || "",
-                    size: (node as any).size as number | undefined,
-                    metadata: (node as any).metadata as Record<string, unknown> | undefined
-                  });
-                }
-              } else {
-                setFocusNode(node.id as string);
-              }
-            }}
-            onBackgroundClick={() => setFocusNode(null)}
-            onNodeRightClick={(node: any, event: any) => {
-              setContextMenu({
-                visible: true,
-                x: event.clientX,
-                y: event.clientY,
-                node
-              });
-            }}
-            onNodeHover={(node: any) => setHoverNode(node ? (node.id as string) : null)}
-          />
-        ) : (
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           <ForceGraph2D
             ref={fgRef}
@@ -1072,7 +910,6 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
               }
             }}
           />
-        )}
       </div>
     </div>
   );
