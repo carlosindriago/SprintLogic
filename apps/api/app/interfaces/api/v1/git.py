@@ -143,7 +143,8 @@ async def execute_git_action(
     if result.get("status") == "blocked":
         raise HTTPException(status_code=403, detail=result.get("message"))
     if result.get("status") == "error":
-        raise HTTPException(status_code=500, detail=result.get("message"))
+        logger.error("Git action failed: %s", result.get("message"))
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
     return result
 
