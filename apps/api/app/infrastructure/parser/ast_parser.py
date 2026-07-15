@@ -192,6 +192,7 @@ def extract_nodes_from_code(project_id: UUID, file_path: str, code: bytes, ext: 
 
     file_node_id = f"file:{file_path}"
     lines = code.split(b'\n')
+    mtime = os.path.getmtime(file_path)
     nodes.append(
         GraphNode(
             id=file_node_id,
@@ -199,7 +200,11 @@ def extract_nodes_from_code(project_id: UUID, file_path: str, code: bytes, ext: 
             label=NodeLabel.FILE,
             name=os.path.basename(file_path),
             file_path=file_path,
-            meta_data=json.dumps({"start_line": 1, "end_line": len(lines)}),
+            meta_data=json.dumps({
+                "start_line": 1,
+                "end_line": len(lines),
+                "mtime": mtime,
+            }),
             file_size=len(code),
             loc=len(lines),
         )

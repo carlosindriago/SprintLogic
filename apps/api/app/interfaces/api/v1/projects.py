@@ -258,6 +258,12 @@ async def get_project_graph(project_id: str, session: AsyncSession = Depends(get
         if label_val == "File":
             node_dict["size"] = n.file_size or 1000
             node_dict["loc"] = n.loc or 0
+            try:
+                meta = json.loads(n.meta_data or "{}")
+                if "mtime" in meta:
+                    node_dict["mtime"] = meta["mtime"]
+            except (json.JSONDecodeError, TypeError):
+                pass
         nodes_dict.append(node_dict)
 
     links_dict = []

@@ -113,9 +113,36 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
   const [enableFlow, setEnableFlow] = useState(false);
   const [isPhysicsActive, setIsPhysicsActive] = useState(true);
   const [glowingLinks, setGlowingLinks] = useState<Set<string>>(new Set());
+
+  const [animating, setAnimating] = useState(false);
+  const [animProgress, setAnimProgress] = useState(1);
+
+  const timeRange = useMemo(() => {
+    const mtimed = graphData.nodes
+      .filter((n) => (n as ForceNode).mtime)
+      .map((n) => (n as ForceNode).mtime!) as number[];
+    if (mtimed.length < 2) return null;
+    return { min: Math.min(...mtimed), max: Math.max(...mtimed) };
+  }, [graphData]);
   
   const lastClickTimeRef = useRef<number>(0);
   const initialFitDone = useRef(false);
+
+  useEffect(() => {
+    if (!animating) return;
+    const start = Date.now();
+    const duration = 15000;
+    const interval = setInterval(() => {
+      const elapsed = Date.now() - start;
+      const progress = Math.min(elapsed / duration, 1);
+      setAnimProgress(progress);
+      if (progress >= 1) {
+        setAnimating(false);
+        clearInterval(interval);
+      }
+    }, 50);
+    return () => clearInterval(interval);
+  }, [animating]);
   const [contextMenu, setContextMenu] = useState<{ visible: boolean; x: number; y: number; node: ForceNode } | null>(null);
 
   useEffect(() => {
@@ -435,21 +462,41 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
   }, [graphData]);
 
   const displayGraphData = useMemo(() => {
-    if (!focusNode || !graphData || !graphData.nodes) return graphData;
+    if (!graphData || !graphData.nodes) return graphData;
 
-    // Isolate only the focused node and its neighbors
-    const neighborsSet = neighbors.get(focusNode) || new Set();
-    const visibleNodes = new Set([focusNode, ...neighborsSet]);
+    let { nodes, links } = graphData;
 
-    const filteredNodes = graphData.nodes.filter((n: any) => visibleNodes.has(n.id as string));
-    const filteredLinks = graphData.links.filter((l: any) => {
-      const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
-      const targetId = typeof l.target === 'object' ? l.target.id : l.target;
-      return visibleNodes.has(sourceId) && visibleNodes.has(targetId);
-    });
+    if (timeRange && animProgress < 1) {
+      const cutoff = timeRange.min + (timeRange.max - timeRange.min) * animProgress;
+      const visibleIds = new Set(
+        graphData.nodes
+          .filter((n) => {
+            const mtime = (n as ForceNode).mtime;
+            return !mtime || mtime <= cutoff;
+          })
+          .map((n) => n.id)
+      );
+      nodes = graphData.nodes.filter((n) => visibleIds.has(n.id));
+      links = graphData.links.filter((l) => {
+        const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
+        const targetId = typeof l.target === 'object' ? l.target.id : l.target;
+        return visibleIds.has(sourceId) && visibleIds.has(targetId);
+      });
+    }
 
-    return { nodes: filteredNodes, links: filteredLinks };
-  }, [graphData, focusNode, neighbors]);
+    if (focusNode) {
+      const neighborsSet = neighbors.get(focusNode) || new Set();
+      const visibleNodes = new Set([focusNode, ...neighborsSet]);
+      nodes = nodes.filter((n) => visibleNodes.has(n.id));
+      links = links.filter((l) => {
+        const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
+        const targetId = typeof l.target === 'object' ? l.target.id : l.target;
+        return visibleNodes.has(sourceId) && visibleNodes.has(targetId);
+      });
+    }
+
+    return { nodes, links };
+  }, [graphData, focusNode, neighbors, timeRange, animProgress]);
 
   const isFaded = useCallback((nodeId: string) => {
     const activeFocus = focusNode || hoverNode;
@@ -822,6 +869,43 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
           {enableFlow ? <Zap className="w-4 h-4" /> : <ZapOff className="w-4 h-4" />}
         </button>
       </div>
+
+      {timeRange && (
+        <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-10 flex items-center gap-3 px-4 py-2 rounded-lg shadow-lg"
+             style={{ backgroundColor: graphTheme.surfaceElevated, border: `1px solid ${graphTheme.border}` }}>
+          <button
+            onClick={() => {
+              if (animating) {
+                setAnimating(false);
+              } else {
+                setAnimProgress(0);
+                setAnimating(true);
+              }
+            }}
+            className="p-1.5 rounded transition-colors text-zinc-400 hover:text-white hover:bg-[#3f3f46]"
+            title={animating ? "Pausar" : "Animar"}
+          >
+            {animating ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+          </button>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={Math.round(animProgress * 100)}
+            onChange={(e) => {
+              setAnimating(false);
+              setAnimProgress(Number(e.target.value) / 100);
+            }}
+            className="w-32 h-1 accent-blue-500 cursor-pointer"
+          />
+          <button
+            onClick={() => { setAnimating(false); setAnimProgress(1); }}
+            className="text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors"
+          >
+            {Math.round(animProgress * 100)}%
+          </button>
+        </div>
+      )}
 
       <div ref={containerRef} className="flex-1 w-full min-h-0 z-0">
         {contextMenu && contextMenu.visible && (

@@ -22,6 +22,7 @@ export interface GraphNode {
   folder?: string;
   size?: number;
   loc?: number;
+  mtime?: number;
   in_degree?: number;
   out_degree?: number;
   metadata?: Record<string, unknown>;
