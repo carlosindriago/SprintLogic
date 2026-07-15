@@ -61,7 +61,7 @@ class ScanCodebaseUseCase:
         self.event_bus = event_bus
         self.graph_repo = graph_repo
 
-    async def execute(self, project_id: UUID, cancel_token: asyncio.Event | None = None):
+    async def execute(self, project_id: UUID, cancel_token: asyncio.Event | None = None, project_path: str = ""):
         topic = f"scan:{project_id}"
         parsed_count = 0
         all_nodes = []
@@ -79,6 +79,12 @@ class ScanCodebaseUseCase:
         })
 
         # Phase 2 — Parse: iterate and emit throttled progress
+        birth_dates: dict[str, int] = {}
+        if project_path:
+            from app.infrastructure.parser.ast_parser import fetch_git_birth_dates
+
+            birth_dates = await fetch_git_birth_dates(project_path)
+
         async for logical_path, content in self.provider.get_source_files(extension_filter):
             if cancel_token and cancel_token.is_set():
                 _logger.warning(f"Scan aborted by user for project {project_id}")
@@ -90,7 +96,7 @@ class ScanCodebaseUseCase:
 
             try:
                 nodes, edges, imports = extract_nodes_from_code(
-                    project_id, logical_path, content.encode('utf-8'), ext
+                    project_id, logical_path, content.encode('utf-8'), ext, birth_dates
                 )
                 all_nodes.extend(nodes)
                 all_edges.extend(edges)

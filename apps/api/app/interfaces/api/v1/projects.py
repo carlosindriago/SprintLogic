@@ -119,7 +119,7 @@ async def scan_project(
     cancel_token = asyncio.Event()
     active_scans[str(saved_project.id)] = cancel_token
 
-    background_tasks.add_task(scan_codebase_usecase.execute, saved_project.id, cancel_token)
+    background_tasks.add_task(scan_codebase_usecase.execute, saved_project.id, cancel_token, saved_project.path)
 
     return ScanStartedResponse(
         status="scanning started",
@@ -260,8 +260,8 @@ async def get_project_graph(project_id: str, session: AsyncSession = Depends(get
             node_dict["loc"] = n.loc or 0
             try:
                 meta = json.loads(n.meta_data or "{}")
-                if "mtime" in meta:
-                    node_dict["mtime"] = meta["mtime"]
+                if "birth_time" in meta:
+                    node_dict["birth_time"] = meta["birth_time"]
             except (json.JSONDecodeError, TypeError):
                 pass
         nodes_dict.append(node_dict)

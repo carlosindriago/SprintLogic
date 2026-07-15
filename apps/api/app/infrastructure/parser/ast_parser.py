@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 from pathlib import Path
@@ -89,8 +90,8 @@ def resolve_python_import(base_project_dir: Path, import_statement: str) -> Path
     return None
 
 
+import asyncio
 import hashlib
-import json
 from dataclasses import dataclass
 
 
@@ -183,7 +184,42 @@ class TreeSitterParser:
         return parsed_nodes, imports
 
 
-def extract_nodes_from_code(project_id: UUID, file_path: str, code: bytes, ext: str):
+async def fetch_git_birth_dates(repo_path: str) -> dict[str, int]:
+    """Ejecuta `git log --diff-filter=A` una sola vez y devuelve
+    un dict {file_path: first_commit_timestamp} con costo O(1)."""
+    dates: dict[str, int] = {}
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "git", "log", "--name-status", "--diff-filter=A",
+            "--pretty=format:commit_time:%at",
+            cwd=repo_path,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        stdout, _ = await proc.communicate()
+        current_time = 0
+        for line in stdout.decode("utf-8", errors="ignore").split("\n"):
+            line = line.strip()
+            if not line:
+                continue
+            if line.startswith("commit_time:"):
+                current_time = int(line.split(":", 1)[1])
+            elif line.startswith("A\t") and current_time:
+                file_path = line[2:]
+                if file_path not in dates:
+                    dates[file_path] = current_time
+    except Exception:
+        pass
+    return dates
+
+
+def extract_nodes_from_code(
+    project_id: UUID,
+    file_path: str,
+    code: bytes,
+    ext: str,
+    birth_dates: dict[str, int] | None = None,
+):
     parser = TreeSitterParser()
     parsed_nodes, imports = parser.parse_code(code, file_path, ext)
 
@@ -192,7 +228,7 @@ def extract_nodes_from_code(project_id: UUID, file_path: str, code: bytes, ext: 
 
     file_node_id = f"file:{file_path}"
     lines = code.split(b'\n')
-    mtime = os.path.getmtime(file_path)
+    birth_time = (birth_dates or {}).get(file_path)
     nodes.append(
         GraphNode(
             id=file_node_id,
@@ -203,7 +239,7 @@ def extract_nodes_from_code(project_id: UUID, file_path: str, code: bytes, ext: 
             meta_data=json.dumps({
                 "start_line": 1,
                 "end_line": len(lines),
-                "mtime": mtime,
+                "birth_time": birth_time,
             }),
             file_size=len(code),
             loc=len(lines),

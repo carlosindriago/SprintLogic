@@ -119,11 +119,11 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
   const animProgressRef = useRef(1);
 
   const timeRange = useMemo(() => {
-    const mtimed = graphData.nodes
-      .filter((n) => (n as ForceNode).mtime)
-      .map((n) => (n as ForceNode).mtime!) as number[];
-    if (mtimed.length < 2) return null;
-    return { min: Math.min(...mtimed), max: Math.max(...mtimed) };
+    const timed = graphData.nodes
+      .filter((n) => (n as ForceNode).birth_time)
+      .map((n) => (n as ForceNode).birth_time!) as number[];
+    if (timed.length < 2) return null;
+    return { min: Math.min(...timed), max: Math.max(...timed) };
   }, [graphData]);
 
   useEffect(() => {
@@ -511,9 +511,9 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     if (lowerSearchQuery && !name.toLowerCase().includes(lowerSearchQuery)) return;
 
     const progress = animProgressRef.current;
-    if (progress < 1 && timeRange && n.mtime) {
+    if (progress < 1 && timeRange && n.birth_time) {
       const cutoff = timeRange.min + (timeRange.max - timeRange.min) * progress;
-      if (n.mtime > cutoff) return;
+      if (n.birth_time > cutoff) return;
     }
 
     let radius = 3;

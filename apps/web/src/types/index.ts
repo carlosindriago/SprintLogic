@@ -22,7 +22,7 @@ export interface GraphNode {
   folder?: string;
   size?: number;
   loc?: number;
-  mtime?: number;
+  birth_time?: number;
   in_degree?: number;
   out_degree?: number;
   metadata?: Record<string, unknown>;
