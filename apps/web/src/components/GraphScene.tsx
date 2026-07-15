@@ -951,8 +951,8 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
           </div>
         )}
 
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          <ForceGraph2D
+        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+        <ForceGraph2D
             ref={fgRef}
             width={dimensions.width || 800}
             height={dimensions.height || 600}
