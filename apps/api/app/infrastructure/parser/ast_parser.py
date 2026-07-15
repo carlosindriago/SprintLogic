@@ -229,6 +229,11 @@ def extract_nodes_from_code(
     file_node_id = f"file:{file_path}"
     lines = code.split(b'\n')
     birth_time = (birth_dates or {}).get(file_path)
+    if birth_time is None:
+        try:
+            birth_time = int(os.path.getmtime(file_path))
+        except OSError:
+            birth_time = 0
     nodes.append(
         GraphNode(
             id=file_node_id,

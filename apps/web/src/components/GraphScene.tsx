@@ -126,6 +126,26 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     return { min: Math.min(...timed), max: Math.max(...timed) };
   }, [graphData]);
 
+  const moduleLegend = useMemo(() => {
+    const seen = new Set<string>();
+    const items: { name: string; color: string }[] = [];
+    for (const n of graphData.nodes) {
+      const folder = (n as ForceNode).folder;
+      if (!folder || folder === "/") continue;
+      const parts = folder.split("/").filter(Boolean);
+      let startIdx = 0;
+      for (let i = 0; i < parts.length; i++) {
+        if (CONTAINER_PREFIXES.includes(parts[i])) startIdx = i + 1;
+      }
+      const key = parts.slice(startIdx, startIdx + 2).join("/") || parts[0] || folder;
+      if (!seen.has(key)) {
+        seen.add(key);
+        items.push({ name: key, color: getModuleColor(folder) });
+      }
+    }
+    return items;
+  }, [graphData]);
+
   useEffect(() => {
     animProgressRef.current = animProgress;
   }, [animProgress]);
@@ -826,6 +846,19 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
           </div>
         )}
       </div>
+
+      {moduleLegend.length > 0 && (
+        <div className="absolute top-4 right-4 z-10 flex flex-col gap-1 p-2 rounded-lg shadow-lg max-h-64 overflow-y-auto"
+             style={{ backgroundColor: graphTheme.surfaceElevated, border: `1px solid ${graphTheme.border}` }}>
+          <span className="text-[10px] text-zinc-500 px-1 mb-1">Módulos</span>
+          {moduleLegend.map((item) => (
+            <div key={item.name} className="flex items-center gap-2 px-1 py-0.5 rounded hover:bg-[#3f3f46] cursor-pointer text-xs">
+              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
+              <span className="text-zinc-400 truncate max-w-[120px]">{item.name}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Unified Graph Controls Toolbar */}
       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 flex flex-row items-center rounded-lg shadow-lg overflow-hidden" 
