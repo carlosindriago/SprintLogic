@@ -57,16 +57,37 @@ const MODULE_COLORS = [
   "#14b8a6", "#e11d48", "#a855f7", "#0ea5e9", "#d946ef",
 ];
 
+const CONTAINER_PREFIXES = ["src", "app", "lib", "pkg", "internal", "packages"];
+
+const moduleColorMap = new Map<string, string>();
+let nextColorIndex = 0;
+
 function getModuleColor(folder: string): string {
   if (!folder || folder === "/") return "#6b7280";
   const parts = folder.split("/").filter(Boolean);
-  const topModule = parts.slice(0, 2).join("/");
-  let hash = 0;
-  for (let i = 0; i < topModule.length; i++) {
-    hash = ((hash << 5) - hash) + topModule.charCodeAt(i);
-    hash |= 0;
+
+  let startIdx = 0;
+  for (let i = 0; i < parts.length; i++) {
+    if (CONTAINER_PREFIXES.includes(parts[i])) {
+      startIdx = i + 1;
+    }
   }
-  return MODULE_COLORS[Math.abs(hash) % MODULE_COLORS.length];
+
+  const significantParts = parts.slice(startIdx);
+  if (significantParts.length === 0) return "#6b7280";
+
+  const modulePath = significantParts.length >= 2
+    ? significantParts.slice(0, 2).join("/")
+    : significantParts[0];
+
+  if (moduleColorMap.has(modulePath)) {
+    return moduleColorMap.get(modulePath)!;
+  }
+
+  const color = MODULE_COLORS[nextColorIndex % MODULE_COLORS.length];
+  moduleColorMap.set(modulePath, color);
+  nextColorIndex++;
+  return color;
 }
 
 
