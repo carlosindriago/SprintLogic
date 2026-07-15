@@ -116,6 +116,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
 
   const [animating, setAnimating] = useState(false);
   const [animProgress, setAnimProgress] = useState(1);
+  const animProgressRef = useRef(1);
 
   const timeRange = useMemo(() => {
     const mtimed = graphData.nodes
@@ -124,6 +125,10 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     if (mtimed.length < 2) return null;
     return { min: Math.min(...mtimed), max: Math.max(...mtimed) };
   }, [graphData]);
+
+  useEffect(() => {
+    animProgressRef.current = animProgress;
+  }, [animProgress]);
   
   const lastClickTimeRef = useRef<number>(0);
   const initialFitDone = useRef(false);
@@ -132,16 +137,22 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     if (!animating) return;
     const start = Date.now();
     const duration = 15000;
-    const interval = setInterval(() => {
+    let rafId: number;
+
+    const tick = () => {
       const elapsed = Date.now() - start;
       const progress = Math.min(elapsed / duration, 1);
+      animProgressRef.current = progress;
       setAnimProgress(progress);
-      if (progress >= 1) {
+      if (progress < 1) {
+        rafId = requestAnimationFrame(tick);
+      } else {
         setAnimating(false);
-        clearInterval(interval);
       }
-    }, 50);
-    return () => clearInterval(interval);
+    };
+
+    rafId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafId);
   }, [animating]);
   const [contextMenu, setContextMenu] = useState<{ visible: boolean; x: number; y: number; node: ForceNode } | null>(null);
 
@@ -466,24 +477,6 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
 
     let { nodes, links } = graphData;
 
-    if (timeRange && animProgress < 1) {
-      const cutoff = timeRange.min + (timeRange.max - timeRange.min) * animProgress;
-      const visibleIds = new Set(
-        graphData.nodes
-          .filter((n) => {
-            const mtime = (n as ForceNode).mtime;
-            return !mtime || mtime <= cutoff;
-          })
-          .map((n) => n.id)
-      );
-      nodes = graphData.nodes.filter((n) => visibleIds.has(n.id));
-      links = graphData.links.filter((l) => {
-        const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
-        const targetId = typeof l.target === 'object' ? l.target.id : l.target;
-        return visibleIds.has(sourceId) && visibleIds.has(targetId);
-      });
-    }
-
     if (focusNode) {
       const neighborsSet = neighbors.get(focusNode) || new Set();
       const visibleNodes = new Set([focusNode, ...neighborsSet]);
@@ -496,7 +489,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     }
 
     return { nodes, links };
-  }, [graphData, focusNode, neighbors, timeRange, animProgress]);
+  }, [graphData, focusNode, neighbors]);
 
   const isFaded = useCallback((nodeId: string) => {
     const activeFocus = focusNode || hoverNode;
@@ -516,6 +509,12 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     
     // Filter by search
     if (lowerSearchQuery && !name.toLowerCase().includes(lowerSearchQuery)) return;
+
+    const progress = animProgressRef.current;
+    if (progress < 1 && timeRange && n.mtime) {
+      const cutoff = timeRange.min + (timeRange.max - timeRange.min) * progress;
+      if (n.mtime > cutoff) return;
+    }
 
     let radius = 3;
     let color = graphTheme.unknown;
