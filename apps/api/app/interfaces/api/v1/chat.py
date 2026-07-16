@@ -1,4 +1,5 @@
 import json
+import logging
 from collections.abc import AsyncGenerator
 from typing import Any
 
@@ -14,6 +15,8 @@ from app.application.ai_agent import AIAgent
 from app.infrastructure.ai.context_builder import build_agent_context
 from app.infrastructure.db.database import get_db_session
 from app.infrastructure.security.credential_manager import CredentialManager
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -100,12 +103,13 @@ async def chat_with_ai(request: ChatRequest, session: AsyncSession = Depends(get
 
             yield f"data: {json.dumps({'text': '', 'is_done': True})}\n\n"
         except Exception as e:
+            logger.error("Chat streaming failed: %s", e, exc_info=True)
             error_str = str(e)
             if "429" in error_str or "RateLimitError" in error_str or "Quota exceeded" in error_str:
                 msg = "⚠️ Límite de cuota excedido para este modelo. Por favor, selecciona un modelo diferente en el menú superior."
                 yield f"data: {json.dumps({'text': msg, 'is_done': True, 'error': True})}\n\n"
             else:
-                yield f"data: {json.dumps({'text': f'Error interno: {error_str}', 'is_done': True, 'error': True})}\n\n"
+                yield f"data: {json.dumps({'text': 'Error interno: An internal error occurred', 'is_done': True, 'error': True})}\n\n"
 
     headers = {
         "Cache-Control": "no-cache, no-transform",
@@ -227,7 +231,8 @@ async def mentor_sensei(
                     "chat_summary",
                     summary + f" — Respuesta: {full_response[:200]}",
                 )
-        except Exception:
+        except Exception as e:
+            logger.error("Mentor stream failed: %s", e, exc_info=True)
             yield f"data: {json.dumps({'text': '', 'is_done': True, 'error': 'Stream error'})}\n\n"
 
     return StreamingResponse(generate(), media_type="text/event-stream")
