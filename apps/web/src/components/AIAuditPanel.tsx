@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   getGitDashboard,
   getFileLocalDiff,
@@ -226,6 +226,12 @@ export default function AIAuditPanel({ projectId }: AIAuditPanelProps) {
     );
   };
 
+
+  const unstagedItems = useMemo(() => [
+    ...(dashboard?.lists?.untracked_list || []),
+    ...(dashboard?.lists?.modified_list || [])
+  ], [dashboard?.lists?.untracked_list, dashboard?.lists?.modified_list]);
+
   if (selectedFile) {
     return (
       <div className="flex flex-col h-full bg-[#151515]">
@@ -283,6 +289,7 @@ export default function AIAuditPanel({ projectId }: AIAuditPanelProps) {
   const kpis = dashboard?.kpis;
   const branch = dashboard?.branch;
   const stagedCount = dashboard?.lists.staged_list.length ?? 0;
+
 
   return (
     <div className="flex flex-col h-full bg-[#151515] overflow-hidden">
@@ -411,7 +418,7 @@ export default function AIAuditPanel({ projectId }: AIAuditPanelProps) {
                   title="Cambios locales (Unstaged)"
                   icon={<FileText className="w-3.5 h-3.5 text-zinc-400" />}
                   count={dashboard.lists.untracked_list.length + dashboard.lists.modified_list.length}
-                  items={[...dashboard.lists.untracked_list, ...dashboard.lists.modified_list]}
+                  items={unstagedItems}
                   onItemClick={handleFileClick}
                   statusBadge={statusBadge}
                   onAction={handleStage}
