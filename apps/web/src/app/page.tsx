@@ -573,8 +573,9 @@ export default function Home() {
                   className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-700"
                   onClick={() => launchTool('insights', 'Insights', 'insights')}
                   title="Insights"
+                  aria-label="Insights"
                 >
-                  <BarChart3 className="w-4 h-4" />
+                  <BarChart3 className="w-4 h-4" aria-hidden="true" />
                 </Button>
                 <Button
                   variant="ghost"
@@ -582,8 +583,9 @@ export default function Home() {
                   className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-700"
                   onClick={() => launchTool('graph', 'Análisis Gráfico', 'graph')}
                   title="Análisis Gráfico"
+                  aria-label="Análisis Gráfico"
                 >
-                  <Network className="w-4 h-4" />
+                  <Network className="w-4 h-4" aria-hidden="true" />
                 </Button>
                 <Button
                   variant="ghost"
@@ -591,8 +593,9 @@ export default function Home() {
                   className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-700"
                   onClick={() => launchTool('kanban', 'Kanban', 'kanban')}
                   title="Kanban"
+                  aria-label="Kanban"
                 >
-                  <Layout className="w-4 h-4" />
+                  <Layout className="w-4 h-4" aria-hidden="true" />
                 </Button>
                 <Button
                   variant="ghost"
@@ -600,8 +603,9 @@ export default function Home() {
                   className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-700"
                   onClick={() => launchTool('git-graph', 'Control Git', 'git-graph')}
                   title="Control Git"
+                  aria-label="Control Git"
                 >
-                  <GitBranch className="w-4 h-4" />
+                  <GitBranch className="w-4 h-4" aria-hidden="true" />
                 </Button>
                 <Button
                   variant="ghost"
@@ -609,8 +613,9 @@ export default function Home() {
                   className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-700"
                   onClick={() => launchTool('audit', 'Auditoría IA', 'audit')}
                   title="Auditoría IA"
+                  aria-label="Auditoría IA"
                 >
-                  <FolderGit2 className="w-4 h-4" />
+                  <FolderGit2 className="w-4 h-4" aria-hidden="true" />
                 </Button>
                 <Button
                   variant="ghost"
@@ -618,8 +623,9 @@ export default function Home() {
                   className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-700"
                   onClick={() => launchTool('ai-history', 'Historial IA', 'ai-history')}
                   title="Historial IA"
+                  aria-label="Historial IA"
                 >
-                  <Bot className="w-4 h-4" />
+                  <Bot className="w-4 h-4" aria-hidden="true" />
                 </Button>
               </div>
 
