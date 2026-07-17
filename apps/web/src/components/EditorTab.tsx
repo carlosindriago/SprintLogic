@@ -15,6 +15,7 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { useLLMConfigStore } from '@/store/llmConfigStore';
 import { useFimStore } from '@/store/fimStore';
 import { useTddStore } from '@/store/tddStore';
+import { useSenseiStore } from '@/store/senseiStore';
 import type { GraphNode } from '@/types';
 import { Code2, ChevronRight, Pencil, Eye, MousePointer2, GraduationCap, Save, SaveAll, Sparkles, Loader2 } from 'lucide-react';
 import FimHintBar from './FimHintBar';
@@ -568,46 +569,62 @@ export default function EditorTab({
     return () => window.removeEventListener("trigger-sensei", handler as any);
   }, [forceSenseiAnalysis]);
 
-  // Respond to the chat's request for Sensei context
-  useEffect(() => {
-    const handleContextRequest = () => {
-      const editor = editorRef.current;
-      if (!editor) return;
+  // ── Sensei Store: push live editor context via Zustand (no CustomEvents) ─────────
+  // This is the correct architecture for Split View: each EditorTab writes to its
+  // own slot in the registry; the Chat reads the active slot when the user invokes
+  // /sensei. Zero DOM events. Zero coupling.
+  const updateEditorContext = useSenseiStore((s) => s.updateEditorContext);
+  const setActiveTabId = useSenseiStore((s) => s.setActiveTabId);
+  const clearEditorContext = useSenseiStore((s) => s.clearEditorContext);
 
+  // Declare this tab as the active one on mount (focus-aware).
+  useEffect(() => {
+    setActiveTabId(node.id);
+    return () => clearEditorContext(node.id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [node.id]);
+
+  /**
+   * Extracts the most semantically relevant code block from the current editor state.
+   * Priority:
+   *   1. Active selection (user explicitly highlighted code).
+   *   2. Graceful fallback: ±40 lines centered on the cursor.
+   * Capped at 4 000 chars to stay within LLM context budgets.
+   */
+  const buildSenseiContext = useCallback(
+    (editor: monacoEditor.IStandaloneCodeEditor): void => {
       const model = editor.getModel();
+      if (!model || model.isDisposed()) return;
+
       const position = editor.getPosition();
       const cursorLine = position?.lineNumber ?? 1;
       const filePath = node.file_path ?? '';
 
       let activeCode = '';
-      if (model && !model.isDisposed()) {
-        // Prefer the current selection; fall back to ±30 lines around cursor
-        const selection = editor.getSelection();
-        if (selection && !selection.isEmpty()) {
-          activeCode = model.getValueInRange(selection);
-        } else {
-          const totalLines = model.getLineCount();
-          const startLine = Math.max(1, cursorLine - 30);
-          const endLine = Math.min(totalLines, cursorLine + 30);
-          const lines: string[] = [];
-          for (let i = startLine; i <= endLine; i++) {
-            lines.push(model.getLineContent(i));
-          }
-          activeCode = lines.join('\n');
+      const selection = editor.getSelection();
+      if (selection && !selection.isEmpty()) {
+        activeCode = model.getValueInRange(selection);
+      } else {
+        const totalLines = model.getLineCount();
+        const startLine = Math.max(1, cursorLine - 40);
+        const endLine = Math.min(totalLines, cursorLine + 40);
+        const lines: string[] = [];
+        for (let i = startLine; i <= endLine; i++) {
+          lines.push(model.getLineContent(i));
         }
+        activeCode = lines.join('\n');
       }
 
-      window.dispatchEvent(
-        new CustomEvent('sensei-context-ready', {
-          detail: { filePath, cursorLine, activeCode },
-        })
-      );
-    };
+      // Cap to 4 000 chars to avoid blowing the LLM context window
+      updateEditorContext(node.id, {
+        filePath,
+        cursorLine,
+        activeCode: activeCode.slice(0, 4000),
+      });
+    },
+    [node.id, node.file_path, updateEditorContext]
+  );
 
-    window.addEventListener('request-sensei-context', handleContextRequest);
-    return () =>
-      window.removeEventListener('request-sensei-context', handleContextRequest);
-  }, [node.file_path]);
 
   // Hot Exit: allow TabBar modal to programmatically save this tab
   useEffect(() => {
@@ -1189,8 +1206,18 @@ export default function EditorTab({
       if (cursorTimeout) clearTimeout(cursorTimeout);
       cursorTimeout = setTimeout(() => {
         setActiveLineNumber(e.position.lineNumber);
+        // Keep the Sensei store registry fresh on every cursor move
+        buildSenseiContext(editor);
       }, 100);
     });
+
+    // Also update on selection changes (user highlighted code for context)
+    const selectionDisposable = editor.onDidChangeCursorSelection(() => {
+      buildSenseiContext(editor);
+    });
+
+    // Initial push so the context is available immediately on tab open
+    buildSenseiContext(editor);
 
     editor.onDidChangeModelContent(() => {
       const model = editor.getModel();
@@ -1279,7 +1306,7 @@ export default function EditorTab({
     // No cleanup required here since handleEditorDidMount manages the disposables?
     // Wait, let's keep the checkDirty logic untouched.
     checkDirty();
-  }, [node.metadata, checkDirty, node.file_path, node.id, vimMode, forceSenseiAnalysis, runCoachAnalysis, runAstAudit, projectId]);
+  }, [node.metadata, checkDirty, node.file_path, node.id, vimMode, forceSenseiAnalysis, runCoachAnalysis, runAstAudit, projectId, buildSenseiContext]);
 
   if (loading) {
     return (

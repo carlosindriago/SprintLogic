@@ -1,11 +1,10 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import ReactMarkdown from "react-markdown";
 import { KeyRound, Cpu, Send, Loader2, Terminal, GraduationCap, X } from "lucide-react";
 import { useLLMConfigStore } from "@/store/llmConfigStore";
 import { useChatStore } from "@/store/chatStore";
 import { useSenseiStore } from "@/store/senseiStore";
-import type { SenseiEditorContext } from "@/store/senseiStore";
 import DraftReviewer from "./DraftReviewer";
 import ProposalCard from "./ProposalCard";
 import { API_BASE_URL } from "@/lib/api";
@@ -38,23 +37,18 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
   const setDefaultModel = useLLMConfigStore((s) => s.setDefaultModel);
   const activeModel = useMemo(() => asValidModel(defaultModel), [defaultModel]);
   const { isDraftMode, setDraftMode, draftPayload, clearDraftMode } = useChatStore();
-  const { isSenseiMode, anchoredContext, activateSensei, deactivateSensei } = useSenseiStore();
+
+  // ── Sensei store (single source of truth for editor context) ──────────────
+  const isSenseiMode = useSenseiStore((s) => s.isSenseiMode);
+  const anchoredContext = useSenseiStore((s) => s.anchoredContext);
+  const activeTabId = useSenseiStore((s) => s.activeTabId);
+  const editorContextByTabId = useSenseiStore((s) => s.editorContextByTabId);
+  const activateSensei = useSenseiStore((s) => s.activateSensei);
+  const deactivateSensei = useSenseiStore((s) => s.deactivateSensei);
+
   const [sessionModel, setSessionModel] = useState<string | null>(null);
-  // Ref to receive context from EditorTab via CustomEvent
-  const pendingSenseiContextRef = useRef<SenseiEditorContext | null>(null);
 
   const currentModel = sessionModel ?? activeModel;
-
-  // Listen for sensei context dispatched by the active EditorTab
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const ctx = (e as CustomEvent<SenseiEditorContext>).detail;
-      pendingSenseiContextRef.current = ctx;
-      activateSensei(ctx);
-    };
-    window.addEventListener('sensei-context-ready', handler);
-    return () => window.removeEventListener('sensei-context-ready', handler);
-  }, [activateSensei]);
 
   const [messages, setMessages] = useState<ChatMessage[]>([
     { role: "assistant", content: "Hola, soy SprintLogic AI. ¿En qué te ayudo hoy?" },
@@ -143,8 +137,8 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
       : '';
 
     if (isSenseiCommand && !senseiQuery) {
-      // Bare /sensei: ask editor for context then prompt user to type question
-      window.dispatchEvent(new CustomEvent('request-sensei-context'));
+      // Bare /sensei with no query: freeze the context now and prompt the user to type
+      activateSensei();
       setInput('/sensei ');
       return;
     }
@@ -166,9 +160,21 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
     if (!trimmed && !overrideMessage) return;
     if (!currentModel) return;
 
-    // Determine if this turn is Sensei-mode
+    // Determine if this turn is Sensei-mode and resolve the context to send
     const isThisSensei = isSenseiCommand || (isSenseiMode && !!anchoredContext);
-    const editorContext = isThisSensei ? (anchoredContext ?? pendingSenseiContextRef.current) : null;
+
+    // Context resolution (pure Zustand — no DOM events):
+    //   - If this is a fresh /sensei invocation: freeze the live registry right now.
+    //   - If we’re in an ongoing Sensei session: use the already-anchored context.
+    //   - If neither: no context (e.g., /sensei <query> from an empty editor).
+    let editorContext = anchoredContext;
+    if (isSenseiCommand) {
+      // activateSensei() already froze the context when the bare /sensei was sent;
+      // if the user typed /sensei <query> directly, freeze now.
+      if (!isSenseiMode) activateSensei();
+      const liveCtx = activeTabId ? (editorContextByTabId[activeTabId] ?? null) : null;
+      editorContext = useSenseiStore.getState().anchoredContext ?? liveCtx;
+    }
     const displayContent = isSenseiCommand ? senseiQuery : trimmed;
 
     const newMessages: ChatMessage[] = overrideMessage
