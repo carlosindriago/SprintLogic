@@ -568,6 +568,47 @@ export default function EditorTab({
     return () => window.removeEventListener("trigger-sensei", handler as any);
   }, [forceSenseiAnalysis]);
 
+  // Respond to the chat's request for Sensei context
+  useEffect(() => {
+    const handleContextRequest = () => {
+      const editor = editorRef.current;
+      if (!editor) return;
+
+      const model = editor.getModel();
+      const position = editor.getPosition();
+      const cursorLine = position?.lineNumber ?? 1;
+      const filePath = node.file_path ?? '';
+
+      let activeCode = '';
+      if (model && !model.isDisposed()) {
+        // Prefer the current selection; fall back to ±30 lines around cursor
+        const selection = editor.getSelection();
+        if (selection && !selection.isEmpty()) {
+          activeCode = model.getValueInRange(selection);
+        } else {
+          const totalLines = model.getLineCount();
+          const startLine = Math.max(1, cursorLine - 30);
+          const endLine = Math.min(totalLines, cursorLine + 30);
+          const lines: string[] = [];
+          for (let i = startLine; i <= endLine; i++) {
+            lines.push(model.getLineContent(i));
+          }
+          activeCode = lines.join('\n');
+        }
+      }
+
+      window.dispatchEvent(
+        new CustomEvent('sensei-context-ready', {
+          detail: { filePath, cursorLine, activeCode },
+        })
+      );
+    };
+
+    window.addEventListener('request-sensei-context', handleContextRequest);
+    return () =>
+      window.removeEventListener('request-sensei-context', handleContextRequest);
+  }, [node.file_path]);
+
   // Hot Exit: allow TabBar modal to programmatically save this tab
   useEffect(() => {
     const eventName = `save-request-${node.id}`;

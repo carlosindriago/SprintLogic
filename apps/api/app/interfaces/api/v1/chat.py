@@ -18,15 +18,39 @@ from app.infrastructure.security.credential_manager import CredentialManager
 router = APIRouter()
 
 
-SENSEI_SYSTEM_PROMPT = (
-    "Eres un Arquitecto de Software Socrático (Modo Sensei). "
-    "1. Analiza el archivo en el contexto de la arquitectura global. "
-    "2. USA PRIMERO la información de documentación proporcionada para basar "
-    "tus respuestas en la documentación oficial del Tech Stack. "
-    "3. Guía al usuario explicando la lógica y el flujo de datos. "
-    "4. TIENES ESTRICTAMENTE PROHIBIDO ESCRIBIR BLOQUES DE CÓDIGO LISTOS "
-    "PARA COPIAR Y PEGAR. Usa solo pseudocódigo abstracto o snippets de 1 línea."
-)
+SENSEI_SYSTEM_PROMPT_TEMPLATE = """
+Eres el 'Sensei del Código', un Maestro Arquitecto de Software con más de 30 años de experiencia profesional.
+Tienes dominio absoluto de todas las arquitecturas modernas (Hexagonal, Microservicios, Event-Driven)
+y lenguajes (TypeScript, Python, Go, Rust, etc.).
+
+Tu objetivo NO es ser un asistente servil. Tu objetivo es ser un mentor riguroso, paciente
+y profundamente pedagógico. Quieres formar a un alumno que algún día te supere.
+
+REGLAS ESTRICTAS DE OPERACIÓN (MASTER RULES):
+1. CERO SPOON-FEEDING: TIENES ESTRICTAMENTE PROHIBIDO ESCRIBIR EL CÓDIGO FINAL LISTO PARA COPIAR
+   Y PEGAR. No resuelvas el problema por el alumno.
+2. MÉTODO SOCRÁTICO: Haz preguntas guía. Obliga al alumno a pensar. Si te pide una solución,
+   pregúntale cómo la abordaría él primero.
+3. EL PORQUÉ ANTES DEL CÓMO: Explica las bases. Usa analogías cotidianas simples.
+4. DEBATE INTELECTUAL: No asumas que el alumno tiene razón. Analiza sus suposiciones.
+   Si su lógica es débil, corrígelo con claridad y firmeza, pero mantén un tono alentador.
+5. CONTEXTO ACTIVO: Usa el EDITOR_CONTEXT proporcionado para hacer que tus consejos sean
+   hiper-específicos a la línea de código que el alumno está mirando.
+
+TONO: Directo, sin rodeos inútiles, sabio, paciente. Ama las 'preguntas tontas'.
+Usa frases como 'Piensa en una función como si fuera una receta' o
+'Te enseñaré lo que me costó años aprender... en minutos.'
+
+<EDITOR_CONTEXT>
+Archivo activo: {injected_file_path}
+Línea del cursor: {injected_cursor_line}
+
+Código relevante:
+```
+{injected_active_code}
+```
+</EDITOR_CONTEXT>
+"""
 
 
 CONTEXT7_API = "https://api.context7.ai/v1"
@@ -76,10 +100,20 @@ async def _fetch_context7_docs(api_key: str, query: str, tech_stack: dict) -> st
     return "\n---\n".join(all_docs[:6]) if all_docs else ""
 
 
+class EditorContext(BaseModel):
+    """Anchored editor state captured at /sensei invocation time."""
+
+    file_path: str = ""
+    cursor_line: int = 1
+    active_code: str = ""
+
+
 class ChatRequest(BaseModel):
     messages: list[dict[str, Any]]
     project_id: str | None = None
     model: str
+    is_sensei: bool = False
+    editor_context: EditorContext | None = None
 
 
 class ChatResponse(BaseModel):
@@ -92,10 +126,25 @@ async def chat_with_ai(request: ChatRequest, session: AsyncSession = Depends(get
     if not request.model or "/" not in request.model:
         raise HTTPException(status_code=400, detail="Model name is required")
 
+    # Build the messages list, optionally prepending the Sensei system prompt
+    messages_to_send = list(request.messages)
+    if request.is_sensei:
+        ctx = request.editor_context
+        injected_system = SENSEI_SYSTEM_PROMPT_TEMPLATE.format(
+            injected_file_path=ctx.file_path if ctx else "(archivo desconocido)",
+            injected_cursor_line=ctx.cursor_line if ctx else 1,
+            injected_active_code=ctx.active_code[:4000] if ctx else "",
+        )
+        # Prepend as a system turn (replaces any existing system turn at index 0)
+        if messages_to_send and messages_to_send[0].get("role") == "system":
+            messages_to_send[0] = {"role": "system", "content": injected_system}
+        else:
+            messages_to_send.insert(0, {"role": "system", "content": injected_system})
+
     async def generate():
         try:
             agent = AIAgent(session=session, project_id=request.project_id)
-            async for chunk_str in agent.chat_stream(request.messages, model=request.model):
+            async for chunk_str in agent.chat_stream(messages_to_send, model=request.model):
                 yield f"data: {chunk_str}\n\n"
 
             yield f"data: {json.dumps({'text': '', 'is_done': True})}\n\n"
@@ -198,7 +247,18 @@ async def mentor_sensei(
             response = await litellm.acompletion(
                 model=model,
                 messages=[
-                    {"role": "system", "content": SENSEI_SYSTEM_PROMPT},
+                    {
+                        "role": "system",
+                        "content": (
+                            "Eres un Arquitecto de Software Socrático (Modo Sensei). "
+                            "1. Analiza el archivo en el contexto de la arquitectura global. "
+                            "2. USA PRIMERO la información de documentación proporcionada para basar "
+                            "tus respuestas en la documentación oficial del Tech Stack. "
+                            "3. Guía al usuario explicando la lógica y el flujo de datos. "
+                            "4. TIENES ESTRICTAMENTE PROHIBIDO ESCRIBIR BLOQUES DE CÓDIGO LISTOS "
+                            "PARA COPIAR Y PEGAR. Usa solo pseudocódigo abstracto o snippets de 1 línea."
+                        ),
+                    },
                     {"role": "user", "content": user_message},
                 ],
                 api_key=api_key,

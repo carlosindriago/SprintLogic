@@ -1,9 +1,11 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import ReactMarkdown from "react-markdown";
-import { KeyRound, Cpu, Send, Loader2, Terminal } from "lucide-react";
+import { KeyRound, Cpu, Send, Loader2, Terminal, GraduationCap, X } from "lucide-react";
 import { useLLMConfigStore } from "@/store/llmConfigStore";
 import { useChatStore } from "@/store/chatStore";
+import { useSenseiStore } from "@/store/senseiStore";
+import type { SenseiEditorContext } from "@/store/senseiStore";
 import DraftReviewer from "./DraftReviewer";
 import ProposalCard from "./ProposalCard";
 import { API_BASE_URL } from "@/lib/api";
@@ -16,6 +18,8 @@ interface ChatMessage {
   isError?: boolean;
   tool_call_id?: string;
   name?: string;
+  /** True when this message belongs to a Sensei interaction. */
+  isSensei?: boolean;
 }
 
 interface SprintLogicChatProps {
@@ -34,9 +38,23 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
   const setDefaultModel = useLLMConfigStore((s) => s.setDefaultModel);
   const activeModel = useMemo(() => asValidModel(defaultModel), [defaultModel]);
   const { isDraftMode, setDraftMode, draftPayload, clearDraftMode } = useChatStore();
+  const { isSenseiMode, anchoredContext, activateSensei, deactivateSensei } = useSenseiStore();
   const [sessionModel, setSessionModel] = useState<string | null>(null);
+  // Ref to receive context from EditorTab via CustomEvent
+  const pendingSenseiContextRef = useRef<SenseiEditorContext | null>(null);
 
   const currentModel = sessionModel ?? activeModel;
+
+  // Listen for sensei context dispatched by the active EditorTab
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const ctx = (e as CustomEvent<SenseiEditorContext>).detail;
+      pendingSenseiContextRef.current = ctx;
+      activateSensei(ctx);
+    };
+    window.addEventListener('sensei-context-ready', handler);
+    return () => window.removeEventListener('sensei-context-ready', handler);
+  }, [activateSensei]);
 
   const [messages, setMessages] = useState<ChatMessage[]>([
     { role: "assistant", content: "Hola, soy SprintLogic AI. ¿En qué te ayudo hoy?" },
@@ -67,6 +85,7 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
   );
 
   const SLASH_COMMANDS = [
+    { command: '/sensei', description: '🎓 Invoca al mentor socrático sobre el código activo', prompt: '' },
     { command: '/explain', description: 'Explica el archivo o código actual', prompt: 'Explica qué hace este archivo y su rol en la arquitectura del proyecto.' },
     { command: '/architecture', description: 'Resume la arquitectura del proyecto', prompt: 'Hazme un resumen de la arquitectura de este proyecto.' },
     { command: '/improve', description: 'Sugiere mejoras en el código', prompt: 'Analiza este código y sugiere mejoras concretas de rendimiento, legibilidad y mantenibilidad.' },
@@ -116,7 +135,20 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
 
   const sendMessage = async (overrideMessage?: ChatMessage) => {
     const trimmed = input.trim();
-    
+
+    // ── /sensei command interception ────────────────────────────────────────
+    const isSenseiCommand = !overrideMessage && trimmed.toLowerCase().startsWith('/sensei');
+    const senseiQuery = isSenseiCommand
+      ? trimmed.slice('/sensei'.length).trim()
+      : '';
+
+    if (isSenseiCommand && !senseiQuery) {
+      // Bare /sensei: ask editor for context then prompt user to type question
+      window.dispatchEvent(new CustomEvent('request-sensei-context'));
+      setInput('/sensei ');
+      return;
+    }
+
     // Feedback loop rejection
     if (!overrideMessage && isDraftMode && draftPayload) {
       if (!trimmed) return;
@@ -134,13 +166,15 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
     if (!trimmed && !overrideMessage) return;
     if (!currentModel) return;
 
-    const newMessages: ChatMessage[] = overrideMessage ? [
-      ...messages,
-      overrideMessage
-    ] : [
-      ...messages,
-      { role: "user", content: trimmed },
-    ];
+    // Determine if this turn is Sensei-mode
+    const isThisSensei = isSenseiCommand || (isSenseiMode && !!anchoredContext);
+    const editorContext = isThisSensei ? (anchoredContext ?? pendingSenseiContextRef.current) : null;
+    const displayContent = isSenseiCommand ? senseiQuery : trimmed;
+
+    const newMessages: ChatMessage[] = overrideMessage
+      ? [...messages, overrideMessage]
+      : [...messages, { role: "user", content: displayContent, isSensei: isThisSensei }];
+
     setMessages(newMessages);
     if (!overrideMessage) setInput("");
     setLoading(true);
@@ -154,6 +188,8 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
           messages: newMessages,
           model: currentModel,
           project_id: projectId,
+          is_sensei: isThisSensei,
+          editor_context: editorContext ?? undefined,
         }),
       });
       if (!res.ok) throw new Error("Chat request failed");
@@ -219,11 +255,21 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
                 setMessages((prev) => {
                   const next = [...prev];
                   const last = next[next.length - 1];
-                   if (last?.role === "assistant") {
-                     next[next.length - 1] = { ...last, content: streamBuffer.text, isError: streamBuffer.isError };
-                   } else {
-                     next.push({ role: "assistant", content: streamBuffer.text, isError: streamBuffer.isError });
-                   }
+                  if (last?.role === "assistant") {
+                    next[next.length - 1] = {
+                      ...last,
+                      content: streamBuffer.text,
+                      isError: streamBuffer.isError,
+                      isSensei: isThisSensei,
+                    };
+                  } else {
+                    next.push({
+                      role: "assistant",
+                      content: streamBuffer.text,
+                      isError: streamBuffer.isError,
+                      isSensei: isThisSensei,
+                    });
+                  }
                   return next;
                 });
               }
@@ -294,9 +340,30 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
     <div className="flex h-full w-full bg-[#0f0f0f] text-zinc-200">
       <div className={`flex flex-col h-full transition-all duration-300 ${isDraftMode ? 'w-[30%] border-r border-zinc-800' : 'w-full'}`}>
       <div className="flex items-center gap-2 px-3 py-2 border-b border-zinc-800/50 bg-[#0a0a0a] shrink-0">
-        <Cpu className="w-4 h-4 text-blue-400" aria-hidden="true" />
-        <span className="text-xs font-semibold text-zinc-300">SprintLogic AI</span>
+        {isSenseiMode ? (
+          <GraduationCap className="w-4 h-4 text-amber-400" aria-hidden="true" />
+        ) : (
+          <Cpu className="w-4 h-4 text-blue-400" aria-hidden="true" />
+        )}
+        <span className={cn('text-xs font-semibold', isSenseiMode ? 'text-amber-300' : 'text-zinc-300')}>
+          {isSenseiMode ? 'Modo Sensei' : 'SprintLogic AI'}
+        </span>
+        {isSenseiMode && anchoredContext && (
+          <span className="text-[10px] text-amber-500/70 truncate max-w-[120px]" title={anchoredContext.filePath}>
+            {anchoredContext.filePath.split('/').pop()} :{anchoredContext.cursorLine}
+          </span>
+        )}
         <div className="flex-1" />
+        {isSenseiMode && (
+          <button
+            onClick={deactivateSensei}
+            className="p-0.5 rounded hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors"
+            title="Desactivar Modo Sensei"
+            aria-label="Desactivar Modo Sensei"
+          >
+            <X className="w-3 h-3" aria-hidden="true" />
+          </button>
+        )}
         <div className="flex gap-2 relative">
           <div className="relative flex items-center hover:bg-zinc-800 px-2 py-1 rounded transition-colors">
             <Cpu className="w-3 h-3 mr-1 text-zinc-400" aria-hidden="true" />
@@ -335,20 +402,41 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
       </div>
 
       <div className="flex-1 overflow-y-auto custom-scrollbar p-3 flex flex-col gap-3">
+        {/* Sensei anchor banner */}
+        {isSenseiMode && anchoredContext && (
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-500/5 border border-amber-500/20 text-[10px] text-amber-400/80">
+            <GraduationCap className="w-3 h-3 shrink-0" aria-hidden="true" />
+            <span className="truncate">
+              Anclado en <strong className="text-amber-400">{anchoredContext.filePath.split('/').pop()}</strong> — línea {anchoredContext.cursorLine}
+            </span>
+          </div>
+        )}
+
         {messages.map((m, i) => (
           <div
             key={i}
             className={cn(
               'text-xs leading-relaxed rounded-lg px-3 py-2 max-w-[88%]',
-              m.role === 'user'
+              m.role === 'user' && m.isSensei
+                ? 'bg-amber-500/10 text-amber-200 self-end border border-amber-500/20'
+                : m.role === 'user'
                 ? 'bg-blue-500/10 text-blue-200 self-end'
                 : m.role === 'system'
                 ? 'bg-red-900/20 text-red-200 border border-red-800/30 self-start'
                 : m.isError
-                ? "bg-orange-900/20 text-orange-200 border border-orange-800/30 self-start"
+                ? 'bg-orange-900/20 text-orange-200 border border-orange-800/30 self-start'
+                : m.isSensei
+                ? 'bg-amber-900/10 text-zinc-200 border border-amber-500/15 self-start'
                 : 'bg-zinc-800/50 text-zinc-300 self-start'
             )}
           >
+            {/* Sensei badge on assistant responses */}
+            {m.role === 'assistant' && m.isSensei && (
+              <div className="flex items-center gap-1 mb-1.5 text-[10px] text-amber-400/70 font-medium">
+                <GraduationCap className="w-2.5 h-2.5" aria-hidden="true" />
+                Sensei
+              </div>
+            )}
             {m.role === 'assistant' ? (
               <ReactMarkdown
                 components={{
@@ -385,9 +473,16 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
         ))}
 
         {loading && (
-          <div className="self-start flex items-center gap-2 text-xs text-zinc-500 px-3 py-2">
-            <Loader2 className="w-3 h-3 animate-spin" aria-hidden="true" />
-            SprintLogic AI está pensando...
+          <div className={cn(
+            'self-start flex items-center gap-2 text-xs px-3 py-2',
+            isSenseiMode ? 'text-amber-500/70' : 'text-zinc-500'
+          )}>
+            {isSenseiMode ? (
+              <GraduationCap className="w-3 h-3 animate-pulse" aria-hidden="true" />
+            ) : (
+              <Loader2 className="w-3 h-3 animate-spin" aria-hidden="true" />
+            )}
+            {isSenseiMode ? 'El Sensei está meditando tu pregunta...' : 'SprintLogic AI está pensando...'}
           </div>
         )}
 
