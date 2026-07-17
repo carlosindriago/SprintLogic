@@ -1,13 +1,13 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useState, useRef, ComponentType, useMemo, useCallback, useLayoutEffect } from "react";
+import { useEffect, useState, useRef, useMemo, useCallback, useLayoutEffect } from "react";
 import { getProjectGraph, rescanProject, ApiError } from "@/lib/api";
 import { API_BASE_URL } from "@/lib/api";
 import { GraphData, GraphNode, GraphEdge } from "@/types";
-import { ForceGraphProps, NodeObject } from "react-force-graph-2d";
+import { LinkObject, NodeObject } from "react-force-graph-2d";
 import { graphTheme } from "@/lib/graph-theme";
-import { Search, RotateCcw, ZoomIn, ZoomOut, Maximize, Brain, AlertTriangle, Play, Pause, Zap, ZapOff, ScanSearch, FileCode, RefreshCw } from "lucide-react";
+import { Search, RotateCcw, ZoomIn, ZoomOut, Maximize, Brain, Play, Pause, Zap, ZapOff, ScanSearch, FileCode, RefreshCw } from "lucide-react";
 import { useTabsStore } from "../store/tabsStore";
 import { useLLMConfigStore } from "../store/llmConfigStore";
 import { useBackgroundJobsStore } from "../store/backgroundJobsStore";
@@ -250,13 +250,12 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     return () => document.removeEventListener('click', handleClick);
   }, []);
 
-  const [iconsLoaded, setIconsLoaded] = useState(false);
+  const [, setIconsLoaded] = useState(false);
   const iconImages = useRef<Record<string, HTMLImageElement>>({});
 
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzingText, setAnalyzingText] = useState("");
   const [savedAnalysis, setSavedAnalysis] = useState<string | null>(null);
-  const [hasChanges, setHasChanges] = useState(false);
 
   const addTab = useTabsStore((state) => state.addTab);
 
@@ -268,7 +267,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     let loc = 0;
     const extMap: Record<string, number> = {};
 
-    graphData.nodes.forEach((n: any) => {
+    graphData.nodes.forEach((n: GraphNode) => {
       if (n.label === 'File') {
         files++;
         loc += n.loc || 0;
@@ -290,23 +289,18 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
 
   useEffect(() => {
     if (!projectId) {
+      // Reset de estado derivado al cerrar el proyecto (no es sincronizacion con un
+      // sistema externo), por eso silenciamos la regla puntualmente aqui.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSavedAnalysis(null);
-      setHasChanges(false);
       return;
     }
     const saved = localStorage.getItem(`graph_analysis_${projectId}`);
-    const savedSig = localStorage.getItem(`graph_analysis_sig_${projectId}`);
 
     if (saved) {
       setSavedAnalysis(saved);
-      if (savedSig && savedSig !== currentSignature) {
-        setHasChanges(true);
-      } else {
-        setHasChanges(false);
-      }
     } else {
       setSavedAnalysis(null);
-      setHasChanges(false);
     }
   }, [projectId, graphData, currentSignature]);
 
@@ -360,7 +354,6 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
         localStorage.setItem(`graph_analysis_${projectId}`, fullText);
         localStorage.setItem(`graph_analysis_sig_${projectId}`, currentSignature);
         setSavedAnalysis(fullText);
-        setHasChanges(false);
         addTab({ id: 'ai-history', title: 'Historial IA', type: 'ai-history' });
       }
     } catch (err) {
@@ -509,17 +502,19 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     fgRef.current.d3Force('charge').strength(-120);
     fgRef.current.d3Force('link').distance(30);
     fgRef.current.d3ReheatSimulation();
-  }, [hasGraphData]);
+  }, [hasGraphData, dimensions.width]);
 
   useEffect(() => {
     if (!enableFlow || !graphData || !graphData.links) {
+      // Reset de estado derivado al desactivar el flujo animado o vaciarse el grafo.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setGlowingLinks(new Set());
       return;
     }
 
     const interval = setInterval(() => {
       const newGlowing = new Set<string>();
-      graphData.links.forEach((link: any) => {
+      graphData.links.forEach((link: GraphEdge) => {
         if (Math.random() < 0.1) {
           const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
           const targetId = typeof link.target === 'object' ? link.target.id : link.target;
@@ -537,7 +532,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
   const neighbors = useMemo(() => {
     const map = new Map<string, Set<string>>();
     graphData.nodes.forEach(n => map.set(n.id as string, new Set()));
-    graphData.links.forEach((l: any) => {
+    graphData.links.forEach((l: GraphEdge) => {
       const source = typeof l.source === 'object' ? l.source.id : l.source;
       const target = typeof l.target === 'object' ? l.target.id : l.target;
       if (source && target) {
@@ -575,7 +570,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
   }, [focusNode, hoverNode, neighbors]);
 
   const paintNode = useCallback((node: NodeObject, ctx: CanvasRenderingContext2D, globalScale: number) => {
-    const n = node as any;
+    const n = node as ForceNode;
     const id = n.id as string;
     const label = n.label as string;
     const name = n.name as string;
@@ -647,7 +642,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     }
     // ────────────────────────────────────────────────────────────────────────
 
-    if (n.out_degree > 0 && !faded && !isZoomedOut) {
+    if ((n.out_degree ?? 0) > 0 && !faded && !isZoomedOut) {
       const pulse = Math.sin(Date.now() / 300) * 1.5;
       const haloRadius = radius + 3.5 + pulse;
       ctx.beginPath();
@@ -692,7 +687,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
       ctx.stroke();
     }
 
-    if (n.in_degree > 0 && (label === "Function" || label === "Interface" || radius < 5) && !faded && !isZoomedOut) {
+    if ((n.in_degree ?? 0) > 0 && (label === "Function" || label === "Interface" || radius < 5) && !faded && !isZoomedOut) {
       const t = (Date.now() / 1200) % 1.0;
       const rippleRadius = radius + t * 8;
       const rippleOpacity = (1 - t) * 0.45;
@@ -729,9 +724,10 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     ctx.globalAlpha = 1;
   }, [activeTypes, lowerSearchQuery, isFaded, hoverNode, focusNode, timeRange]);
 
-  const getLinkColor = useCallback((link: any) => {
-    const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
-    const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+  const getLinkColor = useCallback((link: LinkObject) => {
+    const l = link as ForceLink;
+    const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
+    const targetId = typeof l.target === 'object' ? l.target.id : l.target;
 
     const faded = isFaded(sourceId) && isFaded(targetId);
 
@@ -744,22 +740,24 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
       return "rgba(255, 255, 255, 0.05)";
     }
 
-    if (showCycles && link.is_cycle) {
+    if (showCycles && l.is_cycle) {
       return "rgba(248, 113, 113, 0.55)";
     }
     return "rgba(156, 163, 175, 0.4)";
   }, [isFaded, showCycles, glowingLinks]);
 
-  const getParticleColor = useCallback((link: any) => {
-    if (showCycles && link.is_cycle) {
+  const getParticleColor = useCallback((link: LinkObject) => {
+    const l = link as ForceLink;
+    if (showCycles && l.is_cycle) {
       return "rgba(252, 165, 165, 0.8)";
     }
     return "rgba(203, 213, 225, 0.65)";
   }, [showCycles]);
 
-  const getLinkWidth = useCallback((link: any) => {
-    const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
-    const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+  const getLinkWidth = useCallback((link: LinkObject) => {
+    const l = link as ForceLink;
+    const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
+    const targetId = typeof l.target === 'object' ? l.target.id : l.target;
     const faded = isFaded(sourceId) && isFaded(targetId);
 
     if (glowingLinks.has(`${sourceId}-${targetId}`) && !faded) {
@@ -768,15 +766,16 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
 
     if (faded) return 0.5;
 
-    if (showCycles && link.is_cycle) return 2;
+    if (showCycles && l.is_cycle) return 2;
     if (hoverNode === sourceId || hoverNode === targetId) return 2;
     return Math.max(1, 1.5 / globalScaleRef.current);
   }, [isFaded, hoverNode, showCycles, glowingLinks]);
 
   // SENSEI FIX: Reescritura segura de getLinkVisibility usando getSafeTime
-  const getLinkVisibility = useCallback((link: any) => {
-    const sourceNode = link.source;
-    const targetNode = link.target;
+  const getLinkVisibility = useCallback((link: LinkObject) => {
+    const l = link as ForceLink;
+    const sourceNode = l.source;
+    const targetNode = l.target;
     if (!sourceNode || !targetNode) return false;
 
     const sourceLabel = typeof sourceNode === 'object' ? sourceNode.label : null;
@@ -1067,8 +1066,8 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
                     label: (contextMenu.node.label as "File" | "Class" | "Function") || "File",
                     name: (contextMenu.node.name as string) || "",
                     file_path: (contextMenu.node.file_path as string) || "",
-                    size: (contextMenu.node as any).size as number | undefined,
-                    metadata: (contextMenu.node as any).metadata as Record<string, unknown> | undefined
+                    size: contextMenu.node.size,
+                    metadata: contextMenu.node.metadata
                   });
                 }
                 setContextMenu(null);
@@ -1079,7 +1078,6 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
           </div>
         )}
 
-        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
         <ForceGraph2D
             ref={fgRef}
             width={dimensions.width || 800}
@@ -1097,20 +1095,22 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
             linkWidth={getLinkWidth}
             linkVisibility={getLinkVisibility}
             linkCurvature={0.15}
-            linkDirectionalParticles={enableFlow ? ((link: any) => {
-              const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
-              const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+            linkDirectionalParticles={enableFlow ? ((link: LinkObject) => {
+              const l = link as ForceLink;
+              const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
+              const targetId = typeof l.target === 'object' ? l.target.id : l.target;
               const faded = isFaded(sourceId) && isFaded(targetId);
               if (faded) return 0;
-              return showCycles && link.is_cycle ? 4 : 2;
+              return showCycles && l.is_cycle ? 4 : 2;
             }) : 0}
-            linkDirectionalParticleSpeed={(link: any) => (showCycles && link.is_cycle ? 0.012 : 0.005)}
+            linkDirectionalParticleSpeed={(link: LinkObject) => (showCycles && (link as ForceLink).is_cycle ? 0.012 : 0.005)}
             linkDirectionalParticleWidth={1.0}
             linkDirectionalParticleColor={getParticleColor}
             linkDirectionalArrowLength={3.5}
             linkDirectionalArrowRelPos={1}
             cooldownTicks={100}
-            onNodeClick={(node: any, event: any) => {
+            onNodeClick={(node: NodeObject) => {
+              const n = node as ForceNode;
               const now = Date.now();
               const isDoubleClick = now - lastClickTimeRef.current < 400;
               lastClickTimeRef.current = now;
@@ -1118,28 +1118,28 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
               if (isDoubleClick) {
                 if (onNodeClick) {
                   onNodeClick({
-                    id: (node.id as string) || "",
-                    label: (node.label as "File" | "Class" | "Function") || "File",
-                    name: (node.name as string) || "",
-                    file_path: (node.file_path as string) || "",
-                    size: (node as any).size as number | undefined,
-                    metadata: (node as any).metadata as Record<string, unknown> | undefined
+                    id: (n.id as string) || "",
+                    label: (n.label as "File" | "Class" | "Function") || "File",
+                    name: (n.name as string) || "",
+                    file_path: (n.file_path as string) || "",
+                    size: n.size,
+                    metadata: n.metadata
                   });
                 }
               } else {
-                setFocusNode(node.id as string);
+                setFocusNode(n.id as string);
               }
             }}
             onBackgroundClick={() => setFocusNode(null)}
-            onNodeRightClick={(node: any, event: any) => {
+            onNodeRightClick={(node: NodeObject, event: MouseEvent) => {
               setContextMenu({
                 visible: true,
                 x: event.clientX,
                 y: event.clientY,
-                node
+                node: node as ForceNode
               });
             }}
-            onNodeHover={(node: any) => setHoverNode(node ? (node.id as string) : null)}
+            onNodeHover={(node: NodeObject | null) => setHoverNode(node ? (node.id as string) : null)}
             enableZoomInteraction={true}
             enablePanInteraction={true}
             onEngineStop={() => {
