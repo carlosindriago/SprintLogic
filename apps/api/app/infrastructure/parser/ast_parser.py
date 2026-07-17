@@ -213,6 +213,72 @@ async def fetch_git_birth_dates(repo_path: str) -> dict[str, int]:
     return dates
 
 
+def resolve_import_edges(
+    project_id: UUID,
+    file_imports: dict[str, set[str]],
+    file_paths: list[str],
+    base_dir: Path,
+) -> list[GraphEdge]:
+    """
+    Pasada 2 del análisis (estilo compilador de dos pasadas): una vez que se conoce el
+    universo completo de archivos del proyecto (`file_paths`), resuelve cada import
+    crudo detectado en la Pasada 1 (`file_imports`, poblado por `extract_nodes_from_code`)
+    contra el filesystem real y devuelve las aristas IMPORTS resultantes.
+
+    Limitación conocida y deliberada (no scope creep): la resolución de TS/JS/JSX es un
+    matching por nombre de archivo (stem), no lee `tsconfig.json` ni resuelve alias como
+    `@/components/...`. Esos imports quedarán sin conectar hasta que se construya un
+    resolver consciente de path-mapping — tarea separada y explícitamente fuera de
+    alcance de este fix.
+    """
+    edges: list[GraphEdge] = []
+
+    for source_id, imports in file_imports.items():
+        source_path_str = source_id.replace("file:", "")
+        is_python = source_path_str.endswith(".py")
+
+        for imp in imports:
+            if not imp:
+                continue
+
+            if is_python:
+                target_path = resolve_python_import(base_dir, imp)
+                if target_path:
+                    target_id = f"file:{target_path}"
+                    if source_id != target_id:
+                        edges.append(
+                            GraphEdge(
+                                project_id=project_id,
+                                source_id=source_id,
+                                target_id=target_id,
+                                type=EdgeType.IMPORTS,
+                            )
+                        )
+            else:
+                normalized_imp = imp.replace(".", "/").lstrip("./@")
+                if not normalized_imp:
+                    continue
+
+                target_stem = Path(normalized_imp).stem
+
+                for fp in file_paths:
+                    fp_path = Path(fp)
+                    if fp_path.stem == target_stem or fp_path.parent.name == target_stem:
+                        target_id = f"file:{fp}"
+                        if source_id != target_id:
+                            edges.append(
+                                GraphEdge(
+                                    project_id=project_id,
+                                    source_id=source_id,
+                                    target_id=target_id,
+                                    type=EdgeType.IMPORTS,
+                                )
+                            )
+                            break
+
+    return edges
+
+
 def extract_nodes_from_code(
     project_id: UUID,
     file_path: str,
@@ -320,52 +386,11 @@ class ASTParserService:
                     except Exception:
                         pass
 
-        # Resolve imports across files
+        # Resolve imports across files (Pasada 2 del compilador de dos pasadas)
         base_dir = Path(dir_path)
         file_paths = [n.file_path for n in all_nodes if n.label == NodeLabel.FILE]
+        all_edges.extend(resolve_import_edges(project_id, file_imports, file_paths, base_dir))
 
-        for source_id, imports in file_imports.items():
-            source_path_str = source_id.replace("file:", "")
-            is_python = source_path_str.endswith(".py")
-
-            for imp in imports:
-                if not imp:
-                    continue
-
-                if is_python:
-                    target_path = resolve_python_import(base_dir, imp)
-                    if target_path:
-                        target_id = f"file:{target_path}"
-                        if source_id != target_id:
-                            all_edges.append(
-                                GraphEdge(
-                                    project_id=project_id,
-                                    source_id=source_id,
-                                    target_id=target_id,
-                                    type=EdgeType.IMPORTS,
-                                )
-                            )
-                else:
-                    normalized_imp = imp.replace(".", "/").lstrip("./@")
-                    if not normalized_imp:
-                        continue
-
-                    target_stem = Path(normalized_imp).stem
-
-                    for fp in file_paths:
-                        fp_path = Path(fp)
-                        if fp_path.stem == target_stem or fp_path.parent.name == target_stem:
-                            target_id = f"file:{fp}"
-                            if source_id != target_id:
-                                all_edges.append(
-                                    GraphEdge(
-                                        project_id=project_id,
-                                        source_id=source_id,
-                                        target_id=target_id,
-                                        type=EdgeType.IMPORTS,
-                                    )
-                                )
-                                break
         # Deduplicate edges to prevent DB IntegrityError (UNIQUE constraint failed)
         unique_edges = {}
         for edge in all_edges:
