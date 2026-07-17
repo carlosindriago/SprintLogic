@@ -34,18 +34,19 @@ export const ScanProgressBar: React.FC<ScanProgressBarProps> = ({ projectId }) =
   useEffect(() => {
     if (scanJob?.status !== 'scanning') return;
 
-    localAbortControllerRef.current = new AbortController();
-
     // React 18 StrictMode guard — 50ms debounce prevents double-mount socket leak
     const timerId = setTimeout(startScanStream, 50);
 
     async function startScanStream() {
+      const ctrl = new AbortController();
+      localAbortControllerRef.current = ctrl;
+
       try {
         await fetchEventSource(
           `http://localhost:8000/api/v1/projects/${projectId}/scan/stream`,
           {
             method: 'GET',
-            signal: localAbortControllerRef.current!.signal,
+            signal: ctrl.signal,
 
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             async onmessage(event: any) {
@@ -92,7 +93,7 @@ export const ScanProgressBar: React.FC<ScanProgressBarProps> = ({ projectId }) =
                 }
 
                 if (data.type === 'completed') {
-                  localAbortControllerRef.current?.abort();
+                  ctrl.abort();
                   setPhase('completed');
                   setCurrentPercentage(100);
                   setStatusText(`Done — ${data.parsed ?? ''} files analyzed`);
@@ -109,22 +110,20 @@ export const ScanProgressBar: React.FC<ScanProgressBarProps> = ({ projectId }) =
             },
 
             onclose() {
-              // Server closed the stream — throw to prevent zombie reconnects
-              throw new Error('__stream_closed__');
+              ctrl.abort();
             },
 
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             onerror(err: any) {
               console.error('SSE error:', err);
-              throw err; // kills the reconnect loop
+              ctrl.abort();
+              throw err;
             },
           }
         );
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (err: any) {
-        const isSilent =
-          err?.name === 'AbortError' || err?.message === '__stream_closed__';
-        if (!isSilent) {
+        if (err?.name !== 'AbortError') {
           toast.error('Connection error during scan');
           setScanStatus(projectId, 'failed');
         }

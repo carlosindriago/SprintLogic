@@ -243,6 +243,7 @@ export const getCuratedModels = () => api.get<CuratedProvider[]>('/ai/models');
 export const getGlobalFlowInsights = () => api.get<ProjectFlowInsights>('/insights/flow');
 export const getProjectFlowInsights = (projectId: string) => api.get<ProjectFlowInsights>(`/projects/${projectId}/insights/flow`);
 export const getProjectRepoInsights = (projectId: string) => api.get<ProjectRepoInsights>(`/projects/${projectId}/insights/repo`);
+export const rescanProject = (projectId: string) => api.post<{ status: string; message: string }>(`/projects/${projectId}/rescan`);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const analyzeProject = (projectId: string) => api.post<any>(`/projects/${projectId}/analyze`);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

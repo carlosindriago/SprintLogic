@@ -1,29 +1,41 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/set-state-in-effect */
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useState, useRef, ComponentType, useMemo, useCallback, useLayoutEffect } from "react";
-import * as THREE from "three";
-import { getProjectGraph } from "@/lib/api";
+import { useEffect, useState, useRef, useMemo, useCallback, useLayoutEffect } from "react";
+import { getProjectGraph, rescanProject, ApiError } from "@/lib/api";
 import { API_BASE_URL } from "@/lib/api";
-import { GraphData, GraphNode } from "@/types";
-import { ForceGraphProps, NodeObject, LinkObject } from "react-force-graph-2d";
+import { GraphData, GraphNode, GraphEdge } from "@/types";
+import { LinkObject, NodeObject } from "react-force-graph-2d";
 import { graphTheme } from "@/lib/graph-theme";
-import { Search, RotateCcw, ZoomIn, ZoomOut, Maximize, Brain, AlertTriangle, Play, Pause, Zap, ZapOff, Box, Layers, ScanSearch, FileCode } from "lucide-react";
+import { Search, RotateCcw, ZoomIn, ZoomOut, Maximize, Brain, Play, Pause, Zap, ZapOff, ScanSearch, FileCode, RefreshCw } from "lucide-react";
 import { useTabsStore } from "../store/tabsStore";
 import { useLLMConfigStore } from "../store/llmConfigStore";
+import { useBackgroundJobsStore } from "../store/backgroundJobsStore";
+import { toast } from "sonner";
+
+interface ForceNode extends GraphNode {
+  x?: number;
+  y?: number;
+  z?: number;
+  vx?: number;
+  vy?: number;
+  vz?: number;
+  fx?: number;
+  fy?: number;
+  fz?: number;
+}
+
+interface ForceLink extends GraphEdge {
+  source: string | ForceNode;
+  target: string | ForceNode;
+}
 
 // Dynamically import react-force-graph to avoid SSR issues
-const ForceGraph2D = dynamic<any>(
-  () => import("react-force-graph-2d").then((mod) => mod.default as any),
+const ForceGraph2D = dynamic(
+  () => import("react-force-graph-2d"),
   { ssr: false }
 );
 
-const ForceGraph3D = dynamic<any>(
-  () => import("react-force-graph-3d").then((mod) => mod.default as any),
-  { ssr: false }
-);
- 
 const ICON_URLS: Record<string, string> = {
   py: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/python/python-original.svg",
   ts: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/typescript/typescript-original.svg",
@@ -41,83 +53,212 @@ const ICON_URLS: Record<string, string> = {
   sh: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/bash/bash-original.svg"
 };
 
+// SENSEI FIX: Nuestro escudo, protegiendo contra los undefined y las mutaciones de D3.
+const getSafeTime = (nodeRef: unknown): number => {
+  if (!nodeRef || typeof nodeRef !== 'object') return 0;
+  const value = (nodeRef as { birth_time?: unknown }).birth_time;
+  return typeof value === 'number' ? value : 0;
+};
 
+const MODULE_COLORS = [
+  "#3b82f6", "#ef4444", "#10b981", "#f59e0b", "#8b5cf6",
+  "#ec4899", "#06b6d4", "#f97316", "#84cc16", "#6366f1",
+  "#14b8a6", "#e11d48", "#a855f7", "#0ea5e9", "#d946ef",
+];
+
+const CONTAINER_PREFIXES = ["src", "app", "lib", "pkg", "internal", "packages"];
+
+const moduleColorMap = new Map<string, string>();
+let nextColorIndex = 0;
+
+function getModuleColor(folder: string): string {
+  if (!folder || folder === "/") return "#6b7280";
+  const parts = folder.split("/").filter(Boolean);
+
+  let startIdx = 0;
+  for (let i = 0; i < parts.length; i++) {
+    if (CONTAINER_PREFIXES.includes(parts[i])) {
+      startIdx = i + 1;
+    }
+  }
+
+  const significantParts = parts.slice(startIdx);
+  if (significantParts.length === 0) return "#6b7280";
+
+  const modulePath = significantParts.length >= 2
+    ? significantParts.slice(0, 2).join("/")
+    : significantParts[0];
+
+  if (moduleColorMap.has(modulePath)) {
+    return moduleColorMap.get(modulePath)!;
+  }
+
+  const color = MODULE_COLORS[nextColorIndex % MODULE_COLORS.length];
+  moduleColorMap.set(modulePath, color);
+  nextColorIndex++;
+  return color;
+}
 
 interface GraphSceneProps {
   projectId: string | null;
   onNodeClick?: (node: GraphNode) => void;
 }
- 
+
 export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) {
   const [graphData, setGraphData] = useState<GraphData>({ nodes: [], links: [] });
   const containerRef = useRef<HTMLDivElement>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const fgRef = useRef<any>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
- 
+
   const [hoverNode, setHoverNode] = useState<string | null>(null);
   const [focusNode, setFocusNode] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [showCycles, setShowCycles] = useState(false);
   const [activeTypes, setActiveTypes] = useState<Set<string>>(new Set(["File", "Class", "Function", "Interface"]));
-  
-  const [is3D, setIs3D] = useState(false);
+
   const [enableFlow, setEnableFlow] = useState(false);
   const [isPhysicsActive, setIsPhysicsActive] = useState(true);
   const [glowingLinks, setGlowingLinks] = useState<Set<string>>(new Set());
-  
+
+  const [animating, setAnimating] = useState(false);
+  const [animProgress, setAnimProgress] = useState(1);
+  const animProgressRef = useRef(1);
+
+  const scanStatus = useBackgroundJobsStore((s) => (projectId ? s.activeScans[projectId]?.status : undefined));
+  const startScan = useBackgroundJobsStore((s) => s.startScan);
+  const clearScan = useBackgroundJobsStore((s) => s.clearScan);
+  const isScanning = scanStatus === "scanning";
+
+  const rescanHandledRef = useRef(false);
+  const cutoffTimeRef = useRef<number | null>(null);
+  const globalScaleRef = useRef(1);
+
+  useEffect(() => {
+    if (!projectId) return;
+    if (scanStatus === "scanning") {
+      rescanHandledRef.current = false;
+      return;
+    }
+    if (scanStatus === "completed" && !rescanHandledRef.current) {
+      rescanHandledRef.current = true;
+      getProjectGraph(projectId)
+        .then((data) => setGraphData(data))
+        .catch(() => {
+          toast.error("El escaneo terminó, pero falló la descarga del nuevo grafo. Reintentá.");
+        })
+        .finally(() => clearScan(projectId));
+    }
+    if (scanStatus === "failed") {
+      clearScan(projectId);
+    }
+  }, [scanStatus, projectId, clearScan]);
+
+  const handleRescan = async () => {
+    if (!projectId) return;
+    try {
+      await rescanProject(projectId);
+      startScan(projectId);
+      toast.success("Re-escaneo iniciado. El grafo se actualizará al finalizar.");
+    } catch {
+      toast.error("Error al re-escanear");
+    }
+  };
+
+  useEffect(() => {
+    if (!isScanning || !projectId) return;
+    const watchdog = setTimeout(() => {
+      const current = useBackgroundJobsStore.getState().activeScans[projectId]?.status;
+      if (current === "scanning") {
+        clearScan(projectId);
+        toast.error("El escaneo no respondió a tiempo. Verificá la conexión con el servidor.");
+      }
+    }, 60000);
+    return () => clearTimeout(watchdog);
+  }, [isScanning, projectId, clearScan]);
+
+  const timeRange = useMemo(() => {
+    const timed = graphData.nodes
+      .filter((n) => (n as ForceNode).birth_time)
+      .map((n) => (n as ForceNode).birth_time!) as number[];
+    if (timed.length < 2) return null;
+    return { min: Math.min(...timed), max: Math.max(...timed) };
+  }, [graphData]);
+
+  useEffect(() => {
+    if (!timeRange) {
+      cutoffTimeRef.current = null;
+      return;
+    }
+    cutoffTimeRef.current = timeRange.min + (timeRange.max - timeRange.min) * animProgress;
+  }, [timeRange, animProgress]);
+
+  const moduleLegend = useMemo(() => {
+    const seen = new Set<string>();
+    const items: { name: string; color: string }[] = [];
+    for (const n of graphData.nodes) {
+      const folder = (n as ForceNode).folder;
+      if (!folder || folder === "/") continue;
+      const parts = folder.split("/").filter(Boolean);
+      let startIdx = 0;
+      for (let i = 0; i < parts.length; i++) {
+        if (CONTAINER_PREFIXES.includes(parts[i])) startIdx = i + 1;
+      }
+      const key = parts.slice(startIdx, startIdx + 2).join("/") || parts[0] || folder;
+      if (!seen.has(key)) {
+        seen.add(key);
+        items.push({ name: key, color: getModuleColor(folder) });
+      }
+    }
+    return items;
+  }, [graphData]);
+
+  useEffect(() => {
+    animProgressRef.current = animProgress;
+  }, [animProgress]);
+
   const lastClickTimeRef = useRef<number>(0);
   const initialFitDone = useRef(false);
-  const [contextMenu, setContextMenu] = useState<{ visible: boolean, x: number, y: number, node: any } | null>(null);
+
+  useEffect(() => {
+    if (!animating) return;
+    const start = Date.now();
+    const duration = 15000;
+    let rafId: number;
+
+    const tick = () => {
+      const elapsed = Date.now() - start;
+      const progress = Math.min(elapsed / duration, 1);
+      animProgressRef.current = progress;
+      setAnimProgress(progress);
+      if (progress < 1) {
+        rafId = requestAnimationFrame(tick);
+      } else {
+        setAnimating(false);
+      }
+    };
+
+    rafId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafId);
+  }, [animating]);
+
+  const [contextMenu, setContextMenu] = useState<{ visible: boolean; x: number; y: number; node: ForceNode } | null>(null);
 
   useEffect(() => {
     const handleClick = () => setContextMenu(null);
     document.addEventListener('click', handleClick);
     return () => document.removeEventListener('click', handleClick);
   }, []);
-  const [iconsLoaded, setIconsLoaded] = useState(false);
-  const iconImages = useRef<Record<string, HTMLImageElement>>({});
-  
-  // 3D Texture Preloader
-  const textureLoader = useMemo(() => {
-    if (typeof window === 'undefined') return null;
-    return new THREE.TextureLoader();
-  }, []);
-  const textures = useRef<Record<string, THREE.Texture>>({});
-  const [threeTexturesLoaded, setThreeTexturesLoaded] = useState(false);
 
-  useEffect(() => {
-    if (!textureLoader) return;
-    let loadedCount = 0;
-    const extensions = Object.keys(ICON_URLS);
-    extensions.forEach((ext) => {
-      textureLoader.load(
-        ICON_URLS[ext],
-        (texture) => {
-          textures.current[ext] = texture;
-          loadedCount++;
-          if (loadedCount === extensions.length) {
-            setThreeTexturesLoaded(true);
-          }
-        },
-        undefined,
-        () => {
-          loadedCount++;
-          if (loadedCount === extensions.length) {
-            setThreeTexturesLoaded(true);
-          }
-        }
-      );
-    });
-  }, [textureLoader]);
+  const [, setIconsLoaded] = useState(false);
+  const iconImages = useRef<Record<string, HTMLImageElement>>({});
 
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzingText, setAnalyzingText] = useState("");
   const [savedAnalysis, setSavedAnalysis] = useState<string | null>(null);
-  const [hasChanges, setHasChanges] = useState(false);
-  
+
   const addTab = useTabsStore((state) => state.addTab);
 
-  // Compute codebase statistics
   const stats = useMemo(() => {
     let files = 0;
     let classes = 0;
@@ -126,7 +267,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     let loc = 0;
     const extMap: Record<string, number> = {};
 
-    graphData.nodes.forEach((n: any) => {
+    graphData.nodes.forEach((n: GraphNode) => {
       if (n.label === 'File') {
         files++;
         loc += n.loc || 0;
@@ -144,28 +285,22 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     return { files, classes, functions, interfaces, loc, extMap };
   }, [graphData]);
 
-  // Compute current signature
   const currentSignature = `${graphData.nodes.length}_${graphData.links.length}_${stats.loc}`;
 
   useEffect(() => {
     if (!projectId) {
+      // Reset de estado derivado al cerrar el proyecto (no es sincronizacion con un
+      // sistema externo), por eso silenciamos la regla puntualmente aqui.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSavedAnalysis(null);
-      setHasChanges(false);
       return;
     }
     const saved = localStorage.getItem(`graph_analysis_${projectId}`);
-    const savedSig = localStorage.getItem(`graph_analysis_sig_${projectId}`);
-    
+
     if (saved) {
       setSavedAnalysis(saved);
-      if (savedSig && savedSig !== currentSignature) {
-        setHasChanges(true);
-      } else {
-        setHasChanges(false);
-      }
     } else {
       setSavedAnalysis(null);
-      setHasChanges(false);
     }
   }, [projectId, graphData, currentSignature]);
 
@@ -219,7 +354,6 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
         localStorage.setItem(`graph_analysis_${projectId}`, fullText);
         localStorage.setItem(`graph_analysis_sig_${projectId}`, currentSignature);
         setSavedAnalysis(fullText);
-        setHasChanges(false);
         addTab({ id: 'ai-history', title: 'Historial IA', type: 'ai-history' });
       }
     } catch (err) {
@@ -256,29 +390,19 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
       iconImages.current[ext] = img;
     });
   }, []);
- 
+
   const handleZoomIn = () => {
     if (fgRef.current) {
-      if (is3D) {
-        const { x, y, z } = fgRef.current.cameraPosition();
-        fgRef.current.cameraPosition({ x: x * 0.7, y: y * 0.7, z: z * 0.7 }, undefined, 400);
-      } else {
-        fgRef.current.zoom(fgRef.current.zoom() * 1.5, 400);
-      }
+      fgRef.current.zoom(fgRef.current.zoom() * 1.5, 400);
     }
   };
- 
+
   const handleZoomOut = () => {
     if (fgRef.current) {
-      if (is3D) {
-        const { x, y, z } = fgRef.current.cameraPosition();
-        fgRef.current.cameraPosition({ x: x * 1.5, y: y * 1.5, z: z * 1.5 }, undefined, 400);
-      } else {
-        fgRef.current.zoom(fgRef.current.zoom() / 1.5, 400);
-      }
+      fgRef.current.zoom(fgRef.current.zoom() / 1.5, 400);
     }
   };
- 
+
   const handleFitView = () => {
     if (fgRef.current) {
       fgRef.current.zoomToFit(400, 50);
@@ -343,6 +467,10 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
           const data = await getProjectGraph(projectId);
           if (active) setGraphData(data);
         } catch (err) {
+          if (err instanceof ApiError && err.status === 404) {
+            if (active) setGraphData({ nodes: [], links: [] });
+            return;
+          }
           console.error("Failed to load graph:", err);
         }
       } else {
@@ -353,24 +481,6 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     return () => { active = false; };
   }, [projectId]);
 
-  const prevIs3D = useRef(is3D);
-
-  useEffect(() => {
-    if (prevIs3D.current === is3D) return;
-    prevIs3D.current = is3D;
-
-    if (graphData && graphData.nodes) {
-      graphData.nodes.forEach((n: any) => {
-         delete n.x;
-         delete n.y;
-         delete n.z;
-         delete n.vx;
-         delete n.vy;
-         delete n.vz;
-      });
-    }
-  }, [is3D]);
-
   const hasGraphData = useMemo(
     () => graphData && graphData.nodes && graphData.nodes.length > 0,
     [graphData]
@@ -379,10 +489,8 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
   useEffect(() => {
     if (!fgRef.current || dimensions.width === 0) return;
 
-    fgRef.current.d3Force('charge').strength(-400);
-    fgRef.current.d3Force('link').distance((link: any) => {
-      return link.type === 'IMPORTS' ? 300 : 120;
-    });
+    fgRef.current.d3Force('charge').strength(-120);
+    fgRef.current.d3Force('link').distance(30);
   }, [dimensions.width]);
 
   useEffect(() => {
@@ -391,23 +499,22 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
 
     initialFitDone.current = false;
 
-    fgRef.current.d3Force('charge').strength(-400);
-    fgRef.current.d3Force('link').distance((link: any) => {
-      return link.type === 'IMPORTS' ? 300 : 120;
-    });
+    fgRef.current.d3Force('charge').strength(-120);
+    fgRef.current.d3Force('link').distance(30);
     fgRef.current.d3ReheatSimulation();
-  }, [hasGraphData, is3D]);
+  }, [hasGraphData, dimensions.width]);
 
   useEffect(() => {
-    if (!enableFlow || !is3D || !graphData || !graphData.links) {
+    if (!enableFlow || !graphData || !graphData.links) {
+      // Reset de estado derivado al desactivar el flujo animado o vaciarse el grafo.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setGlowingLinks(new Set());
       return;
     }
-    
-    // Every 1.5 seconds, pick a random subset of links (10%) to glow
+
     const interval = setInterval(() => {
       const newGlowing = new Set<string>();
-      graphData.links.forEach((link: any) => {
+      graphData.links.forEach((link: GraphEdge) => {
         if (Math.random() < 0.1) {
           const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
           const targetId = typeof link.target === 'object' ? link.target.id : link.target;
@@ -416,16 +523,16 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
       });
       setGlowingLinks(newGlowing);
     }, 1500);
-    
+
     return () => clearInterval(interval);
-  }, [enableFlow, is3D, graphData]);
+  }, [enableFlow, graphData]);
 
   const lowerSearchQuery = useMemo(() => searchQuery?.toLowerCase() || "", [searchQuery]);
 
   const neighbors = useMemo(() => {
     const map = new Map<string, Set<string>>();
     graphData.nodes.forEach(n => map.set(n.id as string, new Set()));
-    graphData.links.forEach((l: any) => {
+    graphData.links.forEach((l: GraphEdge) => {
       const source = typeof l.source === 'object' ? l.source.id : l.source;
       const target = typeof l.target === 'object' ? l.target.id : l.target;
       if (source && target) {
@@ -437,20 +544,22 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
   }, [graphData]);
 
   const displayGraphData = useMemo(() => {
-    if (!focusNode || !graphData || !graphData.nodes) return graphData;
+    if (!graphData || !graphData.nodes) return graphData;
 
-    // Isolate only the focused node and its neighbors
-    const neighborsSet = neighbors.get(focusNode) || new Set();
-    const visibleNodes = new Set([focusNode, ...neighborsSet]);
+    let { nodes, links } = graphData;
 
-    const filteredNodes = graphData.nodes.filter((n: any) => visibleNodes.has(n.id as string));
-    const filteredLinks = graphData.links.filter((l: any) => {
-      const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
-      const targetId = typeof l.target === 'object' ? l.target.id : l.target;
-      return visibleNodes.has(sourceId) && visibleNodes.has(targetId);
-    });
+    if (focusNode) {
+      const neighborsSet = neighbors.get(focusNode) || new Set();
+      const visibleNodes = new Set([focusNode, ...neighborsSet]);
+      nodes = nodes.filter((n) => visibleNodes.has(n.id));
+      links = links.filter((l) => {
+        const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
+        const targetId = typeof l.target === 'object' ? l.target.id : l.target;
+        return visibleNodes.has(sourceId) && visibleNodes.has(targetId);
+      });
+    }
 
-    return { nodes: filteredNodes, links: filteredLinks };
+    return { nodes, links };
   }, [graphData, focusNode, neighbors]);
 
   const isFaded = useCallback((nodeId: string) => {
@@ -461,45 +570,84 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
   }, [focusNode, hoverNode, neighbors]);
 
   const paintNode = useCallback((node: NodeObject, ctx: CanvasRenderingContext2D, globalScale: number) => {
-    const n = node as any;
+    const n = node as ForceNode;
     const id = n.id as string;
     const label = n.label as string;
     const name = n.name as string;
-    
-    // Filter by type
+
+    globalScaleRef.current = globalScale;
+
     if (!activeTypes.has(label)) return;
-    
-    // Filter by search
     if (lowerSearchQuery && !name.toLowerCase().includes(lowerSearchQuery)) return;
+
+    const progress = animProgressRef.current;
+
+    // SENSEI FIX: Usamos getSafeTime para la visibilidad temporal del nodo
+    const bTime = getSafeTime(n);
+    if (progress < 1 && timeRange) {
+      const cutoff = timeRange.min + (timeRange.max - timeRange.min) * progress;
+      if (bTime > cutoff) return; // Si no ha nacido, no lo dibujamos
+    }
 
     let radius = 3;
     let color = graphTheme.unknown;
 
+    const degree = n.in_degree || 0;
+    const degreeRadius = 1 + Math.log2(1 + degree) * 1.6;
+
+    const moduleColor = getModuleColor(n.folder || "");
+
     if (label === "File") {
-      const size = (n.size as number) || 0;
-      radius = Math.min(Math.max(size / 2000, 4), 10);
-      color = graphTheme.file;
+      radius = Math.max(4, degreeRadius);
+      color = moduleColor;
     } else if (label === "Class") {
-      radius = 5;
-      color = graphTheme.class;
+      radius = Math.max(5, degreeRadius);
+      color = moduleColor;
     } else if (label === "Function") {
-      radius = 4;
-      color = graphTheme.function;
+      radius = Math.max(4, degreeRadius);
+      color = moduleColor;
     } else if (label === "Interface") {
-      radius = 5;
-      color = graphTheme.interface;
+      radius = Math.max(5, degreeRadius);
+      color = moduleColor;
     }
 
-    const faded = isFaded(id);
-    const isZoomedOut = globalScale < 1.2; // LOD (Level of Detail) threshold
+    const outDegree = n.out_degree || 0;
+    const hasHighOutDegree = outDegree >= 10;
 
-    // Draw Out-Degree Breathing Halo (behind the node to represent active sending) - Skipped if zoomed out
-    if (n.out_degree > 0 && !faded && !isZoomedOut) {
+    const faded = isFaded(id);
+    const isZoomedOut = globalScale < 1.2;
+
+    // ── SUPERNOVA EFFECT SENSEI FIX ──────────────────────────────────────────
+    let isSupernova = false;
+    if (progress > 0 && progress < 1 && timeRange && !faded) {
+      const currentCutoff = timeRange.min + (timeRange.max - timeRange.min) * progress;
+      const age = currentCutoff - bTime;
+      const supernovaWindow = (timeRange.max - timeRange.min) * 0.05; // 5% ventana
+
+      isSupernova = age >= 0 && age <= supernovaWindow;
+    }
+
+    if (isSupernova) {
+      const pulse = Math.sin(Date.now() / 200) * 0.3 + 0.7;
+      const novaRadius = radius * (1.8 + pulse * 0.8);
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(n.x || 0, n.y || 0, novaRadius, 0, 2 * Math.PI, false);
+      ctx.shadowColor = "white";
+      ctx.shadowBlur = 15 * pulse;
+      ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+      ctx.globalAlpha = 0.8 * pulse;
+      ctx.fill();
+      ctx.restore(); // Super importante: restaura el canvas para no manchar el resto
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
+    if ((n.out_degree ?? 0) > 0 && !faded && !isZoomedOut) {
       const pulse = Math.sin(Date.now() / 300) * 1.5;
       const haloRadius = radius + 3.5 + pulse;
       ctx.beginPath();
       ctx.arc(n.x || 0, n.y || 0, haloRadius, 0, 2 * Math.PI, false);
-      
+
       let haloColor = "rgba(100, 116, 139, 0.12)";
       if (color.startsWith('#')) {
         const r = parseInt(color.slice(1, 3), 16);
@@ -531,27 +679,33 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
       ctx.fill();
     }
 
-    // Draw In-Degree Expanding Ripple (for small nodes receiving flow) - Skipped if zoomed out
-    if (n.in_degree > 0 && (label === "Function" || label === "Interface" || radius < 5) && !faded && !isZoomedOut) {
-      const t = (Date.now() / 1200) % 1.0; 
+    if (hasHighOutDegree && !faded && !isZoomedOut) {
+      ctx.beginPath();
+      ctx.arc(n.x || 0, n.y || 0, radius + 1.5, 0, 2 * Math.PI, false);
+      ctx.strokeStyle = "rgba(239, 68, 68, 0.7)";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+
+    if ((n.in_degree ?? 0) > 0 && (label === "Function" || label === "Interface" || radius < 5) && !faded && !isZoomedOut) {
+      const t = (Date.now() / 1200) % 1.0;
       const rippleRadius = radius + t * 8;
       const rippleOpacity = (1 - t) * 0.45;
-      
+
       ctx.beginPath();
       ctx.arc(n.x || 0, n.y || 0, rippleRadius, 0, 2 * Math.PI, false);
       ctx.strokeStyle = color;
       ctx.lineWidth = 0.6;
       ctx.globalAlpha = rippleOpacity;
       ctx.stroke();
-      ctx.globalAlpha = faded ? graphTheme.dimOpacity : 1; 
+      ctx.globalAlpha = faded ? graphTheme.dimOpacity : 1;
     }
 
-    // Hover tooltip info (LOC / Degrees)
     if (id === hoverNode && !faded) {
        const info = [];
        if (n.loc !== undefined) info.push(`LOC: ${n.loc}`);
        if (n.in_degree !== undefined) info.push(`In: ${n.in_degree} | Out: ${n.out_degree}`);
-       
+
        if (info.length > 0) {
          ctx.font = `10px Inter, sans-serif`;
          ctx.fillStyle = "rgba(255,255,255,0.9)";
@@ -566,148 +720,84 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
       ctx.textAlign = "center";
       ctx.fillText(name || "", n.x || 0, (n.y || 0) + radius + fontSize + 2);
     }
-    
-    ctx.globalAlpha = 1; // reset
-  }, [activeTypes, lowerSearchQuery, isFaded, hoverNode, focusNode]);
 
-  const getLinkColor = useCallback((link: any) => {
-    const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
-    const targetId = typeof link.target === 'object' ? link.target.id : link.target;
-    
+    ctx.globalAlpha = 1;
+  }, [activeTypes, lowerSearchQuery, isFaded, hoverNode, focusNode, timeRange]);
+
+  const getLinkColor = useCallback((link: LinkObject) => {
+    const l = link as ForceLink;
+    const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
+    const targetId = typeof l.target === 'object' ? l.target.id : l.target;
+
     const faded = isFaded(sourceId) && isFaded(targetId);
-    const opacityFactor = is3D ? 0.8 : 0.3; 
-    
-    // In 3D, glowing lines when flow is enabled
-    const isGlowing = is3D && enableFlow && glowingLinks.has(`${sourceId}-${targetId}`);
-    if (isGlowing && !faded) {
-      return "rgba(96, 165, 250, 0.85)"; // Bright blue glow for animation
-    }
-    
-    let baseColor = `rgba(228, 228, 231, ${0.25 * opacityFactor})`; // Light gray (zinc-200 at 25% opacity)
-    if (showCycles && link.is_cycle) {
-      baseColor = `rgba(248, 113, 113, ${0.5 * opacityFactor})`; // Soft red/pink for cycles
-    } else if (link.type === "IMPORTS") {
-      baseColor = `rgba(228, 228, 231, ${0.35 * opacityFactor})`; // Slightly visible light gray for imports
-    } else {
-      baseColor = `rgba(228, 228, 231, ${0.15 * opacityFactor})`; // Fainter gray for internal calls
-    }
-    
-    if (faded) {
-      return showCycles && link.is_cycle 
-        ? `rgba(248, 113, 113, ${0.05 * opacityFactor})` 
-        : `rgba(228, 228, 231, ${0.05 * opacityFactor})`;
-    }
-    return baseColor;
-  }, [isFaded, showCycles, is3D, enableFlow, glowingLinks]);
 
-  const getParticleColor = useCallback((link: any) => {
-    if (showCycles && link.is_cycle) {
-      return "rgba(252, 165, 165, 0.8)"; // Soft light red for cycle current
+    const isGlowing = glowingLinks.has(`${sourceId}-${targetId}`);
+    if (isGlowing && !faded) {
+      return "rgba(96, 165, 250, 0.85)";
     }
-    return "rgba(203, 213, 225, 0.65)"; // Soft slate gray-blue for normal flow
+
+    if (faded) {
+      return "rgba(255, 255, 255, 0.05)";
+    }
+
+    if (showCycles && l.is_cycle) {
+      return "rgba(248, 113, 113, 0.55)";
+    }
+    return "rgba(156, 163, 175, 0.4)";
+  }, [isFaded, showCycles, glowingLinks]);
+
+  const getParticleColor = useCallback((link: LinkObject) => {
+    const l = link as ForceLink;
+    if (showCycles && l.is_cycle) {
+      return "rgba(252, 165, 165, 0.8)";
+    }
+    return "rgba(203, 213, 225, 0.65)";
   }, [showCycles]);
 
-  const getLinkWidth = useCallback((link: any) => {
-    const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
-    const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+  const getLinkWidth = useCallback((link: LinkObject) => {
+    const l = link as ForceLink;
+    const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
+    const targetId = typeof l.target === 'object' ? l.target.id : l.target;
     const faded = isFaded(sourceId) && isFaded(targetId);
-    
-    if (is3D && enableFlow && glowingLinks.has(`${sourceId}-${targetId}`) && !faded) {
-      return 1.8; // Thicker when glowing in 3D
-    }
-    
-    if (faded) return 0.2;
-    
-    if (showCycles && link.is_cycle) return 1.5;
-    if (hoverNode === sourceId || hoverNode === targetId) return 1.5;
-    return link.type === "IMPORTS" ? 0.8 : 0.4;
-  }, [isFaded, hoverNode, showCycles, is3D, enableFlow, glowingLinks]);
 
-  const getLinkVisibility = useCallback((link: any) => {
-    const sourceNode = link.source;
-    const targetNode = link.target;
+    if (glowingLinks.has(`${sourceId}-${targetId}`) && !faded) {
+      return 2.5;
+    }
+
+    if (faded) return 0.5;
+
+    if (showCycles && l.is_cycle) return 2;
+    if (hoverNode === sourceId || hoverNode === targetId) return 2;
+    return Math.max(1, 1.5 / globalScaleRef.current);
+  }, [isFaded, hoverNode, showCycles, glowingLinks]);
+
+  // SENSEI FIX: Reescritura segura de getLinkVisibility usando getSafeTime
+  const getLinkVisibility = useCallback((link: LinkObject) => {
+    const l = link as ForceLink;
+    const sourceNode = l.source;
+    const targetNode = l.target;
     if (!sourceNode || !targetNode) return false;
-    
+
     const sourceLabel = typeof sourceNode === 'object' ? sourceNode.label : null;
     const targetLabel = typeof targetNode === 'object' ? targetNode.label : null;
-    
+
     if (sourceLabel && !activeTypes.has(sourceLabel)) return false;
     if (targetLabel && !activeTypes.has(targetLabel)) return false;
-    
+
     if (lowerSearchQuery) {
       const sourceName = (typeof sourceNode === 'object' ? sourceNode.name : '').toLowerCase();
       const targetName = (typeof targetNode === 'object' ? targetNode.name : '').toLowerCase();
       if (!sourceName.includes(lowerSearchQuery) && !targetName.includes(lowerSearchQuery)) return false;
     }
-    
+
+    if (cutoffTimeRef.current) {
+      const sTime = getSafeTime(sourceNode);
+      const tTime = getSafeTime(targetNode);
+      if (sTime > cutoffTimeRef.current || tTime > cutoffTimeRef.current) return false;
+    }
+
     return true;
   }, [activeTypes, lowerSearchQuery]);
-
-  const getNodeThreeObject = useCallback((node: any) => {
-    const label = node.label as string;
-    const name = node.name as string;
-    const id = node.id as string;
-    
-    if (!activeTypes.has(label)) {
-      return new THREE.Object3D();
-    }
-    
-    if (lowerSearchQuery && !name.toLowerCase().includes(lowerSearchQuery)) {
-      return new THREE.Object3D();
-    }
-
-    const faded = isFaded(id);
-    
-    // 1. Files: represented by their language/technology sprite textures
-    if (label === "File") {
-      const ext = name.split(".").pop()?.toLowerCase() || "";
-      const texture = textures.current[ext];
-      
-      if (texture) {
-        const material = new THREE.SpriteMaterial({ 
-          map: texture,
-          transparent: true,
-          opacity: faded ? 0.15 : 1.0
-        });
-        const sprite = new THREE.Sprite(material);
-        
-        // Much clearer size differentiation for file sizes (LOC/size)
-        const size = (node.size as number) || 0;
-        const scale = Math.min(Math.max(size / 2000, 6), 16);
-        sprite.scale.set(scale, scale, 1);
-        return sprite;
-      }
-    }
-
-    // 2. Class / Function / Interface: represented by sphere geometries with clear size hierarchy
-    let radius = 2;
-    let colorHex = graphTheme.unknown;
-    
-    if (label === "File") {
-      const size = (node.size as number) || 0;
-      radius = Math.min(Math.max(size / 2000, 3.5), 8);
-      colorHex = graphTheme.file;
-    } else if (label === "Class") {
-      radius = 2.0; // Classes are slightly larger structural units
-      colorHex = graphTheme.class;
-    } else if (label === "Function") {
-      radius = 0.8; // Functions are small orbital nodes
-      colorHex = graphTheme.function;
-    } else if (label === "Interface") {
-      radius = 1.4; // Interfaces sit in the middle
-      colorHex = graphTheme.interface;
-    }
-
-    // Use lower segment count (8x8) instead of (16x16) for much better 3D performance
-    const geometry = new THREE.SphereGeometry(radius, 8, 8);
-    const material = new THREE.MeshLambertMaterial({
-      color: colorHex,
-      transparent: true,
-      opacity: faded ? 0.15 : 0.95
-    });
-    
-    return new THREE.Mesh(geometry, material);
-  }, [activeTypes, lowerSearchQuery, isFaded]);
 
   const toggleType = (type: string) => {
     setActiveTypes(prev => {
@@ -721,14 +811,14 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
   return (
     <div className="flex-1 w-full flex flex-col relative min-h-0" style={{ backgroundColor: graphTheme.background }}>
       {/* Controls Overlay */}
-      <div className="absolute top-4 left-4 z-10 flex flex-col gap-3 p-4 rounded-lg shadow-lg" 
+      <div className="absolute top-4 left-4 z-10 flex flex-col gap-3 p-4 rounded-lg shadow-lg"
            style={{ backgroundColor: graphTheme.surfaceElevated, border: `1px solid ${graphTheme.border}` }}>
-        
+
         <div className="relative">
           <Search className="w-4 h-4 absolute left-3 top-2.5 text-zinc-400" />
-          <input 
-            type="text" 
-            placeholder="Search nodes..." 
+          <input
+            type="text"
+            placeholder="Search nodes..."
             className="w-full bg-[#18181b] border border-[#3f3f46] rounded-md py-1.5 pl-9 pr-3 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -737,7 +827,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
 
         <div className="flex flex-wrap gap-2 text-xs">
           {["File", "Class", "Function", "Interface"].map(type => (
-            <button 
+            <button
               key={type}
               onClick={() => toggleType(type)}
               className={`px-2 py-1 rounded-md transition-colors ${activeTypes.has(type) ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
@@ -751,7 +841,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
           ))}
         </div>
 
-        <button 
+        <button
           onClick={() => setShowCycles(!showCycles)}
           className={`flex items-center justify-center gap-2 text-xs py-1.5 rounded-md transition-colors ${showCycles ? 'bg-red-900/40 text-red-400 border border-red-900/50' : 'bg-[#18181b] text-zinc-400 border border-[#3f3f46]'}`}
         >
@@ -761,7 +851,18 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
 
         {/* Project Statistics */}
         <div className="border-t border-[#3f3f46] pt-3 mt-1">
-          <h4 className="text-[10px] font-semibold text-zinc-400 mb-2 uppercase tracking-wider">Métricas del Código</h4>
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">Métricas del Código</h4>
+            <button
+              onClick={handleRescan}
+              disabled={isScanning}
+              className="flex items-center gap-1 text-[10px] text-zinc-400 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              title={isScanning ? "Re-escaneando..." : "Re-escanear Proyecto"}
+            >
+              <RefreshCw className={`w-3 h-3 ${isScanning ? "animate-spin" : ""}`} />
+              {isScanning ? "Escaneando..." : "Sincronizar"}
+            </button>
+          </div>
           <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px]">
             <div className="flex justify-between">
               <span className="text-zinc-500">Archivos:</span>
@@ -799,14 +900,14 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
 
         {savedAnalysis ? (
           <div className="flex flex-col gap-2 border-t border-[#3f3f46] pt-3 mt-1">
-            <button 
+            <button
               onClick={handleShowAnalysis}
               className="flex items-center justify-center gap-2 text-xs py-1.5 rounded-md transition-colors bg-zinc-850 hover:bg-zinc-800 text-zinc-200 border border-[#3f3f46]"
             >
               <Brain className="w-3.5 h-3.5 text-green-400" />
               Mostrar Análisis
             </button>
-            <button 
+            <button
               onClick={handleAnalyze}
               disabled={analyzing}
               className="flex items-center justify-center gap-2 text-xs py-1.5 rounded-md transition-colors bg-blue-600 hover:bg-blue-500 text-white disabled:opacity-50"
@@ -817,7 +918,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
           </div>
         ) : (
           <div className="flex flex-col gap-2 border-t border-[#3f3f46] pt-3 mt-1">
-            <button 
+            <button
               onClick={handleAnalyze}
               disabled={analyzing}
               className="flex items-center justify-center gap-2 text-xs py-1.5 rounded-md transition-colors bg-blue-600 hover:bg-blue-500 text-white disabled:opacity-50"
@@ -834,24 +935,37 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
         )}
       </div>
 
+      {moduleLegend.length > 0 && (
+        <div className="absolute top-4 right-4 z-10 flex flex-col gap-1 p-2 rounded-lg shadow-lg max-h-64 overflow-y-auto"
+             style={{ backgroundColor: graphTheme.surfaceElevated, border: `1px solid ${graphTheme.border}` }}>
+          <span className="text-[10px] text-zinc-500 px-1 mb-1">Módulos</span>
+          {moduleLegend.map((item) => (
+            <div key={item.name} className="flex items-center gap-2 px-1 py-0.5 rounded hover:bg-[#3f3f46] cursor-pointer text-xs">
+              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
+              <span className="text-zinc-400 truncate max-w-[120px]">{item.name}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Unified Graph Controls Toolbar */}
-      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 flex flex-row items-center rounded-lg shadow-lg overflow-hidden" 
+      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 flex flex-row items-center rounded-lg shadow-lg overflow-hidden"
            style={{ backgroundColor: graphTheme.surfaceElevated, border: `1px solid ${graphTheme.border}` }}>
-        <button 
+        <button
           onClick={handleZoomIn}
           className="p-2 transition-colors text-zinc-400 hover:text-white hover:bg-[#3f3f46]"
           title="Acercar (Zoom In)"
         >
           <ZoomIn className="w-4 h-4" />
         </button>
-        <button 
+        <button
           onClick={handleFitView}
           className="p-2 border-l border-[#3f3f46] transition-colors text-zinc-400 hover:text-white hover:bg-[#3f3f46]"
           title="Ajustar a la pantalla"
         >
           <Maximize className="w-4 h-4" />
         </button>
-        <button 
+        <button
           onClick={handleZoomOut}
           className="p-2 border-l border-[#3f3f46] transition-colors text-zinc-400 hover:text-white hover:bg-[#3f3f46]"
           title="Alejar (Zoom Out)"
@@ -859,23 +973,14 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
           <ZoomOut className="w-4 h-4" />
         </button>
 
-        <button 
-          onClick={() => setIs3D(!is3D)}
-          className={`flex items-center gap-1.5 px-4 py-2 text-xs font-bold transition-colors border-l border-[#3f3f46] hover:bg-zinc-800 ${is3D ? "text-blue-400" : "text-zinc-400"}`}
-          title={is3D ? "Cambiar a Análisis 2D" : "Cambiar a Análisis 3D"}
-        >
-          {is3D ? <Box className="w-3.5 h-3.5" /> : <Layers className="w-3.5 h-3.5" />}
-          {is3D ? "Análisis 3D" : "Análisis 2D"}
-        </button>
-        
-        <button 
+        <button
           onClick={togglePhysics}
           className={`p-2 border-l border-[#3f3f46] transition-colors ${isPhysicsActive ? "text-emerald-400 hover:text-emerald-300 bg-emerald-950/20" : "text-zinc-500 hover:text-zinc-300 hover:bg-[#3f3f46]"}`}
           title={isPhysicsActive ? "Pausar Simulación Física" : "Reanudar Simulación Física"}
         >
           {isPhysicsActive ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
         </button>
-        <button 
+        <button
           onClick={() => setEnableFlow(!enableFlow)}
           className={`p-2 border-l border-[#3f3f46] transition-colors ${enableFlow ? "text-yellow-400 hover:text-yellow-300 bg-yellow-950/20" : "text-zinc-500 hover:text-zinc-300 hover:bg-[#3f3f46]"}`}
           title={enableFlow ? "Desactivar Flujo de Corriente" : "Activar Flujo de Corriente"}
@@ -884,14 +989,59 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
         </button>
       </div>
 
-      <div ref={containerRef} className="flex-1 w-full min-h-0 z-0">
+      {timeRange && (
+        <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-10 flex items-center gap-3 px-4 py-2 rounded-lg shadow-lg"
+             style={{ backgroundColor: graphTheme.surfaceElevated, border: `1px solid ${graphTheme.border}` }}>
+          <button
+            onClick={() => {
+              if (animating) {
+                setAnimating(false);
+              } else {
+                setAnimProgress(0);
+                setAnimating(true);
+              }
+            }}
+            className="p-1.5 rounded transition-colors text-zinc-400 hover:text-white hover:bg-[#3f3f46]"
+            title={animating ? "Pausar" : "Animar"}
+          >
+            {animating ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+          </button>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={Math.round(animProgress * 100)}
+            onChange={(e) => {
+              setAnimating(false);
+              setAnimProgress(Number(e.target.value) / 100);
+            }}
+            className="w-32 h-1 accent-blue-500 cursor-pointer"
+          />
+          <button
+            onClick={() => { setAnimating(false); setAnimProgress(1); }}
+            className="text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors"
+          >
+            {Math.round(animProgress * 100)}%
+          </button>
+        </div>
+      )}
+
+      <div ref={containerRef} className={`flex-1 w-full min-h-0 z-0 transition-opacity duration-300 ${isScanning ? "opacity-40 pointer-events-none" : ""}`}>
+        {isScanning && (
+          <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
+            <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-black/70 border border-zinc-700 backdrop-blur-sm">
+              <RefreshCw className="w-4 h-4 animate-spin text-blue-400" />
+              <span className="text-sm text-zinc-300">Re-escaneando proyecto...</span>
+            </div>
+          </div>
+        )}
         {contextMenu && contextMenu.visible && (
-          <div 
+          <div
             className="fixed z-50 bg-[#18181b] border border-[#3f3f46] rounded-md shadow-xl py-1 w-48 text-sm overflow-hidden"
             style={{ left: contextMenu.x, top: contextMenu.y }}
             onContextMenu={(e) => e.preventDefault()}
           >
-            <button 
+            <button
               className="w-full text-left px-4 py-2 text-zinc-300 hover:bg-blue-600 hover:text-white transition-colors flex items-center gap-2"
               onClick={(e) => {
                 e.stopPropagation();
@@ -903,10 +1053,10 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
                 setContextMenu(null);
               }}
             >
-              <ScanSearch className="w-4 h-4" /> 
+              <ScanSearch className="w-4 h-4" />
               {focusNode === contextMenu.node.id ? "Restaurar Grafo" : "Aislar Nodo"}
             </button>
-            <button 
+            <button
               className="w-full text-left px-4 py-2 text-zinc-300 hover:bg-blue-600 hover:text-white transition-colors flex items-center gap-2"
               onClick={(e) => {
                 e.stopPropagation();
@@ -916,8 +1066,8 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
                     label: (contextMenu.node.label as "File" | "Class" | "Function") || "File",
                     name: (contextMenu.node.name as string) || "",
                     file_path: (contextMenu.node.file_path as string) || "",
-                    size: (contextMenu.node as any).size as number | undefined,
-                    metadata: (contextMenu.node as any).metadata as Record<string, unknown> | undefined
+                    size: contextMenu.node.size,
+                    metadata: contextMenu.node.metadata
                   });
                 }
                 setContextMenu(null);
@@ -928,81 +1078,39 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
           </div>
         )}
 
-        {is3D ? (
-            <ForceGraph3D
-              ref={fgRef}
-              width={dimensions.width || 800}
-              height={dimensions.height || 600}
-              graphData={displayGraphData}
-            backgroundColor={graphTheme.background}
-            nodeThreeObject={getNodeThreeObject}
-            linkColor={getLinkColor}
-            linkWidth={(link: any) => getLinkWidth(link) * (is3D ? 0.8 : 0.4)}
-            linkVisibility={getLinkVisibility}
-            linkCurvature={0.15}
-            linkDirectionalParticles={0}
-            linkOpacity={0.4}
-            numDimensions={3}
-            cooldownTicks={100}
-            onNodeClick={(node: any, event: any) => {
-              const now = Date.now();
-              const isDoubleClick = now - lastClickTimeRef.current < 400;
-              lastClickTimeRef.current = now;
-
-              if (isDoubleClick) {
-                if (onNodeClick) {
-                  onNodeClick({
-                    id: (node.id as string) || "",
-                    label: (node.label as "File" | "Class" | "Function") || "File",
-                    name: (node.name as string) || "",
-                    file_path: (node.file_path as string) || "",
-                    size: (node as any).size as number | undefined,
-                    metadata: (node as any).metadata as Record<string, unknown> | undefined
-                  });
-                }
-              } else {
-                setFocusNode(node.id as string);
-              }
-            }}
-            onBackgroundClick={() => setFocusNode(null)}
-            onNodeRightClick={(node: any, event: any) => {
-              setContextMenu({
-                visible: true,
-                x: event.clientX,
-                y: event.clientY,
-                node
-              });
-            }}
-            onNodeHover={(node: any) => setHoverNode(node ? (node.id as string) : null)}
-            enableZoomInteraction={true}
-            enableNavigationControls={true}
-          />
-        ) : (
-          <ForceGraph2D
+        <ForceGraph2D
             ref={fgRef}
             width={dimensions.width || 800}
             height={dimensions.height || 600}
             graphData={displayGraphData}
             backgroundColor={graphTheme.background}
             nodeCanvasObject={paintNode}
+            nodeVisibility={(node: NodeObject) => {
+              // SENSEI FIX: También curamos la evaluación global de D3
+              if (!cutoffTimeRef.current) return true;
+              const bTime = getSafeTime(node);
+              return bTime <= cutoffTimeRef.current;
+            }}
             linkColor={getLinkColor}
             linkWidth={getLinkWidth}
             linkVisibility={getLinkVisibility}
             linkCurvature={0.15}
-            linkDirectionalParticles={enableFlow ? ((link: any) => {
-              const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
-              const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+            linkDirectionalParticles={enableFlow ? ((link: LinkObject) => {
+              const l = link as ForceLink;
+              const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
+              const targetId = typeof l.target === 'object' ? l.target.id : l.target;
               const faded = isFaded(sourceId) && isFaded(targetId);
               if (faded) return 0;
-              return showCycles && link.is_cycle ? 4 : 2;
+              return showCycles && l.is_cycle ? 4 : 2;
             }) : 0}
-            linkDirectionalParticleSpeed={(link: any) => (showCycles && link.is_cycle ? 0.012 : 0.005)}
+            linkDirectionalParticleSpeed={(link: LinkObject) => (showCycles && (link as ForceLink).is_cycle ? 0.012 : 0.005)}
             linkDirectionalParticleWidth={1.0}
             linkDirectionalParticleColor={getParticleColor}
             linkDirectionalArrowLength={3.5}
             linkDirectionalArrowRelPos={1}
             cooldownTicks={100}
-            onNodeClick={(node: any, event: any) => {
+            onNodeClick={(node: NodeObject) => {
+              const n = node as ForceNode;
               const now = Date.now();
               const isDoubleClick = now - lastClickTimeRef.current < 400;
               lastClickTimeRef.current = now;
@@ -1010,28 +1118,28 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
               if (isDoubleClick) {
                 if (onNodeClick) {
                   onNodeClick({
-                    id: (node.id as string) || "",
-                    label: (node.label as "File" | "Class" | "Function") || "File",
-                    name: (node.name as string) || "",
-                    file_path: (node.file_path as string) || "",
-                    size: (node as any).size as number | undefined,
-                    metadata: (node as any).metadata as Record<string, unknown> | undefined
+                    id: (n.id as string) || "",
+                    label: (n.label as "File" | "Class" | "Function") || "File",
+                    name: (n.name as string) || "",
+                    file_path: (n.file_path as string) || "",
+                    size: n.size,
+                    metadata: n.metadata
                   });
                 }
               } else {
-                setFocusNode(node.id as string);
+                setFocusNode(n.id as string);
               }
             }}
             onBackgroundClick={() => setFocusNode(null)}
-            onNodeRightClick={(node: any, event: any) => {
+            onNodeRightClick={(node: NodeObject, event: MouseEvent) => {
               setContextMenu({
                 visible: true,
                 x: event.clientX,
                 y: event.clientY,
-                node
+                node: node as ForceNode
               });
             }}
-            onNodeHover={(node: any) => setHoverNode(node ? (node.id as string) : null)}
+            onNodeHover={(node: NodeObject | null) => setHoverNode(node ? (node.id as string) : null)}
             enableZoomInteraction={true}
             enablePanInteraction={true}
             onEngineStop={() => {
@@ -1041,7 +1149,6 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
               }
             }}
           />
-        )}
       </div>
     </div>
   );

@@ -21,6 +21,12 @@ __pycache__/
 venv/
 env/
 
+# Local databases (SQLite is a runtime artifact, never a source-of-truth commit)
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
 # Environment files
 .env
 .env.*

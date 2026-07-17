@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 from pathlib import Path
@@ -89,8 +90,8 @@ def resolve_python_import(base_project_dir: Path, import_statement: str) -> Path
     return None
 
 
+import asyncio
 import hashlib
-import json
 from dataclasses import dataclass
 
 
@@ -183,7 +184,125 @@ class TreeSitterParser:
         return parsed_nodes, imports
 
 
-def extract_nodes_from_code(project_id: UUID, file_path: str, code: bytes, ext: str):
+async def fetch_git_birth_dates(repo_path: str) -> dict[str, int]:
+    """Ejecuta `git log --diff-filter=A` una sola vez y devuelve
+    un dict {file_path: first_commit_timestamp} con costo O(1)."""
+    dates: dict[str, int] = {}
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "git", "log", "--name-status", "--diff-filter=A",
+            "--pretty=format:commit_time:%at",
+            cwd=repo_path,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        stdout, _ = await proc.communicate()
+        current_time = 0
+        for line in stdout.decode("utf-8", errors="ignore").split("\n"):
+            line = line.strip()
+            if not line:
+                continue
+            if line.startswith("commit_time:"):
+                current_time = int(line.split(":", 1)[1])
+            elif line.startswith("A\t") and current_time:
+                file_path = line[2:]
+                if file_path not in dates:
+                    dates[file_path] = current_time
+    except Exception:
+        pass
+    return dates
+
+
+def resolve_import_edges(
+    project_id: UUID,
+    file_imports: dict[str, set[str]],
+    file_paths: list[str],
+    base_dir: Path,
+) -> list[GraphEdge]:
+    """
+    Pasada 2 del análisis (estilo compilador de dos pasadas): una vez que se conoce el
+    universo completo de archivos del proyecto (`file_paths`), resuelve cada import
+    crudo detectado en la Pasada 1 (`file_imports`, poblado por `extract_nodes_from_code`)
+    contra el filesystem real y devuelve las aristas IMPORTS resultantes.
+
+    Limitación conocida y deliberada (no scope creep): la resolución de TS/JS/JSX es un
+    matching por nombre de archivo (stem), no lee `tsconfig.json` ni resuelve alias como
+    `@/components/...`. Esos imports quedarán sin conectar hasta que se construya un
+    resolver consciente de path-mapping — tarea separada y explícitamente fuera de
+    alcance de este fix.
+    """
+    edges: list[GraphEdge] = []
+
+    for source_id, imports in file_imports.items():
+        source_path_str = source_id.replace("file:", "")
+        is_python = source_path_str.endswith(".py")
+
+        for imp in imports:
+            if not imp:
+                continue
+
+            if is_python:
+                target_path = resolve_python_import(base_dir, imp)
+                if target_path:
+                    target_id = f"file:{target_path}"
+                    if source_id != target_id:
+                        edges.append(
+                            GraphEdge(
+                                project_id=project_id,
+                                source_id=source_id,
+                                target_id=target_id,
+                                type=EdgeType.IMPORTS,
+                            )
+                        )
+            else:
+                normalized_imp = imp.replace(".", "/").lstrip("./@")
+                if not normalized_imp:
+                    continue
+
+                target_stem = Path(normalized_imp).stem
+
+                for fp in file_paths:
+                    fp_path = Path(fp)
+                    if fp_path.stem == target_stem or fp_path.parent.name == target_stem:
+                        target_id = f"file:{fp}"
+                        if source_id != target_id:
+                            edges.append(
+                                GraphEdge(
+                                    project_id=project_id,
+                                    source_id=source_id,
+                                    target_id=target_id,
+                                    type=EdgeType.IMPORTS,
+                                )
+                            )
+                            break
+
+    return edges
+
+
+def dedupe_edges(edges: list[GraphEdge]) -> list[GraphEdge]:
+    """
+    Collapses edges sharing the same (source_id, target_id, type) into a single one.
+
+    Required before any bulk insert into `graph_edges`, which enforces a UNIQUE
+    constraint on (project_id, source_id, target_id, type). Duplicates are expected
+    and legitimate here: e.g. a TS/JS file with two different import statements that
+    both resolve to the same target file (barrel imports, re-exports, multiple named
+    imports from one module) will naturally produce the same IMPORTS edge twice.
+    """
+    unique_edges: dict[tuple[str, str, EdgeType], GraphEdge] = {}
+    for edge in edges:
+        key = (edge.source_id, edge.target_id, edge.type)
+        unique_edges[key] = edge
+    return list(unique_edges.values())
+
+
+def extract_nodes_from_code(
+    project_id: UUID,
+    file_path: str,
+    code: bytes,
+    ext: str,
+    birth_dates: dict[str, int] | None = None,
+):
     parser = TreeSitterParser()
     parsed_nodes, imports = parser.parse_code(code, file_path, ext)
 
@@ -192,6 +311,12 @@ def extract_nodes_from_code(project_id: UUID, file_path: str, code: bytes, ext: 
 
     file_node_id = f"file:{file_path}"
     lines = code.split(b'\n')
+    birth_time = (birth_dates or {}).get(file_path)
+    if birth_time is None:
+        try:
+            birth_time = int(os.path.getmtime(file_path))
+        except OSError:
+            birth_time = 0
     nodes.append(
         GraphNode(
             id=file_node_id,
@@ -199,7 +324,11 @@ def extract_nodes_from_code(project_id: UUID, file_path: str, code: bytes, ext: 
             label=NodeLabel.FILE,
             name=os.path.basename(file_path),
             file_path=file_path,
-            meta_data=json.dumps({"start_line": 1, "end_line": len(lines)}),
+            meta_data=json.dumps({
+                "start_line": 1,
+                "end_line": len(lines),
+                "birth_time": birth_time,
+            }),
             file_size=len(code),
             loc=len(lines),
         )
@@ -274,56 +403,10 @@ class ASTParserService:
                     except Exception:
                         pass
 
-        # Resolve imports across files
+        # Resolve imports across files (Pasada 2 del compilador de dos pasadas)
         base_dir = Path(dir_path)
         file_paths = [n.file_path for n in all_nodes if n.label == NodeLabel.FILE]
+        all_edges.extend(resolve_import_edges(project_id, file_imports, file_paths, base_dir))
 
-        for source_id, imports in file_imports.items():
-            source_path_str = source_id.replace("file:", "")
-            is_python = source_path_str.endswith(".py")
-
-            for imp in imports:
-                if not imp:
-                    continue
-
-                if is_python:
-                    target_path = resolve_python_import(base_dir, imp)
-                    if target_path:
-                        target_id = f"file:{target_path}"
-                        if source_id != target_id:
-                            all_edges.append(
-                                GraphEdge(
-                                    project_id=project_id,
-                                    source_id=source_id,
-                                    target_id=target_id,
-                                    type=EdgeType.IMPORTS,
-                                )
-                            )
-                else:
-                    normalized_imp = imp.replace(".", "/").lstrip("./@")
-                    if not normalized_imp:
-                        continue
-
-                    target_stem = Path(normalized_imp).stem
-
-                    for fp in file_paths:
-                        fp_path = Path(fp)
-                        if fp_path.stem == target_stem or fp_path.parent.name == target_stem:
-                            target_id = f"file:{fp}"
-                            if source_id != target_id:
-                                all_edges.append(
-                                    GraphEdge(
-                                        project_id=project_id,
-                                        source_id=source_id,
-                                        target_id=target_id,
-                                        type=EdgeType.IMPORTS,
-                                    )
-                                )
-                                break
         # Deduplicate edges to prevent DB IntegrityError (UNIQUE constraint failed)
-        unique_edges = {}
-        for edge in all_edges:
-            key = (edge.source_id, edge.target_id, edge.type)
-            unique_edges[key] = edge
-
-        return all_nodes, list(unique_edges.values())
+        return all_nodes, dedupe_edges(all_edges)

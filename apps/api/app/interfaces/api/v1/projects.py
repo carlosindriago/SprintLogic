@@ -119,7 +119,7 @@ async def scan_project(
     cancel_token = asyncio.Event()
     active_scans[str(saved_project.id)] = cancel_token
 
-    background_tasks.add_task(scan_codebase_usecase.execute, saved_project.id, cancel_token)
+    background_tasks.add_task(scan_codebase_usecase.execute, saved_project.id, cancel_token, saved_project.path)
 
     return ScanStartedResponse(
         status="scanning started",
@@ -146,6 +146,43 @@ async def stream_scan_progress(project_id: str):
                 cancel_token.set()
 
     return EventSourceResponse(event_generator())
+
+
+@router.post("/projects/{project_id}/rescan", status_code=202)
+async def rescan_project(
+    project_id: str,
+    background_tasks: BackgroundTasks,
+    session: AsyncSession = Depends(get_db_session),
+):
+    try:
+        project_uuid = UUID(project_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+
+    repo = SQLAlchemyProjectRepository(session)
+    project = await repo.get_project(project_uuid)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    parser = ASTParserService()
+    graph_repo = SQLAlchemyGraphRepository(session)
+    provider = LocalFileSystemProvider(project.path)
+
+    await graph_repo.clear_by_project(project_uuid)
+
+    scan_codebase_usecase = ScanCodebaseUseCase(provider, parser, global_event_bus, graph_repo)
+    cancel_token = asyncio.Event()
+    active_scans[str(project_uuid)] = cancel_token
+
+    background_tasks.add_task(
+        scan_codebase_usecase.execute, project_uuid, cancel_token, project.path
+    )
+
+    return {
+        "status": "rescanning started",
+        "project_id": str(project_uuid),
+        "message": "AST parsing is running in the background with fresh git birth dates.",
+    }
 
 
 @router.put("/projects/{project_id}", response_model=ProjectResponse)
@@ -226,7 +263,7 @@ async def get_project_graph(project_id: str, session: AsyncSession = Depends(get
     # NetworkX SCC — O(V+E) linear time, iterative, no stack overflow
     import networkx as nx
 
-    G = nx.DiGraph()  # type: ignore[var-annotated]
+    G: nx.DiGraph[str] = nx.DiGraph()
     for e in filtered_edges:
         G.add_edge(e.source_id, e.target_id)
 
@@ -258,6 +295,12 @@ async def get_project_graph(project_id: str, session: AsyncSession = Depends(get
         if label_val == "File":
             node_dict["size"] = n.file_size or 1000
             node_dict["loc"] = n.loc or 0
+            try:
+                meta = json.loads(n.meta_data or "{}")
+                if "birth_time" in meta:
+                    node_dict["birth_time"] = meta["birth_time"]
+            except (json.JSONDecodeError, TypeError):
+                pass
         nodes_dict.append(node_dict)
 
     links_dict = []
@@ -320,7 +363,7 @@ async def analyze_project_graph(
         valid_ids = {n.id for n in filtered_nodes}
         filtered_edges = [e for e in edges if e.source_id in valid_ids and e.target_id in valid_ids]
 
-        G = nx.DiGraph()  # type: ignore[var-annotated]
+        G: nx.DiGraph[str] = nx.DiGraph()
         for n in filtered_nodes:
             G.add_node(n.id, label=n.label.value if hasattr(n.label, "value") else n.label)
         for e in filtered_edges:

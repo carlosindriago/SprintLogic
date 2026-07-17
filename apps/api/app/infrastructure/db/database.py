@@ -124,6 +124,20 @@ async def init_fts5() -> None:
                 )
             except Exception:
                 pass
+        # Backfill loc from meta_data for pre-existing nodes
+        try:
+            await conn.execute(
+                text("""
+                    UPDATE graph_nodes
+                    SET loc = CAST(json_extract(meta_data, '$.end_line') AS INTEGER)
+                            - CAST(json_extract(meta_data, '$.start_line') AS INTEGER) + 1
+                    WHERE loc IS NULL
+                      AND meta_data IS NOT NULL
+                      AND json_extract(meta_data, '$.end_line') IS NOT NULL
+                """)
+            )
+        except Exception:
+            pass
         await conn.execute(
             text(
                 "CREATE TABLE IF NOT EXISTS daemon_locks ("

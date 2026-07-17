@@ -1,15 +1,22 @@
 import asyncio
 import logging
 import os
+from pathlib import Path
 
 from app.domain.exceptions import ScannerError
+from app.domain.graph_models import NodeLabel
 from app.domain.path_validator import PathSecurityValidator
 from app.domain.ports.codebase_provider import CodebaseProvider
 from app.domain.project import Project
 from app.infrastructure.db.project_repository import SQLAlchemyProjectRepository
 from app.infrastructure.events.event_bus import EventBus
 from app.infrastructure.git.git_gateway import LocalGitGateway
-from app.infrastructure.parser.ast_parser import ASTParserService, extract_nodes_from_code
+from app.infrastructure.parser.ast_parser import (
+    ASTParserService,
+    dedupe_edges,
+    extract_nodes_from_code,
+    resolve_import_edges,
+)
 
 _logger = logging.getLogger(__name__)
 
@@ -61,11 +68,14 @@ class ScanCodebaseUseCase:
         self.event_bus = event_bus
         self.graph_repo = graph_repo
 
-    async def execute(self, project_id: UUID, cancel_token: asyncio.Event | None = None):
+    async def execute(self, project_id: UUID, cancel_token: asyncio.Event | None = None, project_path: str = ""):
         topic = f"scan:{project_id}"
         parsed_count = 0
         all_nodes = []
         all_edges = []
+        # Pasada 1: intenciones de conexión crudas por archivo (quién dice importar a quién),
+        # resueltas en la Pasada 2 una vez que se conoce el universo completo de archivos.
+        file_imports: dict[str, set[str]] = {}
 
         # Phase 1 — Discovery: count files upfront so the frontend can show
         # a determinate progress bar instead of an indeterminate spinner.
@@ -79,6 +89,12 @@ class ScanCodebaseUseCase:
         })
 
         # Phase 2 — Parse: iterate and emit throttled progress
+        birth_dates: dict[str, int] = {}
+        if project_path:
+            from app.infrastructure.parser.ast_parser import fetch_git_birth_dates
+
+            birth_dates = await fetch_git_birth_dates(project_path)
+
         async for logical_path, content in self.provider.get_source_files(extension_filter):
             if cancel_token and cancel_token.is_set():
                 _logger.warning(f"Scan aborted by user for project {project_id}")
@@ -90,10 +106,12 @@ class ScanCodebaseUseCase:
 
             try:
                 nodes, edges, imports = extract_nodes_from_code(
-                    project_id, logical_path, content.encode('utf-8'), ext
+                    project_id, logical_path, content.encode('utf-8'), ext, birth_dates
                 )
                 all_nodes.extend(nodes)
                 all_edges.extend(edges)
+                if imports:
+                    file_imports[f"file:{logical_path}"] = imports
             except Exception as e:
                 _logger.error(f"Error parsing {logical_path}: {e}")
 
@@ -108,9 +126,23 @@ class ScanCodebaseUseCase:
                 throttle_ms=100
             )
 
+        # Pasada 2: ahora que se conoce el universo completo de archivos escaneados,
+        # resolvemos los imports crudos contra el filesystem real para trazar las
+        # aristas IMPORTS entre archivos. Sin esto, el grafo queda compuesto solo por
+        # "estrellas" aisladas (CONTAINS) sin ninguna conexión entre ellas.
+        base_dir = Path(project_path) if project_path else Path(".")
+        file_paths = [n.file_path for n in all_nodes if n.label == NodeLabel.FILE]
+        all_edges.extend(resolve_import_edges(project_id, file_imports, file_paths, base_dir))
+
+        # Same file can be reached by more than one raw import statement (barrel
+        # imports, multiple named imports from one module, etc.) — dedupe before the
+        # bulk insert or the UNIQUE(project_id, source_id, target_id, type) constraint
+        # in graph_edges rejects the whole batch.
+        deduped_edges = dedupe_edges(all_edges)
+
         await self.graph_repo.clear_by_project(project_id)
         await self.graph_repo.save_nodes(all_nodes)
-        await self.graph_repo.save_edges(all_edges)
+        await self.graph_repo.save_edges(deduped_edges)
 
         await self.event_bus.publish_throttled(
             topic=topic,
