@@ -13,6 +13,7 @@ from app.infrastructure.events.event_bus import EventBus
 from app.infrastructure.git.git_gateway import LocalGitGateway
 from app.infrastructure.parser.ast_parser import (
     ASTParserService,
+    dedupe_edges,
     extract_nodes_from_code,
     resolve_import_edges,
 )
@@ -133,9 +134,15 @@ class ScanCodebaseUseCase:
         file_paths = [n.file_path for n in all_nodes if n.label == NodeLabel.FILE]
         all_edges.extend(resolve_import_edges(project_id, file_imports, file_paths, base_dir))
 
+        # Same file can be reached by more than one raw import statement (barrel
+        # imports, multiple named imports from one module, etc.) — dedupe before the
+        # bulk insert or the UNIQUE(project_id, source_id, target_id, type) constraint
+        # in graph_edges rejects the whole batch.
+        deduped_edges = dedupe_edges(all_edges)
+
         await self.graph_repo.clear_by_project(project_id)
         await self.graph_repo.save_nodes(all_nodes)
-        await self.graph_repo.save_edges(all_edges)
+        await self.graph_repo.save_edges(deduped_edges)
 
         await self.event_bus.publish_throttled(
             topic=topic,

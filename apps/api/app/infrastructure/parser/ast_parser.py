@@ -279,6 +279,23 @@ def resolve_import_edges(
     return edges
 
 
+def dedupe_edges(edges: list[GraphEdge]) -> list[GraphEdge]:
+    """
+    Collapses edges sharing the same (source_id, target_id, type) into a single one.
+
+    Required before any bulk insert into `graph_edges`, which enforces a UNIQUE
+    constraint on (project_id, source_id, target_id, type). Duplicates are expected
+    and legitimate here: e.g. a TS/JS file with two different import statements that
+    both resolve to the same target file (barrel imports, re-exports, multiple named
+    imports from one module) will naturally produce the same IMPORTS edge twice.
+    """
+    unique_edges: dict[tuple[str, str, EdgeType], GraphEdge] = {}
+    for edge in edges:
+        key = (edge.source_id, edge.target_id, edge.type)
+        unique_edges[key] = edge
+    return list(unique_edges.values())
+
+
 def extract_nodes_from_code(
     project_id: UUID,
     file_path: str,
@@ -392,9 +409,4 @@ class ASTParserService:
         all_edges.extend(resolve_import_edges(project_id, file_imports, file_paths, base_dir))
 
         # Deduplicate edges to prevent DB IntegrityError (UNIQUE constraint failed)
-        unique_edges = {}
-        for edge in all_edges:
-            key = (edge.source_id, edge.target_id, edge.type)
-            unique_edges[key] = edge
-
-        return all_nodes, list(unique_edges.values())
+        return all_nodes, dedupe_edges(all_edges)
