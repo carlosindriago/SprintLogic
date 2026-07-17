@@ -27,10 +27,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Settings, FolderOpen, ChevronRight, Edit2, Trash2, PlusCircle, ChevronsUpDown, FilePlus, RefreshCw, ScanSearch, Layout, Network, GitBranch, BarChart3, FolderGit2, HelpCircle, Bot } from "lucide-react";
+import { Settings, FolderOpen, ChevronRight, Edit2, Trash2, PlusCircle, ChevronsUpDown, FilePlus, RefreshCw, RotateCcw, ScanSearch, Layout, Network, GitBranch, BarChart3, FolderGit2, HelpCircle, Bot } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { scanProject, getProjects, updateProject, deleteProject, analyzeProject, renameFile, duplicateFile, deleteFile } from "@/lib/api";
+import { scanProject, getProjects, updateProject, deleteProject, rescanProject, analyzeProject, renameFile, duplicateFile, deleteFile } from "@/lib/api";
 import { Switch } from "@/components/ui/switch";
 import SprintLogicChat from "@/components/SprintLogicChat";
 import KanbanBoard from "@/components/KanbanBoard";
@@ -829,6 +829,23 @@ export default function Home() {
                         title="Refrescar Explorador"
                       >
                         <RefreshCw className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 text-zinc-400 hover:text-white hover:bg-zinc-700"
+                        onClick={async () => {
+                          if (!projectId) return;
+                          try {
+                            await rescanProject(projectId);
+                            toast.success("Re-escaneo iniciado. El grafo se actualizará en unos segundos.");
+                          } catch {
+                            toast.error("Error al re-escanear");
+                          }
+                        }}
+                        title="Re-escanear Proyecto"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" />
                       </Button>
                       <Button
                         variant="ghost"
