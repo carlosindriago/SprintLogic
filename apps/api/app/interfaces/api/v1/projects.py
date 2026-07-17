@@ -148,6 +148,43 @@ async def stream_scan_progress(project_id: str):
     return EventSourceResponse(event_generator())
 
 
+@router.post("/projects/{project_id}/rescan", status_code=202)
+async def rescan_project(
+    project_id: str,
+    background_tasks: BackgroundTasks,
+    session: AsyncSession = Depends(get_db_session),
+):
+    try:
+        project_uuid = UUID(project_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+
+    repo = SQLAlchemyProjectRepository(session)
+    project = await repo.get_project(project_uuid)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    parser = ASTParserService()
+    graph_repo = SQLAlchemyGraphRepository(session)
+    provider = LocalFileSystemProvider(project.path)
+
+    await graph_repo.clear_by_project(project_uuid)
+
+    scan_codebase_usecase = ScanCodebaseUseCase(provider, parser, global_event_bus, graph_repo)
+    cancel_token = asyncio.Event()
+    active_scans[str(project_uuid)] = cancel_token
+
+    background_tasks.add_task(
+        scan_codebase_usecase.execute, project_uuid, cancel_token, project.path
+    )
+
+    return {
+        "status": "rescanning started",
+        "project_id": str(project_uuid),
+        "message": "AST parsing is running in the background with fresh git birth dates.",
+    }
+
+
 @router.put("/projects/{project_id}", response_model=ProjectResponse)
 async def update_project(
     project_id: str,
