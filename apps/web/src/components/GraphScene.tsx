@@ -2,14 +2,16 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useState, useRef, ComponentType, useMemo, useCallback, useLayoutEffect } from "react";
-import { getProjectGraph } from "@/lib/api";
+import { getProjectGraph, rescanProject, ApiError } from "@/lib/api";
 import { API_BASE_URL } from "@/lib/api";
 import { GraphData, GraphNode, GraphEdge } from "@/types";
 import { ForceGraphProps, NodeObject } from "react-force-graph-2d";
 import { graphTheme } from "@/lib/graph-theme";
-import { Search, RotateCcw, ZoomIn, ZoomOut, Maximize, Brain, AlertTriangle, Play, Pause, Zap, ZapOff, ScanSearch, FileCode } from "lucide-react";
+import { Search, RotateCcw, ZoomIn, ZoomOut, Maximize, Brain, AlertTriangle, Play, Pause, Zap, ZapOff, ScanSearch, FileCode, RefreshCw } from "lucide-react";
 import { useTabsStore } from "../store/tabsStore";
 import { useLLMConfigStore } from "../store/llmConfigStore";
+import { useBackgroundJobsStore } from "../store/backgroundJobsStore";
+import { toast } from "sonner";
 
 interface ForceNode extends GraphNode {
   x?: number;
@@ -33,7 +35,7 @@ const ForceGraph2D = dynamic(
   () => import("react-force-graph-2d"),
   { ssr: false }
 );
- 
+
 const ICON_URLS: Record<string, string> = {
   py: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/python/python-original.svg",
   ts: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/typescript/typescript-original.svg",
@@ -49,6 +51,13 @@ const ICON_URLS: Record<string, string> = {
   md: "https://cdn.simpleicons.org/markdown/e2e8f0",
   bash: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/bash/bash-original.svg",
   sh: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/bash/bash-original.svg"
+};
+
+// SENSEI FIX: Nuestro escudo, protegiendo contra los undefined y las mutaciones de D3.
+const getSafeTime = (nodeRef: unknown): number => {
+  if (!nodeRef || typeof nodeRef !== 'object') return 0;
+  const value = (nodeRef as { birth_time?: unknown }).birth_time;
+  return typeof value === 'number' ? value : 0;
 };
 
 const MODULE_COLORS = [
@@ -90,26 +99,24 @@ function getModuleColor(folder: string): string {
   return color;
 }
 
-
 interface GraphSceneProps {
   projectId: string | null;
   onNodeClick?: (node: GraphNode) => void;
 }
- 
+
 export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) {
   const [graphData, setGraphData] = useState<GraphData>({ nodes: [], links: [] });
   const containerRef = useRef<HTMLDivElement>(null);
-  // ForceGraphMethods generic chain is incompatible with custom ForceNode/ForceLink
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const fgRef = useRef<any>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
- 
+
   const [hoverNode, setHoverNode] = useState<string | null>(null);
   const [focusNode, setFocusNode] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [showCycles, setShowCycles] = useState(false);
   const [activeTypes, setActiveTypes] = useState<Set<string>>(new Set(["File", "Class", "Function", "Interface"]));
-  
+
   const [enableFlow, setEnableFlow] = useState(false);
   const [isPhysicsActive, setIsPhysicsActive] = useState(true);
   const [glowingLinks, setGlowingLinks] = useState<Set<string>>(new Set());
@@ -118,6 +125,58 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
   const [animProgress, setAnimProgress] = useState(1);
   const animProgressRef = useRef(1);
 
+  const scanStatus = useBackgroundJobsStore((s) => (projectId ? s.activeScans[projectId]?.status : undefined));
+  const startScan = useBackgroundJobsStore((s) => s.startScan);
+  const clearScan = useBackgroundJobsStore((s) => s.clearScan);
+  const isScanning = scanStatus === "scanning";
+
+  const rescanHandledRef = useRef(false);
+  const cutoffTimeRef = useRef<number | null>(null);
+  const globalScaleRef = useRef(1);
+
+  useEffect(() => {
+    if (!projectId) return;
+    if (scanStatus === "scanning") {
+      rescanHandledRef.current = false;
+      return;
+    }
+    if (scanStatus === "completed" && !rescanHandledRef.current) {
+      rescanHandledRef.current = true;
+      getProjectGraph(projectId)
+        .then((data) => setGraphData(data))
+        .catch(() => {
+          toast.error("El escaneo terminó, pero falló la descarga del nuevo grafo. Reintentá.");
+        })
+        .finally(() => clearScan(projectId));
+    }
+    if (scanStatus === "failed") {
+      clearScan(projectId);
+    }
+  }, [scanStatus, projectId, clearScan]);
+
+  const handleRescan = async () => {
+    if (!projectId) return;
+    try {
+      await rescanProject(projectId);
+      startScan(projectId);
+      toast.success("Re-escaneo iniciado. El grafo se actualizará al finalizar.");
+    } catch {
+      toast.error("Error al re-escanear");
+    }
+  };
+
+  useEffect(() => {
+    if (!isScanning || !projectId) return;
+    const watchdog = setTimeout(() => {
+      const current = useBackgroundJobsStore.getState().activeScans[projectId]?.status;
+      if (current === "scanning") {
+        clearScan(projectId);
+        toast.error("El escaneo no respondió a tiempo. Verificá la conexión con el servidor.");
+      }
+    }, 60000);
+    return () => clearTimeout(watchdog);
+  }, [isScanning, projectId, clearScan]);
+
   const timeRange = useMemo(() => {
     const timed = graphData.nodes
       .filter((n) => (n as ForceNode).birth_time)
@@ -125,6 +184,14 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     if (timed.length < 2) return null;
     return { min: Math.min(...timed), max: Math.max(...timed) };
   }, [graphData]);
+
+  useEffect(() => {
+    if (!timeRange) {
+      cutoffTimeRef.current = null;
+      return;
+    }
+    cutoffTimeRef.current = timeRange.min + (timeRange.max - timeRange.min) * animProgress;
+  }, [timeRange, animProgress]);
 
   const moduleLegend = useMemo(() => {
     const seen = new Set<string>();
@@ -149,7 +216,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
   useEffect(() => {
     animProgressRef.current = animProgress;
   }, [animProgress]);
-  
+
   const lastClickTimeRef = useRef<number>(0);
   const initialFitDone = useRef(false);
 
@@ -174,6 +241,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     rafId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafId);
   }, [animating]);
+
   const [contextMenu, setContextMenu] = useState<{ visible: boolean; x: number; y: number; node: ForceNode } | null>(null);
 
   useEffect(() => {
@@ -181,6 +249,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     document.addEventListener('click', handleClick);
     return () => document.removeEventListener('click', handleClick);
   }, []);
+
   const [iconsLoaded, setIconsLoaded] = useState(false);
   const iconImages = useRef<Record<string, HTMLImageElement>>({});
 
@@ -188,10 +257,9 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
   const [analyzingText, setAnalyzingText] = useState("");
   const [savedAnalysis, setSavedAnalysis] = useState<string | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
-  
+
   const addTab = useTabsStore((state) => state.addTab);
 
-  // Compute codebase statistics
   const stats = useMemo(() => {
     let files = 0;
     let classes = 0;
@@ -218,7 +286,6 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     return { files, classes, functions, interfaces, loc, extMap };
   }, [graphData]);
 
-  // Compute current signature
   const currentSignature = `${graphData.nodes.length}_${graphData.links.length}_${stats.loc}`;
 
   useEffect(() => {
@@ -229,7 +296,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     }
     const saved = localStorage.getItem(`graph_analysis_${projectId}`);
     const savedSig = localStorage.getItem(`graph_analysis_sig_${projectId}`);
-    
+
     if (saved) {
       setSavedAnalysis(saved);
       if (savedSig && savedSig !== currentSignature) {
@@ -330,29 +397,19 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
       iconImages.current[ext] = img;
     });
   }, []);
- 
+
   const handleZoomIn = () => {
     if (fgRef.current) {
-      if (false) {
-        const { x, y, z } = fgRef.current.cameraPosition();
-        fgRef.current.cameraPosition({ x: x * 0.7, y: y * 0.7, z: z * 0.7 }, undefined, 400);
-      } else {
-        fgRef.current.zoom(fgRef.current.zoom() * 1.5, 400);
-      }
+      fgRef.current.zoom(fgRef.current.zoom() * 1.5, 400);
     }
   };
- 
+
   const handleZoomOut = () => {
     if (fgRef.current) {
-      if (false) {
-        const { x, y, z } = fgRef.current.cameraPosition();
-        fgRef.current.cameraPosition({ x: x * 1.5, y: y * 1.5, z: z * 1.5 }, undefined, 400);
-      } else {
-        fgRef.current.zoom(fgRef.current.zoom() / 1.5, 400);
-      }
+      fgRef.current.zoom(fgRef.current.zoom() / 1.5, 400);
     }
   };
- 
+
   const handleFitView = () => {
     if (fgRef.current) {
       fgRef.current.zoomToFit(400, 50);
@@ -417,6 +474,10 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
           const data = await getProjectGraph(projectId);
           if (active) setGraphData(data);
         } catch (err) {
+          if (err instanceof ApiError && err.status === 404) {
+            if (active) setGraphData({ nodes: [], links: [] });
+            return;
+          }
           console.error("Failed to load graph:", err);
         }
       } else {
@@ -435,10 +496,8 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
   useEffect(() => {
     if (!fgRef.current || dimensions.width === 0) return;
 
-    fgRef.current.d3Force('charge').strength(-400);
-    fgRef.current.d3Force('link').distance((link: any) => {
-      return link.type === 'IMPORTS' ? 300 : 120;
-    });
+    fgRef.current.d3Force('charge').strength(-120);
+    fgRef.current.d3Force('link').distance(30);
   }, [dimensions.width]);
 
   useEffect(() => {
@@ -447,10 +506,8 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
 
     initialFitDone.current = false;
 
-    fgRef.current.d3Force('charge').strength(-400);
-    fgRef.current.d3Force('link').distance((link: any) => {
-      return link.type === 'IMPORTS' ? 300 : 120;
-    });
+    fgRef.current.d3Force('charge').strength(-120);
+    fgRef.current.d3Force('link').distance(30);
     fgRef.current.d3ReheatSimulation();
   }, [hasGraphData]);
 
@@ -459,8 +516,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
       setGlowingLinks(new Set());
       return;
     }
-    
-    // Every 1.5 seconds, pick a random subset of links (10%) to glow
+
     const interval = setInterval(() => {
       const newGlowing = new Set<string>();
       graphData.links.forEach((link: any) => {
@@ -472,7 +528,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
       });
       setGlowingLinks(newGlowing);
     }, 1500);
-    
+
     return () => clearInterval(interval);
   }, [enableFlow, graphData]);
 
@@ -523,17 +579,19 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     const id = n.id as string;
     const label = n.label as string;
     const name = n.name as string;
-    
-    // Filter by type
+
+    globalScaleRef.current = globalScale;
+
     if (!activeTypes.has(label)) return;
-    
-    // Filter by search
     if (lowerSearchQuery && !name.toLowerCase().includes(lowerSearchQuery)) return;
 
     const progress = animProgressRef.current;
-    if (progress < 1 && timeRange && n.birth_time) {
+
+    // SENSEI FIX: Usamos getSafeTime para la visibilidad temporal del nodo
+    const bTime = getSafeTime(n);
+    if (progress < 1 && timeRange) {
       const cutoff = timeRange.min + (timeRange.max - timeRange.min) * progress;
-      if (n.birth_time > cutoff) return;
+      if (bTime > cutoff) return; // Si no ha nacido, no lo dibujamos
     }
 
     let radius = 3;
@@ -562,15 +620,39 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     const hasHighOutDegree = outDegree >= 10;
 
     const faded = isFaded(id);
-    const isZoomedOut = globalScale < 1.2; // LOD (Level of Detail) threshold
+    const isZoomedOut = globalScale < 1.2;
 
-    // Draw Out-Degree Breathing Halo (behind the node to represent active sending) - Skipped if zoomed out
+    // ── SUPERNOVA EFFECT SENSEI FIX ──────────────────────────────────────────
+    let isSupernova = false;
+    if (progress > 0 && progress < 1 && timeRange && !faded) {
+      const currentCutoff = timeRange.min + (timeRange.max - timeRange.min) * progress;
+      const age = currentCutoff - bTime;
+      const supernovaWindow = (timeRange.max - timeRange.min) * 0.05; // 5% ventana
+
+      isSupernova = age >= 0 && age <= supernovaWindow;
+    }
+
+    if (isSupernova) {
+      const pulse = Math.sin(Date.now() / 200) * 0.3 + 0.7;
+      const novaRadius = radius * (1.8 + pulse * 0.8);
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(n.x || 0, n.y || 0, novaRadius, 0, 2 * Math.PI, false);
+      ctx.shadowColor = "white";
+      ctx.shadowBlur = 15 * pulse;
+      ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+      ctx.globalAlpha = 0.8 * pulse;
+      ctx.fill();
+      ctx.restore(); // Super importante: restaura el canvas para no manchar el resto
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
     if (n.out_degree > 0 && !faded && !isZoomedOut) {
       const pulse = Math.sin(Date.now() / 300) * 1.5;
       const haloRadius = radius + 3.5 + pulse;
       ctx.beginPath();
       ctx.arc(n.x || 0, n.y || 0, haloRadius, 0, 2 * Math.PI, false);
-      
+
       let haloColor = "rgba(100, 116, 139, 0.12)";
       if (color.startsWith('#')) {
         const r = parseInt(color.slice(1, 3), 16);
@@ -610,27 +692,25 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
       ctx.stroke();
     }
 
-    // Draw In-Degree Expanding Ripple (for small nodes receiving flow) - Skipped if zoomed out
     if (n.in_degree > 0 && (label === "Function" || label === "Interface" || radius < 5) && !faded && !isZoomedOut) {
-      const t = (Date.now() / 1200) % 1.0; 
+      const t = (Date.now() / 1200) % 1.0;
       const rippleRadius = radius + t * 8;
       const rippleOpacity = (1 - t) * 0.45;
-      
+
       ctx.beginPath();
       ctx.arc(n.x || 0, n.y || 0, rippleRadius, 0, 2 * Math.PI, false);
       ctx.strokeStyle = color;
       ctx.lineWidth = 0.6;
       ctx.globalAlpha = rippleOpacity;
       ctx.stroke();
-      ctx.globalAlpha = faded ? graphTheme.dimOpacity : 1; 
+      ctx.globalAlpha = faded ? graphTheme.dimOpacity : 1;
     }
 
-    // Hover tooltip info (LOC / Degrees)
     if (id === hoverNode && !faded) {
        const info = [];
        if (n.loc !== undefined) info.push(`LOC: ${n.loc}`);
        if (n.in_degree !== undefined) info.push(`In: ${n.in_degree} | Out: ${n.out_degree}`);
-       
+
        if (info.length > 0) {
          ctx.font = `10px Inter, sans-serif`;
          ctx.fillStyle = "rgba(255,255,255,0.9)";
@@ -645,80 +725,78 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
       ctx.textAlign = "center";
       ctx.fillText(name || "", n.x || 0, (n.y || 0) + radius + fontSize + 2);
     }
-    
-    ctx.globalAlpha = 1; // reset
-  }, [activeTypes, lowerSearchQuery, isFaded, hoverNode, focusNode]);
+
+    ctx.globalAlpha = 1;
+  }, [activeTypes, lowerSearchQuery, isFaded, hoverNode, focusNode, timeRange]);
 
   const getLinkColor = useCallback((link: any) => {
     const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
     const targetId = typeof link.target === 'object' ? link.target.id : link.target;
-    
+
     const faded = isFaded(sourceId) && isFaded(targetId);
-    const opacityFactor = 0.3; 
-    
-    // In 3D, glowing lines when flow is enabled
+
     const isGlowing = glowingLinks.has(`${sourceId}-${targetId}`);
     if (isGlowing && !faded) {
-      return "rgba(96, 165, 250, 0.85)"; // Bright blue glow for animation
+      return "rgba(96, 165, 250, 0.85)";
     }
-    
-    let baseColor = `rgba(228, 228, 231, ${0.25 * opacityFactor})`; // Light gray (zinc-200 at 25% opacity)
-    if (showCycles && link.is_cycle) {
-      baseColor = `rgba(248, 113, 113, ${0.5 * opacityFactor})`; // Soft red/pink for cycles
-    } else if (link.type === "IMPORTS") {
-      baseColor = `rgba(228, 228, 231, ${0.35 * opacityFactor})`; // Slightly visible light gray for imports
-    } else {
-      baseColor = `rgba(228, 228, 231, ${0.15 * opacityFactor})`; // Fainter gray for internal calls
-    }
-    
+
     if (faded) {
-      return showCycles && link.is_cycle 
-        ? `rgba(248, 113, 113, ${0.05 * opacityFactor})` 
-        : `rgba(228, 228, 231, ${0.05 * opacityFactor})`;
+      return "rgba(255, 255, 255, 0.05)";
     }
-    return baseColor;
+
+    if (showCycles && link.is_cycle) {
+      return "rgba(248, 113, 113, 0.55)";
+    }
+    return "rgba(156, 163, 175, 0.4)";
   }, [isFaded, showCycles, glowingLinks]);
 
   const getParticleColor = useCallback((link: any) => {
     if (showCycles && link.is_cycle) {
-      return "rgba(252, 165, 165, 0.8)"; // Soft light red for cycle current
+      return "rgba(252, 165, 165, 0.8)";
     }
-    return "rgba(203, 213, 225, 0.65)"; // Soft slate gray-blue for normal flow
+    return "rgba(203, 213, 225, 0.65)";
   }, [showCycles]);
 
   const getLinkWidth = useCallback((link: any) => {
     const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
     const targetId = typeof link.target === 'object' ? link.target.id : link.target;
     const faded = isFaded(sourceId) && isFaded(targetId);
-    
+
     if (glowingLinks.has(`${sourceId}-${targetId}`) && !faded) {
-      return 1.8; // Thicker when glowing in 3D
+      return 2.5;
     }
-    
-    if (faded) return 0.2;
-    
-    if (showCycles && link.is_cycle) return 1.5;
-    if (hoverNode === sourceId || hoverNode === targetId) return 1.5;
-    return link.type === "IMPORTS" ? 0.8 : 0.4;
+
+    if (faded) return 0.5;
+
+    if (showCycles && link.is_cycle) return 2;
+    if (hoverNode === sourceId || hoverNode === targetId) return 2;
+    return Math.max(1, 1.5 / globalScaleRef.current);
   }, [isFaded, hoverNode, showCycles, glowingLinks]);
 
+  // SENSEI FIX: Reescritura segura de getLinkVisibility usando getSafeTime
   const getLinkVisibility = useCallback((link: any) => {
     const sourceNode = link.source;
     const targetNode = link.target;
     if (!sourceNode || !targetNode) return false;
-    
+
     const sourceLabel = typeof sourceNode === 'object' ? sourceNode.label : null;
     const targetLabel = typeof targetNode === 'object' ? targetNode.label : null;
-    
+
     if (sourceLabel && !activeTypes.has(sourceLabel)) return false;
     if (targetLabel && !activeTypes.has(targetLabel)) return false;
-    
+
     if (lowerSearchQuery) {
       const sourceName = (typeof sourceNode === 'object' ? sourceNode.name : '').toLowerCase();
       const targetName = (typeof targetNode === 'object' ? targetNode.name : '').toLowerCase();
       if (!sourceName.includes(lowerSearchQuery) && !targetName.includes(lowerSearchQuery)) return false;
     }
-    
+
+    if (cutoffTimeRef.current) {
+      const sTime = getSafeTime(sourceNode);
+      const tTime = getSafeTime(targetNode);
+      if (sTime > cutoffTimeRef.current || tTime > cutoffTimeRef.current) return false;
+    }
+
     return true;
   }, [activeTypes, lowerSearchQuery]);
 
@@ -734,14 +812,14 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
   return (
     <div className="flex-1 w-full flex flex-col relative min-h-0" style={{ backgroundColor: graphTheme.background }}>
       {/* Controls Overlay */}
-      <div className="absolute top-4 left-4 z-10 flex flex-col gap-3 p-4 rounded-lg shadow-lg" 
+      <div className="absolute top-4 left-4 z-10 flex flex-col gap-3 p-4 rounded-lg shadow-lg"
            style={{ backgroundColor: graphTheme.surfaceElevated, border: `1px solid ${graphTheme.border}` }}>
-        
+
         <div className="relative">
           <Search className="w-4 h-4 absolute left-3 top-2.5 text-zinc-400" />
-          <input 
-            type="text" 
-            placeholder="Search nodes..." 
+          <input
+            type="text"
+            placeholder="Search nodes..."
             className="w-full bg-[#18181b] border border-[#3f3f46] rounded-md py-1.5 pl-9 pr-3 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -750,7 +828,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
 
         <div className="flex flex-wrap gap-2 text-xs">
           {["File", "Class", "Function", "Interface"].map(type => (
-            <button 
+            <button
               key={type}
               onClick={() => toggleType(type)}
               className={`px-2 py-1 rounded-md transition-colors ${activeTypes.has(type) ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
@@ -764,7 +842,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
           ))}
         </div>
 
-        <button 
+        <button
           onClick={() => setShowCycles(!showCycles)}
           className={`flex items-center justify-center gap-2 text-xs py-1.5 rounded-md transition-colors ${showCycles ? 'bg-red-900/40 text-red-400 border border-red-900/50' : 'bg-[#18181b] text-zinc-400 border border-[#3f3f46]'}`}
         >
@@ -774,7 +852,18 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
 
         {/* Project Statistics */}
         <div className="border-t border-[#3f3f46] pt-3 mt-1">
-          <h4 className="text-[10px] font-semibold text-zinc-400 mb-2 uppercase tracking-wider">Métricas del Código</h4>
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">Métricas del Código</h4>
+            <button
+              onClick={handleRescan}
+              disabled={isScanning}
+              className="flex items-center gap-1 text-[10px] text-zinc-400 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              title={isScanning ? "Re-escaneando..." : "Re-escanear Proyecto"}
+            >
+              <RefreshCw className={`w-3 h-3 ${isScanning ? "animate-spin" : ""}`} />
+              {isScanning ? "Escaneando..." : "Sincronizar"}
+            </button>
+          </div>
           <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px]">
             <div className="flex justify-between">
               <span className="text-zinc-500">Archivos:</span>
@@ -812,14 +901,14 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
 
         {savedAnalysis ? (
           <div className="flex flex-col gap-2 border-t border-[#3f3f46] pt-3 mt-1">
-            <button 
+            <button
               onClick={handleShowAnalysis}
               className="flex items-center justify-center gap-2 text-xs py-1.5 rounded-md transition-colors bg-zinc-850 hover:bg-zinc-800 text-zinc-200 border border-[#3f3f46]"
             >
               <Brain className="w-3.5 h-3.5 text-green-400" />
               Mostrar Análisis
             </button>
-            <button 
+            <button
               onClick={handleAnalyze}
               disabled={analyzing}
               className="flex items-center justify-center gap-2 text-xs py-1.5 rounded-md transition-colors bg-blue-600 hover:bg-blue-500 text-white disabled:opacity-50"
@@ -830,7 +919,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
           </div>
         ) : (
           <div className="flex flex-col gap-2 border-t border-[#3f3f46] pt-3 mt-1">
-            <button 
+            <button
               onClick={handleAnalyze}
               disabled={analyzing}
               className="flex items-center justify-center gap-2 text-xs py-1.5 rounded-md transition-colors bg-blue-600 hover:bg-blue-500 text-white disabled:opacity-50"
@@ -861,23 +950,23 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
       )}
 
       {/* Unified Graph Controls Toolbar */}
-      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 flex flex-row items-center rounded-lg shadow-lg overflow-hidden" 
+      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 flex flex-row items-center rounded-lg shadow-lg overflow-hidden"
            style={{ backgroundColor: graphTheme.surfaceElevated, border: `1px solid ${graphTheme.border}` }}>
-        <button 
+        <button
           onClick={handleZoomIn}
           className="p-2 transition-colors text-zinc-400 hover:text-white hover:bg-[#3f3f46]"
           title="Acercar (Zoom In)"
         >
           <ZoomIn className="w-4 h-4" />
         </button>
-        <button 
+        <button
           onClick={handleFitView}
           className="p-2 border-l border-[#3f3f46] transition-colors text-zinc-400 hover:text-white hover:bg-[#3f3f46]"
           title="Ajustar a la pantalla"
         >
           <Maximize className="w-4 h-4" />
         </button>
-        <button 
+        <button
           onClick={handleZoomOut}
           className="p-2 border-l border-[#3f3f46] transition-colors text-zinc-400 hover:text-white hover:bg-[#3f3f46]"
           title="Alejar (Zoom Out)"
@@ -885,15 +974,14 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
           <ZoomOut className="w-4 h-4" />
         </button>
 
-        
-        <button 
+        <button
           onClick={togglePhysics}
           className={`p-2 border-l border-[#3f3f46] transition-colors ${isPhysicsActive ? "text-emerald-400 hover:text-emerald-300 bg-emerald-950/20" : "text-zinc-500 hover:text-zinc-300 hover:bg-[#3f3f46]"}`}
           title={isPhysicsActive ? "Pausar Simulación Física" : "Reanudar Simulación Física"}
         >
           {isPhysicsActive ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
         </button>
-        <button 
+        <button
           onClick={() => setEnableFlow(!enableFlow)}
           className={`p-2 border-l border-[#3f3f46] transition-colors ${enableFlow ? "text-yellow-400 hover:text-yellow-300 bg-yellow-950/20" : "text-zinc-500 hover:text-zinc-300 hover:bg-[#3f3f46]"}`}
           title={enableFlow ? "Desactivar Flujo de Corriente" : "Activar Flujo de Corriente"}
@@ -939,14 +1027,22 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
         </div>
       )}
 
-      <div ref={containerRef} className="flex-1 w-full min-h-0 z-0">
+      <div ref={containerRef} className={`flex-1 w-full min-h-0 z-0 transition-opacity duration-300 ${isScanning ? "opacity-40 pointer-events-none" : ""}`}>
+        {isScanning && (
+          <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
+            <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-black/70 border border-zinc-700 backdrop-blur-sm">
+              <RefreshCw className="w-4 h-4 animate-spin text-blue-400" />
+              <span className="text-sm text-zinc-300">Re-escaneando proyecto...</span>
+            </div>
+          </div>
+        )}
         {contextMenu && contextMenu.visible && (
-          <div 
+          <div
             className="fixed z-50 bg-[#18181b] border border-[#3f3f46] rounded-md shadow-xl py-1 w-48 text-sm overflow-hidden"
             style={{ left: contextMenu.x, top: contextMenu.y }}
             onContextMenu={(e) => e.preventDefault()}
           >
-            <button 
+            <button
               className="w-full text-left px-4 py-2 text-zinc-300 hover:bg-blue-600 hover:text-white transition-colors flex items-center gap-2"
               onClick={(e) => {
                 e.stopPropagation();
@@ -958,10 +1054,10 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
                 setContextMenu(null);
               }}
             >
-              <ScanSearch className="w-4 h-4" /> 
+              <ScanSearch className="w-4 h-4" />
               {focusNode === contextMenu.node.id ? "Restaurar Grafo" : "Aislar Nodo"}
             </button>
-            <button 
+            <button
               className="w-full text-left px-4 py-2 text-zinc-300 hover:bg-blue-600 hover:text-white transition-colors flex items-center gap-2"
               onClick={(e) => {
                 e.stopPropagation();
@@ -991,6 +1087,12 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
             graphData={displayGraphData}
             backgroundColor={graphTheme.background}
             nodeCanvasObject={paintNode}
+            nodeVisibility={(node: NodeObject) => {
+              // SENSEI FIX: También curamos la evaluación global de D3
+              if (!cutoffTimeRef.current) return true;
+              const bTime = getSafeTime(node);
+              return bTime <= cutoffTimeRef.current;
+            }}
             linkColor={getLinkColor}
             linkWidth={getLinkWidth}
             linkVisibility={getLinkVisibility}
