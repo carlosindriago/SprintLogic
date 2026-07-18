@@ -45,6 +45,16 @@ const TreeNode: React.FC<{
 
   const handleToggleMarkers = useCallback(() => setShowMarkers((v) => !v), []);
 
+  const handleToggleOpen = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsOpen((v) => !v);
+  }, []);
+
+  const handleSelect = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    onSelect(node.path);
+  }, [onSelect, node.path]);
+
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
     setContextMenu({ x: e.clientX, y: e.clientY });
@@ -67,7 +77,7 @@ const TreeNode: React.FC<{
         <div 
           className="flex items-center py-1 hover:bg-zinc-800 cursor-pointer text-zinc-300 transition-colors"
           style={{ paddingLeft }}
-          onClick={() => setIsOpen(!isOpen)}
+          onClick={handleToggleOpen}
           onContextMenu={handleContextMenu}
         >
           {isOpen ? <ChevronDown className="w-4 h-4 mr-1 text-zinc-500" /> : <ChevronRight className="w-4 h-4 mr-1 text-zinc-500" />}
@@ -116,7 +126,7 @@ const TreeNode: React.FC<{
       <div 
         className="flex items-center py-1 hover:bg-zinc-800 cursor-pointer text-zinc-300 transition-colors group"
         style={{ paddingLeft: `${depth * 12 + 28}px` }}
-        onClick={() => onSelect(node.path)}
+        onClick={handleSelect}
         onContextMenu={handleContextMenu}
       >
         <FileIcon fileName={node.name} className="w-4 h-4 mr-2 shrink-0" />
