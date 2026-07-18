@@ -70,7 +70,7 @@ const TreeNode: React.FC<{
           onClick={() => setIsOpen(!isOpen)}
           onContextMenu={handleContextMenu}
         >
-          {isOpen ? <ChevronDown className="w-4 h-4 mr-1 text-zinc-500" /> : <ChevronRight className="w-4 h-4 mr-1 text-zinc-500" />}
+          {isOpen ? <ChevronDown className="w-4 h-4 mr-1 text-zinc-500" aria-hidden="true" /> : <ChevronRight className="w-4 h-4 mr-1 text-zinc-500" aria-hidden="true" />}
           <Folder className="w-4 h-4 mr-2 text-blue-400" />
           <span className="text-sm truncate">{node.name}</span>
           {dirMarkers.errors > 0 && (
@@ -242,6 +242,8 @@ function FileMarkerBadge({ filePath, onToggle, expanded }: { filePath: string; o
             expanded ? "bg-red-500/30 text-red-300" : "bg-red-500/20 text-red-400 hover:bg-red-500/30"
           )}
           onClick={(e) => { e.stopPropagation(); onToggle(); }}
+          aria-label={`${markers.errors} errores. ${expanded ? 'Ocultar detalles' : 'Mostrar detalles'}`}
+          title={`${markers.errors} errores`}
         >
           {markers.errors}
         </button>
@@ -253,12 +255,14 @@ function FileMarkerBadge({ filePath, onToggle, expanded }: { filePath: string; o
             expanded ? "bg-yellow-500/30 text-yellow-300" : "bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30"
           )}
           onClick={(e) => { e.stopPropagation(); onToggle(); }}
+          aria-label={`${markers.warnings} advertencias. ${expanded ? 'Ocultar detalles' : 'Mostrar detalles'}`}
+          title={`${markers.warnings} advertencias`}
         >
           {markers.warnings}
         </button>
       )}
       {expanded && (
-        <ChevronDown className="w-3 h-3 text-zinc-500" />
+        <ChevronDown className="w-3 h-3 text-zinc-500" aria-hidden="true" />
       )}
     </span>
   );
