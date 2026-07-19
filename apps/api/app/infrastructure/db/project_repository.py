@@ -84,6 +84,13 @@ class SQLAlchemyProjectRepository(ProjectRepository):
         model = await self.session.get(ProjectModel, project_id)
         return _to_domain(model) if model else None
 
+    async def get_by_path(self, path: str) -> Project | None:
+        result = await self.session.execute(
+            select(ProjectModel).where(ProjectModel.path == path)
+        )
+        model = result.scalars().first()
+        return _to_domain(model) if model else None
+
     async def get_all(self) -> list[Project]:
         result = await self.session.execute(
             select(ProjectModel).order_by(ProjectModel.last_opened.desc().nullslast())
