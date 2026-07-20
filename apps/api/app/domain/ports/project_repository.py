@@ -30,6 +30,11 @@ class ProjectRepository(ABC):
         ...
 
     @abstractmethod
+    async def get_by_path(self, path: str) -> Project | None:
+        """Return the project with the given path, or None if not found."""
+        ...
+
+    @abstractmethod
     async def get_all(self) -> list[Project]:
         """Return all projects ordered by last_opened descending (nulls last)."""
         ...

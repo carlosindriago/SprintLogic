@@ -89,8 +89,8 @@ async def scan_project(
     from app.domain.path_validator import PathSecurityValidator
 
     canonical = PathSecurityValidator.validate_project_path(request.path)
-    existing = await project_repo.get_all()
-    if any(p.path == str(canonical) for p in existing):
+    existing_project = await project_repo.get_by_path(str(canonical))
+    if existing_project is not None:
         raise HTTPException(
             status_code=409,
             detail=f"Ya existe un proyecto con el directorio '{canonical.name}' en la lista.",
