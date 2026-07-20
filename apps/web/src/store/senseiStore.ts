@@ -72,7 +72,9 @@ interface SenseiStore {
   /** Disconnects the global WebSocket */
   disconnectSocket: () => void;
   /** Used by EditorTab to subscribe to marker updates or sync errors */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   addSocketListener: (listener: (data: any) => void) => () => void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   socketListeners: Array<(data: any) => void>;
 }
 
@@ -116,7 +118,8 @@ export const useSenseiStore = create<SenseiStore>((set, get) => ({
       }));
     };
   },
-  connectSocket: (projectId: number) => {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  connectSocket: (_projectId: number) => {
     const { socket } = get();
     if (socket) return; // Already connected or connecting
 

@@ -136,8 +136,8 @@ export const ScanProgressBar: React.FC<ScanProgressBarProps> = ({ projectId }) =
           originalOnMessage?.call(eventSource, event);
         };
 
-      } catch (err: any) {
-        if (err?.name !== 'AbortError') {
+      } catch (err: unknown) {
+        if (err instanceof Error && err.name !== 'AbortError') {
           toast.error('Connection error during scan');
           setScanStatus(projectId, 'failed');
         }
