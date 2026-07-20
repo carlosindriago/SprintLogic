@@ -309,8 +309,9 @@ export default function AIAuditPanel({ projectId }: AIAuditPanelProps) {
           disabled={loading || refreshing}
           className="p-1 rounded text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors disabled:opacity-30"
           title="Refrescar"
+          aria-label="Refrescar"
         >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading || refreshing ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`w-3.5 h-3.5 ${loading || refreshing ? 'animate-spin' : ''}`} aria-hidden="true" />
         </button>
         {refreshing && (
           <span className="flex items-center gap-1.5 text-[11px] text-zinc-500 animate-pulse">
