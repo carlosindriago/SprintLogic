@@ -104,6 +104,16 @@ export const ScanProgressBar: React.FC<ScanProgressBarProps> = ({ projectId }) =
               setScanStatus(projectId, 'completed');
               toast.success('Codebase analysis complete');
               setTimeout(() => clearScan(projectId), 3000);
+              return;
+            }
+
+            if (data.type === 'error') {
+              eventSource.close();
+              setPhase('aborted');
+              toast.error(data.message || 'Scan failed due to a server error');
+              setScanStatus(projectId, 'failed');
+              setTimeout(() => clearScan(projectId), 5000);
+              return;
             }
           } catch {
             // JSON parse error — swallow silently

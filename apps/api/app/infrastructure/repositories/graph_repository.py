@@ -13,30 +13,40 @@ class SQLAlchemyGraphRepository(GraphRepository):
         self.session = session
 
     async def save_nodes(self, nodes: list[GraphNode]) -> None:
-        for node in nodes:
-            node_model = GraphNodeModel(
-                id=node.id,
-                project_id=node.project_id,
-                label=node.label,
-                name=node.name,
-                file_path=node.file_path,
-                meta_data=node.meta_data,
-                file_size=node.file_size,
-                loc=node.loc,
-            )
-            self.session.add(node_model)
-        await self.session.commit()
+        import asyncio
+        batch_size = 5000
+        for i in range(0, len(nodes), batch_size):
+            batch = nodes[i:i + batch_size]
+            for node in batch:
+                node_model = GraphNodeModel(
+                    id=node.id,
+                    project_id=node.project_id,
+                    label=node.label,
+                    name=node.name,
+                    file_path=node.file_path,
+                    meta_data=node.meta_data,
+                    file_size=node.file_size,
+                    loc=node.loc,
+                )
+                self.session.add(node_model)
+            await self.session.commit()
+            await asyncio.sleep(0)
 
     async def save_edges(self, edges: list[GraphEdge]) -> None:
-        for edge in edges:
-            edge_model = GraphEdgeModel(
-                project_id=edge.project_id,
-                source_id=edge.source_id,
-                target_id=edge.target_id,
-                type=edge.type,
-            )
-            self.session.add(edge_model)
-        await self.session.commit()
+        import asyncio
+        batch_size = 5000
+        for i in range(0, len(edges), batch_size):
+            batch = edges[i:i + batch_size]
+            for edge in batch:
+                edge_model = GraphEdgeModel(
+                    project_id=edge.project_id,
+                    source_id=edge.source_id,
+                    target_id=edge.target_id,
+                    type=edge.type,
+                )
+                self.session.add(edge_model)
+            await self.session.commit()
+            await asyncio.sleep(0)
 
     async def clear_by_project(self, project_id: UUID) -> None:
         await self.session.execute(

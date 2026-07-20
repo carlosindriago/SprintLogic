@@ -70,87 +70,82 @@ class ScanCodebaseUseCase:
 
     async def execute(self, project_id: UUID, cancel_token: asyncio.Event | None = None, project_path: str = ""):
         topic = f"scan:{project_id}"
-        parsed_count = 0
-        all_nodes = []
-        all_edges = []
-        # Pasada 1: intenciones de conexión crudas por archivo (quién dice importar a quién),
-        # resueltas en la Pasada 2 una vez que se conoce el universo completo de archivos.
-        file_imports: dict[str, set[str]] = {}
+        
+        try:
+            parsed_count = 0
+            all_nodes = []
+            all_edges = []
+            file_imports: dict[str, set[str]] = {}
 
-        # Phase 1 — Discovery: count files upfront so the frontend can show
-        # a determinate progress bar instead of an indeterminate spinner.
-        extension_filter = ['.ts', '.tsx', '.py', '.java', '.php', '.go', '.html', '.htm', '.css']
-        discovered = self.provider.discover(extension_filter)
-        total_files = len(discovered)
+            extension_filter = ['.ts', '.tsx', '.py', '.java', '.php', '.go', '.html', '.htm', '.css']
+            discovered = self.provider.discover(extension_filter)
+            total_files = len(discovered)
 
-        await self.event_bus.publish(topic, {
-            "type": "discovering",
-            "total": total_files,
-        })
+            await self.event_bus.publish(topic, {
+                "type": "discovering",
+                "total": total_files,
+            })
 
-        # Phase 2 — Parse: iterate and emit throttled progress
-        birth_dates: dict[str, int] = {}
-        if project_path:
-            from app.infrastructure.parser.ast_parser import fetch_git_birth_dates
+            birth_dates: dict[str, int] = {}
+            if project_path:
+                from app.infrastructure.parser.ast_parser import fetch_git_birth_dates
+                birth_dates = await fetch_git_birth_dates(project_path)
 
-            birth_dates = await fetch_git_birth_dates(project_path)
+            async for logical_path, content in self.provider.get_source_files(extension_filter):
+                if cancel_token and cancel_token.is_set():
+                    _logger.warning(f"Scan aborted by user for project {project_id}")
+                    await self.graph_repo.clear_by_project(project_id)
+                    return
 
-        async for logical_path, content in self.provider.get_source_files(extension_filter):
-            if cancel_token and cancel_token.is_set():
-                _logger.warning(f"Scan aborted by user for project {project_id}")
-                await self.graph_repo.clear_by_project(project_id)
-                return
+                parsed_count += 1
+                ext = os.path.splitext(logical_path)[1]
 
-            parsed_count += 1
-            ext = os.path.splitext(logical_path)[1]
+                try:
+                    nodes, edges, imports = extract_nodes_from_code(
+                        project_id, logical_path, content.encode('utf-8'), ext, birth_dates
+                    )
+                    all_nodes.extend(nodes)
+                    all_edges.extend(edges)
+                    if imports:
+                        file_imports[f"file:{logical_path}"] = imports
+                except Exception as e:
+                    _logger.error(f"Error parsing {logical_path}: {e}")
 
-            try:
-                nodes, edges, imports = extract_nodes_from_code(
-                    project_id, logical_path, content.encode('utf-8'), ext, birth_dates
+                await self.event_bus.publish_throttled(
+                    topic=topic,
+                    data={
+                        "type": "progress",
+                        "parsed": parsed_count,
+                        "total": total_files,
+                        "file": logical_path
+                    },
+                    throttle_ms=100
                 )
-                all_nodes.extend(nodes)
-                all_edges.extend(edges)
-                if imports:
-                    file_imports[f"file:{logical_path}"] = imports
-            except Exception as e:
-                _logger.error(f"Error parsing {logical_path}: {e}")
+
+            base_dir = Path(project_path) if project_path else Path(".")
+            file_paths = [n.file_path for n in all_nodes if n.label == NodeLabel.FILE]
+            
+            all_edges.extend(resolve_import_edges(project_id, file_imports, file_paths, base_dir))
+
+            deduped_edges = dedupe_edges(all_edges)
+
+            await self.graph_repo.clear_by_project(project_id)
+            await self.graph_repo.save_nodes(all_nodes)
+            await self.graph_repo.save_edges(deduped_edges)
 
             await self.event_bus.publish_throttled(
                 topic=topic,
                 data={
-                    "type": "progress",
+                    "type": "completed",
                     "parsed": parsed_count,
                     "total": total_files,
-                    "file": logical_path
-                },
-                throttle_ms=100
+                    "project_id": str(project_id)
+                }
             )
-
-        # Pasada 2: ahora que se conoce el universo completo de archivos escaneados,
-        # resolvemos los imports crudos contra el filesystem real para trazar las
-        # aristas IMPORTS entre archivos. Sin esto, el grafo queda compuesto solo por
-        # "estrellas" aisladas (CONTAINS) sin ninguna conexión entre ellas.
-        base_dir = Path(project_path) if project_path else Path(".")
-        file_paths = [n.file_path for n in all_nodes if n.label == NodeLabel.FILE]
-        all_edges.extend(resolve_import_edges(project_id, file_imports, file_paths, base_dir))
-
-        # Same file can be reached by more than one raw import statement (barrel
-        # imports, multiple named imports from one module, etc.) — dedupe before the
-        # bulk insert or the UNIQUE(project_id, source_id, target_id, type) constraint
-        # in graph_edges rejects the whole batch.
-        deduped_edges = dedupe_edges(all_edges)
-
-        await self.graph_repo.clear_by_project(project_id)
-        await self.graph_repo.save_nodes(all_nodes)
-        await self.graph_repo.save_edges(deduped_edges)
-
-        await self.event_bus.publish_throttled(
-            topic=topic,
-            data={
-                "type": "completed",
-                "parsed": parsed_count,
-                "total": total_files,
-                "project_id": str(project_id)
-            }
-        )
+        except Exception as e:
+            _logger.error(f"Scan failed for project {project_id} with error: {e}", exc_info=True)
+            await self.event_bus.publish(topic, {
+                "type": "error",
+                "message": f"Scan failed: {str(e)}"
+            })
 
