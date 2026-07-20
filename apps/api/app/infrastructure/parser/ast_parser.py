@@ -148,16 +148,16 @@ class TreeSitterParser:
             if node.type in ("class_definition", "class_declaration"):
                 node_type = "class"
                 for child in node.children:
-                    if child.type in ("identifier", "type_identifier"):
+                    if child.type in ("identifier", "type_identifier", "name"):
                         name = code_bytes[child.start_byte:child.end_byte].decode('utf-8')
                         break
                 if name:
                     fqn = f"{current_fqn}::[{node_type}]{name}"
 
-            elif node.type in ("function_definition", "function_declaration", "method_definition"):
+            elif node.type in ("function_definition", "function_declaration", "method_definition", "method_declaration"):
                 node_type = "def"
                 for child in node.children:
-                    if child.type in ("identifier", "property_identifier"):
+                    if child.type in ("identifier", "property_identifier", "name"):
                         name = code_bytes[child.start_byte:child.end_byte].decode('utf-8')
                         break
                 if name:
