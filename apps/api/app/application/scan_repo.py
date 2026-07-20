@@ -70,7 +70,7 @@ class ScanCodebaseUseCase:
 
     async def execute(self, project_id: UUID, cancel_token: asyncio.Event | None = None, project_path: str = ""):
         topic = f"scan:{project_id}"
-        
+
         try:
             parsed_count = 0
             all_nodes = []
@@ -124,7 +124,7 @@ class ScanCodebaseUseCase:
 
             base_dir = Path(project_path) if project_path else Path(".")
             file_paths = [n.file_path for n in all_nodes if n.label == NodeLabel.FILE]
-            
+
             all_edges.extend(resolve_import_edges(project_id, file_imports, file_paths, base_dir))
 
             deduped_edges = dedupe_edges(all_edges)
