@@ -357,36 +357,39 @@ export default function InsightDashboard({ projectId }: { projectId: string }) {
     return sorted[0].hour;
   }, [flowData]);
 
-  const anchorDay = useMemo(() => {
-    if (!flowData?.heatmap_matrix || flowData.heatmap_matrix.length === 0) return null;
+  // ⚡ Bolt: Performance Optimization
+  // Extracts the shared O(N) matrix aggregation to prevent redundant loops
+  // in both anchorDay and streak calculations on every render.
+  const activityByDay = useMemo(() => {
     const byDay: Record<string, number> = {};
+    if (!flowData?.heatmap_matrix) return byDay;
     for (const cell of flowData.heatmap_matrix) {
       byDay[cell.date] = (byDay[cell.date] || 0) + cell.activity;
     }
-    const sorted = Object.entries(byDay).sort((a, b) => b[1] - a[1]);
+    return byDay;
+  }, [flowData]);
+
+  const anchorDay = useMemo(() => {
+    const sorted = Object.entries(activityByDay).sort((a, b) => b[1] - a[1]);
     if (sorted.length === 0) return null;
     const date = new Date(sorted[0][0] + 'T00:00:00');
     return DAY_LABELS[date.getDay()];
-  }, [flowData]);
+  }, [activityByDay]);
 
   const streak = useMemo(() => {
-    if (!flowData?.heatmap_matrix || flowData.heatmap_matrix.length === 0) return 0;
-    const byDay: Record<string, number> = {};
-    for (const cell of flowData.heatmap_matrix) {
-      byDay[cell.date] = (byDay[cell.date] || 0) + cell.activity;
-    }
+    if (Object.keys(activityByDay).length === 0) return 0;
     const today = new Date();
     let count = 0;
     for (let i = 0; i < 7; i++) {
       const d = new Date(today);
       d.setDate(d.getDate() - i);
       const key = d.toISOString().slice(0, 10);
-      const ms = byDay[key] || 0;
+      const ms = activityByDay[key] || 0;
       if (ms >= 3600000) count++;
       else break;
     }
     return count;
-  }, [flowData]);
+  }, [activityByDay]);
 
   const cognitiveDistribution = useMemo(() => {
     if (!flowData?.golden_ratio) return { items: [], stacked: [] };
