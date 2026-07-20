@@ -19,7 +19,7 @@ def _build_tree(root_path: str, max_depth: int = 2) -> str:
     for dirpath, dirnames, filenames in os.walk(root_path):
         # Filter directories in-place
         dirnames[:] = [d for d in dirnames if d not in ignore_dirs and not d.startswith(".")]
-        
+
         rel_path = os.path.relpath(dirpath, root_path)
         if rel_path == ".":
             depth = 0
@@ -32,7 +32,7 @@ def _build_tree(root_path: str, max_depth: int = 2) -> str:
                 continue
             indent = "  " * depth
             tree_lines.append(f"{indent}- {os.path.basename(dirpath)}/")
-            
+
             # Show files if we are at the max depth or below
             if depth <= max_depth:
                 file_count = 0
@@ -63,23 +63,28 @@ def _scan_blocking(project_path: str) -> str:
     for dirpath, dirnames, filenames in os.walk(project_path):
         # Filter directories in-place to avoid descending into them
         dirnames[:] = [d for d in dirnames if d not in ignore_dirs and not d.startswith(".")]
-        
+
         for f in filenames:
             if f.startswith("."):
                 continue
             total_files += 1
-            
+
             if f == "package.json":
                 project_type = "Node.js / Web"
                 try:
-                    with open(os.path.join(dirpath, f), "r", encoding="utf-8") as pkg:
+                    with open(os.path.join(dirpath, f), encoding="utf-8") as pkg:
                         data = json.load(pkg)
                         deps = {**data.get("dependencies", {}), **data.get("devDependencies", {})}
-                        if "react" in deps: core_tech.add("React")
-                        if "next" in deps: core_tech.add("Next.js")
-                        if "vue" in deps: core_tech.add("Vue")
-                        if "tailwindcss" in deps: core_tech.add("TailwindCSS")
-                        if "typescript" in deps: core_tech.add("TypeScript")
+                        if "react" in deps:
+                            core_tech.add("React")
+                        if "next" in deps:
+                            core_tech.add("Next.js")
+                        if "vue" in deps:
+                            core_tech.add("Vue")
+                        if "tailwindcss" in deps:
+                            core_tech.add("TailwindCSS")
+                        if "typescript" in deps:
+                            core_tech.add("TypeScript")
                 except Exception:
                     pass
             elif f == "pyproject.toml" or f == "requirements.txt":
@@ -87,11 +92,14 @@ def _scan_blocking(project_path: str) -> str:
                 core_tech.add("Python")
                 if "pyproject.toml" in filenames:
                     try:
-                        with open(os.path.join(dirpath, "pyproject.toml"), "r", encoding="utf-8") as toml:
+                        with open(os.path.join(dirpath, "pyproject.toml"), encoding="utf-8") as toml:
                             content = toml.read()
-                            if "fastapi" in content: core_tech.add("FastAPI")
-                            if "django" in content: core_tech.add("Django")
-                            if "sqlalchemy" in content: core_tech.add("SQLAlchemy")
+                            if "fastapi" in content:
+                                core_tech.add("FastAPI")
+                            if "django" in content:
+                                core_tech.add("Django")
+                            if "sqlalchemy" in content:
+                                core_tech.add("SQLAlchemy")
                     except Exception:
                         pass
             elif f == "tauri.conf.json":
@@ -133,7 +141,7 @@ async def get_project_awareness_xml(project_path: str | None) -> str:
         return ""
 
     now = time.time()
-    
+
     # Check cache
     if project_path in _SCAN_CACHE:
         timestamp, result = _SCAN_CACHE[project_path]
@@ -142,8 +150,8 @@ async def get_project_awareness_xml(project_path: str | None) -> str:
 
     # Delegate blocking I/O to thread pool
     result = await asyncio.to_thread(_scan_blocking, project_path)
-    
+
     # Update cache
     _SCAN_CACHE[project_path] = (now, result)
-    
+
     return result

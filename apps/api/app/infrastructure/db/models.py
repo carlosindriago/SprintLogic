@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, LargeBinary
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, LargeBinary, String
 from sqlalchemy import Enum as SQLAlchemyEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -155,7 +155,8 @@ class AnalysisReportModel(Base):
         DateTime(timezone=True), nullable=False, default=datetime.utcnow
     )
 
-from sqlalchemy import Index, text, BigInteger
+from sqlalchemy import BigInteger
+
 
 class SearchIndexModel(Base):
     __tablename__ = "search_index"

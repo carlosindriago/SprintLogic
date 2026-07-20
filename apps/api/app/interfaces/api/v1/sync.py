@@ -125,7 +125,7 @@ async def sync_endpoint(websocket: WebSocket, db: AsyncSession = Depends(get_db_
                 messages = data.get("messages", [])
                 model = data.get("model", "gemini-1.5-pro")
                 project_id = data.get("project_id", 1)
-                
+
                 # Retrieve or create Conversation
                 conversation_id = data.get("conversation_id")
                 is_new_conversation = False
@@ -138,10 +138,11 @@ async def sync_endpoint(websocket: WebSocket, db: AsyncSession = Depends(get_db_
                     is_new_conversation = True
 
                 injected_system = SENSEI_SYSTEM_PROMPT_TEMPLATE
-                
+
                 # Inject Project Awareness
                 if project_id:
                     import uuid
+
                     from app.infrastructure.ai.project_scanner import get_project_awareness_xml
                     from app.infrastructure.db.models import ProjectModel
                     try:
@@ -153,14 +154,14 @@ async def sync_endpoint(websocket: WebSocket, db: AsyncSession = Depends(get_db_
                                 injected_system += f"\n\n{awareness_xml}"
                     except Exception as e:
                         print(f"Failed to inject project awareness: {e}")
-                        
+
                 # Shadow AST Context Injection
                 cursor_line = data.get("cursor_line", 1)
                 open_tabs = data.get("open_tabs", [])
-                
+
                 if state.content.strip():
                     injected_system += f"\n\n<EDITOR_CONTEXT>\nFile: {state.file_path}\nCursor Line: {cursor_line}\nActive Code:\n{state.content[:4000]}\n</EDITOR_CONTEXT>"
-                    
+
                 if open_tabs:
                     tabs_str = "\n".join([f"- {t}" for t in open_tabs])
                     injected_system += f"\n\n<OPEN_TABS>\nEl usuario tiene las siguientes pestañas abiertas en el IDE:\n{tabs_str}\n</OPEN_TABS>"
@@ -185,7 +186,7 @@ async def sync_endpoint(websocket: WebSocket, db: AsyncSession = Depends(get_db_
                 )
                 db.add(user_msg)
                 await db.commit()
-                
+
                 if is_new_conversation and user_content:
                     from app.interfaces.api.v1.chat import _generate_conversation_title
                     asyncio.create_task(_generate_conversation_title(conversation_id, user_content))
@@ -234,7 +235,7 @@ async def stream_chat_response(
         await websocket.send_json(
             {"type": "chat_response", "data": json.dumps({"is_done": True, "conversation_id": conversation_id})}
         )
-        
+
         # The message is saved in the finally block below
     except Exception as e:
         print(f"WS Chat Stream Error: {e}")
@@ -254,8 +255,8 @@ async def stream_chat_response(
                 )
                 session.add(bot_msg)
                 await session.commit()
-            except Exception as e:
-                # If the socket gets destroyed completely or the DB connection drops, 
+            except Exception:
+                # If the socket gets destroyed completely or the DB connection drops,
                 # we do a best-effort save.
                 pass
 
