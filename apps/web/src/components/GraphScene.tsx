@@ -548,6 +548,12 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
 
     let { nodes, links } = graphData;
 
+    // Filter by node types
+    nodes = nodes.filter((n: GraphNode) => {
+      const upperLabel = n.label ? String(n.label).toUpperCase() : "";
+      return activeTypes.has(upperLabel);
+    });
+
     if (focusNode) {
       const neighborsSet = neighbors.get(focusNode) || new Set();
       const visibleNodes = new Set([focusNode, ...neighborsSet]);
@@ -560,7 +566,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     }
 
     return { nodes, links };
-  }, [graphData, focusNode, neighbors]);
+  }, [graphData, focusNode, neighbors, activeTypes]);
 
   const isFaded = useCallback((nodeId: string) => {
     const activeFocus = focusNode || hoverNode;
