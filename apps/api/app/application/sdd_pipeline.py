@@ -5,9 +5,10 @@ from app.infrastructure.ai.llm_gateway import LiteLLMGateway
 class SDDPipelineUseCase:
     """Use case for running the SDD pipeline (Proposal -> Spec -> Tasks)."""
 
-    def __init__(self, llm_gateway: LiteLLMGateway, model: str = "gpt-4o"):
+    def __init__(self, llm_gateway: LiteLLMGateway, model: str | None = None):
+        from app.infrastructure.config import DEFAULT_LLM_MODEL
         self.llm_gateway = llm_gateway
-        self.model = model
+        self.model = model or DEFAULT_LLM_MODEL
 
     def execute(self, requirements: str) -> dict:
         """

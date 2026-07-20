@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, LargeBinary
 from sqlalchemy import Enum as SQLAlchemyEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -91,6 +91,16 @@ class ContextSnippetModel(Base):
     # The actual vectors will be stored in a raw sqlite-vec virtual table `vec_context_snippets`
     # linked by rowid = ContextSnippetModel.id
 
+class DeveloperInsightModel(Base):
+    __tablename__ = "developer_insights"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    conversation_id: Mapped[str] = mapped_column(String, nullable=False)
+    sintoma: Mapped[str] = mapped_column(String, nullable=False)
+    solucion: Mapped[str] = mapped_column(String, nullable=False)
+    snippet_corregido: Mapped[str | None] = mapped_column(String, nullable=True)
+    embedding_blob: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+
 class ASTNodeMapModel(Base):
     __tablename__ = "ast_node_map"
 
@@ -103,14 +113,33 @@ class ASTNodeMapModel(Base):
     node_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
 
 
-class ASTVectorModel(Base):
-    __tablename__ = "ast_vectors"
+
+
+
+class ConversationModel(Base):
+    __tablename__ = "conversations"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    node_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    project_id: Mapped[UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    is_active: Mapped[bool] = mapped_column(default=True)
+    insight_extracted: Mapped[bool] = mapped_column(default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+class MessageModel(Base):
+    __tablename__ = "messages"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    conversation_id: Mapped[int] = mapped_column(
+        ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    role: Mapped[str] = mapped_column(String(50), nullable=False)
     content: Mapped[str] = mapped_column(String, nullable=False)
-    # The actual vectors will be stored in a raw sqlite-vec virtual table `vec_ast_nodes`
-    # linked by rowid = ASTVectorModel.id
+    context_snapshot: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
 
 class AnalysisReportModel(Base):
     __tablename__ = "analysis_reports"
@@ -125,3 +154,58 @@ class AnalysisReportModel(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=datetime.utcnow
     )
+
+from sqlalchemy import Index, text, BigInteger
+
+class SearchIndexModel(Base):
+    __tablename__ = "search_index"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    type: Mapped[str | None] = mapped_column(String, nullable=True)
+    name: Mapped[str | None] = mapped_column(String, nullable=True)
+    path: Mapped[str | None] = mapped_column(String, nullable=True)
+    content: Mapped[str | None] = mapped_column(String, nullable=True)
+    line: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
+
+class ProjectMemoryModel(Base):
+    __tablename__ = "project_memories"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    project_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    agent_name: Mapped[str | None] = mapped_column(String, nullable=True)
+    context_type: Mapped[str | None] = mapped_column(String, nullable=True)
+    memory_content: Mapped[str | None] = mapped_column(String, nullable=True)
+
+
+
+class AdrChunkModel(Base):
+    __tablename__ = "adr_chunks"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    filepath: Mapped[str] = mapped_column(String, nullable=False)
+    file_hash: Mapped[str] = mapped_column(String, nullable=False)
+    chunk_text: Mapped[str] = mapped_column(String, nullable=False)
+    breadcrumbs: Mapped[str | None] = mapped_column(String, nullable=True)
+
+
+
+class TelemetryPingModel(Base):
+    __tablename__ = "telemetry_pings"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    project_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    window_start_ms: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    window_end_ms: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    thinking_ms: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    coding_ms: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    testing_ms: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+
+class DaemonLockModel(Base):
+    __tablename__ = "daemon_locks"
+
+    project_id: Mapped[str] = mapped_column(String, primary_key=True)
+    rule: Mapped[str] = mapped_column(String, primary_key=True)
+    last_fired_at: Mapped[str] = mapped_column(String, nullable=False)

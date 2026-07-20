@@ -21,8 +21,51 @@ export interface CuratedProvider {
   models: ModelResult[];
 }
 
-export const API_BASE_URL: string =
+import { invoke } from "@tauri-apps/api/core";
+
+export let API_BASE_URL: string =
   process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000/api/v1";
+
+export async function initSidecarPort() {
+  for (let i = 0; i < 50; i++) {
+    try {
+      const port = await invoke<number>("get_sidecar_port");
+      if (port) {
+        API_BASE_URL = `http://127.0.0.1:${port}/api/v1`;
+        console.log(`[Tauri] Sidecar port configured: ${port}`);
+        
+        // Wait for backend to be fully responsive before proceeding
+        let backendReady = false;
+        for (let j = 0; j < 20; j++) {
+          try {
+            const res = await fetch(`${API_BASE_URL}/projects`, { method: 'GET' });
+            if (res.ok) {
+              backendReady = true;
+              break;
+            }
+          } catch (e) {
+            // Backend not accepting connections yet
+          }
+          await new Promise((resolve) => setTimeout(resolve, 250));
+        }
+
+        if (!backendReady) {
+          console.warn("[Tauri] Backend port is open, but API is not responding after 5 seconds.");
+        } else {
+          console.log("[Tauri] Backend is fully ready to accept requests.");
+        }
+
+        await invoke("show_main_window");
+        return;
+      }
+    } catch (err) {
+      if (i === 49) {
+        console.warn("Failed to get sidecar port from Tauri:", err);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  }
+}
 
 // 1. CLASE DE ERROR PERSONALIZADA
 // Permite al frontend saber exactamente qué falló (ej. error.status === 404)
@@ -228,7 +271,7 @@ export const saveProjectTasks = (projectId: string, tasks: Task[]) => api.post<{
 export const getKanbanConfig = (projectId: string) => api.get<{ columns: KanbanColumn[] }>(`/projects/${projectId}/kanban/config`);
 export const saveKanbanConfig = (projectId: string, columns: KanbanColumn[]) => api.post<{ status: string }>(`/projects/${projectId}/kanban/config`, { columns });
 export const syncKanbanCommits = (projectId: string) => api.post<unknown>(`/projects/${projectId}/tasks/sync-commits`);
-export const generateWBS = (projectId: string, requirements: string, model = "openai/gpt-4o") => 
+export const generateWBS = (projectId: string, requirements: string, model: string) => 
   api.post<WBSResponse>(`/projects/${projectId}/kanban/wbs`, { requirements, model });
 
 // --- Providers & Settings ---

@@ -100,6 +100,7 @@ async def scan_project(
 
     try:
         saved_project = await scan_repo_usecase.execute(request.path)
+        await session.commit()
     except PathBlockedError as e:
         logger.error("Project operation failed: %s", e, exc_info=True)
         raise HTTPException(status_code=403, detail="Access denied")
@@ -200,6 +201,8 @@ async def update_project(
     project = await repo.update(project_uuid, name=request.name, path=request.path)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+        
+    await session.commit()
 
     return ProjectResponse.model_validate(project, from_attributes=True)
 
@@ -232,6 +235,7 @@ async def get_project_graph(project_id: str, session: AsyncSession = Depends(get
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
         await repo.update_last_opened(project_uuid)
+        await session.commit()
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid project ID format")
 
@@ -329,8 +333,10 @@ def get_process_pool(request: Request) -> ProcessPoolExecutor:
     return request.app.state.process_pool
 
 
+from app.infrastructure.config import DEFAULT_LLM_MODEL
+
 class AnalyzeGraphRequest(BaseModel):
-    model: str = "gemini/gemini-2.5-flash"
+    model: str | None = None
     fallback_model: str | None = None
 
 
@@ -345,6 +351,8 @@ async def analyze_project_graph(
         project_uuid = UUID(project_id)
         repo = SQLAlchemyProjectRepository(session)
         project = await repo.get_project(project_uuid)
+        
+        actual_model = request.model or DEFAULT_LLM_MODEL
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
     except ValueError:
@@ -933,23 +941,17 @@ async def search_everywhere(
     q: str = Query(..., min_length=1, description="Search query"),
     session: AsyncSession = Depends(get_db_session),
 ):
-    sanitized = q.replace("'", "''").strip()
-    if not sanitized or sanitized in ("*", "**"):
+    sanitized = f"%{q.strip()}%"
+    if not sanitized or sanitized in ("%%", "%*%"):
         return {"results": []}
-
-    # Wrap dotted names like package.json for FTS5
-    if "." in sanitized and not sanitized.startswith('"'):
-        sanitized = f'"{sanitized}"'
-
-    query_str = sanitized + "*"
 
     try:
         result = await session.execute(
             text(
                 "SELECT type, name, path, line FROM search_index "
-                "WHERE search_index MATCH :q ORDER BY rank LIMIT 50"
+                "WHERE name LIKE :q OR path LIKE :q OR content LIKE :q LIMIT 50"
             ),
-            {"q": query_str},
+            {"q": sanitized},
         )
         rows = result.fetchall()
 
@@ -1542,7 +1544,7 @@ async def sync_project_commits(project_id: str, session: AsyncSession = Depends(
 
 class WBSRequest(BaseModel):
     requirements: str
-    model: str = "openai/gpt-4o"
+    model: str | None = None
 
 
 @router.post("/projects/{project_id}/kanban/wbs")
@@ -1590,11 +1592,14 @@ Debes responder ÚNICAMENTE con un objeto JSON válido con la siguiente estructu
 }}"""
 
     from app.infrastructure.ai.llm_gateway import LiteLLMGateway
+    from app.infrastructure.config import DEFAULT_LLM_MODEL
 
+    actual_model = request.model or DEFAULT_LLM_MODEL
     llm_gateway = LiteLLMGateway()
 
     try:
-        response_text = llm_gateway.generate_completion(prompt=prompt, model=request.model)
+        response_text = llm_gateway.generate_completion(prompt=prompt, model=actual_model)
+
 
         # Clean response string to extract pure JSON
         clean_res = response_text.strip()

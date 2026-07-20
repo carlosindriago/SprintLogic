@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import ReactMarkdown from "react-markdown";
 import { getProjectTasks, saveProjectTasks, getKanbanConfig, saveKanbanConfig, syncKanbanCommits, generateWBS, WBSResponse, WBSTask, KanbanColumn } from '@/lib/api';
+import { useLLMConfigStore } from '@/store/llmConfigStore';
 import { Task } from "@/types";
 import { cn } from "@/lib/utils";
 import { 
@@ -160,7 +161,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
   const [wbsRequirements, setWbsRequirements] = useState("");
   const [wbsResponse, setWbsResponse] = useState<WBSResponse | null>(null);
   const [isWbsGenerating, setIsWbsGenerating] = useState(false);
-  const [wbsModel, setWbsModel] = useState("openai/gpt-4o");
+  const wbsModel = useLLMConfigStore((s) => s.defaultModel);
   const [wbsError, setWbsError] = useState<string | null>(null);
 
   const handleGenerateWbs = async () => {
@@ -675,16 +676,12 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
                   </div>
 
                   <div className="flex flex-col gap-1.5">
-                    <span className="text-xs text-zinc-400 font-semibold">Modelo de IA</span>
-                    <select
-                      className="bg-[#111112] border border-[#3f3f46] rounded-md px-3 py-1.5 text-zinc-200 text-xs focus:outline-none w-48"
+                    <span className="text-xs text-zinc-400 font-semibold">Modelo de IA (Global)</span>
+                    <input
+                      readOnly
+                      className="bg-[#111112] border border-[#3f3f46] rounded-md px-3 py-1.5 text-zinc-500 text-xs focus:outline-none w-64 cursor-not-allowed"
                       value={wbsModel}
-                      onChange={(e) => setWbsModel(e.target.value)}
-                    >
-                      <option value="openai/gpt-4o">openai/gpt-4o</option>
-                      <option value="anthropic/claude-3-5-sonnet">anthropic/claude-3-5-sonnet</option>
-                      <option value="gemini/gemini-1.5-pro">gemini/gemini-1.5-pro</option>
-                    </select>
+                    />
                   </div>
 
                   <button 

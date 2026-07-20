@@ -30,7 +30,7 @@ import { cn } from "@/lib/utils";
 import { Settings, FolderOpen, ChevronRight, Edit2, Trash2, PlusCircle, ChevronsUpDown, FilePlus, RefreshCw, RotateCcw, ScanSearch, Layout, Network, GitBranch, BarChart3, FolderGit2, HelpCircle, Bot } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { scanProject, getProjects, updateProject, deleteProject, rescanProject, analyzeProject, renameFile, duplicateFile, deleteFile } from "@/lib/api";
+import { scanProject, getProjects, updateProject, deleteProject, rescanProject, analyzeProject, renameFile, duplicateFile, deleteFile, initSidecarPort } from "@/lib/api";
 import { Switch } from "@/components/ui/switch";
 import SprintLogicChat from "@/components/SprintLogicChat";
 import KanbanBoard from "@/components/KanbanBoard";
@@ -94,6 +94,7 @@ export default function Home() {
   const [projects, setProjects] = useState<Project[]>([]);
   const { projectId, setProjectId } = useProjectStore();
   const [loading, setLoading] = useState(false);
+  const [apiReady, setApiReady] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [cheatSheetOpen, setCheatSheetOpen] = useState(false);
@@ -180,7 +181,11 @@ export default function Home() {
   useEffect(() => {
     let active = true;
     const load = async () => {
-      if (active) await fetchProjects();
+      await initSidecarPort();
+      if (active) {
+        setApiReady(true);
+        await fetchProjects();
+      }
     };
     load();
     return () => {
@@ -868,17 +873,21 @@ export default function Home() {
                 <CardContent className="p-0 text-xs text-zinc-400 flex-1 overflow-hidden">
                   {projectId ? (
                     <div className="h-full overflow-y-auto">
-                      <FileTree
-                        projectId={projectId}
-                        key={`${projectId}-${fileTreeRefreshKey}`}
-                        onFileSelect={handleFileTreeSelect}
-                        onNewFile={handleNewFile}
-                        refreshKey={fileTreeRefreshKey}
-                        onNavigateToMarker={handleNavigateToMarker}
-                        onFileRename={handleFileRename}
-                        onFileDuplicate={handleFileDuplicate}
-                        onFileDelete={handleFileDelete}
-                      />
+                      {apiReady ? (
+                        <FileTree
+                          projectId={projectId}
+                          key={`${projectId}-${fileTreeRefreshKey}`}
+                          onFileSelect={handleFileTreeSelect}
+                          onNewFile={handleNewFile}
+                          refreshKey={fileTreeRefreshKey}
+                          onNavigateToMarker={handleNavigateToMarker}
+                          onFileRename={handleFileRename}
+                          onFileDuplicate={handleFileDuplicate}
+                          onFileDelete={handleFileDelete}
+                        />
+                      ) : (
+                        <div className="p-4 text-xs text-zinc-500">Conectando con el servidor...</div>
+                      )}
                     </div>
                   ) : (
                     <div className="p-4 text-center">Selecciona un proyecto...</div>
@@ -942,7 +951,16 @@ export default function Home() {
             <>
               <TabBar onToggleAi={toggleRightSidebar} aiOpen={rightSidebarOpen} onNewFile={handleNewUntitled} projectId={projectId ?? undefined} />
               <div className="flex-1 relative overflow-hidden bg-[#151515] flex flex-col" key={activeTabId}>
-                {renderActiveTabContent()}
+                {apiReady ? (
+                  renderActiveTabContent()
+                ) : (
+                  <div className="flex-1 flex items-center justify-center">
+                    <div className="flex flex-col items-center gap-4 text-zinc-500">
+                      <div className="w-8 h-8 border-4 border-zinc-800 border-t-blue-500 rounded-full animate-spin" />
+                      <p className="text-sm font-medium tracking-wide animate-pulse">Despertando núcleo...</p>
+                    </div>
+                  </div>
+                )}
               </div>
             </>
           )}

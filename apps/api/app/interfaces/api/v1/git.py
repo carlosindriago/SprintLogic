@@ -150,7 +150,7 @@ async def execute_git_action(
 
 
 class GenerateCommitMessageRequest(BaseModel):
-    model: str = "gemini/gemini-2.5-flash"
+    model: str | None = None
 
 
 @router.post("/{project_id}/git/generate-commit-message")
@@ -180,7 +180,9 @@ async def generate_commit_message(
             f"Diff:\n{diff}"
         )
 
-        message = llm_gateway.generate_completion(prompt=prompt, model=request.model)
+        from app.infrastructure.config import DEFAULT_LLM_MODEL
+        actual_model = request.model or DEFAULT_LLM_MODEL
+        message = llm_gateway.generate_completion(prompt=prompt, model=actual_model)
 
         # Clean up any potential markdown formatting the LLM might have returned
         message = message.strip()

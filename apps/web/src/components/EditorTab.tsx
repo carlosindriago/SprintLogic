@@ -15,6 +15,7 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { useLLMConfigStore } from '@/store/llmConfigStore';
 import { useFimStore } from '@/store/fimStore';
 import { useTddStore } from '@/store/tddStore';
+import { useSenseiStore } from '@/store/senseiStore';
 import type { GraphNode } from '@/types';
 import { Code2, ChevronRight, Pencil, Eye, MousePointer2, GraduationCap, Save, SaveAll, Sparkles, Loader2 } from 'lucide-react';
 import FimHintBar from './FimHintBar';
@@ -28,11 +29,12 @@ import { GroqFimAdapter } from '@/lib/services/GroqFimAdapter';
 // Global error handler to suppress Monaco's internal "Canceled" unhandled rejections
 if (typeof window !== 'undefined') {
   window.addEventListener('unhandledrejection', (event) => {
-    if (event.reason && event.reason.name === 'Canceled') {
-      // Suppress Monaco's internal cancellation errors from bubbling to the console
+    if (event.reason && (event.reason.name === 'Canceled' || event.reason.message === 'Canceled' || event.reason === 'Canceled')) {
+      // Suppress Monaco's internal cancellation errors from bubbling to Next.js dev overlay
       event.preventDefault();
+      event.stopImmediatePropagation();
     }
-  });
+  }, { capture: true });
 }
 
 interface LintDiagnostic {
@@ -339,17 +341,7 @@ export default function EditorTab({
     isCoachEnabledRef.current = isCoachEnabled;
   }, [isCoachEnabled]);
 
-  useEffect(() => {
-    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
-      // Monaco frequently throws unhandled "Canceled" rejections when disposing models 
-      // during active tokenization/language-service processing. We silence it to prevent Next.js overlay.
-      if (event.reason && (event.reason.name === 'Canceled' || event.reason.message === 'Canceled' || event.reason === 'Canceled')) {
-        event.preventDefault();
-      }
-    };
-    window.addEventListener('unhandledrejection', handleUnhandledRejection);
-    return () => window.removeEventListener('unhandledrejection', handleUnhandledRejection);
-  }, []);
+  // Removed redundant unhandledrejection useEffect - now handled by global capture listener
 
   useEffect(() => {
     fimDefaultModelRef.current = fimDefaultModel;
@@ -567,6 +559,73 @@ export default function EditorTab({
     window.addEventListener("trigger-sensei", handler);
     return () => window.removeEventListener("trigger-sensei", handler as any);
   }, [forceSenseiAnalysis]);
+
+  // ── Sensei Store: push live editor context via Zustand (no CustomEvents) ─────────
+  // This is the correct architecture for Split View: each EditorTab writes to its
+  // own slot in the registry; the Chat reads the active slot when the user invokes
+  // /sensei. Zero DOM events. Zero coupling.
+  const updateEditorContext = useSenseiStore((s) => s.updateEditorContext);
+  const setActiveTabId = useSenseiStore((s) => s.setActiveTabId);
+  const clearEditorContext = useSenseiStore((s) => s.clearEditorContext);
+  
+  const connectSocket = useSenseiStore((s) => s.connectSocket);
+  const disconnectSocket = useSenseiStore((s) => s.disconnectSocket);
+
+  // Initialize the global unified WebSocket on EditorTab mount
+  useEffect(() => {
+    // We assume project 1 for now (could get from context/store)
+    connectSocket(1);
+    return () => disconnectSocket();
+  }, [connectSocket, disconnectSocket]);
+
+  // Declare this tab as the active one on mount (focus-aware).
+  useEffect(() => {
+    setActiveTabId(node.id);
+    return () => clearEditorContext(node.id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [node.id]);
+
+  /**
+   * Extracts the most semantically relevant code block from the current editor state.
+   * Priority:
+   *   1. Active selection (user explicitly highlighted code).
+   *   2. Graceful fallback: ±40 lines centered on the cursor.
+   * Capped at 4 000 chars to stay within LLM context budgets.
+   */
+  const buildSenseiContext = useCallback(
+    (editor: monacoEditor.IStandaloneCodeEditor): void => {
+      const model = editor.getModel();
+      if (!model || model.isDisposed()) return;
+
+      const position = editor.getPosition();
+      const cursorLine = position?.lineNumber ?? 1;
+      const filePath = node.file_path ?? '';
+
+      let activeCode = '';
+      const selection = editor.getSelection();
+      if (selection && !selection.isEmpty()) {
+        activeCode = model.getValueInRange(selection);
+      } else {
+        const totalLines = model.getLineCount();
+        const startLine = Math.max(1, cursorLine - 40);
+        const endLine = Math.min(totalLines, cursorLine + 40);
+        const lines: string[] = [];
+        for (let i = startLine; i <= endLine; i++) {
+          lines.push(model.getLineContent(i));
+        }
+        activeCode = lines.join('\n');
+      }
+
+      // Cap to 4 000 chars to avoid blowing the LLM context window
+      updateEditorContext(node.id, {
+        filePath,
+        cursorLine,
+        activeCode: activeCode.slice(0, 4000),
+      });
+    },
+    [node.id, node.file_path, updateEditorContext]
+  );
+
 
   // Hot Exit: allow TabBar modal to programmatically save this tab
   useEffect(() => {
@@ -1144,6 +1203,8 @@ export default function EditorTab({
     }
 
     let cursorTimeout: ReturnType<typeof setTimeout>;
+    let senseiDebounce: ReturnType<typeof setTimeout>;
+
     const cursorDisposable = editor.onDidChangeCursorPosition((e) => {
       if (cursorTimeout) clearTimeout(cursorTimeout);
       cursorTimeout = setTimeout(() => {
@@ -1151,9 +1212,83 @@ export default function EditorTab({
       }, 100);
     });
 
-    editor.onDidChangeModelContent(() => {
+    const triggerSenseiContextUpdate = () => {
+      if (senseiDebounce) clearTimeout(senseiDebounce);
+      senseiDebounce = setTimeout(() => {
+        buildSenseiContext(editor);
+      }, 400); // 400ms válvula de presión para el Main Thread
+    };
+
+    // Both cursor moves and active highlighting (selections) feed the same debounce
+    const selectionDisposable = editor.onDidChangeCursorSelection(() => {
+      triggerSenseiContextUpdate();
+    });
+
+    // Initial push so the context is available immediately on tab open
+    buildSenseiContext(editor);
+
+    // Initial WebSocket Full Sync
+    const socket = useSenseiStore.getState().socket;
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({
+        type: 'full_sync',
+        file_path: node.file_path,
+        content: editor.getValue(),
+        versionId: editor.getModel()?.getVersionId() || 0
+      }));
+    }
+
+    // Set up WebSocket listener for markers and sync errors
+    const removeSocketListener = useSenseiStore.getState().addSocketListener((data) => {
+      if (data.type === 'sync_out_of_order') {
+        // Self-Healing Protocol
+        const s = useSenseiStore.getState().socket;
+        if (s && s.readyState === WebSocket.OPEN) {
+          s.send(JSON.stringify({
+            type: 'full_sync',
+            file_path: node.file_path,
+            content: editor.getValue(),
+            versionId: editor.getModel()?.getVersionId() || 0
+          }));
+        }
+      } else if (data.type === 'marker_update') {
+        // Here we would apply the marker to Monaco gutter!
+        // In this MVP, we map the CodeCoachMarker to Monaco's generic markers
+        const markers = data.markers || [];
+        const monacoMarkers = markers.map((m: any) => ({
+          severity: m.severity || 8, // monaco.MarkerSeverity.Warning
+          message: m.message,
+          startLineNumber: m.line,
+          startColumn: m.column || 1,
+          endLineNumber: m.line,
+          endColumn: 100, // heuristic
+          source: 'Sensei AST Linter'
+        }));
+        const model = editor.getModel();
+        if (model) {
+          monaco?.editor.setModelMarkers(model, 'sensei-linter', monacoMarkers);
+        }
+      }
+    });
+
+    // Clean up listener on editor unmount
+    editor.onDidDispose(() => {
+      removeSocketListener();
+    });
+
+    editor.onDidChangeModelContent((e) => {
       const model = editor.getModel();
       
+      // Delta Sync via Unified WebSocket
+      const s = useSenseiStore.getState().socket;
+      if (s && s.readyState === WebSocket.OPEN && model) {
+        s.send(JSON.stringify({
+          type: 'delta_sync',
+          changes: e.changes,
+          versionId: model.getVersionId()
+        }));
+      }
+
       // We do NOT clear markers or states here to maintain the Stale-While-Revalidate pattern.
       // The old markers will remain until the new ones arrive.
       
@@ -1238,7 +1373,7 @@ export default function EditorTab({
     // No cleanup required here since handleEditorDidMount manages the disposables?
     // Wait, let's keep the checkDirty logic untouched.
     checkDirty();
-  }, [node.metadata, checkDirty, node.file_path, node.id, vimMode, forceSenseiAnalysis, runCoachAnalysis, runAstAudit, projectId]);
+  }, [node.metadata, checkDirty, node.file_path, node.id, vimMode, forceSenseiAnalysis, runCoachAnalysis, runAstAudit, projectId, buildSenseiContext]);
 
   if (loading) {
     return (

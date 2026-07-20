@@ -119,7 +119,7 @@ async def fetch_provider_models(provider: str, api_key: str) -> list[dict]:
                 if res.status_code != 200:
                     raise ProviderFetchError("Invalid OpenCode Zen Key")
                 data = res.json()
-                models = [{"id": m["id"], "name": m["id"]} for m in data.get("data", [])]
+                models = [{"id": f"opencode-zen/{m['id']}" if not m["id"].startswith("opencode-zen/") else m["id"], "name": m["id"]} for m in data.get("data", [])]
 
             elif provider == "opencode-go":
                 headers["Authorization"] = f"Bearer {api_key}"
@@ -127,7 +127,8 @@ async def fetch_provider_models(provider: str, api_key: str) -> list[dict]:
                 if res.status_code != 200:
                     raise ProviderFetchError("Invalid OpenCode Go Key")
                 data = res.json()
-                models = [{"id": m["id"], "name": m["id"]} for m in data.get("data", [])]
+                models = [{"id": f"opencode-go/{m['id']}" if not m["id"].startswith("opencode-go/") else m["id"], "name": m["id"]} for m in data.get("data", [])]
+
 
             elif provider == "nvidia":
                 headers["Authorization"] = f"Bearer {api_key}"
@@ -262,7 +263,17 @@ async def get_curated_models():
                 {
                     "provider": PROVIDER_LABELS.get(provider, provider),
                     "provider_id": provider,
+                    "is_configured": True,
                     "models": models,
+                }
+            )
+        else:
+            results.append(
+                {
+                    "provider": PROVIDER_LABELS.get(provider, provider),
+                    "provider_id": provider,
+                    "is_configured": False,
+                    "models": [],
                 }
             )
     return results

@@ -1,9 +1,9 @@
 "use client";
 import React, { useEffect, useRef, useState } from 'react';
-import { fetchEventSource } from '@microsoft/fetch-event-source';
 import { toast } from 'sonner';
 import { useBackgroundJobsStore } from '../store/backgroundJobsStore';
 import { Loader2, Minimize2, Maximize2, XCircle, CheckCircle2 } from 'lucide-react';
+import { API_BASE_URL } from '@/lib/api';
 
 // ─── Visual phase machine ────────────────────────────────────────────────────
 //  discovering → we know a scan started but don't have the total count yet
@@ -42,86 +42,100 @@ export const ScanProgressBar: React.FC<ScanProgressBarProps> = ({ projectId }) =
       localAbortControllerRef.current = ctrl;
 
       try {
-        await fetchEventSource(
-          `http://localhost:8000/api/v1/projects/${projectId}/scan/stream`,
-          {
-            method: 'GET',
-            signal: ctrl.signal,
-
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            async onmessage(event: any) {
-              try {
-                const data = JSON.parse(event.data);
-
-                if (data.type === 'discovering') {
-                  // Backend finished the discovery phase — we now know the total
-                  totalFilesRef.current = data.total ?? 0;
-                  setPhase('discovering'); // still in discovery visually until first progress
-                  setStatusText(
-                    `Found ${data.total} files — starting analysis...`
-                  );
-                  return;
-                }
-
-                if (data.type === 'progress') {
-                  const parsed: number = data.parsed ?? 0;
-                  const total: number = data.total ?? totalFilesRef.current ?? 0;
-
-                  if (total > 0) {
-                    // Switch to determinate mode on the first progress event
-                    if (phase === 'discovering') setPhase('parsing');
-
-                    const pct = Math.min(100, (parsed / total) * 100);
-
-                    // Visual layer — bypass React for 60fps bar updates
-                    if (progressBarRef.current) {
-                      progressBarRef.current.style.width = `${pct}%`;
-                    }
-
-                    // Semantic layer — throttle React re-renders to integer boundaries
-                    const intPct = Math.floor(pct);
-                    if (intPct > lastPercentageRef.current) {
-                      lastPercentageRef.current = intPct;
-                      setCurrentPercentage(intPct);
-                      setStatusText(`Analyzing... ${intPct}% (${parsed}/${total} files)`);
-                    }
-                  } else {
-                    // total unknown — indeterminate fallback
-                    setStatusText(`Analyzing... ${parsed} files`);
-                  }
-                  return;
-                }
-
-                if (data.type === 'completed') {
-                  ctrl.abort();
-                  setPhase('completed');
-                  setCurrentPercentage(100);
-                  setStatusText(`Done — ${data.parsed ?? ''} files analyzed`);
-                  if (progressBarRef.current) {
-                    progressBarRef.current.style.width = '100%';
-                  }
-                  setScanStatus(projectId, 'completed');
-                  toast.success('Codebase analysis complete');
-                  setTimeout(() => clearScan(projectId), 3000);
-                }
-              } catch {
-                // JSON parse error — swallow silently
-              }
-            },
-
-            onclose() {
-              ctrl.abort();
-            },
-
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            onerror(err: any) {
-              console.error('SSE error:', err);
-              ctrl.abort();
-              throw err;
-            },
-          }
+        const eventSource = new EventSource(
+          `${API_BASE_URL}/projects/${projectId}/scan/stream`
         );
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
+        // Store a dummy abort controller to satisfy the cleanup function
+        const abortHandler = () => eventSource.close();
+        localAbortControllerRef.current = { abort: abortHandler } as unknown as AbortController;
+
+        eventSource.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+
+            if (data.type === 'discovering') {
+              // Backend finished the discovery phase — we now know the total
+              totalFilesRef.current = data.total ?? 0;
+              setPhase('discovering'); // still in discovery visually until first progress
+              setStatusText(
+                `Found ${data.total} files — starting analysis...`
+              );
+              return;
+            }
+
+            if (data.type === 'progress') {
+              const parsed: number = data.parsed ?? 0;
+              const total: number = data.total ?? totalFilesRef.current ?? 0;
+
+              if (total > 0) {
+                // Switch to determinate mode on the first progress event
+                if (phase === 'discovering') setPhase('parsing');
+
+                const pct = Math.min(100, (parsed / total) * 100);
+
+                // Visual layer — bypass React for 60fps bar updates
+                if (progressBarRef.current) {
+                  progressBarRef.current.style.width = `${pct}%`;
+                }
+
+                // Semantic layer — throttle React re-renders to integer boundaries
+                const intPct = Math.floor(pct);
+                if (intPct > lastPercentageRef.current) {
+                  lastPercentageRef.current = intPct;
+                  setCurrentPercentage(intPct);
+                  setStatusText(`Analyzing... ${intPct}% (${parsed}/${total} files)`);
+                }
+              } else {
+                // total unknown — indeterminate fallback
+                setStatusText(`Analyzing... ${parsed} files`);
+              }
+              return;
+            }
+
+            if (data.type === 'completed') {
+              eventSource.close();
+              setPhase('completed');
+              setCurrentPercentage(100);
+              setStatusText(`Done — ${data.parsed ?? ''} files analyzed`);
+              if (progressBarRef.current) {
+                progressBarRef.current.style.width = '100%';
+              }
+              setScanStatus(projectId, 'completed');
+              toast.success('Codebase analysis complete');
+              setTimeout(() => clearScan(projectId), 3000);
+            }
+          } catch {
+            // JSON parse error — swallow silently
+          }
+        };
+
+        // Failsafe: if no 'completed' event arrives within 2 minutes, mark as failed
+        const timeoutId = setTimeout(() => {
+          eventSource.close();
+          toast.error('Scan timed out. Try rescanning the project.');
+          setScanStatus(projectId, 'failed');
+          setTimeout(() => clearScan(projectId), 3000);
+        }, 2 * 60 * 1000);
+
+        eventSource.onerror = () => {
+          clearTimeout(timeoutId);
+          eventSource.close();
+          toast.error('Connection error during scan');
+          setScanStatus(projectId, 'failed');
+          setTimeout(() => clearScan(projectId), 3000);
+        };
+
+        // Clear timeout on successful completion (patched into the onmessage completed handler)
+        const originalOnMessage = eventSource.onmessage;
+        eventSource.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.type === 'completed') clearTimeout(timeoutId);
+          } catch { /* ignore */ }
+          originalOnMessage?.call(eventSource, event);
+        };
+
       } catch (err: any) {
         if (err?.name !== 'AbortError') {
           toast.error('Connection error during scan');
