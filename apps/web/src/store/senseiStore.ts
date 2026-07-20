@@ -118,6 +118,7 @@ export const useSenseiStore = create<SenseiStore>((set, get) => ({
       }));
     };
   },
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   connectSocket: (_projectId: number) => {
     const { socket } = get();
     if (socket) return; // Already connected or connecting

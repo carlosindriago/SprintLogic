@@ -140,6 +140,7 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
           const firstConfigured = data.find((g: any) => g.is_configured);
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           if (firstConfigured && firstConfigured.models && (firstConfigured as any).models.length > 0) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const defaultId = (firstConfigured as any).models[0].id;
             setDefaultModel(defaultId);
             setSessionModel(defaultId);
@@ -441,7 +442,6 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
                       return next;
                     });
                   } catch (e: unknown) {
-                    // eslint-disable-next-line no-console
                     console.error("Error procesando mensaje parseado:", e);
                   }
                   continue; // Skip rendering raw JSON

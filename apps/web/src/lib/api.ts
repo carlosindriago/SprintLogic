@@ -43,7 +43,7 @@ export async function initSidecarPort() {
               backendReady = true;
               break;
             }
-          } catch (_e) {
+          } catch {
             // Backend not accepting connections yet
           }
           await new Promise((resolve) => setTimeout(resolve, 250));

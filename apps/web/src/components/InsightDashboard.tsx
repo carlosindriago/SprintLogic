@@ -216,7 +216,6 @@ export default function InsightDashboard({ projectId }: { projectId: string }) {
   useEffect(() => {
     if (!projectId) return;
 
-    const _abortController: AbortController | null = null;
     const url = `${API_BASE_URL}/projects/${projectId}/session/stream`;
 
     const eventSource = new EventSource(url);
