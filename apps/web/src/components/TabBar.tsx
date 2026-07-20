@@ -297,7 +297,7 @@ export default function TabBar({ onToggleAi, aiOpen, onNewFile, projectId }: Tab
             {!isFixed && (
               <button
                 type="button"
-                aria-label={`Close ${tab.title} tab`}
+                aria-label={`Cerrar pestaña ${tab.title}`}
                 className={cn(
                   "rounded-sm hover:bg-zinc-700 p-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
                   activeTabId === tab.id ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
@@ -313,7 +313,7 @@ export default function TabBar({ onToggleAi, aiOpen, onNewFile, projectId }: Tab
         {onNewFile && (
           <button
             onClick={onNewFile}
-            aria-label="New file"
+            aria-label="Nuevo archivo"
             className="flex items-center gap-1.5 px-2.5 py-2 text-xs font-medium transition-colors text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800"
             title="Nuevo Archivo (Ctrl+N)"
           >
@@ -323,7 +323,7 @@ export default function TabBar({ onToggleAi, aiOpen, onNewFile, projectId }: Tab
         {onToggleAi && (
           <button
             onClick={onToggleAi}
-            aria-label="Toggle SprintLogic AI"
+            aria-label="Alternar SprintLogic AI"
             className={cn(
               "flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors border-l border-zinc-800/50",
               aiOpen

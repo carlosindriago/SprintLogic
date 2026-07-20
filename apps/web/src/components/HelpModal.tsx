@@ -32,7 +32,7 @@ export function HelpModal({ isOpen, onClose }: HelpModalProps) {
           <h2 id="help-modal-title" className="text-lg font-semibold text-zinc-100">Cheat Sheet & Ayuda (SprintLogic IDE)</h2>
           <button 
             onClick={onClose}
-            aria-label="Close"
+            aria-label="Cerrar modal"
             className="text-zinc-500 hover:text-zinc-300 transition-colors p-1 rounded hover:bg-zinc-800 focus-visible:ring-2 focus-visible:outline-none"
           >
             <X aria-hidden="true" className="w-5 h-5" />
