@@ -126,61 +126,13 @@ class TreeSitterParser:
         parser.language = lang
         tree = parser.parse(code_bytes)
 
-        parsed_nodes = []
-        imports = set()
+        from app.infrastructure.parser.language_adapters import get_adapter
+        adapter = get_adapter(ext)
+        if adapter:
+            parsed_nodes, imports = adapter.extract_nodes(tree, code_bytes, file_path)
+        else:
+            parsed_nodes, imports = [], set()
 
-        def traverse(node, current_fqn: str):
-            if "import" in node.type or "require" in node.type:
-                for child in node.children:
-                    if "string" in child.type:
-                        imp = code_bytes[child.start_byte : child.end_byte].decode("utf-8").strip("\"'")
-                        if imp:
-                            imports.add(imp)
-                    elif child.type in ("dotted_name", "identifier"):
-                        imp = code_bytes[child.start_byte : child.end_byte].decode("utf-8")
-                        if imp:
-                            imports.add(imp)
-
-            node_type = None
-            name = None
-            fqn = current_fqn
-
-            if node.type in ("class_definition", "class_declaration"):
-                node_type = "class"
-                for child in node.children:
-                    if child.type in ("identifier", "type_identifier", "name"):
-                        name = code_bytes[child.start_byte:child.end_byte].decode('utf-8')
-                        break
-                if name:
-                    fqn = f"{current_fqn}::[{node_type}]{name}"
-
-            elif node.type in ("function_definition", "function_declaration", "method_definition", "method_declaration"):
-                node_type = "def"
-                for child in node.children:
-                    if child.type in ("identifier", "property_identifier", "name"):
-                        name = code_bytes[child.start_byte:child.end_byte].decode('utf-8')
-                        break
-                if name:
-                    fqn = f"{current_fqn}::[{node_type}]{name}"
-
-            if name and node_type:
-                content = code_bytes[node.start_byte:node.end_byte].decode('utf-8')
-                node_hash = compute_ast_hash(content)
-                parsed_nodes.append(ParsedNode(
-                    fqn=fqn,
-                    node_type=node_type,
-                    name=name,
-                    start_line=node.start_point[0] + 1,
-                    end_line=node.end_point[0] + 1,
-                    content=content,
-                    hash=node_hash,
-                    parent_fqn=current_fqn
-                ))
-
-            for child in node.children:
-                traverse(child, fqn)
-
-        traverse(tree.root_node, file_path)
         return parsed_nodes, imports
 
 
