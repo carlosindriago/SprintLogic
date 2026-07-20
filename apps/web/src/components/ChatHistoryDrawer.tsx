@@ -29,6 +29,7 @@ export default function ChatHistoryDrawer({
 
   useEffect(() => {
     if (isOpen && projectId) {
+      // eslint-disable-next-line
       setLoading(true);
       fetch(`${API_BASE_URL}/chat/conversations/${projectId}`)
         .then((res) => res.json())

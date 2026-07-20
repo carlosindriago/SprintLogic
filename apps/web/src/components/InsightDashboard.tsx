@@ -1,6 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
-import { fetchEventSource } from '@microsoft/fetch-event-source';
 import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -217,7 +216,7 @@ export default function InsightDashboard({ projectId }: { projectId: string }) {
   useEffect(() => {
     if (!projectId) return;
 
-    const abortController = new AbortController();
+    const _abortController: AbortController | null = null;
     const url = `${API_BASE_URL}/projects/${projectId}/session/stream`;
 
     const eventSource = new EventSource(url);
@@ -237,8 +236,8 @@ export default function InsightDashboard({ projectId }: { projectId: string }) {
             duration: 10000,
           });
         }
-      } catch {
-        // ignore malformed events
+      } catch (e: unknown) {
+        console.error("Error procesando mensaje parseado:", e);
       }
     };
 
