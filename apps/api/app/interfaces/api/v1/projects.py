@@ -1425,7 +1425,7 @@ async def update_project_sticky_notes(
             json.dump(data, f, indent=2)
     except Exception as e:
         logger.error("Failed to write sticky notes: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail="Could not save sticky notes")
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
     return {"status": "success"}
 
