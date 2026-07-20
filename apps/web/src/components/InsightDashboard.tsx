@@ -220,47 +220,33 @@ export default function InsightDashboard({ projectId }: { projectId: string }) {
     const abortController = new AbortController();
     const url = `${API_BASE_URL}/projects/${projectId}/session/stream`;
 
-    fetchEventSource(url, {
-      method: 'GET',
-      signal: abortController.signal,
-      openWhenHidden: true,
+    const eventSource = new EventSource(url);
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      onmessage(event: any) {
-        try {
-          const data: DaemonInsight = JSON.parse(event.data);
-          if (data.type !== 'daemon_insight') return;
+    eventSource.onmessage = (event) => {
+      try {
+        const data: DaemonInsight = JSON.parse(event.data);
+        if (data.type !== 'daemon_insight') return;
 
-          const wasEmpty = insightsRef.current.length === 0;
-          notificationStore.addInsight(data);
+        const wasEmpty = insightsRef.current.length === 0;
+        notificationStore.addInsight(data);
 
-          if (!isActivelyTypingRef.current && wasEmpty) {
-            toast(data.message, {
-              description: `Detectado: ${data.anomaly?.rule === 'high_friction_low_flow' ? 'Alta fricción + bajo flujo' : 'Distracción'}`,
-              icon: <Bell className="w-4 h-4 text-amber-400" />,
-              duration: 10000,
-            });
-          }
-        } catch {
-          // ignore malformed events
+        if (!isActivelyTypingRef.current && wasEmpty) {
+          toast(data.message, {
+            description: `Detectado: ${data.anomaly?.rule === 'high_friction_low_flow' ? 'Alta fricción + bajo flujo' : 'Distracción'}`,
+            icon: <Bell className="w-4 h-4 text-amber-400" />,
+            duration: 10000,
+          });
         }
-      },
+      } catch {
+        // ignore malformed events
+      }
+    };
 
-      onclose() {
-        // Server closed the stream — don't reconnect, this is intentional
-        throw new Error('__session_stream_closed__');
-      },
+    eventSource.onerror = () => {
+      // EventSource auto-reconnects, but on fatal errors we could handle them here
+    };
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      onerror(err: any) {
-        if (err?.message === '__session_stream_closed__') throw err;
-        // Network errors: let fetchEventSource handle exponential backoff
-      },
-    }).catch(() => {
-      // Swallowed — cleanup will abort
-    });
-
-    return () => abortController.abort();
+    return () => eventSource.close();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- notificationStore is a stable Zustand reference
   }, [projectId]);
 

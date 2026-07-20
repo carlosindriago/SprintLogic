@@ -16,6 +16,49 @@ from app.infrastructure.db.database import AsyncSessionLocal
 from app.infrastructure.db.models import AIMemoryModel, ContextSnippetModel, ProjectModel
 from app.infrastructure.security.credential_manager import CredentialManager
 
+import xml.etree.ElementTree as ET
+
+def _parse_dsml_tool_calls(buffer: str) -> list[dict[str, Any]]:
+    """
+    Parses DeepSeek's raw XML tool calls (DSML) into standard OpenAI tool_call dictionaries.
+    Sanitizes DSML tags into standard XML before using ElementTree.
+    """
+    clean_xml = buffer.replace("<｜｜DSML｜｜tool_calls>", "<tool_calls>") \
+                      .replace("</｜｜DSML｜｜tool_calls>", "</tool_calls>") \
+                      .replace("<｜｜DSML｜｜invoke", "<invoke") \
+                      .replace("</｜｜DSML｜｜invoke>", "</invoke>") \
+                      .replace("<｜｜DSML｜｜parameter", "<parameter") \
+                      .replace("</｜｜DSML｜｜parameter>", "</parameter>")
+    
+    start_idx = clean_xml.find("<tool_calls>")
+    end_idx = clean_xml.rfind("</tool_calls>")
+    if start_idx != -1 and end_idx != -1:
+        clean_xml = clean_xml[start_idx:end_idx + 13]
+    else:
+        return []
+
+    try:
+        root = ET.fromstring(clean_xml)
+        tools = []
+        for invoke in root.findall('invoke'):
+            tool_name = invoke.get('name')
+            params = {}
+            for param in invoke.findall('parameter'):
+                params[param.get('name')] = param.text
+            
+            tools.append({
+                "id": f"call_dsml_{uuid4().hex[:8]}",
+                "type": "function",
+                "function": {
+                    "name": tool_name,
+                    "arguments": json.dumps(params)
+                }
+            })
+        return tools
+    except ET.ParseError as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Error parseando DSML: {e}")
+        return []
 
 def _find_all_occurrences(
     content: str,
@@ -92,7 +135,8 @@ class AIAgent:
     def __init__(self, session: AsyncSession, project_id: UUID | str | None = None):
         self.session = session
         self.project_id: UUID | None = self._coerce_project_id(project_id)
-        self.model = "gemini/gemini-2.5-flash"  # Default Gemini model via litellm
+        from app.infrastructure.config import DEFAULT_LLM_MODEL
+        self.model = DEFAULT_LLM_MODEL
 
         self.tools = [
             {
@@ -430,24 +474,13 @@ class AIAgent:
                         "'controller', 'service', or file names."
                     )
 
-                # Sanitize for FTS5 MATCH: escape single quotes, wrap dotted names
-                sanitized = query.replace("'", "''")
-                if "." in sanitized and not sanitized.startswith('"'):
-                    sanitized = f'"{sanitized}"'
-                sanitized += "*"
-
-                # Reject queries that are only special FTS5 chars after sanitization
-                cleaned = sanitized.replace("*", "").replace('"', "").replace("-", "").strip()
-                if not cleaned or not any(c.isalnum() for c in cleaned):
-                    return (
-                        "ToolError: Query contains only special characters. "
-                        "Search for meaningful terms like 'main', 'App', 'config', 'router'."
-                    )
+                # Convert for LIKE query instead of MATCH
+                sanitized = f"%{query.strip()}%"
 
                 result = await session.execute(
                     text(
                         "SELECT type, name, path, line FROM search_index "
-                        "WHERE search_index MATCH :q ORDER BY rank LIMIT 20"
+                        "WHERE name LIKE :q OR path LIKE :q OR content LIKE :q LIMIT 20"
                     ),
                     {"q": sanitized},
                 )
@@ -707,13 +740,25 @@ class AIAgent:
         self._project_root = ""
         return None
 
-    async def _build_system_message(self) -> str:
+    async def _build_system_message(self, user_query: str = "") -> str:
         root = await self._get_project_root()
         if not root:
             return ""
-        return (
+            
+        base_prompt = (
             f"Eres SprintLogic AI (El Crisol), el arquitecto de software socrático integrado en el IDE del usuario.\n"
             f"Proyecto alojado en: {root}\n\n"
+        )
+        
+        try:
+            from app.infrastructure.ai.project_scanner import get_project_awareness_xml
+            awareness_xml = await get_project_awareness_xml(root)
+            if awareness_xml:
+                base_prompt += f"{awareness_xml}\n\n"
+        except Exception:
+            pass
+
+        base_prompt += (
             f"=== IRON PROMPT (MANDATO SOCRÁTICO) ===\n"
             f"1. NO eres un asistente sumiso. Eres un compañero de debate implacable.\n"
             f"2. Exige justificaciones para decisiones arquitectónicas. Obliga al usuario a pensar en Edge Cases.\n"
@@ -724,6 +769,62 @@ class AIAgent:
             f"y `generate_adr` para proponer borradores que el usuario revisará en su editor interactivo.\n"
             f"6. Si usas herramientas de lectura y no hay resultados, busca alternativas. NUNCA digas 'No memories found'."
         )
+        
+        # Pipeline Telescópico - Inyectar Developer RAG
+        if user_query:
+            try:
+                from app.infrastructure.security.credential_manager import CredentialManager
+                import litellm
+                api_key = CredentialManager.get_api_key("gemini")
+                if api_key:
+                    embed_resp = await litellm.aembedding(
+                        model="gemini/text-embedding-004",
+                        input=[user_query],
+                        api_key=api_key
+                    )
+                    query_vector = embed_resp.data[0]["embedding"]
+                    
+                    from app.infrastructure.db.models import DeveloperInsightModel
+                    from sqlalchemy.future import select
+                    import numpy as np
+                    
+                    try:
+                        async with AsyncSessionLocal() as insight_session:
+                            result = await insight_session.execute(select(DeveloperInsightModel))
+                            all_insights = result.scalars().all()
+                            
+                            insight = None
+                            if all_insights:
+                                q_vec = np.array(query_vector, dtype=np.float32)
+                                db_matrix = np.vstack([
+                                    np.frombuffer(i.embedding_blob, dtype=np.float32) 
+                                    for i in all_insights
+                                ])
+                                similarities = np.dot(db_matrix, q_vec)
+                                best_index = np.argmax(similarities)
+                                best_score = similarities[best_index]
+                                
+                                if best_score > 0.75:
+                                    insight_obj = all_insights[best_index]
+                                    insight = {
+                                        "sintoma": insight_obj.sintoma,
+                                        "solucion": insight_obj.solucion
+                                    }
+                    except Exception as inner_e:
+                        insight = None
+                    if insight:
+                        base_prompt += (
+                            f"\n\n<SENSEI_MEMORY>\n"
+                            f"[Recuerdo Histórico del Desarrollador]\n"
+                            f"Síntoma/Problema: {insight['sintoma']}\n"
+                            f"Solución/Lección: {insight['solucion']}\n"
+                            f"</SENSEI_MEMORY>"
+                        )
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(f"Error fetching insight memory: {e}")
+
+        return base_prompt
 
     def _get_provider(self, model: str) -> str:
         return ProviderAdapter.get_provider(model)
@@ -814,8 +915,27 @@ class AIAgent:
                 )
                 return
 
-            system_msg = await self._build_system_message()
+            user_query = ""
+            for m in reversed(messages):
+                if m.get("role") == "user":
+                    user_query = str(m.get("content", ""))
+                    break
+                    
+            system_msg = await self._build_system_message(user_query)
             if system_msg:
+                existing_system = next((m.get("content", "") for m in messages if m.get("role") == "system"), "")
+                # We append existing system context (e.g. EDITOR_CONTEXT from sync.py) to our built prompt
+                if existing_system:
+                    # Quick heuristic to avoid duplicating the base prompt if it was already injected
+                    if "=== IRON PROMPT" in existing_system:
+                        # Extract just the EDITOR_CONTEXT
+                        import re
+                        match = re.search(r"<EDITOR_CONTEXT>.*?</EDITOR_CONTEXT>", existing_system, re.DOTALL)
+                        if match:
+                            system_msg += f"\n\n{match.group(0)}"
+                    else:
+                        system_msg += f"\n\n{existing_system}"
+                        
                 messages = [{"role": "system", "content": system_msg}] + [
                     m for m in messages if m.get("role") != "system"
                 ]
@@ -849,14 +969,18 @@ class AIAgent:
 
                 full_content = ""
                 tool_calls_accum: list[dict[str, Any]] = []
+                
+                # DSML Interceptor State
+                yield_buffer = ""
+                xml_accumulator = ""
+                is_intercepting_tool = False
+                trigger_prefixes = ["<｜｜DSML", "<tool_calls>", "<invoke>"]
 
                 async for chunk in response:
                     delta = chunk.choices[0].delta
-                    if delta.content:
-                        full_content += delta.content
-                        yield json.dumps({"type": "message_chunk", "text": delta.content})
-
+                    
                     if getattr(delta, "tool_calls", None):
+                        # Standard OpenAI/LiteLLM tool calls
                         if not tool_calls_accum:
                             yield json.dumps(
                                 {"type": "agent_state", "status": "Preparando herramientas..."}
@@ -881,6 +1005,61 @@ class AIAgent:
                                 tool_calls_accum[tc.index]["function"]["arguments"] += (
                                     tc.function.arguments
                                 )
+                    elif delta.content:
+                        text_chunk = delta.content
+                        full_content += text_chunk
+                        
+                        if is_intercepting_tool:
+                            xml_accumulator += text_chunk
+                            # We are intercepting. Check if we hit the end tag.
+                            if "</｜｜DSML｜｜tool_calls>" in xml_accumulator or "</tool_calls>" in xml_accumulator or "</invoke>" in xml_accumulator:
+                                parsed_tools = _parse_dsml_tool_calls(xml_accumulator)
+                                tool_calls_accum.extend(parsed_tools)
+                                
+                                # Reset interceptor for the rest of the stream (if any)
+                                is_intercepting_tool = False
+                                xml_accumulator = ""
+                            continue
+                            
+                        yield_buffer += text_chunk
+                        
+                        is_potential_tool = False
+                        
+                        # Check if yield_buffer contains any full prefix or a partial suffix (lookahead)
+                        for prefix in trigger_prefixes:
+                            if prefix in yield_buffer:
+                                is_potential_tool = True
+                                is_intercepting_tool = True
+                                # Extract the matched part and onwards into xml_accumulator
+                                idx = yield_buffer.find(prefix)
+                                xml_accumulator = yield_buffer[idx:]
+                                # Everything before the tag is safe to yield
+                                safe_text = yield_buffer[:idx]
+                                if safe_text:
+                                    yield json.dumps({"type": "message_chunk", "text": safe_text})
+                                
+                                yield_buffer = ""
+                                yield json.dumps({"type": "agent_state", "status": "Preparando herramientas..."})
+                                break
+                                
+                            # Check for partial suffix match (lookahead)
+                            # Only check prefixes up to length-1 since full match is caught above
+                            for i in range(1, len(prefix)):
+                                if yield_buffer.endswith(prefix[:i]):
+                                    is_potential_tool = True
+                                    break
+                                    
+                            if is_potential_tool:
+                                break
+                                
+                        if not is_potential_tool and yield_buffer:
+                            # Safe to yield
+                            yield json.dumps({"type": "message_chunk", "text": yield_buffer})
+                            yield_buffer = ""
+
+                # Flush the yield buffer at the end of the stream
+                if yield_buffer and not is_intercepting_tool:
+                    yield json.dumps({"type": "message_chunk", "text": yield_buffer})
 
                 if not tool_calls_accum:
                     # No more tools, we are done

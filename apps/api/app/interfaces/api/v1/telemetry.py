@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel
 from sqlalchemy import text
@@ -24,34 +26,43 @@ async def ingest_telemetry_ping(
     Ingests a telemetry ping from the IDE containing absolute window times
     and the accumulated time buckets. Optionally scoped to a project.
     """
-    await session.execute(
-        text(
-            """
-            INSERT INTO telemetry_pings (
-                project_id,
-                window_start_ms,
-                window_end_ms,
-                thinking_ms,
-                coding_ms,
-                testing_ms
-            ) VALUES (
-                :project_id,
-                :window_start,
-                :window_end,
-                :thinking_ms,
-                :coding_ms,
-                :testing_ms
-            )
-            """
-        ),
-        {
-            "project_id": payload.project_id,
-            "window_start": payload.window_start,
-            "window_end": payload.window_end,
-            "thinking_ms": payload.thinking_ms,
-            "coding_ms": payload.coding_ms,
-            "testing_ms": payload.testing_ms,
-        }
-    )
-    await session.commit()
+    now = datetime.now(timezone.utc)
+    try:
+        await session.execute(
+            text(
+                """
+                INSERT INTO telemetry_pings (
+                    project_id,
+                    timestamp,
+                    window_start_ms,
+                    window_end_ms,
+                    thinking_ms,
+                    coding_ms,
+                    testing_ms
+                ) VALUES (
+                    :project_id,
+                    :timestamp,
+                    :window_start,
+                    :window_end,
+                    :thinking_ms,
+                    :coding_ms,
+                    :testing_ms
+                )
+                """
+            ),
+            {
+                "project_id": payload.project_id,
+                "timestamp": now,
+                "window_start": payload.window_start,
+                "window_end": payload.window_end,
+                "thinking_ms": payload.thinking_ms,
+                "coding_ms": payload.coding_ms,
+                "testing_ms": payload.testing_ms,
+            }
+        )
+        await session.commit()
+    except Exception:
+        # Telemetry is non-critical — log and swallow so callers are never blocked
+        await session.rollback()
+        return {"status": "skipped"}
     return {"status": "success"}

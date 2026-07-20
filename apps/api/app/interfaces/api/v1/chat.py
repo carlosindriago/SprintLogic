@@ -14,6 +14,8 @@ from app.application.ai_agent import AIAgent
 from app.infrastructure.ai.context_builder import build_agent_context
 from app.infrastructure.db.database import get_db_session
 from app.infrastructure.security.credential_manager import CredentialManager
+from app.infrastructure.db.models import ConversationModel, MessageModel
+from sqlalchemy import select, desc
 
 router = APIRouter()
 
@@ -84,36 +86,127 @@ class EditorContext(BaseModel):
     file_path: str = ""
     cursor_line: int = 1
     active_code: str = ""
+    open_tabs: list[str] = []
 
 
 class ChatRequest(BaseModel):
     messages: list[dict[str, Any]]
     project_id: str | None = None
-    model: str
+    model: str | None = None
     is_sensei: bool = False
     editor_context: EditorContext | None = None
+    conversation_id: int | None = None
 
 
 class ChatResponse(BaseModel):
     response: str
 
 
+async def _generate_conversation_title(conversation_id: int, first_message: str):
+    """Background task to generate a short title for a new conversation."""
+    from app.infrastructure.db.database import AsyncSessionLocal
+    
+    # Pre-emptive short title to display immediately
+    short_preview = " ".join(first_message.split()[:4]) + "..."
+    async with AsyncSessionLocal() as session:
+        try:
+            # Fallback title just in case the LLM fails
+            conv = await session.get(ConversationModel, conversation_id)
+            if conv and not conv.title:
+                conv.title = short_preview
+                await session.commit()
+            
+            from app.infrastructure.config import DEFAULT_LLM_MODEL
+            # Request LLM for a better title
+            
+            provider = DEFAULT_LLM_MODEL.split("/")[0] if "/" in DEFAULT_LLM_MODEL else DEFAULT_LLM_MODEL
+            api_key = CredentialManager.get_api_key(f"sprintlogic_{provider}") or CredentialManager.get_api_key(provider)
+            if not api_key:
+                api_key = CredentialManager.get_api_key("sprintlogic_openrouter")
+                if not api_key:
+                    return
+
+            response = await litellm.acompletion(
+                model=DEFAULT_LLM_MODEL,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "Resume este problema o pregunta de código en máximo 4 palabras. Solo responde con el título corto. Sin comillas ni puntuación final."
+                    },
+                    {"role": "user", "content": first_message}
+                ],
+                api_key=api_key,
+            )
+            title = response.choices[0].message.content.strip().strip('"').strip("'")
+            if len(title) > 50:
+                title = title[:50]
+                
+            conv = await session.get(ConversationModel, conversation_id)
+            if conv:
+                conv.title = title
+                await session.commit()
+        except Exception:
+            pass
+
+
 @router.post("/")
-async def chat_with_ai(request: ChatRequest, session: AsyncSession = Depends(get_db_session)):
+async def chat_with_ai(request: ChatRequest, background_tasks: BackgroundTasks, session: AsyncSession = Depends(get_db_session)):
     """Handles chat messages with the AI and manages tool calls."""
-    if not request.model or "/" not in request.model:
-        raise HTTPException(status_code=400, detail="Model name is required")
+    from app.infrastructure.config import DEFAULT_LLM_MODEL
+    actual_model = request.model or DEFAULT_LLM_MODEL
+
+    # DB Persistence setup
+    conversation_id = request.conversation_id
+    is_new_conversation = False
+    if not conversation_id and request.project_id:
+        import uuid
+        try:
+            project_uuid = uuid.UUID(request.project_id)
+            conv = ConversationModel(project_id=project_uuid)
+            session.add(conv)
+            await session.commit()
+            await session.refresh(conv)
+            conversation_id = conv.id
+            is_new_conversation = True
+        except Exception as e:
+            print(f"Failed to create conversation: {e}")
 
     # Build the messages list, optionally prepending the Sensei system prompt
     messages_to_send = list(request.messages)
+    
+    # Save the latest user message to DB
+    user_content = ""
+    for m in reversed(messages_to_send):
+        if m.get("role") == "user":
+            user_content = str(m.get("content", ""))
+            break
+            
+    if conversation_id and user_content:
+        user_msg = MessageModel(
+            conversation_id=conversation_id,
+            role="user",
+            content=user_content
+        )
+        session.add(user_msg)
+        await session.commit()
+        
+        if is_new_conversation:
+            background_tasks.add_task(_generate_conversation_title, conversation_id, user_content)
+
     if request.is_sensei:
         injected_system = SENSEI_SYSTEM_PROMPT_TEMPLATE
+        
+
         ctx = request.editor_context
         # Context decoupling: Only inject the <EDITOR_CONTEXT> block if we actually have code.
         # This prevents the LLM from getting confused by empty paths/lines when the user
         # asks a general question like "Teach me Rust from scratch".
-        if ctx and ctx.active_code.strip():
-            injected_system += f"\n\n<EDITOR_CONTEXT>\nFile: {ctx.file_path}\nCursor Line: {ctx.cursor_line}\nActive Code:\n{ctx.active_code[:4000]}\n</EDITOR_CONTEXT>"
+        if ctx:
+            if ctx.active_code.strip():
+                injected_system += f"\n\n<EDITOR_CONTEXT>\nFile: {ctx.file_path}\nCursor Line: {ctx.cursor_line}\nActive Code:\n{ctx.active_code[:4000]}\n</EDITOR_CONTEXT>"
+            if ctx.open_tabs:
+                tabs_str = "\n".join([f"- {t}" for t in ctx.open_tabs])
+                injected_system += f"\n\n<OPEN_TABS>\nEl usuario tiene las siguientes pestañas abiertas en el IDE:\n{tabs_str}\n</OPEN_TABS>"
 
         # Prepend as a system turn (replaces any existing system turn at index 0)
         if messages_to_send and messages_to_send[0].get("role") == "system":
@@ -122,19 +215,40 @@ async def chat_with_ai(request: ChatRequest, session: AsyncSession = Depends(get
             messages_to_send.insert(0, {"role": "system", "content": injected_system})
 
     async def generate():
+        full_response = ""
         try:
             agent = AIAgent(session=session, project_id=request.project_id)
-            async for chunk_str in agent.chat_stream(messages_to_send, model=request.model):
+            async for chunk_str in agent.chat_stream(messages_to_send, model=actual_model):
+                # Try to parse the SSE json text manually to accumulate full text
+                try:
+                    chunk_data = json.loads(chunk_str)
+                    if "text" in chunk_data:
+                        full_response += chunk_data["text"]
+                except Exception:
+                    pass
                 yield f"data: {chunk_str}\n\n"
 
-            yield f"data: {json.dumps({'text': '', 'is_done': True})}\n\n"
+            yield f"data: {json.dumps({'is_done': True, 'conversation_id': conversation_id})}\n\n"
+            
+            # Save the final AI response to DB
+            if conversation_id and full_response:
+                from app.infrastructure.db.database import AsyncSessionLocal
+                async with AsyncSessionLocal() as bg_session:
+                    ai_msg = MessageModel(
+                        conversation_id=conversation_id,
+                        role="assistant",
+                        content=full_response
+                    )
+                    bg_session.add(ai_msg)
+                    await bg_session.commit()
+                    
         except Exception as e:
             error_str = str(e)
             if "429" in error_str or "RateLimitError" in error_str or "Quota exceeded" in error_str:
                 msg = "⚠️ Límite de cuota excedido para este modelo. Por favor, selecciona un modelo diferente en el menú superior."
-                yield f"data: {json.dumps({'text': msg, 'is_done': True, 'error': True})}\n\n"
+                yield f"data: {json.dumps({'text': msg, 'is_done': True, 'error': True, 'conversation_id': conversation_id})}\n\n"
             else:
-                yield f"data: {json.dumps({'text': f'Error interno: {error_str}', 'is_done': True, 'error': True})}\n\n"
+                yield f"data: {json.dumps({'text': f'Error interno: {error_str}', 'is_done': True, 'error': True, 'conversation_id': conversation_id})}\n\n"
 
     headers = {
         "Cache-Control": "no-cache, no-transform",
@@ -142,6 +256,47 @@ async def chat_with_ai(request: ChatRequest, session: AsyncSession = Depends(get
         "X-Accel-Buffering": "no",
     }
     return StreamingResponse(generate(), media_type="text/event-stream", headers=headers)
+
+
+@router.get("/conversations/{project_id}")
+async def get_conversations(project_id: str, session: AsyncSession = Depends(get_db_session)):
+    """Fetch chat threads for a project."""
+    import uuid
+    try:
+        project_uuid = uuid.UUID(project_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid project_id")
+
+    result = await session.execute(
+        select(ConversationModel)
+        .where(ConversationModel.project_id == project_uuid)
+        .order_by(desc(ConversationModel.created_at))
+    )
+    conversations = result.scalars().all()
+    return [{"id": c.id, "title": c.title or "Nuevo Chat", "created_at": c.created_at} for c in conversations]
+
+
+@router.get("/conversations/messages/{conversation_id}")
+async def get_conversation_messages(conversation_id: int, session: AsyncSession = Depends(get_db_session)):
+    """Fetch messages for a given thread."""
+    result = await session.execute(
+        select(MessageModel)
+        .where(MessageModel.conversation_id == conversation_id)
+        .order_by(MessageModel.id)
+    )
+    messages = result.scalars().all()
+    return [{"id": m.id, "role": m.role, "content": m.content, "created_at": m.created_at} for m in messages]
+
+
+@router.delete("/conversations/{conversation_id}")
+async def delete_conversation(conversation_id: int, session: AsyncSession = Depends(get_db_session)):
+    """Delete a conversation and all its messages."""
+    conv = await session.get(ConversationModel, conversation_id)
+    if not conv:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    await session.delete(conv)
+    await session.commit()
+    return {"status": "ok"}
 
 
 class MentorRequest(BaseModel):
@@ -186,11 +341,15 @@ async def mentor_sensei(
     background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_db_session),
 ):
-    provider = "gemini"
-    model = "gemini/gemini-2.5-flash"
-    api_key = CredentialManager.get_api_key(provider)
+    from app.infrastructure.config import DEFAULT_LLM_MODEL
+    actual_model = DEFAULT_LLM_MODEL
+    
+    provider = actual_model.split("/")[0] if "/" in actual_model else actual_model
+    api_key = CredentialManager.get_api_key(f"sprintlogic_{provider}") or CredentialManager.get_api_key(provider)
     if not api_key:
-        raise HTTPException(status_code=400, detail="Gemini API key not configured")
+        api_key = CredentialManager.get_api_key("sprintlogic_openrouter")
+        if not api_key:
+            raise HTTPException(status_code=400, detail=f"{provider} API key not configured")
 
     # Retrieve episodic project memory
     memory_context = ""
@@ -225,7 +384,7 @@ async def mentor_sensei(
         full_response = ""
         try:
             response = await litellm.acompletion(
-                model=model,
+                model=actual_model,
                 messages=[
                     {
                         "role": "system",

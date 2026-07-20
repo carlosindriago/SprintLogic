@@ -1,19 +1,22 @@
 from __future__ import annotations
 
+import asyncio
 import os
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import pool
+from sqlalchemy.engine import Connection
+from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from app.infrastructure.db import models  # noqa: F401
-from app.infrastructure.db.database import DB_PATH, Base
+from app.infrastructure.db.database import Base
 
 config = context.config
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    f"sqlite:///{DB_PATH}",
+    "sqlite+aiosqlite:///sprintlogic.db",
 )
 config.set_main_option("sqlalchemy.url", DATABASE_URL)
 
@@ -22,7 +25,6 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
-
 def run_migrations_offline() -> None:
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
@@ -30,36 +32,39 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        render_as_batch=True,
     )
 
     with context.begin_transaction():
         context.run_migrations()
 
 
-def run_migrations_online() -> None:
-    connectable = engine_from_config(
+def do_run_migrations(connection: Connection) -> None:
+    context.configure(
+        connection=connection, 
+        target_metadata=target_metadata,
+        render_as_batch=True
+    )
+
+    with context.begin_transaction():
+        context.run_migrations()
+
+
+async def run_async_migrations() -> None:
+    connectable = async_engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
 
-    import sqlite_vec
-    from sqlalchemy import event
+    async with connectable.connect() as connection:
+        await connection.run_sync(do_run_migrations)
 
-    @event.listens_for(connectable, "connect")
-    def _set_sqlite_pragmas(dbapi_connection, _connection_record):
-        dbapi_connection.enable_load_extension(True)
-        dbapi_connection.load_extension(sqlite_vec.loadable_path())
-        dbapi_connection.enable_load_extension(False)
+    await connectable.dispose()
 
 
-    with connectable.connect() as connection:
-        context.configure(
-            connection=connection, target_metadata=target_metadata, render_as_batch=True
-        )
-
-        with context.begin_transaction():
-            context.run_migrations()
+def run_migrations_online() -> None:
+    asyncio.run(run_async_migrations())
 
 
 if context.is_offline_mode():

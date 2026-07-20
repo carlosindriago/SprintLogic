@@ -70,7 +70,7 @@ export async function addRemoteUrl(projectId: string, url: string, name: string 
   }
 }
 
-export async function generateCommitMessage(projectId: string, model: string = "gemini/gemini-2.5-flash") {
+export async function generateCommitMessage(projectId: string, model: string) {
   try {
     const res = await fetch(`${API_BASE_URL}/projects/${projectId}/git/generate-commit-message`, {
       method: 'POST',

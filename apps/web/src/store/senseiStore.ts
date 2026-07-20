@@ -61,6 +61,19 @@ interface SenseiStore {
    */
   activateSensei: () => void;
   deactivateSensei: () => void;
+
+  // ── Unified WebSocket Channel ──────────────────────────────────────────────
+  /** Global WebSocket instance for syncing the active file and streaming Sensei chat */
+  socket: WebSocket | null;
+  /** Whether the socket is currently connected */
+  isSocketConnected: boolean;
+  /** Initializes the global WebSocket */
+  connectSocket: (projectId: number) => void;
+  /** Disconnects the global WebSocket */
+  disconnectSocket: () => void;
+  /** Used by EditorTab to subscribe to marker updates or sync errors */
+  addSocketListener: (listener: (data: any) => void) => () => void;
+  socketListeners: Array<(data: any) => void>;
 }
 
 export const useSenseiStore = create<SenseiStore>((set, get) => ({
@@ -91,4 +104,51 @@ export const useSenseiStore = create<SenseiStore>((set, get) => ({
 
   deactivateSensei: () =>
     set({ isSenseiMode: false, anchoredContext: null }),
+
+  socket: null,
+  isSocketConnected: false,
+  socketListeners: [],
+  addSocketListener: (listener) => {
+    set((state) => ({ socketListeners: [...state.socketListeners, listener] }));
+    return () => {
+      set((state) => ({
+        socketListeners: state.socketListeners.filter((l) => l !== listener),
+      }));
+    };
+  },
+  connectSocket: (projectId: number) => {
+    const { socket } = get();
+    if (socket) return; // Already connected or connecting
+
+    const wsUrl = `ws://localhost:8000/api/v1/sync/ws`;
+    const ws = new window.WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      set({ isSocketConnected: true });
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        const { socketListeners } = get();
+        socketListeners.forEach((listener) => listener(data));
+      } catch (e) {
+        console.error('Failed to parse WebSocket message', e);
+      }
+    };
+
+    ws.onclose = () => {
+      set({ isSocketConnected: false, socket: null });
+      // In a real app we'd have reconnection logic here with backoff
+    };
+
+    set({ socket: ws });
+  },
+  disconnectSocket: () => {
+    const { socket } = get();
+    if (socket) {
+      socket.close();
+      set({ socket: null, isSocketConnected: false });
+    }
+  },
 }));

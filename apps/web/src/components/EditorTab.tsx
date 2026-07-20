@@ -29,11 +29,12 @@ import { GroqFimAdapter } from '@/lib/services/GroqFimAdapter';
 // Global error handler to suppress Monaco's internal "Canceled" unhandled rejections
 if (typeof window !== 'undefined') {
   window.addEventListener('unhandledrejection', (event) => {
-    if (event.reason && event.reason.name === 'Canceled') {
-      // Suppress Monaco's internal cancellation errors from bubbling to the console
+    if (event.reason && (event.reason.name === 'Canceled' || event.reason.message === 'Canceled' || event.reason === 'Canceled')) {
+      // Suppress Monaco's internal cancellation errors from bubbling to Next.js dev overlay
       event.preventDefault();
+      event.stopImmediatePropagation();
     }
-  });
+  }, { capture: true });
 }
 
 interface LintDiagnostic {
@@ -340,17 +341,7 @@ export default function EditorTab({
     isCoachEnabledRef.current = isCoachEnabled;
   }, [isCoachEnabled]);
 
-  useEffect(() => {
-    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
-      // Monaco frequently throws unhandled "Canceled" rejections when disposing models 
-      // during active tokenization/language-service processing. We silence it to prevent Next.js overlay.
-      if (event.reason && (event.reason.name === 'Canceled' || event.reason.message === 'Canceled' || event.reason === 'Canceled')) {
-        event.preventDefault();
-      }
-    };
-    window.addEventListener('unhandledrejection', handleUnhandledRejection);
-    return () => window.removeEventListener('unhandledrejection', handleUnhandledRejection);
-  }, []);
+  // Removed redundant unhandledrejection useEffect - now handled by global capture listener
 
   useEffect(() => {
     fimDefaultModelRef.current = fimDefaultModel;
@@ -576,6 +567,16 @@ export default function EditorTab({
   const updateEditorContext = useSenseiStore((s) => s.updateEditorContext);
   const setActiveTabId = useSenseiStore((s) => s.setActiveTabId);
   const clearEditorContext = useSenseiStore((s) => s.clearEditorContext);
+  
+  const connectSocket = useSenseiStore((s) => s.connectSocket);
+  const disconnectSocket = useSenseiStore((s) => s.disconnectSocket);
+
+  // Initialize the global unified WebSocket on EditorTab mount
+  useEffect(() => {
+    // We assume project 1 for now (could get from context/store)
+    connectSocket(1);
+    return () => disconnectSocket();
+  }, [connectSocket, disconnectSocket]);
 
   // Declare this tab as the active one on mount (focus-aware).
   useEffect(() => {
@@ -1202,26 +1203,92 @@ export default function EditorTab({
     }
 
     let cursorTimeout: ReturnType<typeof setTimeout>;
+    let senseiDebounce: ReturnType<typeof setTimeout>;
+
     const cursorDisposable = editor.onDidChangeCursorPosition((e) => {
       if (cursorTimeout) clearTimeout(cursorTimeout);
       cursorTimeout = setTimeout(() => {
         setActiveLineNumber(e.position.lineNumber);
-        // Keep the Sensei store registry fresh on every cursor move
-        buildSenseiContext(editor);
       }, 100);
     });
 
-    // Also update on selection changes (user highlighted code for context)
+    const triggerSenseiContextUpdate = () => {
+      if (senseiDebounce) clearTimeout(senseiDebounce);
+      senseiDebounce = setTimeout(() => {
+        buildSenseiContext(editor);
+      }, 400); // 400ms válvula de presión para el Main Thread
+    };
+
+    // Both cursor moves and active highlighting (selections) feed the same debounce
     const selectionDisposable = editor.onDidChangeCursorSelection(() => {
-      buildSenseiContext(editor);
+      triggerSenseiContextUpdate();
     });
 
     // Initial push so the context is available immediately on tab open
     buildSenseiContext(editor);
 
-    editor.onDidChangeModelContent(() => {
+    // Initial WebSocket Full Sync
+    const socket = useSenseiStore.getState().socket;
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({
+        type: 'full_sync',
+        file_path: node.file_path,
+        content: editor.getValue(),
+        versionId: editor.getModel()?.getVersionId() || 0
+      }));
+    }
+
+    // Set up WebSocket listener for markers and sync errors
+    const removeSocketListener = useSenseiStore.getState().addSocketListener((data) => {
+      if (data.type === 'sync_out_of_order') {
+        // Self-Healing Protocol
+        const s = useSenseiStore.getState().socket;
+        if (s && s.readyState === WebSocket.OPEN) {
+          s.send(JSON.stringify({
+            type: 'full_sync',
+            file_path: node.file_path,
+            content: editor.getValue(),
+            versionId: editor.getModel()?.getVersionId() || 0
+          }));
+        }
+      } else if (data.type === 'marker_update') {
+        // Here we would apply the marker to Monaco gutter!
+        // In this MVP, we map the CodeCoachMarker to Monaco's generic markers
+        const markers = data.markers || [];
+        const monacoMarkers = markers.map((m: any) => ({
+          severity: m.severity || 8, // monaco.MarkerSeverity.Warning
+          message: m.message,
+          startLineNumber: m.line,
+          startColumn: m.column || 1,
+          endLineNumber: m.line,
+          endColumn: 100, // heuristic
+          source: 'Sensei AST Linter'
+        }));
+        const model = editor.getModel();
+        if (model) {
+          monaco?.editor.setModelMarkers(model, 'sensei-linter', monacoMarkers);
+        }
+      }
+    });
+
+    // Clean up listener on editor unmount
+    editor.onDidDispose(() => {
+      removeSocketListener();
+    });
+
+    editor.onDidChangeModelContent((e) => {
       const model = editor.getModel();
       
+      // Delta Sync via Unified WebSocket
+      const s = useSenseiStore.getState().socket;
+      if (s && s.readyState === WebSocket.OPEN && model) {
+        s.send(JSON.stringify({
+          type: 'delta_sync',
+          changes: e.changes,
+          versionId: model.getVersionId()
+        }));
+      }
+
       // We do NOT clear markers or states here to maintain the Stale-While-Revalidate pattern.
       // The old markers will remain until the new ones arrive.
       

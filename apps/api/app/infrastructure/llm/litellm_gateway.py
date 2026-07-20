@@ -5,12 +5,15 @@ from collections.abc import AsyncGenerator
 from typing import Any
 
 from litellm import acompletion  # type: ignore
+from app.infrastructure.config import DEFAULT_LLM_MODEL
+from app.infrastructure.security.credential_manager import CredentialManager
 
 logger = logging.getLogger(__name__)
 
 class LiteLLMGateway:
-    def __init__(self, model_name: str = "gpt-4o"):
-        self.model_name = model_name
+    def __init__(self, model_name: str | None = None):
+        self.model_name = model_name or DEFAULT_LLM_MODEL
+        self.cred_manager = CredentialManager()
 
     async def analyze_anomalies_stream(
         self,

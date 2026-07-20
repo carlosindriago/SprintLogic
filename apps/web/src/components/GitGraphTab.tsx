@@ -11,6 +11,7 @@ import { Commit, CommitDetails, CommitFile } from '@/types';
 import { toast } from 'sonner';
 import { useGitSyncStatus } from '@/hooks/useGitSyncStatus';
 import { checkoutHead, createBranch, deleteBranch, resetCommit, revertCommit, cherryPick, getBranches, getRemoteUrl, addRemoteUrl, generateCommitMessage } from '@/lib/git-actions';
+import { useLLMConfigStore } from '@/store/llmConfigStore';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel, DropdownMenuGroup } from '@/components/ui/dropdown-menu';
 import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuGroup } from '@/components/ui/context-menu';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
@@ -81,6 +82,8 @@ export default function GitGraphTab({ projectId }: { projectId: string }) {
   const [commitDetails, setCommitDetails] = useState<CommitDetails | null>(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [showDetails, setShowDetails] = useState(true);
+  
+  const defaultModel = useLLMConfigStore((state) => state.defaultModel);
   
   // Remote connection state
   const [isRemoteDialogOpen, setIsRemoteDialogOpen] = useState(false);
@@ -428,7 +431,6 @@ export default function GitGraphTab({ projectId }: { projectId: string }) {
 
   const handleGenerateCommitMessage = async () => {
     setIsGeneratingMessage(true);
-    const defaultModel = localStorage.getItem("default_ai_model") || "gemini/gemini-2.5-flash";
     const res = await generateCommitMessage(projectId, defaultModel);
     setIsGeneratingMessage(false);
     
