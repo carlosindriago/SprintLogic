@@ -1,14 +1,15 @@
 from abc import ABC, abstractmethod
-from typing import Set, Tuple
+
 from app.infrastructure.parser.ast_parser import ParsedNode, compute_ast_hash
+
 
 class LanguageAdapter(ABC):
     """
     Adapter Interface to decouple AST extraction logic from the Graph Engine.
     """
-    
+
     @abstractmethod
-    def extract_nodes(self, tree, code_bytes: bytes, file_path: str) -> Tuple[list[ParsedNode], Set[str]]:
+    def extract_nodes(self, tree, code_bytes: bytes, file_path: str) -> tuple[list[ParsedNode], set[str]]:
         """
         Extracts universal ParsedNode objects and imports from a language-specific AST.
         """
@@ -16,7 +17,7 @@ class LanguageAdapter(ABC):
 
 class GenericTreeSitterAdapter(LanguageAdapter):
     """
-    A generic adapter that implements the legacy traversal logic, 
+    A generic adapter that implements the legacy traversal logic,
     abstracted away to comply with the OCP principle.
     Subclasses can override this with optimized S-expression queries.
     """
@@ -25,7 +26,7 @@ class GenericTreeSitterAdapter(LanguageAdapter):
         self.method_types = method_types
         self.identifier_types = identifier_types
 
-    def extract_nodes(self, tree, code_bytes: bytes, file_path: str) -> Tuple[list[ParsedNode], Set[str]]:
+    def extract_nodes(self, tree, code_bytes: bytes, file_path: str) -> tuple[list[ParsedNode], set[str]]:
         parsed_nodes = []
         imports = set()
 
