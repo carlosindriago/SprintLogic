@@ -185,6 +185,21 @@ def resolve_import_edges(
     """
     edges: list[GraphEdge] = []
 
+    # Precompute file stems for O(1) lookup
+    file_stems: dict[str, list[str]] = {}
+    for fp in file_paths:
+        fp_path = Path(fp)
+        stem = fp_path.stem
+        parent_name = fp_path.parent.name
+
+        if stem not in file_stems:
+            file_stems[stem] = []
+        file_stems[stem].append(fp)
+
+        if parent_name not in file_stems:
+            file_stems[parent_name] = []
+        file_stems[parent_name].append(fp)
+
     for source_id, imports in file_imports.items():
         source_path_str = source_id.replace("file:", "")
         is_python = source_path_str.endswith(".py")
@@ -213,20 +228,20 @@ def resolve_import_edges(
 
                 target_stem = Path(normalized_imp).stem
 
-                for fp in file_paths:
-                    fp_path = Path(fp)
-                    if fp_path.stem == target_stem or fp_path.parent.name == target_stem:
-                        target_id = f"file:{fp}"
-                        if source_id != target_id:
-                            edges.append(
-                                GraphEdge(
-                                    project_id=project_id,
-                                    source_id=source_id,
-                                    target_id=target_id,
-                                    type=EdgeType.IMPORTS,
-                                )
+                # Fast lookup using precomputed stems
+                matching_files = file_stems.get(target_stem, [])
+                for fp in matching_files:
+                    target_id = f"file:{fp}"
+                    if source_id != target_id:
+                        edges.append(
+                            GraphEdge(
+                                project_id=project_id,
+                                source_id=source_id,
+                                target_id=target_id,
+                                type=EdgeType.IMPORTS,
                             )
-                            break
+                        )
+                        break
 
     return edges
 
@@ -326,6 +341,10 @@ class ASTParserService:
                 "__pycache__",
                 ".pytest_cache",
                 "migrations",
+                "target",
+                "build",
+                ".gradle",
+                ".idea"
             }
         else:
             self.ignore_dirs = set(ignore_dirs)
