@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, LargeBinary
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, LargeBinary, String
 from sqlalchemy import Enum as SQLAlchemyEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -112,7 +112,12 @@ class ASTNodeMapModel(Base):
     fqn: Mapped[str] = mapped_column(String(1024), nullable=False, index=True)
     node_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
 
+class ASTVectorModel(Base):
+    __tablename__ = "vec_ast_nodes"
 
+    node_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    content: Mapped[str] = mapped_column(String, nullable=False)
+    embedding: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
 
 
 
@@ -155,7 +160,8 @@ class AnalysisReportModel(Base):
         DateTime(timezone=True), nullable=False, default=datetime.utcnow
     )
 
-from sqlalchemy import Index, text, BigInteger
+from sqlalchemy import BigInteger
+
 
 class SearchIndexModel(Base):
     __tablename__ = "search_index"

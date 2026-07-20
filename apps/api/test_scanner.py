@@ -1,5 +1,7 @@
 import asyncio
+
 from app.infrastructure.ai.project_scanner import get_project_awareness_xml
+
 
 async def main():
     import os

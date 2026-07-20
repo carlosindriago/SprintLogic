@@ -7,15 +7,14 @@ import litellm
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from sqlalchemy import text
+from sqlalchemy import desc, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.ai_agent import AIAgent
 from app.infrastructure.ai.context_builder import build_agent_context
 from app.infrastructure.db.database import get_db_session
-from app.infrastructure.security.credential_manager import CredentialManager
 from app.infrastructure.db.models import ConversationModel, MessageModel
-from sqlalchemy import select, desc
+from app.infrastructure.security.credential_manager import CredentialManager
 
 router = APIRouter()
 
@@ -105,7 +104,7 @@ class ChatResponse(BaseModel):
 async def _generate_conversation_title(conversation_id: int, first_message: str):
     """Background task to generate a short title for a new conversation."""
     from app.infrastructure.db.database import AsyncSessionLocal
-    
+
     # Pre-emptive short title to display immediately
     short_preview = " ".join(first_message.split()[:4]) + "..."
     async with AsyncSessionLocal() as session:
@@ -115,10 +114,10 @@ async def _generate_conversation_title(conversation_id: int, first_message: str)
             if conv and not conv.title:
                 conv.title = short_preview
                 await session.commit()
-            
+
             from app.infrastructure.config import DEFAULT_LLM_MODEL
             # Request LLM for a better title
-            
+
             provider = DEFAULT_LLM_MODEL.split("/")[0] if "/" in DEFAULT_LLM_MODEL else DEFAULT_LLM_MODEL
             api_key = CredentialManager.get_api_key(f"sprintlogic_{provider}") or CredentialManager.get_api_key(provider)
             if not api_key:
@@ -140,7 +139,7 @@ async def _generate_conversation_title(conversation_id: int, first_message: str)
             title = response.choices[0].message.content.strip().strip('"').strip("'")
             if len(title) > 50:
                 title = title[:50]
-                
+
             conv = await session.get(ConversationModel, conversation_id)
             if conv:
                 conv.title = title
@@ -173,14 +172,14 @@ async def chat_with_ai(request: ChatRequest, background_tasks: BackgroundTasks, 
 
     # Build the messages list, optionally prepending the Sensei system prompt
     messages_to_send = list(request.messages)
-    
+
     # Save the latest user message to DB
     user_content = ""
     for m in reversed(messages_to_send):
         if m.get("role") == "user":
             user_content = str(m.get("content", ""))
             break
-            
+
     if conversation_id and user_content:
         user_msg = MessageModel(
             conversation_id=conversation_id,
@@ -189,13 +188,13 @@ async def chat_with_ai(request: ChatRequest, background_tasks: BackgroundTasks, 
         )
         session.add(user_msg)
         await session.commit()
-        
+
         if is_new_conversation:
             background_tasks.add_task(_generate_conversation_title, conversation_id, user_content)
 
     if request.is_sensei:
         injected_system = SENSEI_SYSTEM_PROMPT_TEMPLATE
-        
+
 
         ctx = request.editor_context
         # Context decoupling: Only inject the <EDITOR_CONTEXT> block if we actually have code.
@@ -229,7 +228,7 @@ async def chat_with_ai(request: ChatRequest, background_tasks: BackgroundTasks, 
                 yield f"data: {chunk_str}\n\n"
 
             yield f"data: {json.dumps({'is_done': True, 'conversation_id': conversation_id})}\n\n"
-            
+
             # Save the final AI response to DB
             if conversation_id and full_response:
                 from app.infrastructure.db.database import AsyncSessionLocal
@@ -241,7 +240,7 @@ async def chat_with_ai(request: ChatRequest, background_tasks: BackgroundTasks, 
                     )
                     bg_session.add(ai_msg)
                     await bg_session.commit()
-                    
+
         except Exception as e:
             error_str = str(e)
             if "429" in error_str or "RateLimitError" in error_str or "Quota exceeded" in error_str:
@@ -343,7 +342,7 @@ async def mentor_sensei(
 ):
     from app.infrastructure.config import DEFAULT_LLM_MODEL
     actual_model = DEFAULT_LLM_MODEL
-    
+
     provider = actual_model.split("/")[0] if "/" in actual_model else actual_model
     api_key = CredentialManager.get_api_key(f"sprintlogic_{provider}") or CredentialManager.get_api_key(provider)
     if not api_key:

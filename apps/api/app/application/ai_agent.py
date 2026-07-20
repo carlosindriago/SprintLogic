@@ -2,6 +2,7 @@ import difflib
 import hashlib
 import json
 import logging
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
@@ -16,7 +17,6 @@ from app.infrastructure.db.database import AsyncSessionLocal
 from app.infrastructure.db.models import AIMemoryModel, ContextSnippetModel, ProjectModel
 from app.infrastructure.security.credential_manager import CredentialManager
 
-import xml.etree.ElementTree as ET
 
 def _parse_dsml_tool_calls(buffer: str) -> list[dict[str, Any]]:
     """
@@ -29,7 +29,7 @@ def _parse_dsml_tool_calls(buffer: str) -> list[dict[str, Any]]:
                       .replace("</｜｜DSML｜｜invoke>", "</invoke>") \
                       .replace("<｜｜DSML｜｜parameter", "<parameter") \
                       .replace("</｜｜DSML｜｜parameter>", "</parameter>")
-    
+
     start_idx = clean_xml.find("<tool_calls>")
     end_idx = clean_xml.rfind("</tool_calls>")
     if start_idx != -1 and end_idx != -1:
@@ -45,7 +45,7 @@ def _parse_dsml_tool_calls(buffer: str) -> list[dict[str, Any]]:
             params = {}
             for param in invoke.findall('parameter'):
                 params[param.get('name')] = param.text
-            
+
             tools.append({
                 "id": f"call_dsml_{uuid4().hex[:8]}",
                 "type": "function",
@@ -744,12 +744,12 @@ class AIAgent:
         root = await self._get_project_root()
         if not root:
             return ""
-            
+
         base_prompt = (
             f"Eres SprintLogic AI (El Crisol), el arquitecto de software socrático integrado en el IDE del usuario.\n"
             f"Proyecto alojado en: {root}\n\n"
         )
-        
+
         try:
             from app.infrastructure.ai.project_scanner import get_project_awareness_xml
             awareness_xml = await get_project_awareness_xml(root)
@@ -759,22 +759,23 @@ class AIAgent:
             pass
 
         base_prompt += (
-            f"=== IRON PROMPT (MANDATO SOCRÁTICO) ===\n"
-            f"1. NO eres un asistente sumiso. Eres un compañero de debate implacable.\n"
-            f"2. Exige justificaciones para decisiones arquitectónicas. Obliga al usuario a pensar en Edge Cases.\n"
-            f"3. Eres el Enforcer de TDD y Docs-as-Code. ANTES de escribir código de producción, "
-            f"debes exigir o proponer la creación de un TASK-spec usando la herramienta `generate_task_spec`.\n"
-            f"4. Si el usuario toma una decisión estructural importante, usa `generate_adr` para proponer un registro.\n"
-            f"5. NO devuelvas bloques de texto gigantes con Markdown de tareas. Usa SIEMPRE las herramientas `generate_task_spec` "
-            f"y `generate_adr` para proponer borradores que el usuario revisará en su editor interactivo.\n"
-            f"6. Si usas herramientas de lectura y no hay resultados, busca alternativas. NUNCA digas 'No memories found'."
+            "=== IRON PROMPT (MANDATO SOCRÁTICO) ===\n"
+            "1. NO eres un asistente sumiso. Eres un compañero de debate implacable.\n"
+            "2. Exige justificaciones para decisiones arquitectónicas. Obliga al usuario a pensar en Edge Cases.\n"
+            "3. Eres el Enforcer de TDD y Docs-as-Code. ANTES de escribir código de producción, "
+            "debes exigir o proponer la creación de un TASK-spec usando la herramienta `generate_task_spec`.\n"
+            "4. Si el usuario toma una decisión estructural importante, usa `generate_adr` para proponer un registro.\n"
+            "5. NO devuelvas bloques de texto gigantes con Markdown de tareas. Usa SIEMPRE las herramientas `generate_task_spec` "
+            "y `generate_adr` para proponer borradores que el usuario revisará en su editor interactivo.\n"
+            "6. Si usas herramientas de lectura y no hay resultados, busca alternativas. NUNCA digas 'No memories found'."
         )
-        
+
         # Pipeline Telescópico - Inyectar Developer RAG
         if user_query:
             try:
-                from app.infrastructure.security.credential_manager import CredentialManager
                 import litellm
+
+                from app.infrastructure.security.credential_manager import CredentialManager
                 api_key = CredentialManager.get_api_key("gemini")
                 if api_key:
                     embed_resp = await litellm.aembedding(
@@ -783,34 +784,35 @@ class AIAgent:
                         api_key=api_key
                     )
                     query_vector = embed_resp.data[0]["embedding"]
-                    
-                    from app.infrastructure.db.models import DeveloperInsightModel
-                    from sqlalchemy.future import select
+
                     import numpy as np
-                    
+                    from sqlalchemy.future import select
+
+                    from app.infrastructure.db.models import DeveloperInsightModel
+
                     try:
                         async with AsyncSessionLocal() as insight_session:
                             result = await insight_session.execute(select(DeveloperInsightModel))
                             all_insights = result.scalars().all()
-                            
+
                             insight = None
                             if all_insights:
                                 q_vec = np.array(query_vector, dtype=np.float32)
                                 db_matrix = np.vstack([
-                                    np.frombuffer(i.embedding_blob, dtype=np.float32) 
+                                    np.frombuffer(i.embedding_blob, dtype=np.float32)
                                     for i in all_insights
                                 ])
                                 similarities = np.dot(db_matrix, q_vec)
                                 best_index = np.argmax(similarities)
                                 best_score = similarities[best_index]
-                                
+
                                 if best_score > 0.75:
-                                    insight_obj = all_insights[best_index]
+                                    insight_obj = all_insights[int(best_index)]
                                     insight = {
                                         "sintoma": insight_obj.sintoma,
                                         "solucion": insight_obj.solucion
                                     }
-                    except Exception as inner_e:
+                    except Exception:
                         insight = None
                     if insight:
                         base_prompt += (
@@ -920,7 +922,7 @@ class AIAgent:
                 if m.get("role") == "user":
                     user_query = str(m.get("content", ""))
                     break
-                    
+
             system_msg = await self._build_system_message(user_query)
             if system_msg:
                 existing_system = next((m.get("content", "") for m in messages if m.get("role") == "system"), "")
@@ -935,7 +937,7 @@ class AIAgent:
                             system_msg += f"\n\n{match.group(0)}"
                     else:
                         system_msg += f"\n\n{existing_system}"
-                        
+
                 messages = [{"role": "system", "content": system_msg}] + [
                     m for m in messages if m.get("role") != "system"
                 ]
@@ -969,7 +971,7 @@ class AIAgent:
 
                 full_content = ""
                 tool_calls_accum: list[dict[str, Any]] = []
-                
+
                 # DSML Interceptor State
                 yield_buffer = ""
                 xml_accumulator = ""
@@ -978,7 +980,7 @@ class AIAgent:
 
                 async for chunk in response:
                     delta = chunk.choices[0].delta
-                    
+
                     if getattr(delta, "tool_calls", None):
                         # Standard OpenAI/LiteLLM tool calls
                         if not tool_calls_accum:
@@ -1008,23 +1010,23 @@ class AIAgent:
                     elif delta.content:
                         text_chunk = delta.content
                         full_content += text_chunk
-                        
+
                         if is_intercepting_tool:
                             xml_accumulator += text_chunk
                             # We are intercepting. Check if we hit the end tag.
                             if "</｜｜DSML｜｜tool_calls>" in xml_accumulator or "</tool_calls>" in xml_accumulator or "</invoke>" in xml_accumulator:
                                 parsed_tools = _parse_dsml_tool_calls(xml_accumulator)
                                 tool_calls_accum.extend(parsed_tools)
-                                
+
                                 # Reset interceptor for the rest of the stream (if any)
                                 is_intercepting_tool = False
                                 xml_accumulator = ""
                             continue
-                            
+
                         yield_buffer += text_chunk
-                        
+
                         is_potential_tool = False
-                        
+
                         # Check if yield_buffer contains any full prefix or a partial suffix (lookahead)
                         for prefix in trigger_prefixes:
                             if prefix in yield_buffer:
@@ -1037,21 +1039,21 @@ class AIAgent:
                                 safe_text = yield_buffer[:idx]
                                 if safe_text:
                                     yield json.dumps({"type": "message_chunk", "text": safe_text})
-                                
+
                                 yield_buffer = ""
                                 yield json.dumps({"type": "agent_state", "status": "Preparando herramientas..."})
                                 break
-                                
+
                             # Check for partial suffix match (lookahead)
                             # Only check prefixes up to length-1 since full match is caught above
                             for i in range(1, len(prefix)):
                                 if yield_buffer.endswith(prefix[:i]):
                                     is_potential_tool = True
                                     break
-                                    
+
                             if is_potential_tool:
                                 break
-                                
+
                         if not is_potential_tool and yield_buffer:
                             # Safe to yield
                             yield json.dumps({"type": "message_chunk", "text": yield_buffer})

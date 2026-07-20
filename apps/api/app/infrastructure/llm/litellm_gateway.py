@@ -5,6 +5,7 @@ from collections.abc import AsyncGenerator
 from typing import Any
 
 from litellm import acompletion  # type: ignore
+
 from app.infrastructure.config import DEFAULT_LLM_MODEL
 from app.infrastructure.security.credential_manager import CredentialManager
 
