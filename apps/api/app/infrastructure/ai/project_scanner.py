@@ -4,10 +4,9 @@ import os
 import time
 from pathlib import Path
 
-from typing import Dict, Tuple
 # Cache to avoid hammering the disk
 # Key: project_path, Value: (timestamp, xml_result)
-_SCAN_CACHE: Dict[str, Tuple[float, str]] = {}
+_SCAN_CACHE: dict[str, tuple[float, str]] = {}
 _CACHE_TTL_SECONDS = 60
 
 
