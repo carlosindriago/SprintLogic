@@ -23,7 +23,6 @@ logging.basicConfig(
 
 import os
 import signal
-import threading
 from concurrent.futures import ProcessPoolExecutor
 from contextlib import asynccontextmanager
 
@@ -48,12 +47,12 @@ async def lifespan(app: FastAPI):
     try:
         app.state.process_pool = ProcessPoolExecutor(max_workers=2)
 
+        from app.application.insight_worker import run_insight_worker_loop
         from app.application.telemetry_daemon import TelemetryDaemon
         from app.infrastructure.events.event_bus import global_event_bus
-        from app.application.insight_worker import run_insight_worker_loop
 
         app.state.telemetry_daemon = TelemetryDaemon(global_event_bus)
-        
+
         # Iniciar REM Sleep / Insight Worker
         import asyncio
         app.state.insight_worker_task = asyncio.create_task(run_insight_worker_loop())
@@ -61,21 +60,22 @@ async def lifespan(app: FastAPI):
         import traceback
         traceback.print_exc(file=sys.stderr)
         raise e
-    
+
     yield
-    
+
     # Shutdown
     import asyncio
+
     from app.application.insight_worker import signal_shutdown
     signal_shutdown()
-    
+
     try:
         if hasattr(app.state, "insight_worker_task"):
             await asyncio.wait_for(app.state.insight_worker_task, timeout=10.0)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         print("Insight worker shutdown timed out, cancelling.")
         app.state.insight_worker_task.cancel()
-        
+
     app.state.process_pool.shutdown(wait=True)
 
 
@@ -158,20 +158,21 @@ if __name__ == "__main__":
     import multiprocessing
     import socket
     import sys
+
     import uvicorn
 
     # When running via PyInstaller, multiprocessing needs this to prevent fork bombs
     multiprocessing.freeze_support()
-    
+
     # Dynamic Port Allocation (No TOCTOU)
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     # Bind to port 0 to let the OS assign a free ephemeral port
     sock.bind(("127.0.0.1", 0))
     assigned_port = sock.getsockname()[1]
-    
+
     # The IPC handshake signature for Tauri
     print(f"[SPRINTLOGIC_READY::{assigned_port}]", flush=True)
-    
+
     # Pass the socket's file descriptor directly to Uvicorn
     # This prevents anyone from stealing the port between check and use
     config = uvicorn.Config(app, fd=sock.fileno())

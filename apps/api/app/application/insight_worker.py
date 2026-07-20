@@ -1,16 +1,15 @@
 import asyncio
 import json
 import logging
-from typing import Any
-
-import litellm
-from sqlalchemy import select, asc, update
-from sqlalchemy.ext.asyncio import AsyncSession
 import uuid
 
+import litellm
 import numpy as np
+from sqlalchemy import asc, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.infrastructure.db.database import AsyncSessionLocal
-from app.infrastructure.db.models import ConversationModel, MessageModel, DeveloperInsightModel
+from app.infrastructure.db.models import ConversationModel, DeveloperInsightModel, MessageModel
 from app.infrastructure.security.credential_manager import CredentialManager
 
 logger = logging.getLogger(__name__)
@@ -28,7 +27,7 @@ async def run_insight_worker_loop():
     Extracts 'pepitas de sabiduría' (Developer Insights) from past unmapped conversations.
     """
     logger.info("SprintLogic REM Sleep: Insight Worker started.")
-    
+
     while not shutdown_event.is_set():
         try:
             # Sleep in small increments to allow responsive shutdown
@@ -36,7 +35,7 @@ async def run_insight_worker_loop():
                 if shutdown_event.is_set():
                     break
                 await asyncio.sleep(1)
-                
+
             if shutdown_event.is_set():
                 break
 
@@ -44,7 +43,7 @@ async def run_insight_worker_loop():
                 # Fetch conversations that have not been processed
                 stmt = (
                     select(ConversationModel)
-                    .where(ConversationModel.insight_extracted == False)
+                    .where(ConversationModel.insight_extracted.is_(False))
                     .order_by(asc(ConversationModel.created_at))
                     .limit(5)
                 )
@@ -72,7 +71,7 @@ async def run_insight_worker_loop():
 
         except Exception as e:
             logger.error(f"Error in Insight Worker: {e}")
-            
+
     logger.info("Insight Worker gracefully shutdown.")
 
 async def _extract_and_save_insight(session: AsyncSession, conv: ConversationModel, messages: list[MessageModel]):
@@ -81,7 +80,7 @@ async def _extract_and_save_insight(session: AsyncSession, conv: ConversationMod
         chat_text = ""
         for m in messages:
             chat_text += f"[{m.role.upper()}]: {m.content}\n"
-            
+
         system_prompt = (
             "Eres el Consolidator de Memoria (Insight Worker) de SprintLogic. "
             "Tu objetivo es leer un hilo de conversación de un desarrollador y extraer una única 'Pepita de Sabiduría'. "
@@ -94,11 +93,11 @@ async def _extract_and_save_insight(session: AsyncSession, conv: ConversationMod
             "}\n"
             "Si la conversación no contiene nada valioso (charlas genéricas), devuelve un JSON vacío: {}."
         )
-        
+
         api_key = CredentialManager.get_api_key("gemini")
         if not api_key:
             return
-            
+
         response = await litellm.acompletion(
             model="gemini/gemini-1.5-flash",
             messages=[
@@ -108,25 +107,25 @@ async def _extract_and_save_insight(session: AsyncSession, conv: ConversationMod
             api_key=api_key,
             response_format={"type": "json_object"}
         )
-        
+
         raw_content = response.choices[0].message.content
         if not raw_content:
             return
-            
+
         data = json.loads(raw_content)
         if "sintoma" not in data or "solucion" not in data:
             return # Empty or invalid JSON means no valuable insight
-            
+
         # Get embedding for semantic search
         # We concatenate the symptom and solution to create a strong semantic vector
         embed_text = f"Síntoma: {data['sintoma']} | Solución: {data['solucion']}"
-        
+
         embed_resp = await litellm.aembedding(
             model="gemini/text-embedding-004",
             input=[embed_text],
             api_key=api_key
         )
-        
+
         embedding_vector = embed_resp.data[0]["embedding"]
 
         # Save to SQLite using DeveloperInsightModel
@@ -142,13 +141,13 @@ async def _extract_and_save_insight(session: AsyncSession, conv: ConversationMod
         )
 
         session.add(insight)
-        
+
         # Mark as processed in SQLite
         conv.insight_extracted = True
         session.add(conv)
         await session.commit()
-        
+
         logger.info(f"Insight consolidado para la conversación {conv.id}")
-        
+
     except Exception as e:
         logger.error(f"Fallo consolidando insight: {e}")

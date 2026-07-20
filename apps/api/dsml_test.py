@@ -1,5 +1,6 @@
-import xml.etree.ElementTree as ET
 import uuid
+import xml.etree.ElementTree as ET
+
 
 def _parse_dsml_tool_calls(buffer: str):
     clean_xml = buffer.replace("<｜｜DSML｜｜tool_calls>", "<tool_calls>") \
@@ -8,7 +9,7 @@ def _parse_dsml_tool_calls(buffer: str):
                       .replace("</｜｜DSML｜｜invoke>", "</invoke>") \
                       .replace("<｜｜DSML｜｜parameter", "<parameter") \
                       .replace("</｜｜DSML｜｜parameter>", "</parameter>")
-    
+
     # In case there is text before or after the tags, we want to extract just the XML part.
     start_idx = clean_xml.find("<tool_calls>")
     end_idx = clean_xml.rfind("</tool_calls>")
@@ -25,7 +26,7 @@ def _parse_dsml_tool_calls(buffer: str):
             params = {}
             for param in invoke.findall('parameter'):
                 params[param.get('name')] = param.text
-            
+
             import json
             tools.append({
                 "id": f"call_dsml_{uuid.uuid4().hex[:8]}",

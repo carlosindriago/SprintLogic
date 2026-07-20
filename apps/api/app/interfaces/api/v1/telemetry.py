@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel
@@ -26,7 +26,7 @@ async def ingest_telemetry_ping(
     Ingests a telemetry ping from the IDE containing absolute window times
     and the accumulated time buckets. Optionally scoped to a project.
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     try:
         await session.execute(
             text(

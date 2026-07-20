@@ -201,7 +201,7 @@ async def update_project(
     project = await repo.update(project_uuid, name=request.name, path=request.path)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-        
+
     await session.commit()
 
     return ProjectResponse.model_validate(project, from_attributes=True)
@@ -335,6 +335,7 @@ def get_process_pool(request: Request) -> ProcessPoolExecutor:
 
 from app.infrastructure.config import DEFAULT_LLM_MODEL
 
+
 class AnalyzeGraphRequest(BaseModel):
     model: str | None = None
     fallback_model: str | None = None
@@ -351,8 +352,8 @@ async def analyze_project_graph(
         project_uuid = UUID(project_id)
         repo = SQLAlchemyProjectRepository(session)
         project = await repo.get_project(project_uuid)
-        
-        actual_model = request.model or DEFAULT_LLM_MODEL
+
+        # actual_model is not used in get_project
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
     except ValueError:
@@ -1592,7 +1593,6 @@ Debes responder ÚNICAMENTE con un objeto JSON válido con la siguiente estructu
 }}"""
 
     from app.infrastructure.ai.llm_gateway import LiteLLMGateway
-    from app.infrastructure.config import DEFAULT_LLM_MODEL
 
     actual_model = request.model or DEFAULT_LLM_MODEL
     llm_gateway = LiteLLMGateway()
