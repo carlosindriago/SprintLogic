@@ -807,7 +807,7 @@ class AIAgent:
                                 best_score = similarities[best_index]
 
                                 if best_score > 0.75:
-                                    insight_obj = all_insights[best_index]
+                                    insight_obj = all_insights[int(best_index)]
                                     insight = {
                                         "sintoma": insight_obj.sintoma,
                                         "solucion": insight_obj.solucion

@@ -112,7 +112,12 @@ class ASTNodeMapModel(Base):
     fqn: Mapped[str] = mapped_column(String(1024), nullable=False, index=True)
     node_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
 
-
+class ASTVectorModel(Base):
+    __tablename__ = "vec_ast_nodes"
+    
+    node_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    content: Mapped[str] = mapped_column(String, nullable=False)
+    embedding: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
 
 
 
