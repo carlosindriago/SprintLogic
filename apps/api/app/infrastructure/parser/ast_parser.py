@@ -222,7 +222,7 @@ def resolve_import_edges(
                             )
                         )
             else:
-                normalized_imp = imp.replace(".", "/").lstrip("./@")
+                normalized_imp = imp.replace("\\", "/").replace(".", "/").lstrip("./@")
                 if not normalized_imp:
                     continue
 

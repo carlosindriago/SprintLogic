@@ -108,13 +108,80 @@ class JavaAdapter(GenericTreeSitterAdapter):
             identifier_types=("identifier",)
         )
 
-class PhpAdapter(GenericTreeSitterAdapter):
-    def __init__(self):
-        super().__init__(
-            class_types=("class_declaration",),
-            method_types=("method_declaration", "function_declaration"),
-            identifier_types=("name",)
-        )
+class PhpAdapter(LanguageAdapter):
+    def extract_nodes(self, tree, code_bytes: bytes, file_path: str) -> tuple[list[ParsedNode], set[str]]:
+        parsed_nodes = []
+        imports = set()
+
+        class_like_types = {
+            "class_declaration",
+            "interface_declaration",
+            "trait_declaration",
+            "enum_declaration",
+        }
+        method_like_types = {
+            "method_declaration",
+            "function_definition",
+            "function_declaration",
+        }
+
+        def traverse(node, current_fqn: str):
+            if node.type == "namespace_use_declaration":
+                for child in node.children:
+                    if child.type == "namespace_use_clause":
+                        for subchild in child.children:
+                            if subchild.type in ("qualified_name", "name"):
+                                imp_text = code_bytes[subchild.start_byte:subchild.end_byte].decode("utf-8")
+                                if imp_text:
+                                    imports.add(imp_text)
+            elif "require" in node.type or "include" in node.type:
+                for child in node.children:
+                    if "string" in child.type:
+                        imp_text = code_bytes[child.start_byte:child.end_byte].decode("utf-8").strip("\"'")
+                        if imp_text:
+                            imports.add(imp_text)
+
+            node_type = None
+            name = None
+            fqn = current_fqn
+
+            if node.type in class_like_types:
+                node_type = "class"
+                for child in node.children:
+                    if child.type == "name":
+                        name = code_bytes[child.start_byte:child.end_byte].decode("utf-8")
+                        break
+                if name:
+                    fqn = f"{current_fqn}::[{node_type}]{name}"
+
+            elif node.type in method_like_types:
+                node_type = "def"
+                for child in node.children:
+                    if child.type == "name":
+                        name = code_bytes[child.start_byte:child.end_byte].decode("utf-8")
+                        break
+                if name:
+                    fqn = f"{current_fqn}::[{node_type}]{name}"
+
+            if name and node_type:
+                content = code_bytes[node.start_byte:node.end_byte].decode("utf-8")
+                node_hash = compute_ast_hash(content)
+                parsed_nodes.append(ParsedNode(
+                    fqn=fqn,
+                    node_type=node_type,
+                    name=name,
+                    start_line=node.start_point[0] + 1,
+                    end_line=node.end_point[0] + 1,
+                    content=content,
+                    hash=node_hash,
+                    parent_fqn=current_fqn
+                ))
+
+            for child in node.children:
+                traverse(child, fqn)
+
+        traverse(tree.root_node, file_path)
+        return parsed_nodes, imports
 
 class GoAdapter(GenericTreeSitterAdapter):
     def __init__(self):
