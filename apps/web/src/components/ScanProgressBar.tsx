@@ -184,27 +184,29 @@ export const ScanProgressBar: React.FC<ScanProgressBarProps> = ({ projectId }) =
     return (
       <div className="flex items-center gap-2 bg-slate-900 border border-slate-700 px-3 py-1.5 rounded-full shadow-lg pointer-events-auto">
         {isFinished ? (
-          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+          <CheckCircle2 aria-hidden="true" className="w-4 h-4 text-emerald-400" />
         ) : (
-          <Loader2 className="w-4 h-4 animate-spin text-blue-400" />
+          <Loader2 aria-hidden="true" className="w-4 h-4 animate-spin text-blue-400" />
         )}
         <span className="text-xs font-mono text-slate-300 w-16 truncate text-right">
           {isIndeterminate ? '…' : `${currentPercentage}%`}
         </span>
         <button
+          aria-label="Expand scan progress"
           onClick={() => toggleMinimize(projectId)}
           className="ml-1 hover:bg-slate-800 p-1 rounded-full text-slate-400 hover:text-white transition-colors"
           title="Expand"
         >
-          <Maximize2 className="w-3.5 h-3.5" />
+          <Maximize2 aria-hidden="true" className="w-3.5 h-3.5" />
         </button>
         {!isFinished && (
           <button
+            aria-label="Cancel scan"
             onClick={() => requestAbort(projectId)}
             className="hover:bg-slate-800 p-1 rounded-full text-red-400 hover:text-red-300 transition-colors"
             title="Cancel scan"
           >
-            <XCircle className="w-3.5 h-3.5" />
+            <XCircle aria-hidden="true" className="w-3.5 h-3.5" />
           </button>
         )}
       </div>
@@ -218,9 +220,9 @@ export const ScanProgressBar: React.FC<ScanProgressBarProps> = ({ projectId }) =
       <div className="flex justify-between items-start gap-2">
         <div className="flex items-center gap-2 min-w-0">
           {isFinished ? (
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <CheckCircle2 aria-hidden="true" className="w-4 h-4 text-emerald-400 shrink-0" />
           ) : (
-            <Loader2 className="w-4 h-4 animate-spin text-blue-400 shrink-0" />
+            <Loader2 aria-hidden="true" className="w-4 h-4 animate-spin text-blue-400 shrink-0" />
           )}
           <span className="text-sm font-mono text-slate-300 truncate">
             {statusText}
@@ -228,19 +230,21 @@ export const ScanProgressBar: React.FC<ScanProgressBarProps> = ({ projectId }) =
         </div>
         <div className="flex items-center gap-1 shrink-0">
           <button
+            aria-label="Minimize scan progress"
             onClick={() => toggleMinimize(projectId)}
             className="hover:bg-slate-800 p-1.5 rounded text-slate-400 hover:text-white transition-colors"
             title="Minimize"
           >
-            <Minimize2 className="w-4 h-4" />
+            <Minimize2 aria-hidden="true" className="w-4 h-4" />
           </button>
           {!isFinished && (
             <button
+              aria-label="Cancel scan"
               onClick={() => requestAbort(projectId)}
               className="hover:bg-slate-800 p-1.5 rounded text-red-400 hover:text-red-300 transition-colors"
               title="Cancel scan"
             >
-              <XCircle className="w-4 h-4" />
+              <XCircle aria-hidden="true" className="w-4 h-4" />
             </button>
           )}
         </div>
