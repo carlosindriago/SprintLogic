@@ -60,6 +60,9 @@ const getSafeTime = (nodeRef: unknown): number => {
   return typeof value === 'number' ? value : 0;
 };
 
+// Normalize any label casing to TitleCase ("file" -> "File") — must match activeTypes set values exactly.
+const toTitleCase = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+
 const MODULE_COLORS = [
   "#3b82f6", "#ef4444", "#10b981", "#f59e0b", "#8b5cf6",
   "#ec4899", "#06b6d4", "#f97316", "#84cc16", "#6366f1",
@@ -115,6 +118,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
   const [focusNode, setFocusNode] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [showCycles, setShowCycles] = useState(false);
+  // Canonical label form is TitleCase ("File", "Class", "Function", "Interface") — matches backend values exactly.
   const [activeTypes, setActiveTypes] = useState<Set<string>>(new Set(["File", "Class", "Function", "Interface"]));
 
   const [enableFlow, setEnableFlow] = useState(false);
@@ -550,10 +554,10 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     let nodes = graphData.nodes.map((n: GraphNode) => ({ ...n }));
     let links = graphData.links.map((l: GraphEdge) => ({ ...l }));
 
-    // Filter by node types
+    // Filter by node types — compare TitleCase label against the TitleCase activeTypes set
     nodes = nodes.filter((n: GraphNode) => {
-      const upperLabel = n.label ? String(n.label).toUpperCase() : "";
-      return activeTypes.has(upperLabel);
+      const titleLabel = n.label ? toTitleCase(String(n.label)) : "";
+      return activeTypes.has(titleLabel);
     });
 
     if (focusNode) {
