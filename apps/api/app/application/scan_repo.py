@@ -122,12 +122,20 @@ class ScanCodebaseUseCase:
                     throttle_ms=100
                 )
 
+                # Force yield to the event loop to keep SSE connection alive
+                if parsed_count % 10 == 0:
+                    await asyncio.sleep(0)
+
             base_dir = Path(project_path) if project_path else Path(".")
             file_paths = [n.file_path for n in all_nodes if n.label == NodeLabel.FILE]
 
-            all_edges.extend(resolve_import_edges(project_id, file_imports, file_paths, base_dir))
+            # Run heavy synchronous operations in a thread pool to avoid blocking the event loop
+            resolved_edges = await asyncio.to_thread(
+                resolve_import_edges, project_id, file_imports, file_paths, base_dir
+            )
+            all_edges.extend(resolved_edges)
 
-            deduped_edges = dedupe_edges(all_edges)
+            deduped_edges = await asyncio.to_thread(dedupe_edges, all_edges)
 
             await self.graph_repo.clear_by_project(project_id)
             await self.graph_repo.save_nodes(all_nodes)
