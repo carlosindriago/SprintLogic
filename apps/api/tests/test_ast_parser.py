@@ -46,3 +46,31 @@ def my_function():
 
     for edge_type in edge_map.values():
         assert edge_type == EdgeType.CONTAINS
+
+
+def test_extract_nodes_from_php_code():
+    code = b"""<?php
+namespace App\\Http\\Controllers;
+
+use App\\Models\\User;
+use App\\Services\\PaymentService;
+
+class UserController extends Controller
+{
+    public function index()
+    {
+        return User::all();
+    }
+}
+"""
+    import uuid
+    project_id = uuid.uuid4()
+    file_path = "app/Http/Controllers/UserController.php"
+    nodes, edges, imports = extract_nodes_from_code(project_id, file_path, code, ".php")
+
+    assert len(nodes) == 3  # File, UserController, index
+    class_node = next(n for n in nodes if n.label == NodeLabel.CLASS)
+    assert class_node.name == "UserController"
+    assert "App\\Models\\User" in imports
+    assert "App\\Services\\PaymentService" in imports
+
