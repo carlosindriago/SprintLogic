@@ -6,7 +6,7 @@ import { getProjectGraph, rescanProject, ApiError } from "@/lib/api";
 import { API_BASE_URL } from "@/lib/api";
 import { GraphData, GraphNode, GraphEdge } from "@/types";
 import { LinkObject, NodeObject } from "react-force-graph-2d";
-import { graphTheme } from "@/lib/graph-theme";
+import { graphTheme, extColorHash, bloomGlow } from "@/lib/graph-theme";
 import { Search, RotateCcw, ZoomIn, ZoomOut, Maximize, Brain, Play, Pause, Zap, ZapOff, ScanSearch, FileCode, RefreshCw } from "lucide-react";
 import { useTabsStore } from "../store/tabsStore";
 import { useLLMConfigStore } from "../store/llmConfigStore";
@@ -63,43 +63,42 @@ const getSafeTime = (nodeRef: unknown): number => {
 // Normalize any label casing to TitleCase ("file" -> "File") — must match activeTypes set values exactly.
 const toTitleCase = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 
-const MODULE_COLORS = [
-  "#3b82f6", "#ef4444", "#10b981", "#f59e0b", "#8b5cf6",
-  "#ec4899", "#06b6d4", "#f97316", "#84cc16", "#6366f1",
-  "#14b8a6", "#e11d48", "#a855f7", "#0ea5e9", "#d946ef",
-];
+// ── Visual helpers ────────────────────────────────────────────────────
 
-const CONTAINER_PREFIXES = ["src", "app", "lib", "pkg", "internal", "packages"];
+// Draw a rounded square centered at (cx, cy) with half-size r
+function drawRoundedSquare(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number) {
+  const rad = r * 0.35;
+  const x = cx - r, y = cy - r, w = r * 2, h = r * 2;
+  ctx.beginPath();
+  ctx.moveTo(x + rad, y);
+  ctx.lineTo(x + w - rad, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + rad);
+  ctx.lineTo(x + w, y + h - rad);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - rad, y + h);
+  ctx.lineTo(x + rad, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - rad);
+  ctx.lineTo(x, y + rad);
+  ctx.quadraticCurveTo(x, y, x + rad, y);
+  ctx.closePath();
+}
 
-const moduleColorMap = new Map<string, string>();
-let nextColorIndex = 0;
+// Draw a diamond (rotated square) centered at (cx, cy) with half-size r
+function drawDiamond(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number) {
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - r);
+  ctx.lineTo(cx + r, cy);
+  ctx.lineTo(cx, cy + r);
+  ctx.lineTo(cx - r, cy);
+  ctx.closePath();
+}
 
-function getModuleColor(folder: string): string {
-  if (!folder || folder === "/") return "#6b7280";
-  const parts = folder.split("/").filter(Boolean);
-
-  let startIdx = 0;
-  for (let i = 0; i < parts.length; i++) {
-    if (CONTAINER_PREFIXES.includes(parts[i])) {
-      startIdx = i + 1;
-    }
-  }
-
-  const significantParts = parts.slice(startIdx);
-  if (significantParts.length === 0) return "#6b7280";
-
-  const modulePath = significantParts.length >= 2
-    ? significantParts.slice(0, 2).join("/")
-    : significantParts[0];
-
-  if (moduleColorMap.has(modulePath)) {
-    return moduleColorMap.get(modulePath)!;
-  }
-
-  const color = MODULE_COLORS[nextColorIndex % MODULE_COLORS.length];
-  moduleColorMap.set(modulePath, color);
-  nextColorIndex++;
-  return color;
+// Draw a triangle pointing up centered at (cx, cy) with half-size r
+function drawTriangle(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number) {
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - r);
+  ctx.lineTo(cx + r * 0.87, cy + r * 0.5);
+  ctx.lineTo(cx - r * 0.87, cy + r * 0.5);
+  ctx.closePath();
 }
 
 interface GraphSceneProps {
@@ -197,24 +196,18 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     cutoffTimeRef.current = timeRange.min + (timeRange.max - timeRange.min) * animProgress;
   }, [timeRange, animProgress]);
 
+  // Extension-based color legend (each file extension gets its own HSL color)
   const moduleLegend = useMemo(() => {
-    const seen = new Set<string>();
-    const items: { name: string; color: string }[] = [];
+    const extMap = new Map<string, string>();
     for (const n of graphData.nodes) {
-      const folder = (n as ForceNode).folder;
-      if (!folder || folder === "/") continue;
-      const parts = folder.split("/").filter(Boolean);
-      let startIdx = 0;
-      for (let i = 0; i < parts.length; i++) {
-        if (CONTAINER_PREFIXES.includes(parts[i])) startIdx = i + 1;
-      }
-      const key = parts.slice(startIdx, startIdx + 2).join("/") || parts[0] || folder;
-      if (!seen.has(key)) {
-        seen.add(key);
-        items.push({ name: key, color: getModuleColor(folder) });
+      const node = n as ForceNode;
+      if (node.label !== "File") continue;
+      const ext = node.name?.split(".").pop()?.toLowerCase() || "";
+      if (ext && !extMap.has(ext)) {
+        extMap.set(ext, extColorHash(ext));
       }
     }
-    return items;
+    return Array.from(extMap.entries()).map(([name, color]) => ({ name, color }));
   }, [graphData]);
 
   useEffect(() => {
@@ -590,6 +583,8 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     const id = n.id as string;
     const label = n.label as string;
     const name = n.name as string;
+    const nx = n.x || 0;
+    const ny = n.y || 0;
 
     globalScaleRef.current = globalScale;
 
@@ -597,147 +592,198 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     if (lowerSearchQuery && !name.toLowerCase().includes(lowerSearchQuery)) return;
 
     const progress = animProgressRef.current;
-
-    // SENSEI FIX: Usamos getSafeTime para la visibilidad temporal del nodo
     const bTime = getSafeTime(n);
     if (progress < 1 && timeRange) {
       const cutoff = timeRange.min + (timeRange.max - timeRange.min) * progress;
-      if (bTime > cutoff) return; // Si no ha nacido, no lo dibujamos
+      if (bTime > cutoff) return;
     }
 
-    let radius = 3;
-    let color = graphTheme.unknown;
-
+    // ── Color resolution ─────────────────────────────────────
     const degree = n.in_degree || 0;
-    const degreeRadius = 1 + Math.log2(1 + degree) * 1.6;
+    const outDegree = n.out_degree || 0;
+    const degreeRadius = 1 + Math.log2(1 + degree) * 1.8;
 
-    const moduleColor = getModuleColor(n.folder || "");
+    let radius = 4;
+    let color = graphTheme.unknown;
+    let glowColor = "rgba(148, 163, 184, 0.4)";
 
     if (label === "File") {
-      radius = Math.max(4, degreeRadius);
-      color = moduleColor;
+      const ext = name.split(".").pop()?.toLowerCase() || "";
+      color = extColorHash(ext);
+      glowColor = bloomGlow(color, 0.45);
+      radius = Math.max(3.5, degreeRadius * 0.9);
     } else if (label === "Class") {
+      color = graphTheme.class;
+      glowColor = graphTheme.glowClass;
       radius = Math.max(5, degreeRadius);
-      color = moduleColor;
     } else if (label === "Function") {
-      radius = Math.max(4, degreeRadius);
-      color = moduleColor;
+      color = graphTheme.function;
+      glowColor = graphTheme.glowFunction;
+      radius = Math.max(4, degreeRadius * 0.85);
     } else if (label === "Interface") {
+      color = graphTheme.interface;
+      glowColor = graphTheme.glowInterface;
       radius = Math.max(5, degreeRadius);
-      color = moduleColor;
     }
 
-    const outDegree = n.out_degree || 0;
-    const hasHighOutDegree = outDegree >= 10;
-
     const faded = isFaded(id);
-    const isZoomedOut = globalScale < 1.2;
+    const isZoomedOut = globalScale < 1.0;
+    const isActive = id === hoverNode || id === focusNode;
 
-    // ── SUPERNOVA EFFECT SENSEI FIX ──────────────────────────────────────────
+    // ── SUPERNOVA EFFECT (temporal birth flash) ──────────────────────────────
     let isSupernova = false;
     if (progress > 0 && progress < 1 && timeRange && !faded) {
       const currentCutoff = timeRange.min + (timeRange.max - timeRange.min) * progress;
       const age = currentCutoff - bTime;
-      const supernovaWindow = (timeRange.max - timeRange.min) * 0.05; // 5% ventana
-
+      const supernovaWindow = (timeRange.max - timeRange.min) * 0.05;
       isSupernova = age >= 0 && age <= supernovaWindow;
     }
 
     if (isSupernova) {
       const pulse = Math.sin(Date.now() / 200) * 0.3 + 0.7;
-      const novaRadius = radius * (1.8 + pulse * 0.8);
       ctx.save();
       ctx.beginPath();
-      ctx.arc(n.x || 0, n.y || 0, novaRadius, 0, 2 * Math.PI, false);
+      ctx.arc(nx, ny, radius * (2.2 + pulse * 0.8), 0, 2 * Math.PI);
       ctx.shadowColor = "white";
-      ctx.shadowBlur = 15 * pulse;
-      ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
-      ctx.globalAlpha = 0.8 * pulse;
+      ctx.shadowBlur = 22 * pulse;
+      ctx.fillStyle = "rgba(255, 255, 255, 0.92)";
+      ctx.globalAlpha = 0.85 * pulse;
       ctx.fill();
-      ctx.restore(); // Super importante: restaura el canvas para no manchar el resto
+      ctx.restore();
     }
     // ────────────────────────────────────────────────────────────────────────
 
-    if ((n.out_degree ?? 0) > 0 && !faded && !isZoomedOut) {
-      const pulse = Math.sin(Date.now() / 300) * 1.5;
-      const haloRadius = radius + 3.5 + pulse;
-      ctx.beginPath();
-      ctx.arc(n.x || 0, n.y || 0, haloRadius, 0, 2 * Math.PI, false);
-
-      let haloColor = "rgba(100, 116, 139, 0.12)";
-      if (color.startsWith('#')) {
-        const r = parseInt(color.slice(1, 3), 16);
-        const g = parseInt(color.slice(3, 5), 16);
-        const b = parseInt(color.slice(5, 7), 16);
-        haloColor = `rgba(${r}, ${g}, ${b}, 0.16)`;
-      }
-      ctx.fillStyle = haloColor;
-      ctx.fill();
-    }
-
+    ctx.save();
     ctx.globalAlpha = faded ? graphTheme.dimOpacity : 1;
 
+    // ── Bloom outer glow (signature luminous effect) ────────────────
+    if (!faded && !isZoomedOut) {
+      const bloomRadius = isActive ? radius * 2.6 : radius * 1.9;
+      ctx.save();
+      ctx.shadowColor = glowColor;
+      ctx.shadowBlur = isActive ? 18 : 10;
+      ctx.beginPath();
+      ctx.arc(nx, ny, bloomRadius * 0.5, 0, 2 * Math.PI);
+      ctx.fillStyle = glowColor;
+      ctx.globalAlpha = isActive ? 0.22 : 0.12;
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // ── File icons (devicon — drawn over bloom) ──────────────────────────────
     let isIconDrawn = false;
     if (label === "File") {
       const ext = name.split(".").pop()?.toLowerCase() || "";
       const img = iconImages.current[ext];
       if (img && img.complete && img.naturalWidth !== 0) {
-        const iconSize = radius * 2.5;
-        ctx.drawImage(img, (n.x || 0) - iconSize / 2, (n.y || 0) - iconSize / 2, iconSize, iconSize);
+        ctx.save();
+        ctx.shadowColor = glowColor;
+        ctx.shadowBlur = isActive ? 14 : 7;
+        const iconSize = radius * 2.6;
+        ctx.drawImage(img, nx - iconSize / 2, ny - iconSize / 2, iconSize, iconSize);
+        ctx.restore();
         isIconDrawn = true;
       }
     }
 
+    // ── Node shape by type ───────────────────────────────────────────────────
     if (!isIconDrawn) {
-      ctx.beginPath();
-      ctx.arc(n.x || 0, n.y || 0, radius, 0, 2 * Math.PI, false);
+      ctx.save();
+      // Bloom: inner core glows with shadowBlur
+      ctx.shadowColor = glowColor;
+      ctx.shadowBlur = isActive ? 16 : 8;
       ctx.fillStyle = color;
+
+      if (label === "Class") {
+        // Rounded square — structured, solid
+        drawRoundedSquare(ctx, nx, ny, radius);
+      } else if (label === "Interface") {
+        // Diamond — abstract, structural
+        drawDiamond(ctx, nx, ny, radius);
+      } else if (label === "Function") {
+        // Triangle — directional, active
+        drawTriangle(ctx, nx, ny, radius);
+      } else {
+        // Circle — file or unknown
+        ctx.beginPath();
+        ctx.arc(nx, ny, radius, 0, 2 * Math.PI);
+      }
       ctx.fill();
+
+      // Inner highlight (top-left specular — self-luminous feel)
+      if (!faded && !isZoomedOut) {
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = "rgba(255, 255, 255, 0.18)";
+        ctx.beginPath();
+        ctx.arc(nx - radius * 0.3, ny - radius * 0.3, radius * 0.35, 0, 2 * Math.PI);
+        ctx.fill();
+      }
+      ctx.restore();
     }
 
-    if (hasHighOutDegree && !faded && !isZoomedOut) {
+    // ── High out-degree ring (hot node indicator) ────────────────────────────
+    if (outDegree >= 10 && !faded && !isZoomedOut) {
+      ctx.save();
+      ctx.shadowColor = "rgba(251, 113, 133, 0.7)";
+      ctx.shadowBlur = 6;
       ctx.beginPath();
-      ctx.arc(n.x || 0, n.y || 0, radius + 1.5, 0, 2 * Math.PI, false);
-      ctx.strokeStyle = "rgba(239, 68, 68, 0.7)";
-      ctx.lineWidth = 1.5;
+      ctx.arc(nx, ny, radius + 2, 0, 2 * Math.PI);
+      ctx.strokeStyle = "rgba(251, 113, 133, 0.65)";
+      ctx.lineWidth = 1.2;
       ctx.stroke();
+      ctx.restore();
     }
 
-    if ((n.in_degree ?? 0) > 0 && (label === "Function" || label === "Interface" || radius < 5) && !faded && !isZoomedOut) {
-      const t = (Date.now() / 1200) % 1.0;
-      const rippleRadius = radius + t * 8;
-      const rippleOpacity = (1 - t) * 0.45;
-
+    // ── Ripple pulse on nodes with in-connections ────────────────────────────
+    if (degree > 0 && !faded && !isZoomedOut && (label === "Function" || label === "Interface")) {
+      const t = (Date.now() / 1400) % 1.0;
+      const rippleRadius = radius + t * 9;
       ctx.beginPath();
-      ctx.arc(n.x || 0, n.y || 0, rippleRadius, 0, 2 * Math.PI, false);
+      ctx.arc(nx, ny, rippleRadius, 0, 2 * Math.PI);
       ctx.strokeStyle = color;
-      ctx.lineWidth = 0.6;
-      ctx.globalAlpha = rippleOpacity;
+      ctx.lineWidth = 0.5;
+      ctx.globalAlpha = (1 - t) * 0.35;
       ctx.stroke();
       ctx.globalAlpha = faded ? graphTheme.dimOpacity : 1;
     }
 
+    // ── Hover tooltip ────────────────────────────────────────────────────────
     if (id === hoverNode && !faded) {
-       const info = [];
-       if (n.loc !== undefined) info.push(`LOC: ${n.loc}`);
-       if (n.in_degree !== undefined) info.push(`In: ${n.in_degree} | Out: ${n.out_degree}`);
-
-       if (info.length > 0) {
-         ctx.font = `10px Inter, sans-serif`;
-         ctx.fillStyle = "rgba(255,255,255,0.9)";
-         ctx.fillText(info.join(" - "), (n.x || 0), (n.y || 0) - radius - 6);
-       }
+      const info: string[] = [];
+      if (n.loc !== undefined) info.push(`LOC: ${n.loc}`);
+      if (n.in_degree !== undefined) info.push(`↓${n.in_degree}  ↑${n.out_degree}`);
+      if (info.length > 0) {
+        const text = info.join("  ·  ");
+        const fontSize = Math.max(8, 10 / globalScale);
+        ctx.font = `${fontSize}px "Inter", sans-serif`;
+        const tw = ctx.measureText(text).width;
+        const padding = 3;
+        const bx = nx - tw / 2 - padding;
+        const by = ny - radius - fontSize - 10;
+        ctx.fillStyle = "rgba(0,0,0,0.65)";
+        ctx.beginPath();
+        ctx.roundRect(bx, by, tw + padding * 2, fontSize + padding * 2, 3);
+        ctx.fill();
+        ctx.fillStyle = "rgba(255,255,255,0.92)";
+        ctx.textAlign = "center";
+        ctx.fillText(text, nx, by + fontSize + padding - 1);
+      }
     }
 
-    if (globalScale > 2 || id === focusNode || id === hoverNode) {
-      const fontSize = 12 / globalScale;
-      ctx.font = `${fontSize}px Inter, sans-serif`;
-      ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
+    // ── Node label (shown on zoom or focus) ──────────────────────────────────
+    if (globalScale > 2.5 || id === focusNode || id === hoverNode) {
+      const fontSize = Math.max(7, 11 / globalScale);
+      ctx.font = `${fontSize}px "Inter", sans-serif`;
       ctx.textAlign = "center";
-      ctx.fillText(name || "", n.x || 0, (n.y || 0) + radius + fontSize + 2);
+      // Text shadow for readability on dark background
+      ctx.shadowColor = "rgba(0,0,0,0.9)";
+      ctx.shadowBlur = 4;
+      ctx.fillStyle = isActive ? "rgba(255, 255, 255, 1)" : "rgba(200, 200, 220, 0.75)";
+      ctx.fillText(name || "", nx, ny + radius + fontSize + 2);
+      ctx.shadowBlur = 0;
     }
 
-    ctx.globalAlpha = 1;
+    ctx.restore();
   }, [activeTypes, lowerSearchQuery, isFaded, hoverNode, focusNode, timeRange]);
 
   const getLinkColor = useCallback((link: LinkObject) => {
@@ -749,25 +795,28 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
 
     const isGlowing = glowingLinks.has(`${sourceId}-${targetId}`);
     if (isGlowing && !faded) {
-      return "rgba(96, 165, 250, 0.85)";
+      return graphTheme.edgeGlow;
     }
 
     if (faded) {
-      return "rgba(255, 255, 255, 0.05)";
+      return "rgba(255, 255, 255, 0.025)";
     }
 
     if (showCycles && l.is_cycle) {
-      return "rgba(248, 113, 113, 0.55)";
+      return graphTheme.edgeCycle;
     }
-    return "rgba(156, 163, 175, 0.4)";
+    // Uses very thin, barely-visible white lines — the graph structure
+    // is implied, not dominant. Nodes are the stars, edges are the void between them.
+    return graphTheme.edgeDefault;
   }, [isFaded, showCycles, glowingLinks]);
 
   const getParticleColor = useCallback((link: LinkObject) => {
     const l = link as ForceLink;
     if (showCycles && l.is_cycle) {
-      return "rgba(252, 165, 165, 0.8)";
+      return "rgba(252, 165, 165, 0.85)";
     }
-    return "rgba(203, 213, 225, 0.65)";
+    // Particles travel as small bright dots along edges
+    return "rgba(226, 232, 240, 0.75)";
   }, [showCycles]);
 
   const getLinkWidth = useCallback((link: LinkObject) => {
@@ -842,16 +891,28 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
         </div>
 
         <div className="flex flex-wrap gap-2 text-xs">
-          {["File", "Class", "Function", "Interface"].map(type => (
+          {([
+            { type: "File",      shape: "●", color: "#94a3b8" },
+            { type: "Class",     shape: "■", color: graphTheme.class },
+            { type: "Function",  shape: "▲", color: graphTheme.function },
+            { type: "Interface", shape: "◆", color: graphTheme.interface },
+          ] as { type: string; shape: string; color: string }[]).map(({ type, shape, color }) => (
             <button
               key={type}
               onClick={() => toggleType(type)}
-              className={`px-2 py-1 rounded-md transition-colors ${activeTypes.has(type) ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
+              className={`flex items-center gap-1.5 px-2 py-1 rounded-md transition-all ${
+                activeTypes.has(type)
+                  ? 'text-white'
+                  : 'text-zinc-500 hover:text-zinc-300 opacity-50'
+              }`}
               style={{
-                backgroundColor: activeTypes.has(type) ? '#3f3f46' : '#18181b',
-                borderLeft: `3px solid ${activeTypes.has(type) ? graphTheme[type.toLowerCase() as keyof typeof graphTheme] : 'transparent'}`
+                backgroundColor: activeTypes.has(type) ? `${color}18` : 'transparent',
+                border: `1px solid ${activeTypes.has(type) ? `${color}60` : '#27272a'}`,
               }}
             >
+              <span style={{ color: activeTypes.has(type) ? color : '#52525b', fontSize: '0.7rem' }}>
+                {shape}
+              </span>
               {type}
             </button>
           ))}
