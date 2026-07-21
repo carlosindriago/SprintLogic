@@ -544,9 +544,11 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
   }, [graphData]);
 
   const displayGraphData = useMemo(() => {
-    if (!graphData || !graphData.nodes) return graphData;
+    if (!graphData || !graphData.nodes) return { nodes: [], links: [] };
 
-    let { nodes, links } = graphData;
+    // Deep-ish clone for d3-force to allow mutation of .x, .y, .vx, .vy without readonly errors
+    let nodes = graphData.nodes.map((n: GraphNode) => ({ ...n }));
+    let links = graphData.links.map((l: GraphEdge) => ({ ...l }));
 
     // Filter by node types
     nodes = nodes.filter((n: GraphNode) => {
@@ -558,12 +560,16 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
       const neighborsSet = neighbors.get(focusNode) || new Set();
       const visibleNodes = new Set([focusNode, ...neighborsSet]);
       nodes = nodes.filter((n) => visibleNodes.has(n.id));
-      links = links.filter((l) => {
-        const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
-        const targetId = typeof l.target === 'object' ? l.target.id : l.target;
-        return visibleNodes.has(sourceId) && visibleNodes.has(targetId);
-      });
     }
+
+    // ALWAYS filter links to ensure both source and target exist in the current nodes array
+    // This prevents d3-force "node not found" errors when a connected node is filtered out.
+    const visibleIds = new Set(nodes.map(n => n.id));
+    links = links.filter((l) => {
+      const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
+      const targetId = typeof l.target === 'object' ? l.target.id : l.target;
+      return visibleIds.has(sourceId) && visibleIds.has(targetId);
+    });
 
     return { nodes, links };
   }, [graphData, focusNode, neighbors, activeTypes]);
