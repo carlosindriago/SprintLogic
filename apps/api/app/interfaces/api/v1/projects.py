@@ -404,8 +404,8 @@ async def analyze_project_graph(
                 logger.warning("Streaming cancelled by client.")
                 raise
             except Exception as e:
-                logger.error(f"Error streaming LLM response: {e}")
-                yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+                logger.error("Error streaming LLM response: %s", e, exc_info=True)
+                yield f"data: {json.dumps({'type': 'error', 'message': 'An internal error occurred'})}\n\n"
 
         return StreamingResponse(event_generator(), media_type="text/event-stream")
 
