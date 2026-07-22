@@ -117,7 +117,9 @@ class ParsedNode:
     parent_fqn: str
 
 class TreeSitterParser:
-    def parse_code(self, code: str | bytes, file_path: str, ext: str = ".py") -> tuple[list[ParsedNode], set[str]]:
+    def parse_code(
+        self, code: bytes, file_path: str, ext: str
+    ) -> tuple[list[ParsedNode], set[str], set[str]]:
         if isinstance(code, str):
             code_bytes = code.encode("utf-8")
         else:
@@ -134,11 +136,11 @@ class TreeSitterParser:
         from app.infrastructure.parser.language_adapters import get_adapter
         adapter = get_adapter(ext)
         if adapter:
-            parsed_nodes, imports = adapter.extract_nodes(tree, code_bytes, file_path)
+            parsed_nodes, imports, api_endpoints = adapter.extract_nodes(tree, code_bytes, file_path)
         else:
-            parsed_nodes, imports = [], set()
+            parsed_nodes, imports, api_endpoints = [], set(), set()
 
-        return parsed_nodes, imports
+        return parsed_nodes, imports, api_endpoints
 
 
 async def fetch_git_birth_dates(repo_path: str) -> dict[str, int]:
@@ -261,15 +263,66 @@ def dedupe_edges(edges: list[GraphEdge]) -> list[GraphEdge]:
     return list(unique_edges.values())
 
 
+def resolve_api_edges(
+    project_id: UUID, file_endpoints: dict[str, set[str]]
+) -> list[GraphEdge]:
+    edges = []
+
+    # Separate consumers and exposers
+    exposers: dict[str, set[str]] = {} # e.g. {"file:/path/to/java": {"/api/users/*"}}
+    consumers: dict[str, set[str]] = {} # e.g. {"file:/path/to/ts": {"*/api/users/*"}}
+
+    # Import the matcher
+    from app.infrastructure.parser.route_matcher import (
+        do_routes_match,
+    )
+
+    for file_id, endpoints in file_endpoints.items():
+        for ep in endpoints:
+            if ep.startswith("EXPOSES:"):
+                # EXPOSES:VERB:/route
+                parts = ep[8:].split(':', 1)
+                if len(parts) == 2:
+                    verb, route = parts
+                    if file_id not in exposers:
+                        exposers[file_id] = set()
+                    exposers[file_id].add((verb, route))
+            elif ep.startswith("CONSUMES:"):
+                # CONSUMES:VERB:/route
+                parts = ep[9:].split(':', 1)
+                if len(parts) == 2:
+                    verb, route = parts
+                    if file_id not in consumers:
+                        consumers[file_id] = set()
+                    consumers[file_id].add((verb, route))
+                
+    for cons_file, cons_routes in consumers.items():
+        for c_verb, c_route in cons_routes:
+            for exp_file, exp_routes in exposers.items():
+                for e_verb, e_route in exp_routes:
+                    if c_verb == e_verb or c_verb == "ANY" or e_verb == "ANY":
+                        if do_routes_match(c_route, e_route):
+                            edges.append(
+                                GraphEdge(
+                                    project_id=project_id,
+                                    source_id=cons_file,
+                                    target_id=exp_file,
+                                    type=EdgeType.API_CALL,
+                                )
+                            )
+
+    return edges
+
+
 def extract_nodes_from_code(
     project_id: UUID,
     file_path: str,
     code: bytes,
     ext: str,
     birth_dates: dict[str, int] | None = None,
-):
+) -> tuple[list[GraphNode], list[GraphEdge], set[str], set[str]]:
     parser = TreeSitterParser()
-    parsed_nodes, imports = parser.parse_code(code, file_path, ext)
+    parsed_nodes, imports, api_endpoints = parser.parse_code(code, file_path, ext)
 
     nodes = []
     edges = []
@@ -331,7 +384,7 @@ def extract_nodes_from_code(
             )
         )
 
-    return nodes, edges, imports
+    return nodes, edges, imports, api_endpoints
 
 
 class ASTParserService:
@@ -368,7 +421,7 @@ class ASTParserService:
                     try:
                         with open(file_path, "rb") as f:
                             code = f.read()
-                        nodes, edges, imports = extract_nodes_from_code(
+                        nodes, edges, imports, api_endpoints = extract_nodes_from_code(
                             project_id, file_path, code, ext
                         )
                         all_nodes.extend(nodes)

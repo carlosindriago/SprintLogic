@@ -8,7 +8,7 @@ import { forceRadial, forceCollide } from "d3-force";
 import { GraphData, GraphNode, GraphEdge, GraphNodeLabel } from "@/types";
 import { LinkObject, NodeObject } from "react-force-graph-2d";
 import { graphTheme, extColorHash, bloomGlow, graphUI } from "@/lib/graph-theme";
-import { Search, RotateCcw, ZoomIn, ZoomOut, Maximize, Brain, Play, Pause, Zap, ZapOff, ScanSearch, FileCode, RefreshCw, X, FolderOpen } from "lucide-react";
+import { Search, RotateCcw, ZoomIn, ZoomOut, Maximize, Brain, Play, Pause, Zap, ZapOff, ScanSearch, FileCode, RefreshCw, X, FolderOpen, ChevronRight, File, Folder } from "lucide-react";
 import { useTabsStore } from "../store/tabsStore";
 import { useLLMConfigStore } from "../store/llmConfigStore";
 import { useBackgroundJobsStore } from "../store/backgroundJobsStore";
@@ -659,6 +659,12 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     return { nodes, links };
   }, [graphData, focusNode, neighbors, activeTypes]);
 
+  const activeNode = useMemo(() => {
+    const activeId = focusNode || hoverNode;
+    if (!activeId) return null;
+    return displayGraphData.nodes.find(n => n.id === activeId) as ForceNode | undefined;
+  }, [focusNode, hoverNode, displayGraphData]);
+
   const paintBackground = useCallback((ctx: CanvasRenderingContext2D, globalScale: number) => {
     if (!displayGraphData || !displayGraphData.nodes || displayGraphData.nodes.length === 0) return;
 
@@ -1199,6 +1205,21 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
               <span className="text-zinc-400 truncate max-w-[120px]">{item.name}</span>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Breadcrumbs Overlay */}
+      {activeNode && (
+        <div className={cn("absolute top-4 left-4 z-10 flex items-center px-3 py-1.5 rounded-lg max-w-full overflow-hidden whitespace-nowrap", graphUI.background, graphUI.blur, graphUI.border, graphUI.shadow)}>
+          {activeNode.label === "Module" ? <Folder className="w-3.5 h-3.5 text-indigo-400 mr-2 shrink-0" /> : <File className="w-3.5 h-3.5 text-blue-400 mr-2 shrink-0" />}
+          <div className="flex items-center text-xs text-zinc-300 font-mono tracking-tight gap-1 truncate overflow-hidden">
+            {(activeNode.label === "Module" ? (activeNode.folder || "") : (activeNode.file_path || activeNode.name)).split("/").filter(Boolean).map((part, i, arr) => (
+              <div key={i} className="flex items-center gap-1 shrink-0">
+                <span className={i === arr.length - 1 ? "text-zinc-100 font-medium" : "text-zinc-500"}>{part}</span>
+                {i < arr.length - 1 && <ChevronRight className="w-3 h-3 text-zinc-600 shrink-0" />}
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

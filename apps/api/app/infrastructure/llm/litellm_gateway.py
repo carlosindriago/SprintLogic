@@ -16,6 +16,96 @@ class LiteLLMGateway:
         self.model_name = model_name or DEFAULT_LLM_MODEL
         self.cred_manager = CredentialManager()
 
+    def _get_tools(self) -> list[dict[str, Any]]:
+        return [
+            {
+                "type": "function",
+                "function": {
+                    "name": "analyze_blast_radius",
+                    "description": "Calculates the blast radius of a file in the project's dependency graph. Returns XML detailing dependencies grouped by depth. Very useful when asked what would happen if a file is modified.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "target_file": {
+                                "type": "string",
+                                "description": "The path to the file to analyze, e.g., 'apps/web/src/UserService.ts'"
+                            },
+                            "max_depth": {
+                                "type": "integer",
+                                "description": "Maximum depth of the BFS traversal (default 2)",
+                                "default": 2
+                            }
+                        },
+                        "required": ["target_file"]
+                    }
+                }
+            }
+        ]
+
+    async def chat_with_graph_rag(
+        self,
+        project_id: str,
+        messages: list[dict[str, Any]],
+        analyze_blast_radius_use_case: Any
+    ) -> str:
+        """
+        Executes a ReAct agent loop using LiteLLM to answer architectural questions,
+        with access to tools like `analyze_blast_radius`.
+        """
+        tools = self._get_tools()
+        current_messages = list(messages)
+        max_tool_iterations = 3
+        
+        from uuid import UUID
+        proj_uuid = UUID(project_id)
+
+        for _ in range(max_tool_iterations + 1):
+            response = await acompletion(
+                model=self.model_name,
+                messages=current_messages,
+                tools=tools,
+                tool_choice="auto"
+            )
+
+            response_message = response.choices[0].message
+            current_messages.append(response_message.model_dump(exclude_none=True))
+
+            if response_message.tool_calls:
+                for tool_call in response_message.tool_calls:
+                    if tool_call.function.name == "analyze_blast_radius":
+                        arguments = json.loads(tool_call.function.arguments)
+                        target_file = arguments.get("target_file")
+                        max_depth = arguments.get("max_depth", 2)
+
+                        logger.info(f"LLM executing analyze_blast_radius for {target_file}")
+                        
+                        try:
+                            # Executing the Use Case
+                            tool_result = await analyze_blast_radius_use_case.execute(
+                                project_id=proj_uuid,
+                                target_file=target_file,
+                                max_depth=max_depth
+                            )
+                        except Exception as e:
+                            logger.error(f"Error executing analyze_blast_radius: {e}")
+                            tool_result = f"<error>{str(e)}</error>"
+
+                        current_messages.append(
+                            {
+                                "role": "tool",
+                                "name": tool_call.function.name,
+                                "tool_call_id": tool_call.id,
+                                "content": tool_result,
+                            }
+                        )
+                # Continue the loop
+                continue
+            
+            # If no tool calls, return the final response
+            return response_message.content
+
+        return "Error: Maximum tool iterations reached without finalizing response."
+
     async def analyze_anomalies_stream(
         self,
         project_name: str,

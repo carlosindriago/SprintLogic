@@ -12,6 +12,7 @@ class EdgeType(StrEnum):
     IMPORTS = "IMPORTS"
     CALLS = "CALLS"
     CONTAINS = "CONTAINS"
+    API_CALL = "API_CALL"
 
 
 from uuid import UUID
