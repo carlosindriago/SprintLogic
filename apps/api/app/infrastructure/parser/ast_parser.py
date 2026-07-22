@@ -3,13 +3,12 @@ import os
 import sys
 from pathlib import Path
 
+import tree_sitter
+
 from app.infrastructure.parser.import_resolver import (
     TSConfigResolver,
-    is_external_import,
-    try_resolve_file
+    try_resolve_file,
 )
-
-import tree_sitter
 
 try:
     import tree_sitter_python
@@ -182,10 +181,10 @@ def resolve_import_edges(
     Ahora soporta Path Aliases de TypeScript (@/) y resolución relativa.
     """
     edges: list[GraphEdge] = []
-    
+
     # Precompute file set for O(1) lookup
     file_set = set(file_paths)
-    
+
     # Instanciar el resolver de TS
     alias_resolver = TSConfigResolver(file_paths)
 

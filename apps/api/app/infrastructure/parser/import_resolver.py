@@ -16,19 +16,19 @@ def try_resolve_file(base_path: str, file_set: set[str]) -> str | None:
     # 1. Exact match (already has extension)
     if base_path in file_set:
         return base_path
-    
+
     # 2. Try each extension
     for ext in CANDIDATE_EXTS:
         candidate = base_path + ext
         if candidate in file_set:
             return candidate
-            
+
     # 3. Try index files (directory import)
     for ext in CANDIDATE_EXTS:
         candidate = base_path + "/index" + ext
         if candidate in file_set:
             return candidate
-            
+
     return None
 
 def is_external_import(imp: str, alias_prefixes: list[str]) -> bool:
@@ -56,19 +56,19 @@ class TSConfigResolver:
             if fp.endswith("tsconfig.json"):
                 self.tsconfig_dir = str(Path(fp).parent)
                 try:
-                    with open(fp, "r", encoding="utf-8") as f:
+                    with open(fp, encoding="utf-8") as f:
                         content = f.read()
                         clean_content = strip_json_comments(content)
                         # También remover posibles trailing commas para evitar fallos en json.loads
                         clean_content = re.sub(r',\s*}', '}', clean_content)
                         clean_content = re.sub(r',\s*\]', ']', clean_content)
-                        
+
                         config = json.loads(clean_content)
                         compiler_options = config.get("compilerOptions", {})
-                        
+
                         self.base_url = compiler_options.get("baseUrl")
                         raw_paths = compiler_options.get("paths", {})
-                        
+
                         for alias, targets in raw_paths.items():
                             if isinstance(targets, list) and len(targets) > 0:
                                 # Normalizar alias (ej: '@/*' -> '@/')
@@ -78,7 +78,7 @@ class TSConfigResolver:
                                 self.alias_prefixes.append(clean_alias)
                 except Exception as e:
                     logger.warning(f"Error parsing tsconfig.json {fp}: {e}")
-                
+
                 # Si encontramos uno, nos quedamos con el primero que funcione para este proyecto
                 if self.paths:
                     break
@@ -93,18 +93,18 @@ class TSConfigResolver:
         """Traduce el alias a la ruta real, y resuelve la extensión"""
         if not self.tsconfig_dir:
             return None
-            
+
         for prefix, targets in self.paths.items():
             if imp.startswith(prefix):
                 # Remover el alias del import
                 suffix = imp[len(prefix):]
                 target_base = targets[0] # Ej: './src/'
-                
+
                 # Base de resolución: tsconfig_dir + baseUrl (si existe)
                 base_dir = Path(self.tsconfig_dir)
                 if self.base_url:
                     base_dir = base_dir / self.base_url
-                
+
                 # Resolver la ruta combinando todo
                 # Ej: apps/web + ./src/ + components/Button
                 resolved_path = (base_dir / target_base / suffix).resolve()
@@ -114,14 +114,14 @@ class TSConfigResolver:
                     rel_path = str(resolved_path.relative_to(Path.cwd()))
                 except ValueError:
                     rel_path = str(resolved_path)
-                    
+
                 # Limpiar cualquier './' extra para asegurar match limpio
                 rel_path = rel_path.replace("\\", "/")
                 if rel_path.startswith("./"):
                     rel_path = rel_path[2:]
-                
+
                 if not rel_path:
                     continue
                 return try_resolve_file(rel_path, self.file_set)
-                
+
         return None
