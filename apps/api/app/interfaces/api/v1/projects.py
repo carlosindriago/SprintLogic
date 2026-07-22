@@ -264,17 +264,17 @@ async def get_project_graph(project_id: str, expanded_folders: str | None = None
     out_degree = {n_id: 0 for n_id in valid_node_ids}
     adj: dict[str, list[str]] = {n_id: [] for n_id in valid_node_ids}
 
-    for e in filtered_edges:
-        in_degree[e.target_id] += 1
-        out_degree[e.source_id] += 1
-        adj[e.source_id].append(e.target_id)
+    for edge in filtered_edges:
+        in_degree[edge.target_id] += 1
+        out_degree[edge.source_id] += 1
+        adj[edge.source_id].append(edge.target_id)
 
     # NetworkX SCC — O(V+E) linear time, iterative, no stack overflow
     import networkx as nx
 
     G: nx.DiGraph[str] = nx.DiGraph()
-    for e in filtered_edges:
-        G.add_edge(e.source_id, e.target_id)
+    for edge in filtered_edges:
+        G.add_edge(edge.source_id, edge.target_id)
 
     node_to_scc: dict[str, int] = {}
     for i, scc in enumerate(nx.strongly_connected_components(G)):
@@ -313,17 +313,17 @@ async def get_project_graph(project_id: str, expanded_folders: str | None = None
         nodes_dict.append(node_dict)
 
     links_dict = []
-    for e in filtered_edges:
+    for edge in filtered_edges:
         is_cycle = False
-        if e.source_id in node_to_scc and e.target_id in node_to_scc:
-            if node_to_scc[e.source_id] == node_to_scc[e.target_id]:
+        if edge.source_id in node_to_scc and edge.target_id in node_to_scc:
+            if node_to_scc[edge.source_id] == node_to_scc[edge.target_id]:
                 is_cycle = True
 
         links_dict.append(
             {
-                "source": e.source_id,
-                "target": e.target_id,
-                "type": e.type.value if hasattr(e.type, "value") else e.type,
+                "source": edge.source_id,
+                "target": edge.target_id,
+                "type": edge.type.value if hasattr(edge.type, "value") else edge.type,
                 "is_cycle": is_cycle,
             }
         )
