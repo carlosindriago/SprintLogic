@@ -55,12 +55,12 @@ const TreeNode: React.FC<{
     onSelect(node.path);
   }, [onSelect, node.path]);
 
-  const handleContextMenu = (e: React.MouseEvent) => {
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     setContextMenu({ x: e.clientX, y: e.clientY });
-  };
+  }, []);
 
-  const closeContextMenu = () => setContextMenu(null);
+  const closeContextMenu = useCallback(() => setContextMenu(null), []);
 
   useEffect(() => {
     const handleClick = () => closeContextMenu();
@@ -68,7 +68,7 @@ const TreeNode: React.FC<{
       document.addEventListener('click', handleClick);
       return () => document.removeEventListener('click', handleClick);
     }
-  }, [contextMenu]);
+  }, [contextMenu, closeContextMenu]);
 
   if (node.type === 'directory') {
 
