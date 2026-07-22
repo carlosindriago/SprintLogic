@@ -12,7 +12,7 @@ export interface GitStatus {
   error?: string;
 }
 
-export type GraphNodeLabel = "File" | "Class" | "Function" | "Interface";
+export type GraphNodeLabel = "File" | "Class" | "Function" | "Interface" | "Module";
 
 export interface GraphNode {
   id: string;
@@ -28,7 +28,7 @@ export interface GraphNode {
   metadata?: Record<string, unknown>;
 }
 
-export type GraphEdgeType = "IMPORTS" | "CALLS" | "CONTAINS";
+export type GraphEdgeType = "IMPORTS" | "CALLS" | "CONTAINS" | "internal_cluster";
 
 export interface GraphEdge {
   source: string | { id: string; x?: number; y?: number };

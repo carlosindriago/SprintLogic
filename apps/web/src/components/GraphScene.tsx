@@ -4,16 +4,21 @@ import dynamic from "next/dynamic";
 import { useEffect, useState, useRef, useMemo, useCallback, useLayoutEffect } from "react";
 import { getProjectGraph, rescanProject, ApiError } from "@/lib/api";
 import { API_BASE_URL } from "@/lib/api";
-import { GraphData, GraphNode, GraphEdge } from "@/types";
+import { forceRadial, forceCollide } from "d3-force";
+import { GraphData, GraphNode, GraphEdge, GraphNodeLabel } from "@/types";
 import { LinkObject, NodeObject } from "react-force-graph-2d";
-import { graphTheme } from "@/lib/graph-theme";
-import { Search, RotateCcw, ZoomIn, ZoomOut, Maximize, Brain, Play, Pause, Zap, ZapOff, ScanSearch, FileCode, RefreshCw } from "lucide-react";
+import { graphTheme, extColorHash, bloomGlow, graphUI } from "@/lib/graph-theme";
+import { Search, RotateCcw, ZoomIn, ZoomOut, Maximize, Brain, Play, Pause, Zap, ZapOff, ScanSearch, FileCode, RefreshCw, X, FolderOpen } from "lucide-react";
 import { useTabsStore } from "../store/tabsStore";
 import { useLLMConfigStore } from "../store/llmConfigStore";
 import { useBackgroundJobsStore } from "../store/backgroundJobsStore";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 interface ForceNode extends GraphNode {
+  index?: number;
+  isMacronode?: boolean;
+  children_count?: number;
   x?: number;
   y?: number;
   z?: number;
@@ -63,43 +68,42 @@ const getSafeTime = (nodeRef: unknown): number => {
 // Normalize any label casing to TitleCase ("file" -> "File") — must match activeTypes set values exactly.
 const toTitleCase = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 
-const MODULE_COLORS = [
-  "#3b82f6", "#ef4444", "#10b981", "#f59e0b", "#8b5cf6",
-  "#ec4899", "#06b6d4", "#f97316", "#84cc16", "#6366f1",
-  "#14b8a6", "#e11d48", "#a855f7", "#0ea5e9", "#d946ef",
-];
+// ── Visual helpers ────────────────────────────────────────────────────
 
-const CONTAINER_PREFIXES = ["src", "app", "lib", "pkg", "internal", "packages"];
+// Draw a rounded square centered at (cx, cy) with half-size r
+function drawRoundedSquare(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number) {
+  const rad = r * 0.35;
+  const x = cx - r, y = cy - r, w = r * 2, h = r * 2;
+  ctx.beginPath();
+  ctx.moveTo(x + rad, y);
+  ctx.lineTo(x + w - rad, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + rad);
+  ctx.lineTo(x + w, y + h - rad);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - rad, y + h);
+  ctx.lineTo(x + rad, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - rad);
+  ctx.lineTo(x, y + rad);
+  ctx.quadraticCurveTo(x, y, x + rad, y);
+  ctx.closePath();
+}
 
-const moduleColorMap = new Map<string, string>();
-let nextColorIndex = 0;
+// Draw a diamond (rotated square) centered at (cx, cy) with half-size r
+function drawDiamond(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number) {
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - r);
+  ctx.lineTo(cx + r, cy);
+  ctx.lineTo(cx, cy + r);
+  ctx.lineTo(cx - r, cy);
+  ctx.closePath();
+}
 
-function getModuleColor(folder: string): string {
-  if (!folder || folder === "/") return "#6b7280";
-  const parts = folder.split("/").filter(Boolean);
-
-  let startIdx = 0;
-  for (let i = 0; i < parts.length; i++) {
-    if (CONTAINER_PREFIXES.includes(parts[i])) {
-      startIdx = i + 1;
-    }
-  }
-
-  const significantParts = parts.slice(startIdx);
-  if (significantParts.length === 0) return "#6b7280";
-
-  const modulePath = significantParts.length >= 2
-    ? significantParts.slice(0, 2).join("/")
-    : significantParts[0];
-
-  if (moduleColorMap.has(modulePath)) {
-    return moduleColorMap.get(modulePath)!;
-  }
-
-  const color = MODULE_COLORS[nextColorIndex % MODULE_COLORS.length];
-  moduleColorMap.set(modulePath, color);
-  nextColorIndex++;
-  return color;
+// Draw a triangle pointing up centered at (cx, cy) with half-size r
+function drawTriangle(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number) {
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - r);
+  ctx.lineTo(cx + r * 0.87, cy + r * 0.5);
+  ctx.lineTo(cx - r * 0.87, cy + r * 0.5);
+  ctx.closePath();
 }
 
 interface GraphSceneProps {
@@ -119,7 +123,8 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
   const [searchQuery, setSearchQuery] = useState("");
   const [showCycles, setShowCycles] = useState(false);
   // Canonical label form is TitleCase ("File", "Class", "Function", "Interface") — matches backend values exactly.
-  const [activeTypes, setActiveTypes] = useState<Set<string>>(new Set(["File", "Class", "Function", "Interface"]));
+  const [activeTypes, setActiveTypes] = useState<Set<string>>(new Set(["File", "Module"]));
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
 
   const [enableFlow, setEnableFlow] = useState(false);
   const [isPhysicsActive, setIsPhysicsActive] = useState(true);
@@ -146,7 +151,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     }
     if (scanStatus === "completed" && !rescanHandledRef.current) {
       rescanHandledRef.current = true;
-      getProjectGraph(projectId)
+      getProjectGraph(projectId, Array.from(expandedFolders).join(","))
         .then((data) => setGraphData(data))
         .catch(() => {
           toast.error("El escaneo terminó, pero falló la descarga del nuevo grafo. Reintentá.");
@@ -156,7 +161,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     if (scanStatus === "failed") {
       clearScan(projectId);
     }
-  }, [scanStatus, projectId, clearScan]);
+  }, [scanStatus, projectId, clearScan, expandedFolders]);
 
   const handleRescan = async () => {
     if (!projectId) return;
@@ -177,7 +182,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
         clearScan(projectId);
         toast.error("El escaneo no respondió a tiempo. Verificá la conexión con el servidor.");
       }
-    }, 60000);
+    }, 300000); // 5 minutes watchdog for large codebases
     return () => clearTimeout(watchdog);
   }, [isScanning, projectId, clearScan]);
 
@@ -197,31 +202,24 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     cutoffTimeRef.current = timeRange.min + (timeRange.max - timeRange.min) * animProgress;
   }, [timeRange, animProgress]);
 
+  // Extension-based color legend (each file extension gets its own HSL color)
   const moduleLegend = useMemo(() => {
-    const seen = new Set<string>();
-    const items: { name: string; color: string }[] = [];
+    const extMap = new Map<string, string>();
     for (const n of graphData.nodes) {
-      const folder = (n as ForceNode).folder;
-      if (!folder || folder === "/") continue;
-      const parts = folder.split("/").filter(Boolean);
-      let startIdx = 0;
-      for (let i = 0; i < parts.length; i++) {
-        if (CONTAINER_PREFIXES.includes(parts[i])) startIdx = i + 1;
-      }
-      const key = parts.slice(startIdx, startIdx + 2).join("/") || parts[0] || folder;
-      if (!seen.has(key)) {
-        seen.add(key);
-        items.push({ name: key, color: getModuleColor(folder) });
+      const node = n as ForceNode;
+      if (node.label !== "File") continue;
+      const ext = node.name?.split(".").pop()?.toLowerCase() || "";
+      if (ext && !extMap.has(ext)) {
+        extMap.set(ext, extColorHash(ext));
       }
     }
-    return items;
+    return Array.from(extMap.entries()).map(([name, color]) => ({ name, color }));
   }, [graphData]);
 
   useEffect(() => {
     animProgressRef.current = animProgress;
   }, [animProgress]);
 
-  const lastClickTimeRef = useRef<number>(0);
   const initialFitDone = useRef(false);
 
   useEffect(() => {
@@ -468,8 +466,26 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     const loadData = async () => {
       if (projectId !== null) {
         try {
-          const data = await getProjectGraph(projectId);
-          if (active) setGraphData(data);
+          const data = await getProjectGraph(projectId, Array.from(expandedFolders).join(","));
+          
+          if (active) {
+            setGraphData((prevGraph) => {
+              // Lock existing nodes to prevent explosion
+              const existingCoords = new Map(prevGraph.nodes.map((n: ForceNode) => [n.id, { x: n.x, y: n.y }]));
+              
+              data.nodes.forEach((n: ForceNode) => {
+                if (existingCoords.has(n.id)) {
+                  const coords = existingCoords.get(n.id)!;
+                  n.x = coords.x;
+                  n.y = coords.y;
+                  // We do NOT set fx/fy here because that permanently freezes the graph,
+                  // preventing nodes from making room for newly expanded children.
+                }
+              });
+              
+              return data;
+            });
+          }
         } catch (err) {
           if (err instanceof ApiError && err.status === 404) {
             if (active) setGraphData({ nodes: [], links: [] });
@@ -483,19 +499,16 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     };
     loadData();
     return () => { active = false; };
-  }, [projectId]);
+  }, [projectId, expandedFolders]);
 
   const hasGraphData = useMemo(
     () => graphData && graphData.nodes && graphData.nodes.length > 0,
     [graphData]
   );
 
-  useEffect(() => {
-    if (!fgRef.current || dimensions.width === 0) return;
+  // Removed static focalPoints in favor of dynamic clustering
 
-    fgRef.current.d3Force('charge').strength(-120);
-    fgRef.current.d3Force('link').distance(30);
-  }, [dimensions.width]);
+
 
   useEffect(() => {
     if (!fgRef.current || !hasGraphData) return;
@@ -503,8 +516,76 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
 
     initialFitDone.current = false;
 
-    fgRef.current.d3Force('charge').strength(-120);
-    fgRef.current.d3Force('link').distance(30);
+    // Base D3 forces
+    fgRef.current.d3Force('charge').strength(-350); // Increased repulsion for more space
+    fgRef.current.d3Force('link').distance(40);
+    
+    // Add collision force to prevent nodes from overlapping (especially large modules)
+    fgRef.current.d3Force('collide', forceCollide<ForceNode>().radius(node => {
+      return node.label === "Module" ? 22 : 10;
+    }).iterations(2));
+
+    // Magnetic Injection: Dynamic Solar System grouping by folder
+    function forceCluster() {
+      let nodes: ForceNode[];
+      
+      function force(alpha: number) {
+        const centroids = new Map<string, { x: number; y: number; count: number }>();
+        
+        // 1. Calculate the dynamic centroid for each Module
+        nodes.forEach(d => {
+          if (!d.folder || d.folder === "/") return;
+          const parts = d.folder.split('/').filter(Boolean);
+          const mod = parts.slice(0, 2).join('/');
+          if (!mod) return;
+          
+          const c = centroids.get(mod);
+          if (!c) {
+             centroids.set(mod, { x: d.x || 0, y: d.y || 0, count: 1 });
+          } else {
+             c.x += d.x || 0;
+             c.y += d.y || 0;
+             c.count += 1;
+          }
+        });
+
+        // 2. Apply gentle magnetic pull towards the centroid
+        const strength = 0.08 * alpha; // Force that decays with time
+        nodes.forEach(d => {
+          if (!d.folder || d.folder === "/") return;
+          const parts = d.folder.split('/').filter(Boolean);
+          const mod = parts.slice(0, 2).join('/');
+          const centroid = centroids.get(mod);
+          
+          if (centroid && d.vx !== undefined && d.vy !== undefined && d.x !== undefined && d.y !== undefined) {
+            const cx = centroid.x / centroid.count;
+            const cy = centroid.y / centroid.count;
+            
+            // Empujar suavemente hacia el centroide
+            d.vx -= (d.x - cx) * strength;
+            d.vy -= (d.y - cy) * strength;
+          }
+        });
+      }
+
+      force.initialize = function(_: ForceNode[]) {
+        nodes = _;
+      };
+
+      return force;
+    }
+
+    // Radial force to gather orphaned nodes (no edges) around the center
+    const centerForce = forceRadial<ForceNode>(0, 0, 0).strength(node => {
+      const degree = (node.in_degree || 0) + (node.out_degree || 0);
+      return degree === 0 ? 0.05 : 0;
+    });
+
+    fgRef.current.d3Force('cluster', forceCluster());
+    fgRef.current.d3Force('x', null); // Remove static X force
+    fgRef.current.d3Force('y', null); // Remove static Y force
+    fgRef.current.d3Force('radial', centerForce);
+
     fgRef.current.d3ReheatSimulation();
   }, [hasGraphData, dimensions.width]);
 
@@ -578,6 +659,59 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     return { nodes, links };
   }, [graphData, focusNode, neighbors, activeTypes]);
 
+  const paintBackground = useCallback((ctx: CanvasRenderingContext2D, globalScale: number) => {
+    if (!displayGraphData || !displayGraphData.nodes || displayGraphData.nodes.length === 0) return;
+
+    const centroids = new Map<string, { x: number; y: number; count: number }>();
+    
+    displayGraphData.nodes.forEach((n: ForceNode) => {
+      if (!n.folder || n.folder === "/") return;
+      if (cutoffTimeRef.current && getSafeTime(n) > cutoffTimeRef.current) return;
+
+      const parts = n.folder.split('/').filter(Boolean);
+      const mod = parts.slice(0, 2).join('/');
+      if (!mod) return;
+      
+      const c = centroids.get(mod);
+      if (!c) {
+         centroids.set(mod, { x: n.x || 0, y: n.y || 0, count: 1 });
+      } else {
+         c.x += n.x || 0;
+         c.y += n.y || 0;
+         c.count += 1;
+      }
+    });
+
+    ctx.save();
+    for (const [mod, centroid] of centroids.entries()) {
+      const cx = centroid.x / centroid.count;
+      const cy = centroid.y / centroid.count;
+      const orbitRadius = Math.max(60, Math.sqrt(centroid.count) * 20);
+      const color = extColorHash(mod);
+
+      ctx.beginPath();
+      ctx.arc(cx, cy, orbitRadius, 0, 2 * Math.PI, false);
+      
+      ctx.fillStyle = color;
+      ctx.globalAlpha = 0.03;
+      ctx.fill();
+      
+      ctx.lineWidth = 1 / globalScale;
+      ctx.strokeStyle = color;
+      ctx.globalAlpha = 0.15;
+      ctx.stroke();
+      
+      const fontSize = 12 / globalScale;
+      ctx.font = `${fontSize}px Inter, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.globalAlpha = 0.6;
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillText(mod.toUpperCase(), cx, cy - orbitRadius - (10 / globalScale));
+    }
+    ctx.restore();
+  }, [displayGraphData]);
+
   const isFaded = useCallback((nodeId: string) => {
     const activeFocus = focusNode || hoverNode;
     if (!activeFocus) return false;
@@ -585,11 +719,13 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     return !neighbors.get(activeFocus)?.has(nodeId);
   }, [focusNode, hoverNode, neighbors]);
 
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const paintNode = useCallback((node: NodeObject, ctx: CanvasRenderingContext2D, globalScale: number) => {
+    const isMassive = (graphData?.nodes?.length || 0) > 1000;
     const n = node as ForceNode;
-    const id = n.id as string;
-    const label = n.label as string;
-    const name = n.name as string;
+    const { id, label, name } = n;
+    const nx = n.x || 0;
+    const ny = n.y || 0;
 
     globalScaleRef.current = globalScale;
 
@@ -597,148 +733,235 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     if (lowerSearchQuery && !name.toLowerCase().includes(lowerSearchQuery)) return;
 
     const progress = animProgressRef.current;
-
-    // SENSEI FIX: Usamos getSafeTime para la visibilidad temporal del nodo
     const bTime = getSafeTime(n);
     if (progress < 1 && timeRange) {
       const cutoff = timeRange.min + (timeRange.max - timeRange.min) * progress;
-      if (bTime > cutoff) return; // Si no ha nacido, no lo dibujamos
+      if (bTime > cutoff) return;
     }
 
-    let radius = 3;
-    let color = graphTheme.unknown;
-
+    // ── Color resolution ─────────────────────────────────────
     const degree = n.in_degree || 0;
-    const degreeRadius = 1 + Math.log2(1 + degree) * 1.6;
+    const outDegree = n.out_degree || 0;
+    const degreeRadius = 1 + Math.log2(1 + degree) * 1.8;
 
-    const moduleColor = getModuleColor(n.folder || "");
+    let radius = 4;
+    let color = graphTheme.unknown;
+    let glowColor = "rgba(148, 163, 184, 0.4)";
 
     if (label === "File") {
-      radius = Math.max(4, degreeRadius);
-      color = moduleColor;
+      const ext = name.split(".").pop()?.toLowerCase() || "";
+      color = extColorHash(ext);
+      glowColor = bloomGlow(color, 0.45);
+      radius = Math.max(3.5, degreeRadius * 0.9);
     } else if (label === "Class") {
+      color = graphTheme.class;
+      glowColor = graphTheme.glowClass;
       radius = Math.max(5, degreeRadius);
-      color = moduleColor;
     } else if (label === "Function") {
-      radius = Math.max(4, degreeRadius);
-      color = moduleColor;
+      color = graphTheme.function;
+      glowColor = graphTheme.glowFunction;
+      radius = Math.max(4, degreeRadius * 0.85);
     } else if (label === "Interface") {
+      color = graphTheme.interface;
+      glowColor = graphTheme.glowInterface;
       radius = Math.max(5, degreeRadius);
-      color = moduleColor;
+    } else if (label === "Module") {
+      color = "#6366f1"; // Indigo for Super-Nodes
+      glowColor = bloomGlow(color, 0.6);
+      const children = (n as ForceNode).children_count || 1;
+      radius = Math.max(12, 6 + Math.log2(children) * 3);
     }
 
-    const outDegree = n.out_degree || 0;
-    const hasHighOutDegree = outDegree >= 10;
-
     const faded = isFaded(id);
-    const isZoomedOut = globalScale < 1.2;
+    const isZoomedOut = globalScale < 1.0;
+    const isActive = id === hoverNode || id === focusNode;
 
-    // ── SUPERNOVA EFFECT SENSEI FIX ──────────────────────────────────────────
+    // ── SUPERNOVA EFFECT (temporal birth flash) ──────────────────────────────
     let isSupernova = false;
     if (progress > 0 && progress < 1 && timeRange && !faded) {
       const currentCutoff = timeRange.min + (timeRange.max - timeRange.min) * progress;
       const age = currentCutoff - bTime;
-      const supernovaWindow = (timeRange.max - timeRange.min) * 0.05; // 5% ventana
-
+      const supernovaWindow = (timeRange.max - timeRange.min) * 0.05;
       isSupernova = age >= 0 && age <= supernovaWindow;
     }
 
     if (isSupernova) {
       const pulse = Math.sin(Date.now() / 200) * 0.3 + 0.7;
-      const novaRadius = radius * (1.8 + pulse * 0.8);
       ctx.save();
       ctx.beginPath();
-      ctx.arc(n.x || 0, n.y || 0, novaRadius, 0, 2 * Math.PI, false);
+      ctx.arc(nx, ny, radius * (2.2 + pulse * 0.8), 0, 2 * Math.PI);
       ctx.shadowColor = "white";
-      ctx.shadowBlur = 15 * pulse;
-      ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
-      ctx.globalAlpha = 0.8 * pulse;
+      ctx.shadowBlur = 22 * pulse;
+      ctx.fillStyle = "rgba(255, 255, 255, 0.92)";
+      ctx.globalAlpha = 0.85 * pulse;
       ctx.fill();
-      ctx.restore(); // Super importante: restaura el canvas para no manchar el resto
+      ctx.restore();
     }
     // ────────────────────────────────────────────────────────────────────────
 
-    if ((n.out_degree ?? 0) > 0 && !faded && !isZoomedOut) {
-      const pulse = Math.sin(Date.now() / 300) * 1.5;
-      const haloRadius = radius + 3.5 + pulse;
-      ctx.beginPath();
-      ctx.arc(n.x || 0, n.y || 0, haloRadius, 0, 2 * Math.PI, false);
-
-      let haloColor = "rgba(100, 116, 139, 0.12)";
-      if (color.startsWith('#')) {
-        const r = parseInt(color.slice(1, 3), 16);
-        const g = parseInt(color.slice(3, 5), 16);
-        const b = parseInt(color.slice(5, 7), 16);
-        haloColor = `rgba(${r}, ${g}, ${b}, 0.16)`;
-      }
-      ctx.fillStyle = haloColor;
-      ctx.fill();
-    }
-
+    ctx.save();
     ctx.globalAlpha = faded ? graphTheme.dimOpacity : 1;
 
+    // ── Bloom outer glow (signature luminous effect) ────────────────
+    if (!faded && !isZoomedOut) {
+      const bloomRadius = isActive ? radius * 2.6 : radius * 1.9;
+      ctx.save();
+      ctx.shadowColor = glowColor;
+      ctx.shadowBlur = (isMassive && !isActive) ? 0 : (isActive ? 18 : 10);
+      
+      // LOD: If massive, don't draw the bloom fill unless hovered
+      if (!isMassive || isActive) {
+        ctx.beginPath();
+        ctx.arc(nx, ny, bloomRadius * 0.5, 0, 2 * Math.PI);
+        ctx.fillStyle = glowColor;
+        ctx.globalAlpha = isActive ? 0.22 : 0.12;
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    // ── File icons (devicon — drawn over bloom) ──────────────────────────────
     let isIconDrawn = false;
     if (label === "File") {
       const ext = name.split(".").pop()?.toLowerCase() || "";
       const img = iconImages.current[ext];
       if (img && img.complete && img.naturalWidth !== 0) {
-        const iconSize = radius * 2.5;
-        ctx.drawImage(img, (n.x || 0) - iconSize / 2, (n.y || 0) - iconSize / 2, iconSize, iconSize);
+        ctx.save();
+        ctx.shadowColor = glowColor;
+        ctx.shadowBlur = isActive ? 14 : 7;
+        const iconSize = radius * 2.6;
+        ctx.drawImage(img, nx - iconSize / 2, ny - iconSize / 2, iconSize, iconSize);
+        ctx.restore();
         isIconDrawn = true;
       }
     }
 
+    // ── Node shape by type ───────────────────────────────────────────────────
     if (!isIconDrawn) {
-      ctx.beginPath();
-      ctx.arc(n.x || 0, n.y || 0, radius, 0, 2 * Math.PI, false);
+      ctx.save();
+      // Bloom: inner core glows with shadowBlur
+      ctx.shadowColor = glowColor;
+      ctx.shadowBlur = (isMassive && !isActive) ? 0 : (isActive ? 16 : 8);
       ctx.fillStyle = color;
-      ctx.fill();
+
+      // SENSEI LOD FIX: Ultra-fast rendering for distant massive graphs
+      if (isMassive && globalScale < 0.3 && !isActive) {
+        ctx.fillRect(nx - radius, ny - radius, radius * 2, radius * 2);
+      } else {
+        if (label === "Class") {
+          // Rounded square — structured, solid
+          drawRoundedSquare(ctx, nx, ny, radius);
+        } else if (label === "Interface") {
+          // Diamond — abstract, structural
+          drawDiamond(ctx, nx, ny, radius);
+        } else if (label === "Function") {
+          // Triangle — directional, active
+          drawTriangle(ctx, nx, ny, radius);
+        } else if (label === "Module") {
+          // Draw an octagon or thick circle for super nodes
+          ctx.beginPath();
+          ctx.arc(nx, ny, radius, 0, 2 * Math.PI);
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
+          ctx.stroke();
+        } else {
+          // Circle — file or unknown
+          ctx.beginPath();
+          ctx.arc(nx, ny, radius, 0, 2 * Math.PI);
+        }
+        ctx.fill();
+
+        // Inner highlight (top-left specular — self-luminous feel)
+        if (!faded && !isZoomedOut && !isMassive && label !== "Module") {
+          ctx.shadowBlur = 0;
+          ctx.fillStyle = "rgba(255, 255, 255, 0.18)";
+          ctx.beginPath();
+          ctx.arc(nx - radius * 0.3, ny - radius * 0.3, radius * 0.35, 0, 2 * Math.PI);
+          ctx.fill();
+        }
+        
+        // Text inside Module
+        if (label === "Module" && !isZoomedOut) {
+          ctx.fillStyle = "white";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          const fontSize = Math.max(4, radius * 0.4);
+          ctx.font = `600 ${fontSize}px Inter, sans-serif`;
+          ctx.shadowBlur = 0;
+          const count = (n as ForceNode).children_count || 1;
+          ctx.fillText(String(count), nx, ny);
+        }
+      }
+      ctx.restore();
     }
 
-    if (hasHighOutDegree && !faded && !isZoomedOut) {
+    // ── High out-degree ring (hot node indicator) ────────────────────────────
+    if (outDegree >= 10 && !faded && !isZoomedOut) {
+      ctx.save();
+      ctx.shadowColor = "rgba(251, 113, 133, 0.7)";
+      ctx.shadowBlur = 6;
       ctx.beginPath();
-      ctx.arc(n.x || 0, n.y || 0, radius + 1.5, 0, 2 * Math.PI, false);
-      ctx.strokeStyle = "rgba(239, 68, 68, 0.7)";
-      ctx.lineWidth = 1.5;
+      ctx.arc(nx, ny, radius + 2, 0, 2 * Math.PI);
+      ctx.strokeStyle = "rgba(251, 113, 133, 0.65)";
+      ctx.lineWidth = 1.2;
       ctx.stroke();
+      ctx.restore();
     }
 
-    if ((n.in_degree ?? 0) > 0 && (label === "Function" || label === "Interface" || radius < 5) && !faded && !isZoomedOut) {
-      const t = (Date.now() / 1200) % 1.0;
-      const rippleRadius = radius + t * 8;
-      const rippleOpacity = (1 - t) * 0.45;
-
+    // ── Ripple pulse on nodes with in-connections ────────────────────────────
+    if (degree > 0 && !faded && !isZoomedOut && !isMassive && (label === "Function" || label === "Interface")) {
+      const t = (Date.now() / 1400) % 1.0;
+      const rippleRadius = radius + t * 9;
       ctx.beginPath();
-      ctx.arc(n.x || 0, n.y || 0, rippleRadius, 0, 2 * Math.PI, false);
+      ctx.arc(nx, ny, rippleRadius, 0, 2 * Math.PI);
       ctx.strokeStyle = color;
-      ctx.lineWidth = 0.6;
-      ctx.globalAlpha = rippleOpacity;
+      ctx.lineWidth = 0.5;
+      ctx.globalAlpha = (1 - t) * 0.35;
       ctx.stroke();
       ctx.globalAlpha = faded ? graphTheme.dimOpacity : 1;
     }
 
+    // ── Hover tooltip ────────────────────────────────────────────────────────
     if (id === hoverNode && !faded) {
-       const info = [];
-       if (n.loc !== undefined) info.push(`LOC: ${n.loc}`);
-       if (n.in_degree !== undefined) info.push(`In: ${n.in_degree} | Out: ${n.out_degree}`);
-
-       if (info.length > 0) {
-         ctx.font = `10px Inter, sans-serif`;
-         ctx.fillStyle = "rgba(255,255,255,0.9)";
-         ctx.fillText(info.join(" - "), (n.x || 0), (n.y || 0) - radius - 6);
-       }
+      const info: string[] = [];
+      if (n.loc !== undefined) info.push(`LOC: ${n.loc}`);
+      if (n.in_degree !== undefined) info.push(`↓${n.in_degree}  ↑${n.out_degree}`);
+      if (info.length > 0) {
+        const text = info.join("  ·  ");
+        const fontSize = Math.max(8, 10 / globalScale);
+        ctx.font = `${fontSize}px "Inter", sans-serif`;
+        const tw = ctx.measureText(text).width;
+        const padding = 3;
+        const bx = nx - tw / 2 - padding;
+        const by = ny - radius - fontSize - 10;
+        ctx.fillStyle = "rgba(0,0,0,0.65)";
+        ctx.beginPath();
+        ctx.roundRect(bx, by, tw + padding * 2, fontSize + padding * 2, 3);
+        ctx.fill();
+        ctx.fillStyle = "rgba(255,255,255,0.92)";
+        ctx.textAlign = "center";
+        ctx.fillText(text, nx, by + fontSize + padding - 1);
+      }
     }
 
-    if (globalScale > 2 || id === focusNode || id === hoverNode) {
-      const fontSize = 12 / globalScale;
-      ctx.font = `${fontSize}px Inter, sans-serif`;
-      ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
-      ctx.textAlign = "center";
-      ctx.fillText(name || "", n.x || 0, (n.y || 0) + radius + fontSize + 2);
+    // ── Node label (shown on zoom or focus) ──────────────────────────────────
+    if (globalScale > 2.5 || id === focusNode || id === hoverNode) {
+      // LOD: Block text immediately on massive graphs if too zoomed out and not hovered
+      if (!(isMassive && globalScale < 0.6 && !isActive)) {
+        const fontSize = Math.max(7, 11 / globalScale);
+        ctx.font = `${fontSize}px "Inter", sans-serif`;
+        ctx.textAlign = "center";
+        // Text shadow for readability on dark background
+        ctx.shadowColor = "rgba(0,0,0,0.9)";
+        ctx.shadowBlur = (isMassive && !isActive) ? 0 : 4;
+        ctx.fillStyle = isActive ? "rgba(255, 255, 255, 1)" : "rgba(200, 200, 220, 0.75)";
+        ctx.fillText(name || "", nx, ny + radius + fontSize + 2);
+        ctx.shadowBlur = 0;
+      }
     }
 
-    ctx.globalAlpha = 1;
-  }, [activeTypes, lowerSearchQuery, isFaded, hoverNode, focusNode, timeRange]);
+    ctx.restore();
+  }, [activeTypes, lowerSearchQuery, isFaded, hoverNode, focusNode, timeRange, graphData?.nodes?.length]);
 
   const getLinkColor = useCallback((link: LinkObject) => {
     const l = link as ForceLink;
@@ -749,25 +972,28 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
 
     const isGlowing = glowingLinks.has(`${sourceId}-${targetId}`);
     if (isGlowing && !faded) {
-      return "rgba(96, 165, 250, 0.85)";
+      return graphTheme.edgeGlow;
     }
 
     if (faded) {
-      return "rgba(255, 255, 255, 0.05)";
+      return "rgba(255, 255, 255, 0.025)";
     }
 
     if (showCycles && l.is_cycle) {
-      return "rgba(248, 113, 113, 0.55)";
+      return graphTheme.edgeCycle;
     }
-    return "rgba(156, 163, 175, 0.4)";
+    // Uses very thin, barely-visible white lines — the graph structure
+    // is implied, not dominant. Nodes are the stars, edges are the void between them.
+    return graphTheme.edgeDefault;
   }, [isFaded, showCycles, glowingLinks]);
 
   const getParticleColor = useCallback((link: LinkObject) => {
     const l = link as ForceLink;
     if (showCycles && l.is_cycle) {
-      return "rgba(252, 165, 165, 0.8)";
+      return "rgba(252, 165, 165, 0.85)";
     }
-    return "rgba(203, 213, 225, 0.65)";
+    // Particles travel as small bright dots along edges
+    return "rgba(226, 232, 240, 0.75)";
   }, [showCycles]);
 
   const getLinkWidth = useCallback((link: LinkObject) => {
@@ -793,6 +1019,8 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     const sourceNode = l.source;
     const targetNode = l.target;
     if (!sourceNode || !targetNode) return false;
+    
+    if (l.type === "internal_cluster") return false;
 
     const sourceLabel = typeof sourceNode === 'object' ? sourceNode.label : null;
     const targetLabel = typeof targetNode === 'object' ? targetNode.label : null;
@@ -827,8 +1055,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
   return (
     <div className="flex-1 w-full flex flex-col relative min-h-0" style={{ backgroundColor: graphTheme.background }}>
       {/* Controls Overlay */}
-      <div className="absolute top-4 left-4 z-10 flex flex-col gap-3 p-4 rounded-lg shadow-lg"
-           style={{ backgroundColor: graphTheme.surfaceElevated, border: `1px solid ${graphTheme.border}` }}>
+      <div className={cn("absolute top-4 left-4 z-10 flex flex-col gap-3 p-4 rounded-lg", graphUI.background, graphUI.blur, graphUI.border, graphUI.shadow)}>
 
         <div className="relative">
           <Search className="w-4 h-4 absolute left-3 top-2.5 text-zinc-400" />
@@ -842,16 +1069,28 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
         </div>
 
         <div className="flex flex-wrap gap-2 text-xs">
-          {["File", "Class", "Function", "Interface"].map(type => (
+          {([
+            { type: "File",      shape: "●", color: "#94a3b8" },
+            { type: "Class",     shape: "■", color: graphTheme.class },
+            { type: "Function",  shape: "▲", color: graphTheme.function },
+            { type: "Interface", shape: "◆", color: graphTheme.interface },
+          ] as { type: string; shape: string; color: string }[]).map(({ type, shape, color }) => (
             <button
               key={type}
               onClick={() => toggleType(type)}
-              className={`px-2 py-1 rounded-md transition-colors ${activeTypes.has(type) ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
+              className={`flex items-center gap-1.5 px-2 py-1 rounded-md transition-all ${
+                activeTypes.has(type)
+                  ? 'text-white'
+                  : 'text-zinc-500 hover:text-zinc-300 opacity-50'
+              }`}
               style={{
-                backgroundColor: activeTypes.has(type) ? '#3f3f46' : '#18181b',
-                borderLeft: `3px solid ${activeTypes.has(type) ? graphTheme[type.toLowerCase() as keyof typeof graphTheme] : 'transparent'}`
+                backgroundColor: activeTypes.has(type) ? `${color}18` : 'transparent',
+                border: `1px solid ${activeTypes.has(type) ? `${color}60` : '#27272a'}`,
               }}
             >
+              <span style={{ color: activeTypes.has(type) ? color : '#52525b', fontSize: '0.7rem' }}>
+                {shape}
+              </span>
               {type}
             </button>
           ))}
@@ -952,8 +1191,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
       </div>
 
       {moduleLegend.length > 0 && (
-        <div className="absolute top-4 right-4 z-10 flex flex-col gap-1 p-2 rounded-lg shadow-lg max-h-64 overflow-y-auto"
-             style={{ backgroundColor: graphTheme.surfaceElevated, border: `1px solid ${graphTheme.border}` }}>
+        <div className={cn("absolute top-4 right-4 z-10 flex flex-col gap-1 p-2 rounded-lg max-h-64 overflow-y-auto", graphUI.background, graphUI.blur, graphUI.border, graphUI.shadow)}>
           <span className="text-[10px] text-zinc-500 px-1 mb-1">Módulos</span>
           {moduleLegend.map((item) => (
             <div key={item.name} className="flex items-center gap-2 px-1 py-0.5 rounded hover:bg-[#3f3f46] cursor-pointer text-xs">
@@ -965,8 +1203,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
       )}
 
       {/* Unified Graph Controls Toolbar */}
-      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 flex flex-row items-center rounded-lg shadow-lg overflow-hidden"
-           style={{ backgroundColor: graphTheme.surfaceElevated, border: `1px solid ${graphTheme.border}` }}>
+      <div className={cn("absolute bottom-6 left-1/2 -translate-x-1/2 z-10 flex flex-row items-center rounded-lg overflow-hidden", graphUI.background, graphUI.blur, graphUI.border, graphUI.shadow)}>
         <button
           onClick={handleZoomIn}
           className="p-2 transition-colors text-zinc-400 hover:text-white hover:bg-[#3f3f46]"
@@ -1006,8 +1243,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
       </div>
 
       {timeRange && (
-        <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-10 flex items-center gap-3 px-4 py-2 rounded-lg shadow-lg"
-             style={{ backgroundColor: graphTheme.surfaceElevated, border: `1px solid ${graphTheme.border}` }}>
+        <div className={cn("absolute bottom-24 left-1/2 -translate-x-1/2 z-10 flex items-center gap-3 px-4 py-2 rounded-lg", graphUI.background, graphUI.blur, graphUI.border, graphUI.shadow)}>
           <button
             onClick={() => {
               if (animating) {
@@ -1094,12 +1330,56 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
           </div>
         )}
 
+        {expandedFolders.size > 0 && (
+          <div className="absolute top-6 left-1/2 -translate-x-1/2 z-20 flex flex-row flex-wrap justify-center gap-2 w-full max-w-3xl pointer-events-none">
+            {Array.from(expandedFolders).map((folderPath) => (
+              <div 
+                key={folderPath}
+                className="flex items-center gap-1 px-2 py-0.5 bg-indigo-950/80 border border-indigo-500/50 rounded-full text-[11px] font-medium tracking-wide text-indigo-100 shadow-[0_0_15px_rgba(99,102,241,0.3)] pointer-events-auto backdrop-blur-md transition-all hover:bg-indigo-900/90"
+              >
+                <FolderOpen className="w-2.5 h-2.5 text-blue-400" />
+                <span className="truncate max-w-[150px]">{folderPath.split('/').pop() || folderPath}</span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setExpandedFolders((prev) => {
+                      const next = new Set(prev);
+                      next.delete(folderPath);
+                      return next;
+                    });
+                    
+                    // Unfreeze all nodes to allow physics to regroup them
+                    setGraphData((prevGraph) => {
+                      prevGraph.nodes.forEach((nItem: ForceNode) => {
+                        nItem.fx = undefined;
+                        nItem.fy = undefined;
+                      });
+                      return { ...prevGraph };
+                    });
+
+                    setTimeout(() => {
+                      if (fgRef.current) {
+                        fgRef.current.d3ReheatSimulation();
+                      }
+                    }, 50);
+                  }}
+                  className="ml-1 p-0.5 rounded-full hover:bg-zinc-700 hover:text-white transition-colors"
+                  title="Colapsar carpeta"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
         <ForceGraph2D
             ref={fgRef}
             width={dimensions.width || 800}
             height={dimensions.height || 600}
             graphData={displayGraphData}
             backgroundColor={graphTheme.background}
+            onRenderFramePre={paintBackground}
             nodeCanvasObject={paintNode}
             nodeVisibility={(node: NodeObject) => {
               // SENSEI FIX: También curamos la evaluación global de D3
@@ -1124,27 +1404,53 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
             linkDirectionalParticleColor={getParticleColor}
             linkDirectionalArrowLength={3.5}
             linkDirectionalArrowRelPos={1}
+            d3AlphaDecay={((graphData?.nodes?.length || 0) > 1000) ? 0.06 : 0.0228}
             cooldownTicks={100}
+            nodePointerAreaPaint={(node: NodeObject, color: string, ctx: CanvasRenderingContext2D) => {
+              ctx.fillStyle = color;
+              const hitRadius = node.label === "Module" ? 18 : 8; 
+              ctx.beginPath();
+              ctx.arc(node.x || 0, node.y || 0, hitRadius, 0, 2 * Math.PI);
+              ctx.fill();
+            }}
             onNodeClick={(node: NodeObject) => {
               const n = node as ForceNode;
-              const now = Date.now();
-              const isDoubleClick = now - lastClickTimeRef.current < 400;
-              lastClickTimeRef.current = now;
-
-              if (isDoubleClick) {
-                if (onNodeClick) {
-                  onNodeClick({
-                    id: (n.id as string) || "",
-                    label: (n.label as "File" | "Class" | "Function") || "File",
-                    name: (n.name as string) || "",
-                    file_path: (n.file_path as string) || "",
-                    size: n.size,
-                    metadata: n.metadata
+              
+              if (n.label === "Module") {
+                // Initialize physics state for smooth transition without freezing
+                setGraphData((prevGraph) => {
+                  prevGraph.nodes.forEach((nItem: ForceNode) => {
+                    if (nItem.x !== undefined) nItem.x = nItem.x;
+                    if (nItem.y !== undefined) nItem.y = nItem.y;
                   });
-                }
-              } else {
-                setFocusNode(n.id as string);
+                  return { ...prevGraph };
+                });
+                setExpandedFolders((prev) => new Set([...prev, n.file_path || ""]));
+                
+                setTimeout(() => {
+                  if (fgRef.current) {
+                    fgRef.current.zoomToFit(800, 100);
+                    fgRef.current.d3ReheatSimulation();
+                  }
+                }, 100);
+              } else if (onNodeClick) {
+                onNodeClick({
+                  id: (n.id as string) || "",
+                  label: (n.label as GraphNodeLabel) || "File",
+                  name: (n.name as string) || "",
+                  file_path: (n.file_path as string) || "",
+                  size: n.size,
+                  metadata: n.metadata
+                });
               }
+            }}
+            onNodeDragEnd={(node: NodeObject) => {
+              const n = node as ForceNode;
+              n.fx = n.x;
+              n.fy = n.y;
+            }}
+            onNodeDrag={() => {
+              // Allows manual dragging and pinning
             }}
             onBackgroundClick={() => setFocusNode(null)}
             onNodeRightClick={(node: NodeObject, event: MouseEvent) => {
@@ -1155,7 +1461,14 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
                 node: node as ForceNode
               });
             }}
-            onNodeHover={(node: NodeObject | null) => setHoverNode(node ? (node.id as string) : null)}
+            onNodeHover={(node: NodeObject | null) => {
+              setHoverNode(node ? (node.id as string) : null);
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const canvas = (fgRef.current as any)?.canvasControls?.getCanvasElement?.() || document.querySelector('canvas');
+              if (canvas) {
+                canvas.style.cursor = node ? ((node as ForceNode).label === "Module" ? 'pointer' : 'grab') : 'default';
+              }
+            }}
             enableZoomInteraction={true}
             enablePanInteraction={true}
             onEngineStop={() => {

@@ -159,6 +159,17 @@ class PhpAnalyzerStrategy(LanguageAnalyzerStrategy):
                     if target_class[0].islower() or target_class in ("self", "static", "parent"):
                         continue
 
+                elif capture_name == "use.fqn":
+                    fqn = node.text.decode('utf8')
+                    target_path = self._fqn_to_path(fqn, psr4_map)
+                    if target_path:
+                        edges.append({
+                            "source_id": f"file:{rel_path}",
+                            "target_id": f"file:{target_path}",
+                            "type": "depends_on"
+                        })
+                    continue
+
                 if target_class:
                     if target_class.startswith('\\'):
                         continue

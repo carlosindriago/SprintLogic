@@ -142,9 +142,7 @@ async def stream_scan_progress(project_id: str):
             logger.warning("TCP client disconnected abruptly for project %s", project_id)
             raise
         finally:
-            cancel_token = active_scans.pop(project_id, None)
-            if cancel_token:
-                cancel_token.set()
+            active_scans.pop(project_id, None)
 
     return EventSourceResponse(event_generator())
 
@@ -226,7 +224,7 @@ async def delete_project(
 
 
 @router.get("/projects/{project_id}/graph")
-async def get_project_graph(project_id: str, session: AsyncSession = Depends(get_db_session)):
+async def get_project_graph(project_id: str, expanded_folders: str | None = None, session: AsyncSession = Depends(get_db_session)):
     # Update last opened time since we are fetching the graph
     try:
         project_uuid = UUID(project_id)
@@ -234,8 +232,15 @@ async def get_project_graph(project_id: str, session: AsyncSession = Depends(get
         project = await repo.get_project(project_uuid)
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
-        await repo.update_last_opened(project_uuid)
-        await session.commit()
+
+        try:
+            await repo.update_last_opened(project_uuid)
+            await session.commit()
+        except Exception as e:
+            if "database is locked" in str(e):
+                await session.rollback()
+            else:
+                raise
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid project ID format")
 
@@ -259,17 +264,17 @@ async def get_project_graph(project_id: str, session: AsyncSession = Depends(get
     out_degree = {n_id: 0 for n_id in valid_node_ids}
     adj: dict[str, list[str]] = {n_id: [] for n_id in valid_node_ids}
 
-    for e in filtered_edges:
-        in_degree[e.target_id] += 1
-        out_degree[e.source_id] += 1
-        adj[e.source_id].append(e.target_id)
+    for edge in filtered_edges:
+        in_degree[edge.target_id] += 1
+        out_degree[edge.source_id] += 1
+        adj[edge.source_id].append(edge.target_id)
 
     # NetworkX SCC — O(V+E) linear time, iterative, no stack overflow
     import networkx as nx
 
     G: nx.DiGraph[str] = nx.DiGraph()
-    for e in filtered_edges:
-        G.add_edge(e.source_id, e.target_id)
+    for edge in filtered_edges:
+        G.add_edge(edge.source_id, edge.target_id)
 
     node_to_scc: dict[str, int] = {}
     for i, scc in enumerate(nx.strongly_connected_components(G)):
@@ -308,22 +313,27 @@ async def get_project_graph(project_id: str, session: AsyncSession = Depends(get
         nodes_dict.append(node_dict)
 
     links_dict = []
-    for e in filtered_edges:
+    for edge in filtered_edges:
         is_cycle = False
-        if e.source_id in node_to_scc and e.target_id in node_to_scc:
-            if node_to_scc[e.source_id] == node_to_scc[e.target_id]:
+        if edge.source_id in node_to_scc and edge.target_id in node_to_scc:
+            if node_to_scc[edge.source_id] == node_to_scc[edge.target_id]:
                 is_cycle = True
 
         links_dict.append(
             {
-                "source": e.source_id,
-                "target": e.target_id,
-                "type": e.type.value if hasattr(e.type, "value") else e.type,
+                "source": edge.source_id,
+                "target": edge.target_id,
+                "type": edge.type.value if hasattr(edge.type, "value") else edge.type,
                 "is_cycle": is_cycle,
             }
         )
 
-    return {"nodes": nodes_dict, "links": links_dict}
+    # Apply Macro-to-Micro density collapse
+    from app.application.graph_collapse import collapse_graph_by_density
+    expanded_set = set(expanded_folders.split(",")) if expanded_folders else set()
+    collapsed = collapse_graph_by_density(nodes_dict, links_dict, max_density=15, expanded_folders=expanded_set)
+
+    return collapsed
 
 
 from concurrent.futures import ProcessPoolExecutor

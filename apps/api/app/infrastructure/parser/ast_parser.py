@@ -5,6 +5,11 @@ from pathlib import Path
 
 import tree_sitter
 
+from app.infrastructure.parser.import_resolver import (
+    TSConfigResolver,
+    try_resolve_file,
+)
+
 try:
     import tree_sitter_python
 except ImportError:
@@ -172,33 +177,16 @@ def resolve_import_edges(
     base_dir: Path,
 ) -> list[GraphEdge]:
     """
-    Pasada 2 del análisis (estilo compilador de dos pasadas): una vez que se conoce el
-    universo completo de archivos del proyecto (`file_paths`), resuelve cada import
-    crudo detectado en la Pasada 1 (`file_imports`, poblado por `extract_nodes_from_code`)
-    contra el filesystem real y devuelve las aristas IMPORTS resultantes.
-
-    Limitación conocida y deliberada (no scope creep): la resolución de TS/JS/JSX es un
-    matching por nombre de archivo (stem), no lee `tsconfig.json` ni resuelve alias como
-    `@/components/...`. Esos imports quedarán sin conectar hasta que se construya un
-    resolver consciente de path-mapping — tarea separada y explícitamente fuera de
-    alcance de este fix.
+    Pasada 2 del análisis: Resuelve los imports contra el filesystem real.
+    Ahora soporta Path Aliases de TypeScript (@/) y resolución relativa.
     """
     edges: list[GraphEdge] = []
 
-    # Precompute file stems for O(1) lookup
-    file_stems: dict[str, list[str]] = {}
-    for fp in file_paths:
-        fp_path = Path(fp)
-        stem = fp_path.stem
-        parent_name = fp_path.parent.name
+    # Precompute file set for O(1) lookup
+    file_set = set(file_paths)
 
-        if stem not in file_stems:
-            file_stems[stem] = []
-        file_stems[stem].append(fp)
-
-        if parent_name not in file_stems:
-            file_stems[parent_name] = []
-        file_stems[parent_name].append(fp)
+    # Instanciar el resolver de TS
+    alias_resolver = TSConfigResolver(file_paths)
 
     for source_id, imports in file_imports.items():
         source_path_str = source_id.replace("file:", "")
@@ -222,16 +210,27 @@ def resolve_import_edges(
                             )
                         )
             else:
-                normalized_imp = imp.replace("\\", "/").replace(".", "/").lstrip("./@")
-                if not normalized_imp:
+                # TS/JS/Go/Java resolutions
+                target = None
+                if imp.startswith("./") or imp.startswith("../"):
+                    # Relative import
+                    source_dir = Path(source_path_str).parent
+                    resolved = (source_dir / imp).resolve()
+                    try:
+                        # Convert to relative to CWD to match file_paths
+                        rel_path = str(resolved.relative_to(Path.cwd())).replace("\\", "/")
+                    except ValueError:
+                        rel_path = str(resolved).replace("\\", "/")
+                    target = try_resolve_file(rel_path, file_set)
+                elif alias_resolver.is_alias(imp):
+                    # TS alias
+                    target = alias_resolver.resolve(imp)
+                else:
+                    # External (node_modules) or unmapped workspace package -> skip
                     continue
 
-                target_stem = Path(normalized_imp).stem
-
-                # Fast lookup using precomputed stems
-                matching_files = file_stems.get(target_stem, [])
-                for fp in matching_files:
-                    target_id = f"file:{fp}"
+                if target:
+                    target_id = f"file:{target}"
                     if source_id != target_id:
                         edges.append(
                             GraphEdge(
@@ -241,7 +240,6 @@ def resolve_import_edges(
                                 type=EdgeType.IMPORTS,
                             )
                         )
-                        break
 
     return edges
 
@@ -301,7 +299,13 @@ def extract_nodes_from_code(
         )
     )
 
+    seen_fqns = set()
     for pnode in parsed_nodes:
+        # Prevent UNIQUE constraint failure in DB due to overloaded or duplicate methods
+        if pnode.fqn in seen_fqns:
+            pnode.fqn = f"{pnode.fqn}_{pnode.start_line}"
+        seen_fqns.add(pnode.fqn)
+
         nodes.append(
             GraphNode(
                 id=pnode.fqn,
