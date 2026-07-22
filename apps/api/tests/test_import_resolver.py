@@ -77,29 +77,25 @@ def test_tsconfig_resolver(tmp_path):
     
     # Setup files (paths relative to CWD like in real scenario)
     # We pretend tmp_path is CWD for the sake of paths in the file_set
-    
-    cwd_path = Path.cwd()
-    # The tsconfig path passed to the resolver is usually relative to cwd
-    rel_tsconfig = str(tsconfig_file.relative_to(cwd_path)) if cwd_path in tsconfig_file.parents else str(tsconfig_file)
-    
+
     # We will just pass absolute paths to make it easy for testing, or simulate relative
     file_paths = [
         str(tsconfig_file),
         str(tmp_path / "src/lib/api.ts"),
         str(tmp_path / "src/components/Button.tsx")
     ]
-    
+
     resolver = TSConfigResolver(file_paths)
-    
+
     assert resolver.is_alias("@/lib/api") is True
     assert resolver.is_alias("@components/Button") is True
     assert resolver.is_alias("react") is False
-    
+
     # Resolve should find the file
     resolved_api = resolver.resolve("@/lib/api")
     assert resolved_api is not None
     assert resolved_api.endswith("api.ts")
-    
+
     resolved_btn = resolver.resolve("@components/Button")
     assert resolved_btn is not None
     assert resolved_btn.endswith("Button.tsx")
