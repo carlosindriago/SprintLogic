@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useState, useRef, useMemo, useCallback, useLayoutEffect } from "react";
 import { getProjectGraph, rescanProject, ApiError } from "@/lib/api";
 import { API_BASE_URL } from "@/lib/api";
+import { forceX, forceY } from "d3-force";
 import { GraphData, GraphNode, GraphEdge } from "@/types";
 import { LinkObject, NodeObject } from "react-force-graph-2d";
 import { graphTheme, extColorHash, bloomGlow } from "@/lib/graph-theme";
@@ -176,7 +177,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
         clearScan(projectId);
         toast.error("El escaneo no respondió a tiempo. Verificá la conexión con el servidor.");
       }
-    }, 60000);
+    }, 300000); // 5 minutes watchdog for large codebases
     return () => clearTimeout(watchdog);
   }, [isScanning, projectId, clearScan]);
 
@@ -483,12 +484,35 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     [graphData]
   );
 
-  useEffect(() => {
-    if (!fgRef.current || dimensions.width === 0) return;
-
-    fgRef.current.d3Force('charge').strength(-120);
-    fgRef.current.d3Force('link').distance(30);
-  }, [dimensions.width]);
+  // Calculate focal points for modules to create "solar systems"
+  const focalPoints = useMemo(() => {
+    const modules = new Set<string>();
+    if (!graphData || !graphData.nodes) return new Map<string, { x: number; y: number }>();
+    
+    for (const n of graphData.nodes) {
+      const node = n as ForceNode;
+      if (!node.folder || node.folder === "/") continue;
+      const parts = node.folder.split('/').filter(Boolean);
+      // Group by the first two segments of the path to form major "modules"
+      const moduleName = parts.slice(0, 2).join('/');
+      if (moduleName) modules.add(moduleName);
+    }
+    
+    const moduleList = Array.from(modules);
+    const map = new Map<string, { x: number; y: number }>();
+    // Giant circle based on the number of modules
+    const radius = Math.max(300, moduleList.length * 90);
+    
+    moduleList.forEach((mod, i) => {
+      const angle = (i / moduleList.length) * 2 * Math.PI;
+      map.set(mod, {
+        x: Math.cos(angle) * radius,
+        y: Math.sin(angle) * radius
+      });
+    });
+    
+    return map;
+  }, [graphData]);
 
   useEffect(() => {
     if (!fgRef.current || !hasGraphData) return;
@@ -496,10 +520,30 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
 
     initialFitDone.current = false;
 
+    // Base D3 forces
     fgRef.current.d3Force('charge').strength(-120);
     fgRef.current.d3Force('link').distance(30);
+
+    // Magnetic Injection: Solar System grouping by folder
+    const fx = forceX<ForceNode>(node => {
+      if (!node.folder || node.folder === "/") return 0;
+      const parts = node.folder.split('/').filter(Boolean);
+      const mod = parts.slice(0, 2).join('/');
+      return focalPoints.get(mod)?.x || 0;
+    }).strength(0.05);
+
+    const fy = forceY<ForceNode>(node => {
+      if (!node.folder || node.folder === "/") return 0;
+      const parts = node.folder.split('/').filter(Boolean);
+      const mod = parts.slice(0, 2).join('/');
+      return focalPoints.get(mod)?.y || 0;
+    }).strength(0.05);
+
+    fgRef.current.d3Force('x', fx);
+    fgRef.current.d3Force('y', fy);
+
     fgRef.current.d3ReheatSimulation();
-  }, [hasGraphData, dimensions.width]);
+  }, [hasGraphData, dimensions.width, focalPoints]);
 
   useEffect(() => {
     if (!enableFlow || !graphData || !graphData.links) {

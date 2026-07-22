@@ -10,6 +10,7 @@ Key design decisions:
 """
 import asyncio
 import logging
+import os
 from collections.abc import AsyncIterator
 from pathlib import Path
 
@@ -40,6 +41,10 @@ _BASELINE_IGNORE_PATTERNS: list[str] = [
     "node_modules/",
     ".next/",
     ".turbo/",
+    # PHP / Laravel / Composer
+    "vendor/",
+    "storage/",
+    "bootstrap/cache/",
     # Build outputs
     "dist/",
     "build/",
@@ -92,22 +97,35 @@ class LocalFileSystemProvider(CodebaseProvider):
     def discover(self, extension_filter: list[str] | None = None) -> list[Path]:
         """
         Returns the full list of candidate files (no I/O beyond stat).
-        Call this before get_source_files to know the total count upfront.
+        Uses os.walk with directory pruning to avoid traversing ignored directories (like vendor/ or node_modules/).
         """
         ext_set = set(extension_filter) if extension_filter else None
         results: list[Path] = []
+        root_str = str(self.root_path)
 
-        for path in self.root_path.rglob("*"):
-            if not path.is_file():
-                continue
-            if path.stat().st_size > MAX_FILE_BYTES:
-                continue
-            rel = path.relative_to(self.root_path)
-            if self._spec.match_file(str(rel)):
-                continue
-            if ext_set and path.suffix.lower() not in ext_set:
-                continue
-            results.append(path)
+        for root, dirs, files in os.walk(root_str):
+            rel_root = os.path.relpath(root, root_str)
+            # Prune ignored directories in place so os.walk never enters vendor/, node_modules/, .git/, etc.
+            dirs[:] = [
+                d for d in dirs
+                if not self._spec.match_file(
+                    d + "/" if rel_root == "." else f"{rel_root}/{d}/"
+                )
+            ]
+
+            for file in files:
+                full_path = Path(root) / file
+                rel_file = full_path.relative_to(self.root_path).as_posix()
+                if self._spec.match_file(rel_file):
+                    continue
+                if ext_set and full_path.suffix.lower() not in ext_set:
+                    continue
+                try:
+                    if full_path.stat().st_size > MAX_FILE_BYTES:
+                        continue
+                except OSError:
+                    continue
+                results.append(full_path)
 
         return results
 

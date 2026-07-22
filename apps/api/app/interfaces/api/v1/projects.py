@@ -142,9 +142,7 @@ async def stream_scan_progress(project_id: str):
             logger.warning("TCP client disconnected abruptly for project %s", project_id)
             raise
         finally:
-            cancel_token = active_scans.pop(project_id, None)
-            if cancel_token:
-                cancel_token.set()
+            active_scans.pop(project_id, None)
 
     return EventSourceResponse(event_generator())
 
