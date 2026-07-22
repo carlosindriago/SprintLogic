@@ -1,12 +1,11 @@
-import pytest
-from pathlib import Path
 
 from app.infrastructure.parser.import_resolver import (
     TSConfigResolver,
+    is_external_import,
     strip_json_comments,
     try_resolve_file,
-    is_external_import,
 )
+
 
 def test_strip_json_comments():
     json_with_comments = '''{
@@ -28,32 +27,32 @@ def test_try_resolve_file():
         "src/store/index.ts",
         "src/utils.js"
     }
-    
+
     # 1. Exact match
     assert try_resolve_file("src/lib/api.ts", file_set) == "src/lib/api.ts"
-    
+
     # 2. Extension resolution
     assert try_resolve_file("src/lib/api", file_set) == "src/lib/api.ts"
     assert try_resolve_file("src/components/Button", file_set) == "src/components/Button.tsx"
     assert try_resolve_file("src/utils", file_set) == "src/utils.js"
-    
+
     # 3. Index resolution
     assert try_resolve_file("src/store", file_set) == "src/store/index.ts"
-    
+
     # 4. Not found
     assert try_resolve_file("src/notfound", file_set) is None
 
 
 def test_is_external_import():
     alias_prefixes = ["@/"]
-    
+
     # Relativos
     assert is_external_import("./button", alias_prefixes) is False
     assert is_external_import("../utils", alias_prefixes) is False
-    
+
     # Alias
     assert is_external_import("@/lib/api", alias_prefixes) is False
-    
+
     # Externos
     assert is_external_import("react", alias_prefixes) is True
     assert is_external_import("lucide-react", alias_prefixes) is True
@@ -71,10 +70,10 @@ def test_tsconfig_resolver(tmp_path):
             }
         }
     }'''
-    
+
     tsconfig_file = tmp_path / "tsconfig.json"
     tsconfig_file.write_text(tsconfig_content)
-    
+
     # Setup files (paths relative to CWD like in real scenario)
     # We pretend tmp_path is CWD for the sake of paths in the file_set
 
