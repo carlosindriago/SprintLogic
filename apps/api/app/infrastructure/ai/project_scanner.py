@@ -70,7 +70,6 @@ def _scan_blocking(project_path: str) -> str:
             total_files += 1
 
             if f == "package.json":
-                project_type = "Node.js / Web"
                 try:
                     with open(os.path.join(dirpath, f), encoding="utf-8") as pkg:
                         data = json.load(pkg)
@@ -81,14 +80,17 @@ def _scan_blocking(project_path: str) -> str:
                             core_tech.add("Next.js")
                         if "vue" in deps:
                             core_tech.add("Vue")
+                        if "@angular/core" in deps:
+                            core_tech.add("Angular")
                         if "tailwindcss" in deps:
                             core_tech.add("TailwindCSS")
                         if "typescript" in deps:
                             core_tech.add("TypeScript")
                 except Exception:
                     pass
+            elif f == "angular.json":
+                core_tech.add("Angular")
             elif f == "pyproject.toml" or f == "requirements.txt":
-                project_type = "Python"
                 core_tech.add("Python")
                 if "pyproject.toml" in filenames:
                     try:
@@ -102,14 +104,37 @@ def _scan_blocking(project_path: str) -> str:
                                 core_tech.add("SQLAlchemy")
                     except Exception:
                         pass
+            elif f == "pom.xml" or f == "build.gradle":
+                core_tech.add("Java")
+                if "pom.xml" == f:
+                    try:
+                        with open(os.path.join(dirpath, f), encoding="utf-8") as pom:
+                            content = pom.read()
+                            if "spring-boot" in content:
+                                core_tech.add("Spring Boot")
+                    except Exception:
+                        pass
             elif f == "tauri.conf.json":
-                project_type = "Tauri App"
                 core_tech.add("Tauri")
                 core_tech.add("Rust")
             elif f == "Cargo.toml":
                 core_tech.add("Rust")
             elif f == "go.mod":
                 core_tech.add("Go")
+
+    # Determine Project Type based on detected core_tech
+    if "Java" in core_tech and ("Angular" in core_tech or "React" in core_tech or "Vue" in core_tech):
+        project_type = "Monorepo (Java + Frontend)"
+    elif "Python" in core_tech and ("Angular" in core_tech or "React" in core_tech or "Vue" in core_tech):
+        project_type = "Monorepo (Python + Frontend)"
+    elif "Java" in core_tech:
+        project_type = "Java / JVM"
+    elif "Python" in core_tech:
+        project_type = "Python"
+    elif "Tauri" in core_tech:
+        project_type = "Tauri App"
+    elif "Angular" in core_tech or "React" in core_tech or "Vue" in core_tech or "Next.js" in core_tech:
+        project_type = "Node.js / Web"
 
     if not core_tech:
         core_tech.add("Generic")

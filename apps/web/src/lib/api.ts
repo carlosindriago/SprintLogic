@@ -163,7 +163,10 @@ export const updateProject = (id: string, data: { name?: string, path?: string }
 export const deleteProject = (id: string) => api.delete<{ status: string }>(`/projects/${id}`);
 
 // --- Graph ---
-export const getProjectGraph = (projectId: string) => api.get<GraphData>(`/projects/${projectId}/graph`);
+export const getProjectGraph = (projectId: string, expandedFolders: string = "") => {
+  const url = expandedFolders ? `/projects/${projectId}/graph?expanded_folders=${encodeURIComponent(expandedFolders)}` : `/projects/${projectId}/graph`;
+  return api.get<GraphData>(url);
+};
 
 // --- Files ---
 export const getProjectFiles = (projectId: string) => api.get<FileTreeNode>(`/projects/${projectId}/files`);

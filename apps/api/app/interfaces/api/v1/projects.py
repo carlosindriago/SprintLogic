@@ -224,7 +224,7 @@ async def delete_project(
 
 
 @router.get("/projects/{project_id}/graph")
-async def get_project_graph(project_id: str, session: AsyncSession = Depends(get_db_session)):
+async def get_project_graph(project_id: str, expanded_folders: str | None = None, session: AsyncSession = Depends(get_db_session)):
     # Update last opened time since we are fetching the graph
     try:
         project_uuid = UUID(project_id)
@@ -232,8 +232,15 @@ async def get_project_graph(project_id: str, session: AsyncSession = Depends(get
         project = await repo.get_project(project_uuid)
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
-        await repo.update_last_opened(project_uuid)
-        await session.commit()
+        
+        try:
+            await repo.update_last_opened(project_uuid)
+            await session.commit()
+        except Exception as e:
+            if "database is locked" in str(e):
+                await session.rollback()
+            else:
+                raise
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid project ID format")
 
@@ -321,7 +328,12 @@ async def get_project_graph(project_id: str, session: AsyncSession = Depends(get
             }
         )
 
-    return {"nodes": nodes_dict, "links": links_dict}
+    # Apply Macro-to-Micro density collapse
+    from app.application.graph_collapse import collapse_graph_by_density
+    expanded_set = set(expanded_folders.split(",")) if expanded_folders else set()
+    collapsed = collapse_graph_by_density(nodes_dict, links_dict, max_density=15, expanded_folders=expanded_set)
+
+    return collapsed
 
 
 from concurrent.futures import ProcessPoolExecutor

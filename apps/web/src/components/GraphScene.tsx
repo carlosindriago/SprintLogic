@@ -4,11 +4,11 @@ import dynamic from "next/dynamic";
 import { useEffect, useState, useRef, useMemo, useCallback, useLayoutEffect } from "react";
 import { getProjectGraph, rescanProject, ApiError } from "@/lib/api";
 import { API_BASE_URL } from "@/lib/api";
-import { forceX, forceY } from "d3-force";
+import { forceRadial, forceCollide } from "d3-force";
 import { GraphData, GraphNode, GraphEdge } from "@/types";
 import { LinkObject, NodeObject } from "react-force-graph-2d";
 import { graphTheme, extColorHash, bloomGlow } from "@/lib/graph-theme";
-import { Search, RotateCcw, ZoomIn, ZoomOut, Maximize, Brain, Play, Pause, Zap, ZapOff, ScanSearch, FileCode, RefreshCw } from "lucide-react";
+import { Search, RotateCcw, ZoomIn, ZoomOut, Maximize, Brain, Play, Pause, Zap, ZapOff, ScanSearch, FileCode, RefreshCw, X, FolderOpen } from "lucide-react";
 import { useTabsStore } from "../store/tabsStore";
 import { useLLMConfigStore } from "../store/llmConfigStore";
 import { useBackgroundJobsStore } from "../store/backgroundJobsStore";
@@ -119,7 +119,8 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
   const [searchQuery, setSearchQuery] = useState("");
   const [showCycles, setShowCycles] = useState(false);
   // Canonical label form is TitleCase ("File", "Class", "Function", "Interface") — matches backend values exactly.
-  const [activeTypes, setActiveTypes] = useState<Set<string>>(new Set(["File", "Class", "Function", "Interface"]));
+  const [activeTypes, setActiveTypes] = useState<Set<string>>(new Set(["File", "Module"]));
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
 
   const [enableFlow, setEnableFlow] = useState(false);
   const [isPhysicsActive, setIsPhysicsActive] = useState(true);
@@ -146,7 +147,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     }
     if (scanStatus === "completed" && !rescanHandledRef.current) {
       rescanHandledRef.current = true;
-      getProjectGraph(projectId)
+      getProjectGraph(projectId, Array.from(expandedFolders).join(","))
         .then((data) => setGraphData(data))
         .catch(() => {
           toast.error("El escaneo terminó, pero falló la descarga del nuevo grafo. Reintentá.");
@@ -156,7 +157,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     if (scanStatus === "failed") {
       clearScan(projectId);
     }
-  }, [scanStatus, projectId, clearScan]);
+  }, [scanStatus, projectId, clearScan, expandedFolders]);
 
   const handleRescan = async () => {
     if (!projectId) return;
@@ -215,7 +216,6 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     animProgressRef.current = animProgress;
   }, [animProgress]);
 
-  const lastClickTimeRef = useRef<number>(0);
   const initialFitDone = useRef(false);
 
   useEffect(() => {
@@ -462,8 +462,26 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     const loadData = async () => {
       if (projectId !== null) {
         try {
-          const data = await getProjectGraph(projectId);
-          if (active) setGraphData(data);
+          const data = await getProjectGraph(projectId, Array.from(expandedFolders).join(","));
+          
+          if (active) {
+            setGraphData((prevGraph) => {
+              // Lock existing nodes to prevent explosion
+              const existingCoords = new Map(prevGraph.nodes.map((n: ForceNode) => [n.id, { x: n.x, y: n.y }]));
+              
+              data.nodes.forEach((n: ForceNode) => {
+                if (existingCoords.has(n.id)) {
+                  const coords = existingCoords.get(n.id)!;
+                  n.x = coords.x;
+                  n.y = coords.y;
+                  // We do NOT set fx/fy here because that permanently freezes the graph,
+                  // preventing nodes from making room for newly expanded children.
+                }
+              });
+              
+              return data;
+            });
+          }
         } catch (err) {
           if (err instanceof ApiError && err.status === 404) {
             if (active) setGraphData({ nodes: [], links: [] });
@@ -477,42 +495,16 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     };
     loadData();
     return () => { active = false; };
-  }, [projectId]);
+  }, [projectId, expandedFolders]);
 
   const hasGraphData = useMemo(
     () => graphData && graphData.nodes && graphData.nodes.length > 0,
     [graphData]
   );
 
-  // Calculate focal points for modules to create "solar systems"
-  const focalPoints = useMemo(() => {
-    const modules = new Set<string>();
-    if (!graphData || !graphData.nodes) return new Map<string, { x: number; y: number }>();
-    
-    for (const n of graphData.nodes) {
-      const node = n as ForceNode;
-      if (!node.folder || node.folder === "/") continue;
-      const parts = node.folder.split('/').filter(Boolean);
-      // Group by the first two segments of the path to form major "modules"
-      const moduleName = parts.slice(0, 2).join('/');
-      if (moduleName) modules.add(moduleName);
-    }
-    
-    const moduleList = Array.from(modules);
-    const map = new Map<string, { x: number; y: number }>();
-    // Giant circle based on the number of modules
-    const radius = Math.max(300, moduleList.length * 90);
-    
-    moduleList.forEach((mod, i) => {
-      const angle = (i / moduleList.length) * 2 * Math.PI;
-      map.set(mod, {
-        x: Math.cos(angle) * radius,
-        y: Math.sin(angle) * radius
-      });
-    });
-    
-    return map;
-  }, [graphData]);
+  // Removed static focalPoints in favor of dynamic clustering
+
+
 
   useEffect(() => {
     if (!fgRef.current || !hasGraphData) return;
@@ -521,29 +513,77 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     initialFitDone.current = false;
 
     // Base D3 forces
-    fgRef.current.d3Force('charge').strength(-120);
-    fgRef.current.d3Force('link').distance(30);
+    fgRef.current.d3Force('charge').strength(-350); // Increased repulsion for more space
+    fgRef.current.d3Force('link').distance(40);
+    
+    // Add collision force to prevent nodes from overlapping (especially large modules)
+    fgRef.current.d3Force('collide', forceCollide<ForceNode>().radius(node => {
+      return node.label === "Module" ? 22 : 10;
+    }).iterations(2));
 
-    // Magnetic Injection: Solar System grouping by folder
-    const fx = forceX<ForceNode>(node => {
-      if (!node.folder || node.folder === "/") return 0;
-      const parts = node.folder.split('/').filter(Boolean);
-      const mod = parts.slice(0, 2).join('/');
-      return focalPoints.get(mod)?.x || 0;
-    }).strength(0.05);
+    // Magnetic Injection: Dynamic Solar System grouping by folder
+    function forceCluster() {
+      let nodes: ForceNode[];
+      
+      function force(alpha: number) {
+        const centroids = new Map<string, { x: number; y: number; count: number }>();
+        
+        // 1. Calculate the dynamic centroid for each Module
+        nodes.forEach(d => {
+          if (!d.folder || d.folder === "/") return;
+          const parts = d.folder.split('/').filter(Boolean);
+          const mod = parts.slice(0, 2).join('/');
+          if (!mod) return;
+          
+          const c = centroids.get(mod);
+          if (!c) {
+             centroids.set(mod, { x: d.x || 0, y: d.y || 0, count: 1 });
+          } else {
+             c.x += d.x || 0;
+             c.y += d.y || 0;
+             c.count += 1;
+          }
+        });
 
-    const fy = forceY<ForceNode>(node => {
-      if (!node.folder || node.folder === "/") return 0;
-      const parts = node.folder.split('/').filter(Boolean);
-      const mod = parts.slice(0, 2).join('/');
-      return focalPoints.get(mod)?.y || 0;
-    }).strength(0.05);
+        // 2. Apply gentle magnetic pull towards the centroid
+        const strength = 0.08 * alpha; // Force that decays with time
+        nodes.forEach(d => {
+          if (!d.folder || d.folder === "/") return;
+          const parts = d.folder.split('/').filter(Boolean);
+          const mod = parts.slice(0, 2).join('/');
+          const centroid = centroids.get(mod);
+          
+          if (centroid && d.vx !== undefined && d.vy !== undefined && d.x !== undefined && d.y !== undefined) {
+            const cx = centroid.x / centroid.count;
+            const cy = centroid.y / centroid.count;
+            
+            // Empujar suavemente hacia el centroide
+            d.vx -= (d.x - cx) * strength;
+            d.vy -= (d.y - cy) * strength;
+          }
+        });
+      }
 
-    fgRef.current.d3Force('x', fx);
-    fgRef.current.d3Force('y', fy);
+      force.initialize = function(_: ForceNode[]) {
+        nodes = _;
+      };
+
+      return force;
+    }
+
+    // Radial force to gather orphaned nodes (no edges) around the center
+    const centerForce = forceRadial<ForceNode>(0, 0, 0).strength(node => {
+      const degree = (node.in_degree || 0) + (node.out_degree || 0);
+      return degree === 0 ? 0.05 : 0;
+    });
+
+    fgRef.current.d3Force('cluster', forceCluster());
+    fgRef.current.d3Force('x', null); // Remove static X force
+    fgRef.current.d3Force('y', null); // Remove static Y force
+    fgRef.current.d3Force('radial', centerForce);
 
     fgRef.current.d3ReheatSimulation();
-  }, [hasGraphData, dimensions.width, focalPoints]);
+  }, [hasGraphData, dimensions.width]);
 
   useEffect(() => {
     if (!enableFlow || !graphData || !graphData.links) {
@@ -615,6 +655,59 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     return { nodes, links };
   }, [graphData, focusNode, neighbors, activeTypes]);
 
+  const paintBackground = useCallback((ctx: CanvasRenderingContext2D, globalScale: number) => {
+    if (!displayGraphData || !displayGraphData.nodes || displayGraphData.nodes.length === 0) return;
+
+    const centroids = new Map<string, { x: number; y: number; count: number }>();
+    
+    displayGraphData.nodes.forEach((n: ForceNode) => {
+      if (!n.folder || n.folder === "/") return;
+      if (cutoffTimeRef.current && getSafeTime(n) > cutoffTimeRef.current) return;
+
+      const parts = n.folder.split('/').filter(Boolean);
+      const mod = parts.slice(0, 2).join('/');
+      if (!mod) return;
+      
+      const c = centroids.get(mod);
+      if (!c) {
+         centroids.set(mod, { x: n.x || 0, y: n.y || 0, count: 1 });
+      } else {
+         c.x += n.x || 0;
+         c.y += n.y || 0;
+         c.count += 1;
+      }
+    });
+
+    ctx.save();
+    for (const [mod, centroid] of centroids.entries()) {
+      const cx = centroid.x / centroid.count;
+      const cy = centroid.y / centroid.count;
+      const orbitRadius = Math.max(60, Math.sqrt(centroid.count) * 20);
+      const color = extColorHash(mod);
+
+      ctx.beginPath();
+      ctx.arc(cx, cy, orbitRadius, 0, 2 * Math.PI, false);
+      
+      ctx.fillStyle = color;
+      ctx.globalAlpha = 0.03;
+      ctx.fill();
+      
+      ctx.lineWidth = 1 / globalScale;
+      ctx.strokeStyle = color;
+      ctx.globalAlpha = 0.15;
+      ctx.stroke();
+      
+      const fontSize = 12 / globalScale;
+      ctx.font = `${fontSize}px Inter, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.globalAlpha = 0.6;
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillText(mod.toUpperCase(), cx, cy - orbitRadius - (10 / globalScale));
+    }
+    ctx.restore();
+  }, [displayGraphData]);
+
   const isFaded = useCallback((nodeId: string) => {
     const activeFocus = focusNode || hoverNode;
     if (!activeFocus) return false;
@@ -622,11 +715,11 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     return !neighbors.get(activeFocus)?.has(nodeId);
   }, [focusNode, hoverNode, neighbors]);
 
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const paintNode = useCallback((node: NodeObject, ctx: CanvasRenderingContext2D, globalScale: number) => {
+    const isMassive = (graphData?.nodes?.length || 0) > 1000;
     const n = node as ForceNode;
-    const id = n.id as string;
-    const label = n.label as string;
-    const name = n.name as string;
+    const { id, label, name } = n;
     const nx = n.x || 0;
     const ny = n.y || 0;
 
@@ -668,6 +761,11 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
       color = graphTheme.interface;
       glowColor = graphTheme.glowInterface;
       radius = Math.max(5, degreeRadius);
+    } else if (label === "Module") {
+      color = "#6366f1"; // Indigo for Super-Nodes
+      glowColor = bloomGlow(color, 0.6);
+      const children = (n as ForceNode).children_count || 1;
+      radius = Math.max(12, 6 + Math.log2(children) * 3);
     }
 
     const faded = isFaded(id);
@@ -705,12 +803,16 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
       const bloomRadius = isActive ? radius * 2.6 : radius * 1.9;
       ctx.save();
       ctx.shadowColor = glowColor;
-      ctx.shadowBlur = isActive ? 18 : 10;
-      ctx.beginPath();
-      ctx.arc(nx, ny, bloomRadius * 0.5, 0, 2 * Math.PI);
-      ctx.fillStyle = glowColor;
-      ctx.globalAlpha = isActive ? 0.22 : 0.12;
-      ctx.fill();
+      ctx.shadowBlur = (isMassive && !isActive) ? 0 : (isActive ? 18 : 10);
+      
+      // LOD: If massive, don't draw the bloom fill unless hovered
+      if (!isMassive || isActive) {
+        ctx.beginPath();
+        ctx.arc(nx, ny, bloomRadius * 0.5, 0, 2 * Math.PI);
+        ctx.fillStyle = glowColor;
+        ctx.globalAlpha = isActive ? 0.22 : 0.12;
+        ctx.fill();
+      }
       ctx.restore();
     }
 
@@ -735,32 +837,56 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
       ctx.save();
       // Bloom: inner core glows with shadowBlur
       ctx.shadowColor = glowColor;
-      ctx.shadowBlur = isActive ? 16 : 8;
+      ctx.shadowBlur = (isMassive && !isActive) ? 0 : (isActive ? 16 : 8);
       ctx.fillStyle = color;
 
-      if (label === "Class") {
-        // Rounded square — structured, solid
-        drawRoundedSquare(ctx, nx, ny, radius);
-      } else if (label === "Interface") {
-        // Diamond — abstract, structural
-        drawDiamond(ctx, nx, ny, radius);
-      } else if (label === "Function") {
-        // Triangle — directional, active
-        drawTriangle(ctx, nx, ny, radius);
+      // SENSEI LOD FIX: Ultra-fast rendering for distant massive graphs
+      if (isMassive && globalScale < 0.3 && !isActive) {
+        ctx.fillRect(nx - radius, ny - radius, radius * 2, radius * 2);
       } else {
-        // Circle — file or unknown
-        ctx.beginPath();
-        ctx.arc(nx, ny, radius, 0, 2 * Math.PI);
-      }
-      ctx.fill();
-
-      // Inner highlight (top-left specular — self-luminous feel)
-      if (!faded && !isZoomedOut) {
-        ctx.shadowBlur = 0;
-        ctx.fillStyle = "rgba(255, 255, 255, 0.18)";
-        ctx.beginPath();
-        ctx.arc(nx - radius * 0.3, ny - radius * 0.3, radius * 0.35, 0, 2 * Math.PI);
+        if (label === "Class") {
+          // Rounded square — structured, solid
+          drawRoundedSquare(ctx, nx, ny, radius);
+        } else if (label === "Interface") {
+          // Diamond — abstract, structural
+          drawDiamond(ctx, nx, ny, radius);
+        } else if (label === "Function") {
+          // Triangle — directional, active
+          drawTriangle(ctx, nx, ny, radius);
+        } else if (label === "Module") {
+          // Draw an octagon or thick circle for super nodes
+          ctx.beginPath();
+          ctx.arc(nx, ny, radius, 0, 2 * Math.PI);
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
+          ctx.stroke();
+        } else {
+          // Circle — file or unknown
+          ctx.beginPath();
+          ctx.arc(nx, ny, radius, 0, 2 * Math.PI);
+        }
         ctx.fill();
+
+        // Inner highlight (top-left specular — self-luminous feel)
+        if (!faded && !isZoomedOut && !isMassive && label !== "Module") {
+          ctx.shadowBlur = 0;
+          ctx.fillStyle = "rgba(255, 255, 255, 0.18)";
+          ctx.beginPath();
+          ctx.arc(nx - radius * 0.3, ny - radius * 0.3, radius * 0.35, 0, 2 * Math.PI);
+          ctx.fill();
+        }
+        
+        // Text inside Module
+        if (label === "Module" && !isZoomedOut) {
+          ctx.fillStyle = "white";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          const fontSize = Math.max(4, radius * 0.4);
+          ctx.font = `600 ${fontSize}px Inter, sans-serif`;
+          ctx.shadowBlur = 0;
+          const count = (n as ForceNode).children_count || 1;
+          ctx.fillText(String(count), nx, ny);
+        }
       }
       ctx.restore();
     }
@@ -779,7 +905,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     }
 
     // ── Ripple pulse on nodes with in-connections ────────────────────────────
-    if (degree > 0 && !faded && !isZoomedOut && (label === "Function" || label === "Interface")) {
+    if (degree > 0 && !faded && !isZoomedOut && !isMassive && (label === "Function" || label === "Interface")) {
       const t = (Date.now() / 1400) % 1.0;
       const rippleRadius = radius + t * 9;
       ctx.beginPath();
@@ -816,19 +942,22 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
 
     // ── Node label (shown on zoom or focus) ──────────────────────────────────
     if (globalScale > 2.5 || id === focusNode || id === hoverNode) {
-      const fontSize = Math.max(7, 11 / globalScale);
-      ctx.font = `${fontSize}px "Inter", sans-serif`;
-      ctx.textAlign = "center";
-      // Text shadow for readability on dark background
-      ctx.shadowColor = "rgba(0,0,0,0.9)";
-      ctx.shadowBlur = 4;
-      ctx.fillStyle = isActive ? "rgba(255, 255, 255, 1)" : "rgba(200, 200, 220, 0.75)";
-      ctx.fillText(name || "", nx, ny + radius + fontSize + 2);
-      ctx.shadowBlur = 0;
+      // LOD: Block text immediately on massive graphs if too zoomed out and not hovered
+      if (!(isMassive && globalScale < 0.6 && !isActive)) {
+        const fontSize = Math.max(7, 11 / globalScale);
+        ctx.font = `${fontSize}px "Inter", sans-serif`;
+        ctx.textAlign = "center";
+        // Text shadow for readability on dark background
+        ctx.shadowColor = "rgba(0,0,0,0.9)";
+        ctx.shadowBlur = (isMassive && !isActive) ? 0 : 4;
+        ctx.fillStyle = isActive ? "rgba(255, 255, 255, 1)" : "rgba(200, 200, 220, 0.75)";
+        ctx.fillText(name || "", nx, ny + radius + fontSize + 2);
+        ctx.shadowBlur = 0;
+      }
     }
 
     ctx.restore();
-  }, [activeTypes, lowerSearchQuery, isFaded, hoverNode, focusNode, timeRange]);
+  }, [activeTypes, lowerSearchQuery, isFaded, hoverNode, focusNode, timeRange, graphData?.nodes?.length]);
 
   const getLinkColor = useCallback((link: LinkObject) => {
     const l = link as ForceLink;
@@ -886,6 +1015,8 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     const sourceNode = l.source;
     const targetNode = l.target;
     if (!sourceNode || !targetNode) return false;
+    
+    if (l.type === "internal_cluster") return false;
 
     const sourceLabel = typeof sourceNode === 'object' ? sourceNode.label : null;
     const targetLabel = typeof targetNode === 'object' ? targetNode.label : null;
@@ -1199,12 +1330,56 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
           </div>
         )}
 
+        {expandedFolders.size > 0 && (
+          <div className="absolute top-6 left-1/2 -translate-x-1/2 z-20 flex flex-row flex-wrap justify-center gap-2 w-full max-w-3xl pointer-events-none">
+            {Array.from(expandedFolders).map((folderPath) => (
+              <div 
+                key={folderPath}
+                className="flex items-center gap-1.5 px-3 py-1 bg-indigo-950/80 border border-indigo-500/50 rounded-full text-xs font-semibold tracking-wide text-indigo-100 shadow-[0_0_15px_rgba(99,102,241,0.3)] pointer-events-auto backdrop-blur-md transition-all hover:bg-indigo-900/90"
+              >
+                <FolderOpen className="w-3 h-3 text-blue-400" />
+                <span className="truncate max-w-[180px]">{folderPath.split('/').pop() || folderPath}</span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setExpandedFolders((prev) => {
+                      const next = new Set(prev);
+                      next.delete(folderPath);
+                      return next;
+                    });
+                    
+                    // Unfreeze all nodes to allow physics to regroup them
+                    setGraphData((prevGraph) => {
+                      prevGraph.nodes.forEach((nItem: ForceNode) => {
+                        nItem.fx = undefined;
+                        nItem.fy = undefined;
+                      });
+                      return { ...prevGraph };
+                    });
+
+                    setTimeout(() => {
+                      if (fgRef.current) {
+                        fgRef.current.d3ReheatSimulation();
+                      }
+                    }, 50);
+                  }}
+                  className="ml-1 p-0.5 rounded-full hover:bg-zinc-700 hover:text-white transition-colors"
+                  title="Colapsar carpeta"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
         <ForceGraph2D
             ref={fgRef}
             width={dimensions.width || 800}
             height={dimensions.height || 600}
             graphData={displayGraphData}
             backgroundColor={graphTheme.background}
+            onRenderFramePre={paintBackground}
             nodeCanvasObject={paintNode}
             nodeVisibility={(node: NodeObject) => {
               // SENSEI FIX: También curamos la evaluación global de D3
@@ -1229,27 +1404,56 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
             linkDirectionalParticleColor={getParticleColor}
             linkDirectionalArrowLength={3.5}
             linkDirectionalArrowRelPos={1}
+            d3AlphaDecay={((graphData?.nodes?.length || 0) > 1000) ? 0.06 : 0.0228}
             cooldownTicks={100}
+            nodePointerAreaPaint={(node: NodeObject, color: string, ctx: CanvasRenderingContext2D) => {
+              ctx.fillStyle = color;
+              const hitRadius = node.label === "Module" ? 18 : 8; 
+              ctx.beginPath();
+              ctx.arc(node.x, node.y, hitRadius, 0, 2 * Math.PI);
+              ctx.fill();
+            }}
             onNodeClick={(node: NodeObject) => {
               const n = node as ForceNode;
-              const now = Date.now();
-              const isDoubleClick = now - lastClickTimeRef.current < 400;
-              lastClickTimeRef.current = now;
-
-              if (isDoubleClick) {
-                if (onNodeClick) {
-                  onNodeClick({
-                    id: (n.id as string) || "",
-                    label: (n.label as "File" | "Class" | "Function") || "File",
-                    name: (n.name as string) || "",
-                    file_path: (n.file_path as string) || "",
-                    size: n.size,
-                    metadata: n.metadata
+              
+              if (n.label === "Module") {
+                // Initialize physics state for smooth transition without freezing
+                setGraphData((prevGraph) => {
+                  prevGraph.nodes.forEach((nItem: ForceNode) => {
+                    if (nItem.x !== undefined) nItem.x = nItem.x;
+                    if (nItem.y !== undefined) nItem.y = nItem.y;
                   });
-                }
-              } else {
-                setFocusNode(n.id as string);
+                  return { ...prevGraph };
+                });
+                setExpandedFolders((prev) => new Set([...prev, n.file_path || ""]));
+                
+                setTimeout(() => {
+                  if (fgRef.current) {
+                    fgRef.current.zoomToFit(800, 100);
+                    fgRef.current.d3ReheatSimulation();
+                  }
+                }, 100);
+              } else if (onNodeClick) {
+                onNodeClick({
+                  id: (n.id as string) || "",
+                  label: (n.label as string) || "File",
+                  name: (n.name as string) || "",
+                  file_path: (n.file_path as string) || "",
+                  size: n.size,
+                  metadata: n.metadata
+                });
               }
+            }}
+            onNodeDragEnd={(node: NodeObject) => {
+              const n = node as ForceNode;
+              n.fx = n.x;
+              n.fy = n.y;
+            }}
+            onNodeDrag={() => {
+              // Allows manual dragging and pinning
+            }}
+            onNodeDoubleClick={() => {
+              // Double click action removed in favor of single click
             }}
             onBackgroundClick={() => setFocusNode(null)}
             onNodeRightClick={(node: NodeObject, event: MouseEvent) => {
@@ -1260,7 +1464,14 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
                 node: node as ForceNode
               });
             }}
-            onNodeHover={(node: NodeObject | null) => setHoverNode(node ? (node.id as string) : null)}
+            onNodeHover={(node: NodeObject | null) => {
+              setHoverNode(node ? (node.id as string) : null);
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const canvas = (fgRef.current as any)?.canvasControls?.getCanvasElement?.() || document.querySelector('canvas');
+              if (canvas) {
+                canvas.style.cursor = node ? ((node as ForceNode).label === "Module" ? 'pointer' : 'grab') : 'default';
+              }
+            }}
             enableZoomInteraction={true}
             enablePanInteraction={true}
             onEngineStop={() => {

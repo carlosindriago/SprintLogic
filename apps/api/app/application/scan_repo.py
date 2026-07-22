@@ -137,8 +137,16 @@ class ScanCodebaseUseCase:
 
             deduped_edges = await asyncio.to_thread(dedupe_edges, all_edges)
 
+            # Dedupe nodes to avoid IntegrityError (UNIQUE constraint failed)
+            seen_nodes = set()
+            deduped_nodes = []
+            for n in all_nodes:
+                if n.id not in seen_nodes:
+                    seen_nodes.add(n.id)
+                    deduped_nodes.append(n)
+
             await self.graph_repo.clear_by_project(project_id)
-            await self.graph_repo.save_nodes(all_nodes)
+            await self.graph_repo.save_nodes(deduped_nodes)
             await self.graph_repo.save_edges(deduped_edges)
 
             await self.event_bus.publish_throttled(

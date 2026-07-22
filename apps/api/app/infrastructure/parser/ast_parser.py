@@ -301,7 +301,13 @@ def extract_nodes_from_code(
         )
     )
 
+    seen_fqns = set()
     for pnode in parsed_nodes:
+        # Prevent UNIQUE constraint failure in DB due to overloaded or duplicate methods
+        if pnode.fqn in seen_fqns:
+            pnode.fqn = f"{pnode.fqn}_{pnode.start_line}"
+        seen_fqns.add(pnode.fqn)
+
         nodes.append(
             GraphNode(
                 id=pnode.fqn,
