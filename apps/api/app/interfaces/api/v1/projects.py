@@ -232,7 +232,7 @@ async def get_project_graph(project_id: str, expanded_folders: str | None = None
         project = await repo.get_project(project_uuid)
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
-        
+
         try:
             await repo.update_last_opened(project_uuid)
             await session.commit()

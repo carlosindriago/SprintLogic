@@ -5,16 +5,20 @@ import { useEffect, useState, useRef, useMemo, useCallback, useLayoutEffect } fr
 import { getProjectGraph, rescanProject, ApiError } from "@/lib/api";
 import { API_BASE_URL } from "@/lib/api";
 import { forceRadial, forceCollide } from "d3-force";
-import { GraphData, GraphNode, GraphEdge } from "@/types";
+import { GraphData, GraphNode, GraphEdge, GraphNodeLabel } from "@/types";
 import { LinkObject, NodeObject } from "react-force-graph-2d";
-import { graphTheme, extColorHash, bloomGlow } from "@/lib/graph-theme";
+import { graphTheme, extColorHash, bloomGlow, graphUI } from "@/lib/graph-theme";
 import { Search, RotateCcw, ZoomIn, ZoomOut, Maximize, Brain, Play, Pause, Zap, ZapOff, ScanSearch, FileCode, RefreshCw, X, FolderOpen } from "lucide-react";
 import { useTabsStore } from "../store/tabsStore";
 import { useLLMConfigStore } from "../store/llmConfigStore";
 import { useBackgroundJobsStore } from "../store/backgroundJobsStore";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 interface ForceNode extends GraphNode {
+  index?: number;
+  isMacronode?: boolean;
+  children_count?: number;
   x?: number;
   y?: number;
   z?: number;
@@ -1051,8 +1055,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
   return (
     <div className="flex-1 w-full flex flex-col relative min-h-0" style={{ backgroundColor: graphTheme.background }}>
       {/* Controls Overlay */}
-      <div className="absolute top-4 left-4 z-10 flex flex-col gap-3 p-4 rounded-lg shadow-lg"
-           style={{ backgroundColor: graphTheme.surfaceElevated, border: `1px solid ${graphTheme.border}` }}>
+      <div className={cn("absolute top-4 left-4 z-10 flex flex-col gap-3 p-4 rounded-lg", graphUI.background, graphUI.blur, graphUI.border, graphUI.shadow)}>
 
         <div className="relative">
           <Search className="w-4 h-4 absolute left-3 top-2.5 text-zinc-400" />
@@ -1188,8 +1191,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
       </div>
 
       {moduleLegend.length > 0 && (
-        <div className="absolute top-4 right-4 z-10 flex flex-col gap-1 p-2 rounded-lg shadow-lg max-h-64 overflow-y-auto"
-             style={{ backgroundColor: graphTheme.surfaceElevated, border: `1px solid ${graphTheme.border}` }}>
+        <div className={cn("absolute top-4 right-4 z-10 flex flex-col gap-1 p-2 rounded-lg max-h-64 overflow-y-auto", graphUI.background, graphUI.blur, graphUI.border, graphUI.shadow)}>
           <span className="text-[10px] text-zinc-500 px-1 mb-1">Módulos</span>
           {moduleLegend.map((item) => (
             <div key={item.name} className="flex items-center gap-2 px-1 py-0.5 rounded hover:bg-[#3f3f46] cursor-pointer text-xs">
@@ -1201,8 +1203,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
       )}
 
       {/* Unified Graph Controls Toolbar */}
-      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 flex flex-row items-center rounded-lg shadow-lg overflow-hidden"
-           style={{ backgroundColor: graphTheme.surfaceElevated, border: `1px solid ${graphTheme.border}` }}>
+      <div className={cn("absolute bottom-6 left-1/2 -translate-x-1/2 z-10 flex flex-row items-center rounded-lg overflow-hidden", graphUI.background, graphUI.blur, graphUI.border, graphUI.shadow)}>
         <button
           onClick={handleZoomIn}
           className="p-2 transition-colors text-zinc-400 hover:text-white hover:bg-[#3f3f46]"
@@ -1242,8 +1243,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
       </div>
 
       {timeRange && (
-        <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-10 flex items-center gap-3 px-4 py-2 rounded-lg shadow-lg"
-             style={{ backgroundColor: graphTheme.surfaceElevated, border: `1px solid ${graphTheme.border}` }}>
+        <div className={cn("absolute bottom-24 left-1/2 -translate-x-1/2 z-10 flex items-center gap-3 px-4 py-2 rounded-lg", graphUI.background, graphUI.blur, graphUI.border, graphUI.shadow)}>
           <button
             onClick={() => {
               if (animating) {
@@ -1335,10 +1335,10 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
             {Array.from(expandedFolders).map((folderPath) => (
               <div 
                 key={folderPath}
-                className="flex items-center gap-1.5 px-3 py-1 bg-indigo-950/80 border border-indigo-500/50 rounded-full text-xs font-semibold tracking-wide text-indigo-100 shadow-[0_0_15px_rgba(99,102,241,0.3)] pointer-events-auto backdrop-blur-md transition-all hover:bg-indigo-900/90"
+                className="flex items-center gap-1 px-2 py-0.5 bg-indigo-950/80 border border-indigo-500/50 rounded-full text-[11px] font-medium tracking-wide text-indigo-100 shadow-[0_0_15px_rgba(99,102,241,0.3)] pointer-events-auto backdrop-blur-md transition-all hover:bg-indigo-900/90"
               >
-                <FolderOpen className="w-3 h-3 text-blue-400" />
-                <span className="truncate max-w-[180px]">{folderPath.split('/').pop() || folderPath}</span>
+                <FolderOpen className="w-2.5 h-2.5 text-blue-400" />
+                <span className="truncate max-w-[150px]">{folderPath.split('/').pop() || folderPath}</span>
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -1410,7 +1410,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
               ctx.fillStyle = color;
               const hitRadius = node.label === "Module" ? 18 : 8; 
               ctx.beginPath();
-              ctx.arc(node.x, node.y, hitRadius, 0, 2 * Math.PI);
+              ctx.arc(node.x || 0, node.y || 0, hitRadius, 0, 2 * Math.PI);
               ctx.fill();
             }}
             onNodeClick={(node: NodeObject) => {
@@ -1436,7 +1436,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
               } else if (onNodeClick) {
                 onNodeClick({
                   id: (n.id as string) || "",
-                  label: (n.label as string) || "File",
+                  label: (n.label as GraphNodeLabel) || "File",
                   name: (n.name as string) || "",
                   file_path: (n.file_path as string) || "",
                   size: n.size,
@@ -1451,9 +1451,6 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
             }}
             onNodeDrag={() => {
               // Allows manual dragging and pinning
-            }}
-            onNodeDoubleClick={() => {
-              // Double click action removed in favor of single click
             }}
             onBackgroundClick={() => setFocusNode(null)}
             onNodeRightClick={(node: NodeObject, event: MouseEvent) => {

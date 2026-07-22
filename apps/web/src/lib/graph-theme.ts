@@ -56,3 +56,14 @@ export function bloomGlow(color: string, alpha = 0.55): string {
   }
   return color;
 }
+
+export const graphUI = {
+  background: "bg-slate-950/80", // Glass base
+  blur: "backdrop-blur-md",
+  border: "border border-slate-800/50",
+  textPrimary: "text-slate-100",
+  textSecondary: "text-slate-400",
+  textAccent: "text-cyan-400",
+  ring: "ring-1 ring-white/5",
+  shadow: "shadow-2xl shadow-black/50"
+};
