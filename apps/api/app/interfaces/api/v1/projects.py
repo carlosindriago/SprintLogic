@@ -405,10 +405,31 @@ async def analyze_project_graph(
 
         async def event_generator():
             try:
+                full_text = []
                 async for chunk in gateway.analyze_anomalies_stream(
                     project.name, project.path, metrics, {}
                 ):
+                    full_text.append(chunk)
                     yield f"data: {json.dumps({'type': 'message_chunk', 'text': chunk})}\n\n"
+
+                final_content = "".join(full_text)
+                if final_content.strip():
+                    import uuid
+
+                    from app.infrastructure.db.database import AsyncSessionLocal
+                    from app.infrastructure.db.models import AnalysisReportModel
+
+                    async with AsyncSessionLocal() as db_session:
+                        new_report = AnalysisReportModel(
+                            id=uuid.uuid4(),
+                            project_id=project_uuid,
+                            content=final_content,
+                            ai_model_version=request.model or "default",
+                            structural_metrics=metrics
+                        )
+                        db_session.add(new_report)
+                        await db_session.commit()
+
                 yield f"data: {json.dumps({'type': 'done'})}\n\n"
             except _asyncio.CancelledError:
                 logger.warning("Streaming cancelled by client.")
