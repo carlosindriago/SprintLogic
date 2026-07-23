@@ -14,7 +14,7 @@ def _build_tree(root_path: str, max_depth: int = 2) -> str:
     """Builds a simple textual directory tree up to max_depth."""
     tree_lines = []
     root_path_obj = Path(root_path)
-    ignore_dirs = {".git", "node_modules", ".venv", "venv", "test_env", "dist", "build", "__pycache__", "target", ".gradle", ".idea"}
+    ignore_dirs = {".git", "node_modules", ".venv", "venv", "test_env", "dist", "build", "__pycache__", "target", ".gradle", ".idea", "vendor", "coverage", "out"}
 
     for dirpath, dirnames, filenames in os.walk(root_path):
         # Filter directories in-place
@@ -56,7 +56,7 @@ def _scan_blocking(project_path: str) -> str:
         return "<PROJECT_AWARENESS>\n  <error>Project path not found</error>\n</PROJECT_AWARENESS>"
 
     total_files = 0
-    ignore_dirs = {".git", "node_modules", ".venv", "venv", "test_env", "dist", "build", "__pycache__", "target", ".gradle", ".idea"}
+    ignore_dirs = {".git", "node_modules", ".venv", "venv", "test_env", "dist", "build", "__pycache__", "target", ".gradle", ".idea", "vendor", "coverage", "out"}
     core_tech = set()
     project_type = "Unknown"
 

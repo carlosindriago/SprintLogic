@@ -78,7 +78,7 @@ class ScanCodebaseUseCase:
             file_imports: dict[str, set[str]] = {}
             file_endpoints: dict[str, set[str]] = {}
 
-            extension_filter = ['.ts', '.tsx', '.py', '.java', '.php', '.go', '.html', '.htm', '.css']
+            extension_filter = ['.ts', '.tsx', '.py', '.java', '.php', '.go']
             discovered = self.provider.discover(extension_filter)
             total_files = len(discovered)
 
