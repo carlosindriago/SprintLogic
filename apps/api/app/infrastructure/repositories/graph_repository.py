@@ -87,15 +87,15 @@ class SQLAlchemyGraphRepository(GraphRepository):
         self, project_id: UUID, target_node_id: str, max_depth: int = 2
     ) -> list[dict]:
         from sqlalchemy import text
-        
+
         query = text("""
             WITH RECURSIVE blast_radius AS (
                 SELECT e.source_id, e.target_id, e.type as edge_type, 1 as depth
                 FROM graph_edges e
                 WHERE e.target_id = :initial_node_id AND e.project_id = :project_id
-                
+
                 UNION ALL
-                
+
                 SELECT e.source_id, e.target_id, e.type as edge_type, b.depth + 1
                 FROM graph_edges e
                 INNER JOIN blast_radius b ON e.target_id = b.source_id
@@ -115,7 +115,7 @@ class SQLAlchemyGraphRepository(GraphRepository):
                 "max_depth": max_depth,
             }
         )
-        
+
         rows = result.fetchall()
         return [
             {

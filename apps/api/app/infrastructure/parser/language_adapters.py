@@ -29,7 +29,7 @@ class GenericTreeSitterAdapter(LanguageAdapter):
     def extract_nodes(self, tree, code_bytes: bytes, file_path: str) -> tuple[list[ParsedNode], set[str], set[str]]:
         parsed_nodes = []
         imports = set()
-        api_endpoints = set()
+        api_endpoints: set[str] = set()
 
         def traverse(node, current_fqn: str):
             if "import" in node.type or "require" in node.type:
@@ -250,13 +250,18 @@ class JavaAdapter(GenericTreeSitterAdapter):
                                     if n.type == "identifier":
                                         ann_name = code_bytes[n.start_byte:n.end_byte].decode('utf-8')
                                 if ann_name in ("GetMapping", "PostMapping", "PutMapping", "DeleteMapping", "PatchMapping", "RequestMapping"):
-                                    
+
                                     verb = "ANY"
-                                    if ann_name == "GetMapping": verb = "GET"
-                                    elif ann_name == "PostMapping": verb = "POST"
-                                    elif ann_name == "PutMapping": verb = "PUT"
-                                    elif ann_name == "DeleteMapping": verb = "DELETE"
-                                    elif ann_name == "PatchMapping": verb = "PATCH"
+                                    if ann_name == "GetMapping":
+                                        verb = "GET"
+                                    elif ann_name == "PostMapping":
+                                        verb = "POST"
+                                    elif ann_name == "PutMapping":
+                                        verb = "PUT"
+                                    elif ann_name == "DeleteMapping":
+                                        verb = "DELETE"
+                                    elif ann_name == "PatchMapping":
+                                        verb = "PATCH"
 
                                     for n in mod.children:
                                         if n.type == "annotation_argument_list":
@@ -278,7 +283,7 @@ class PhpAdapter(LanguageAdapter):
     def extract_nodes(self, tree, code_bytes: bytes, file_path: str) -> tuple[list[ParsedNode], set[str], set[str]]:
         parsed_nodes = []
         imports = set()
-        api_endpoints = set()
+        api_endpoints: set[str] = set()
 
         class_like_types = {
             "class_declaration",

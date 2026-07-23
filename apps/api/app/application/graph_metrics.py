@@ -1,3 +1,5 @@
+from typing import Any
+
 import networkx as nx  # type: ignore
 
 
@@ -6,7 +8,7 @@ def _compute_graph_metrics_cpu_bound(nodes_data: list, edges_data: list) -> dict
     Computes graph metrics deterministically.
     Runs in a separate ProcessPoolExecutor so it doesn't block the Event Loop.
     """
-    G = nx.DiGraph()
+    G: Any = nx.DiGraph()
 
     # Add nodes with their attributes
     for n in nodes_data:

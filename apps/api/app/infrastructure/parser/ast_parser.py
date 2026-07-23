@@ -127,7 +127,7 @@ class TreeSitterParser:
 
         lang = get_language(ext)
         if not lang:
-            return [], set()
+            return [], set(), set()
 
         parser = tree_sitter.Parser()
         parser.language = lang
@@ -269,8 +269,8 @@ def resolve_api_edges(
     edges = []
 
     # Separate consumers and exposers
-    exposers: dict[str, set[str]] = {} # e.g. {"file:/path/to/java": {"/api/users/*"}}
-    consumers: dict[str, set[str]] = {} # e.g. {"file:/path/to/ts": {"*/api/users/*"}}
+    exposers: dict[str, set[tuple[str, str]]] = {} # e.g. {"file:/path/to/java": {("GET", "/api/users/*")}}
+    consumers: dict[str, set[tuple[str, str]]] = {} # e.g. {"file:/path/to/ts": {("POST", "*/api/users/*")}}
 
     # Import the matcher
     from app.infrastructure.parser.route_matcher import (
@@ -295,7 +295,7 @@ def resolve_api_edges(
                     if file_id not in consumers:
                         consumers[file_id] = set()
                     consumers[file_id].add((verb, route))
-                
+
     for cons_file, cons_routes in consumers.items():
         for c_verb, c_route in cons_routes:
             for exp_file, exp_routes in exposers.items():

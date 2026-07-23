@@ -1,7 +1,10 @@
-import pytest
 from uuid import uuid4
-from app.domain.graph_models import EdgeType
+
+import pytest
+
 from app.application.analyze_blast_radius import AnalyzeBlastRadiusUseCase
+from app.domain.graph_models import EdgeType
+
 
 class DummyProjectRepo:
     pass
