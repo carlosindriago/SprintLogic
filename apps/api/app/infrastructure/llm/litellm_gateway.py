@@ -61,7 +61,7 @@ class LiteLLMGateway:
         tools = self._get_tools()
         current_messages = list(messages)
         max_tool_iterations = 3
-        
+
         from uuid import UUID
         proj_uuid = UUID(project_id)
 
@@ -88,7 +88,7 @@ class LiteLLMGateway:
                         max_depth = arguments.get("max_depth", 2)
 
                         logger.info(f"LLM executing analyze_blast_radius for {target_file}")
-                        
+
                         try:
                             # Executing the Use Case
                             tool_result = await analyze_blast_radius_use_case.execute(
@@ -110,7 +110,7 @@ class LiteLLMGateway:
                         )
                 # Continue the loop
                 continue
-            
+
             # If no tool calls, return the final response
             return response_message.content
 
@@ -125,32 +125,34 @@ class LiteLLMGateway:
     ) -> AsyncGenerator[str, None]:
 
         _IRON_PROMPT_PREAMBLE = """\
-CONTEXTO DE DOMINIO (LEER ANTES DE ANALIZAR):
-Estás analizando el grafo de dependencias de un proyecto.
+Eres un Principal Software Architect analizando la radiografía de un proyecto (Abstract Syntax Tree + Grafo de Dependencias). Tu objetivo no es listar métricas crudas, sino interpretar el diseño, encontrar deuda técnica real y proponer mejoras accionables.
 
-Regla de Física #1: El backend en Python frecuentemente lee (File I/O) archivos del frontend (.css, .tsx, .ts) para analizarlos.
-Regla de Física #2: Leer un archivo NO es importarlo. Python no puede importar CSS o React. Si ves una conexión entre el backend y el frontend, ASUME por defecto que es una operación de lectura/escaneo, NO una violación de dependencias cruzadas.
+Tienes prohibido considerar DTOs o Entities con múltiples métodos/getters como 'God Objects'. Un God Object es aquel que importa demasiados dominios externos, no el que tiene muchos métodos internos. Reconoce que las aristas de tipo API_CALL representan comunicación HTTP entre microservicios o Front/Back, no errores de parseo.
 
-MARCO DE EVIDENCIA ESTRICTO:
-Tu trabajo es identificar vulnerabilidades arquitectónicas, pero estás sujeto a un rigor científico absoluto. Sigue estas reglas al emitir tu reporte:
+Estructura tu reporte ESTRICTAMENTE bajo estos apartados, usando lenguaje técnico avanzado:
 
-- Cero Suposiciones: No deduzcas intenciones. Si ves un acoplamiento, descríbelo. Si crees que es un "import" entre lenguajes incompatibles, detente y reclasifícalo como operación de I/O.
-- Evidencia Requerida: Si vas a reportar un error crítico (como un God Object o una violación de la Arquitectura Limpia), debes citar los nombres exactos de los nodos o módulos que lo prueban. Utiliza el formato URI de archivo como `ide://ruta/al/archivo` para que el IDE local lo pueda abrir.
-- Humildad Epistémica: Si el grafo es ambiguo o una conexión no tiene sentido lógico en el lenguaje objetivo, tu respuesta obligatoria debe ser: "El grafo muestra una relación entre X y Y, pero debido a la incompatibilidad de lenguajes, esto probablemente representa una operación de lectura/parseo y no una dependencia de módulo. Se requiere validación manual."
-- Lenguaje Categórico: Nunca uses frases como "Me parece que", "Podría ser", "Yo creo". Usa "El grafo indica", "Se observa", o "La evidencia es insuficiente para concluir".
+# Visión General y Patrones Detectados
+Infiere qué arquitectura usan. ¿Es Hexagonal? ¿MVC? ¿Monolito modular? Basándote en nombres de carpetas como 'infrastructure', 'domain', 'features'.
+
+# Deuda Técnica y Cuellos de Botella
+Identifica God Objects reales: Controladores que hablan con demasiados repositorios, o Servicios con excesivo fan-out. Identifica código muerto real entre los nodos aislados, ignorando archivos de configuración. Utiliza el formato URI de archivo como `ide://ruta/al/archivo` para citar evidencia.
+
+# Seguridad y Resiliencia (Riesgos Estructurales)
+Busca cruces de límites peligrosos. Ej: ¿Hay componentes del frontend saltándose servicios y llamando directamente a APIs no autorizadas? ¿El dominio de Java está importando librerías de infraestructura rompiendo Clean Architecture?
+
+# Plan de Refactorización (Top 3 Acciones)
+Da 3 pasos accionables para mejorar la mantenibilidad del código.
 """
 
         metrics_xml = "<networkx_metrics>\n" + json.dumps(metrics, indent=2) + "\n</networkx_metrics>"
         skeletons_xml = "<code_skeletons>\n" + json.dumps(skeletons, indent=2) + "\n</code_skeletons>"
 
         prompt = (
-            f"{_IRON_PROMPT_PREAMBLE}\n"
-            f"Analiza la estructura de este proyecto de software basándote en su grafo de dependencias de código y estructuras AST extraídas.\n"
+            f"{_IRON_PROMPT_PREAMBLE}\n\n"
             f"Ruta del proyecto: {project_path}\n"
             f"Nombre del proyecto: {project_name}\n\n"
             f"{metrics_xml}\n\n"
-            f"{skeletons_xml}\n\n"
-            f"Emite un reporte en formato Markdown siguiendo el Marco de Evidencia Estricto."
+            f"{skeletons_xml}\n"
         )
 
         adapted = self._get_adapted_params()

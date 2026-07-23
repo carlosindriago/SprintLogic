@@ -370,7 +370,6 @@ async def analyze_project_graph(
         raise HTTPException(status_code=400, detail="Invalid project ID format")
 
     try:
-        import networkx as nx
 
         graph_repo = SQLAlchemyGraphRepository(session)
         nodes = await graph_repo.get_nodes_by_project(project_uuid)
@@ -382,20 +381,31 @@ async def analyze_project_graph(
         valid_ids = {n.id for n in filtered_nodes}
         filtered_edges = [e for e in edges if e.source_id in valid_ids and e.target_id in valid_ids]
 
-        G: nx.DiGraph[str] = nx.DiGraph()
-        for n in filtered_nodes:
-            G.add_node(n.id, label=n.label.value if hasattr(n.label, "value") else n.label)
-        for e in filtered_edges:
-            G.add_edge(e.source_id, e.target_id)
+        node_file_paths = {n.id: os.path.abspath(n.file_path) for n in filtered_nodes}
+        pruned_edges = [e for e in filtered_edges if node_file_paths.get(e.source_id) != node_file_paths.get(e.target_id)]
 
         import asyncio as _asyncio
 
         from app.application.graph_metrics import _compute_graph_metrics_cpu_bound
 
-        nx_edges = [{"source": e.source_id, "target": e.target_id} for e in filtered_edges]
+        nx_edges = [
+            {
+                "source": e.source_id,
+                "target": e.target_id,
+                "type": e.type.value if hasattr(e.type, "value") else str(e.type)
+            }
+            for e in pruned_edges
+        ]
+
+        nodes_for_metrics = []
+        for n in filtered_nodes:
+            label = n.label.value if hasattr(n.label, "value") else str(n.label)
+            is_test = n.file_path.endswith(".spec.ts") or n.file_path.endswith("Test.java")
+            nodes_for_metrics.append({"id": n.id, "label": label, "is_test": is_test, "file_path": n.file_path})
+
         metrics = await _asyncio.to_thread(
             _compute_graph_metrics_cpu_bound,
-            [{"id": n.id, "label": n.label.value if hasattr(n.label, "value") else str(n.label)} for n in filtered_nodes],
+            nodes_for_metrics,
             nx_edges,
         )
 
