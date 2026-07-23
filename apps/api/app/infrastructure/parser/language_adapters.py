@@ -9,9 +9,9 @@ class LanguageAdapter(ABC):
     """
 
     @abstractmethod
-    def extract_nodes(self, tree, code_bytes: bytes, file_path: str) -> tuple[list[ParsedNode], set[str]]:
+    def extract_nodes(self, tree, code_bytes: bytes, file_path: str) -> tuple[list[ParsedNode], set[str], set[str]]:
         """
-        Extracts universal ParsedNode objects and imports from a language-specific AST.
+        Extracts universal ParsedNode objects, imports, and api endpoints from a language-specific AST.
         """
         pass
 
@@ -26,9 +26,10 @@ class GenericTreeSitterAdapter(LanguageAdapter):
         self.method_types = method_types
         self.identifier_types = identifier_types
 
-    def extract_nodes(self, tree, code_bytes: bytes, file_path: str) -> tuple[list[ParsedNode], set[str]]:
+    def extract_nodes(self, tree, code_bytes: bytes, file_path: str) -> tuple[list[ParsedNode], set[str], set[str]]:
         parsed_nodes = []
         imports = set()
+        api_endpoints: set[str] = set()
 
         def traverse(node, current_fqn: str):
             if "import" in node.type or "require" in node.type:
@@ -82,7 +83,7 @@ class GenericTreeSitterAdapter(LanguageAdapter):
                 traverse(child, fqn)
 
         traverse(tree.root_node, file_path)
-        return parsed_nodes, imports
+        return parsed_nodes, imports, api_endpoints
 
 class PythonAdapter(GenericTreeSitterAdapter):
     def __init__(self):
@@ -100,6 +101,82 @@ class TypescriptAdapter(GenericTreeSitterAdapter):
             identifier_types=("identifier", "property_identifier", "type_identifier")
         )
 
+    def extract_nodes(self, tree, code_bytes: bytes, file_path: str) -> tuple[list[ParsedNode], set[str], set[str]]:
+        parsed_nodes, imports, _ = super().extract_nodes(tree, code_bytes, file_path)
+        api_endpoints: set[str] = set()
+
+        def extract_route_from_arg(arg_node) -> str:
+            if arg_node.type == "string":
+                # Regular string literal
+                for child in arg_node.children:
+                    if child.type == "string_fragment":
+                        return code_bytes[child.start_byte:child.end_byte].decode('utf-8')
+            elif arg_node.type == "template_string":
+                # Template string like `/api/users/${id}`
+                # We can replace template substitutions with `*`
+                parts = []
+                for child in arg_node.children:
+                    if child.type == "string_fragment":
+                        parts.append(code_bytes[child.start_byte:child.end_byte].decode('utf-8'))
+                    elif child.type == "template_substitution":
+                        parts.append("*")
+                return "".join(parts)
+            elif arg_node.type == "binary_expression":
+                # Something like `baseUrl + "/api"`
+                # Very simple heuristic: just assume variables are `*`
+                # A more complete AST resolution could recursively evaluate this, but for now we fallback
+                # Let's extract any string_fragment from the binary expression and replace the rest with *
+                # To do it simply, we can extract the raw text and replace identifiers with *
+                # But it's easier to just traverse and collect strings and non-strings
+                parts = []
+                def traverse_binary(n):
+                    if n.type == "string":
+                        for c in n.children:
+                            if c.type == "string_fragment":
+                                parts.append(code_bytes[c.start_byte:c.end_byte].decode('utf-8'))
+                    elif n.type in ("identifier", "member_expression", "call_expression"):
+                        parts.append("*")
+                    else:
+                        for c in n.children:
+                            traverse_binary(c)
+                traverse_binary(arg_node)
+                return "".join(parts).replace("**", "*")
+            return ""
+
+        def traverse_calls(node):
+            if node.type == "call_expression":
+                # Check if it's an HTTP call (e.g. this.http.get)
+                # It would look like: function: member_expression
+                is_http = False
+                for child in node.children:
+                    if child.type == "member_expression":
+                        # Check the property
+                        prop_name = ""
+                        for n in child.children:
+                            if n.type == "property_identifier":
+                                prop_name = code_bytes[n.start_byte:n.end_byte].decode('utf-8')
+                        if prop_name in ("get", "post", "put", "delete", "patch", "request"):
+                            # We found a potential HTTP call. We could check if object ends with 'http' or 'httpClient'
+                            # but for now this is a strong signal if inside Angular services.
+                            is_http = True
+                            verb = prop_name.upper()
+                            if verb == "REQUEST":
+                                verb = "ANY"
+                    elif child.type == "arguments" and is_http:
+                        # First argument is usually the URL
+                        if len(child.children) >= 2: # '(' then arg1
+                            arg1 = child.children[1]
+                            route = extract_route_from_arg(arg1)
+                            if route and ("/" in route or "api" in route):
+                                api_endpoints.add(f"CONSUMES:{verb}:{route}")
+
+            for child in node.children:
+                traverse_calls(child)
+
+        traverse_calls(tree.root_node)
+
+        return parsed_nodes, imports, api_endpoints
+
 class JavaAdapter(GenericTreeSitterAdapter):
     def __init__(self):
         super().__init__(
@@ -108,10 +185,105 @@ class JavaAdapter(GenericTreeSitterAdapter):
             identifier_types=("identifier",)
         )
 
+    def extract_nodes(self, tree, code_bytes: bytes, file_path: str) -> tuple[list[ParsedNode], set[str], set[str]]:
+        parsed_nodes, imports, _ = super().extract_nodes(tree, code_bytes, file_path)
+        api_endpoints = set()
+
+        def extract_string_value(node):
+            for child in node.children:
+                if child.type == "string_literal":
+                    for sub in child.children:
+                        if sub.type == "string_fragment":
+                            return code_bytes[sub.start_byte:sub.end_byte].decode('utf-8')
+            return None
+
+        # Pass 1: Find class level @RequestMapping
+        class_routes = {}
+
+        def traverse_classes(node):
+            if node.type == "class_declaration":
+                class_name = None
+                route = ""
+                for child in node.children:
+                    if child.type == "modifiers":
+                        for mod in child.children:
+                            if mod.type == "annotation":
+                                ann_name = ""
+                                for n in mod.children:
+                                    if n.type == "identifier":
+                                        ann_name = code_bytes[n.start_byte:n.end_byte].decode('utf-8')
+                                if ann_name == "RequestMapping":
+                                    for n in mod.children:
+                                        if n.type == "annotation_argument_list":
+                                            val = extract_string_value(n)
+                                            if val:
+                                                route = val
+                    elif child.type == "identifier" and not class_name:
+                        class_name = code_bytes[child.start_byte:child.end_byte].decode('utf-8')
+
+                if class_name and route:
+                    class_routes[class_name] = route
+
+            for child in node.children:
+                traverse_classes(child)
+
+        traverse_classes(tree.root_node)
+
+        # Pass 2: Find method level mapping
+        def traverse_methods(node, current_class_route=""):
+            if node.type == "class_declaration":
+                cname = None
+                for child in node.children:
+                    if child.type == "identifier":
+                        cname = code_bytes[child.start_byte:child.end_byte].decode('utf-8')
+                        break
+                if cname in class_routes:
+                    current_class_route = class_routes[cname]
+
+            if node.type == "method_declaration":
+                for child in node.children:
+                    if child.type == "modifiers":
+                        for mod in child.children:
+                            if mod.type == "annotation":
+                                ann_name = ""
+                                for n in mod.children:
+                                    if n.type == "identifier":
+                                        ann_name = code_bytes[n.start_byte:n.end_byte].decode('utf-8')
+                                if ann_name in ("GetMapping", "PostMapping", "PutMapping", "DeleteMapping", "PatchMapping", "RequestMapping"):
+
+                                    verb = "ANY"
+                                    if ann_name == "GetMapping":
+                                        verb = "GET"
+                                    elif ann_name == "PostMapping":
+                                        verb = "POST"
+                                    elif ann_name == "PutMapping":
+                                        verb = "PUT"
+                                    elif ann_name == "DeleteMapping":
+                                        verb = "DELETE"
+                                    elif ann_name == "PatchMapping":
+                                        verb = "PATCH"
+
+                                    for n in mod.children:
+                                        if n.type == "annotation_argument_list":
+                                            val = extract_string_value(n)
+                                            full_route = current_class_route
+                                            if val:
+                                                full_route += val
+                                            if full_route:
+                                                api_endpoints.add(f"EXPOSES:{verb}:{full_route}")
+
+            for child in node.children:
+                traverse_methods(child, current_class_route)
+
+        traverse_methods(tree.root_node)
+
+        return parsed_nodes, imports, api_endpoints
+
 class PhpAdapter(LanguageAdapter):
-    def extract_nodes(self, tree, code_bytes: bytes, file_path: str) -> tuple[list[ParsedNode], set[str]]:
+    def extract_nodes(self, tree, code_bytes: bytes, file_path: str) -> tuple[list[ParsedNode], set[str], set[str]]:
         parsed_nodes = []
         imports = set()
+        api_endpoints: set[str] = set()
 
         class_like_types = {
             "class_declaration",
@@ -181,7 +353,7 @@ class PhpAdapter(LanguageAdapter):
                 traverse(child, fqn)
 
         traverse(tree.root_node, file_path)
-        return parsed_nodes, imports
+        return parsed_nodes, imports, api_endpoints
 
 class GoAdapter(GenericTreeSitterAdapter):
     def __init__(self):

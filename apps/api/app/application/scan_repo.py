@@ -76,8 +76,9 @@ class ScanCodebaseUseCase:
             all_nodes = []
             all_edges = []
             file_imports: dict[str, set[str]] = {}
+            file_endpoints: dict[str, set[str]] = {}
 
-            extension_filter = ['.ts', '.tsx', '.py', '.java', '.php', '.go', '.html', '.htm', '.css']
+            extension_filter = ['.ts', '.tsx', '.py', '.java', '.php', '.go']
             discovered = self.provider.discover(extension_filter)
             total_files = len(discovered)
 
@@ -101,13 +102,15 @@ class ScanCodebaseUseCase:
                 ext = os.path.splitext(logical_path)[1]
 
                 try:
-                    nodes, edges, imports = extract_nodes_from_code(
+                    nodes, edges, imports, api_endpoints = extract_nodes_from_code(
                         project_id, logical_path, content.encode('utf-8'), ext, birth_dates
                     )
                     all_nodes.extend(nodes)
                     all_edges.extend(edges)
                     if imports:
                         file_imports[f"file:{logical_path}"] = imports
+                    if api_endpoints:
+                        file_endpoints[f"file:{logical_path}"] = api_endpoints
                 except Exception as e:
                     _logger.error(f"Error parsing {logical_path}: {e}")
 
@@ -134,6 +137,12 @@ class ScanCodebaseUseCase:
                 resolve_import_edges, project_id, file_imports, file_paths, base_dir
             )
             all_edges.extend(resolved_edges)
+
+            from app.infrastructure.parser.ast_parser import resolve_api_edges
+            api_edges = await asyncio.to_thread(
+                resolve_api_edges, project_id, file_endpoints
+            )
+            all_edges.extend(api_edges)
 
             deduped_edges = await asyncio.to_thread(dedupe_edges, all_edges)
 

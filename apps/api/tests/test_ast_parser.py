@@ -15,7 +15,7 @@ def my_function():
 
     project_id = uuid.uuid4()
     file_path = "fake/path.py"
-    nodes, edges, _ = extract_nodes_from_code(project_id, file_path, code, ".py")
+    nodes, edges, _, _ = extract_nodes_from_code(project_id, file_path, code, ".py")
 
     assert len(nodes) == 4  # File, MyClass, my_method, my_function
 
@@ -66,7 +66,7 @@ class UserController extends Controller
     import uuid
     project_id = uuid.uuid4()
     file_path = "app/Http/Controllers/UserController.php"
-    nodes, edges, imports = extract_nodes_from_code(project_id, file_path, code, ".php")
+    nodes, edges, imports, _ = extract_nodes_from_code(project_id, file_path, code, ".php")
 
     assert len(nodes) == 3  # File, UserController, index
     class_node = next(n for n in nodes if n.label == NodeLabel.CLASS)

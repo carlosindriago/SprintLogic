@@ -46,7 +46,9 @@ class FileWatcherService:
             try:
                 with open(filepath, encoding="utf-8") as f:
                     code = f.read()
-                nodes, _ = parser.parse_code(code, filepath)
+                import os
+                ext = os.path.splitext(filepath)[1]
+                nodes, _, _ = parser.parse_code(code.encode("utf-8"), filepath, ext)
                 parsed_data[filepath] = {n.fqn: n for n in nodes}
             except FileNotFoundError:
                 parsed_data[filepath] = {}  # Archivo borrado, purgará todo

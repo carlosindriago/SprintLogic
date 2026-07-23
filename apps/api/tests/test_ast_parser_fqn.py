@@ -12,7 +12,7 @@ def helper():
     pass
 """
     parser = TreeSitterParser()
-    nodes, _ = parser.parse_code(code, "test.py")
+    nodes, _, _ = parser.parse_code(code, "test.py", ".py")
 
     fqns = [n.fqn for n in nodes]
     assert "test.py::[class]AuthManager" in fqns

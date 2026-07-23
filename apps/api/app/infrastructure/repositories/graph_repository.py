@@ -82,3 +82,48 @@ class SQLAlchemyGraphRepository(GraphRepository):
             )
             for m in models
         ]
+
+    async def get_blast_radius(
+        self, project_id: UUID, target_node_id: str, max_depth: int = 2
+    ) -> list[dict]:
+        from sqlalchemy import text
+
+        query = text("""
+            WITH RECURSIVE blast_radius AS (
+                SELECT e.source_id, e.target_id, e.type as edge_type, 1 as depth
+                FROM graph_edges e
+                WHERE e.target_id = :initial_node_id AND e.project_id = :project_id
+
+                UNION ALL
+
+                SELECT e.source_id, e.target_id, e.type as edge_type, b.depth + 1
+                FROM graph_edges e
+                INNER JOIN blast_radius b ON e.target_id = b.source_id
+                WHERE b.depth < :max_depth AND e.project_id = :project_id
+            )
+            SELECT b.source_id, b.target_id, b.edge_type, b.depth, n.file_path
+            FROM blast_radius b
+            LEFT JOIN graph_nodes n ON b.source_id = n.id AND n.project_id = :project_id
+        """)
+
+        # Let SQLAlchemy handle the UUID parameter binding correctly.
+        result = await self.session.execute(
+            query,
+            {
+                "initial_node_id": target_node_id,
+                "project_id": project_id.hex,  # SQLite UUID is often stored as hex, but wait, SQLAlchemy handles UUID natively.
+                "max_depth": max_depth,
+            }
+        )
+
+        rows = result.fetchall()
+        return [
+            {
+                "source_id": row[0],
+                "target_id": row[1],
+                "edge_type": row[2],
+                "depth": row[3],
+                "source_file_path": row[4],
+            }
+            for row in rows
+        ]
