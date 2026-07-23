@@ -1,4 +1,5 @@
 import json
+import logging
 from collections.abc import AsyncGenerator
 from typing import Any
 
@@ -247,7 +248,8 @@ async def chat_with_ai(request: ChatRequest, background_tasks: BackgroundTasks, 
                 msg = "⚠️ Límite de cuota excedido para este modelo. Por favor, selecciona un modelo diferente en el menú superior."
                 yield f"data: {json.dumps({'text': msg, 'is_done': True, 'error': True, 'conversation_id': conversation_id})}\n\n"
             else:
-                yield f"data: {json.dumps({'text': f'Error interno: {error_str}', 'is_done': True, 'error': True, 'conversation_id': conversation_id})}\n\n"
+                logging.error("Chat streaming failed", exc_info=True)
+                yield f"data: {json.dumps({'text': 'Error interno', 'is_done': True, 'error': True, 'conversation_id': conversation_id})}\n\n"
 
     headers = {
         "Cache-Control": "no-cache, no-transform",

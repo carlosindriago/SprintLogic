@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -237,12 +238,12 @@ async def stream_chat_response(
         )
 
         # The message is saved in the finally block below
-    except Exception as e:
-        print(f"WS Chat Stream Error: {e}")
+    except Exception:
+        logging.error("WS Chat Stream Error", exc_info=True)
         await websocket.send_json(
             {
                 "type": "chat_response",
-                "data": json.dumps({"text": f"Error: {str(e)}", "is_done": True, "error": True, "conversation_id": conversation_id}),
+                "data": json.dumps({"text": "Error interno", "is_done": True, "error": True, "conversation_id": conversation_id}),
             }
         )
     finally:
