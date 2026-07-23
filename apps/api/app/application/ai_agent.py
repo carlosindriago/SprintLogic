@@ -1149,11 +1149,11 @@ class AIAgent:
                             yield json.dumps({"type": "message_chunk", "text": delta.content})
                     break
 
-        except Exception as e:
+        except Exception:
             _logger = logging.getLogger(__name__)
             _logger.exception("AI agent execution failed")
             yield json.dumps(
-                {"type": "error", "message": f"Falla catastrófica en el núcleo: {str(e)}"}
+                {"type": "error", "message": "Falla catastrófica en el núcleo"}
             )
 
     @staticmethod
