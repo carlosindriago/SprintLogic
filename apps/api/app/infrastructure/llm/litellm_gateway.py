@@ -16,6 +16,12 @@ class LiteLLMGateway:
         self.model_name = model_name or DEFAULT_LLM_MODEL
         self.cred_manager = CredentialManager()
 
+    def _get_adapted_params(self) -> dict:
+        from app.infrastructure.ai.provider_adapter import ProviderAdapter
+        provider = ProviderAdapter.get_provider(self.model_name)
+        api_key = self.cred_manager.get_api_key(provider)
+        return ProviderAdapter.adapt(self.model_name, api_key)
+
     def _get_tools(self) -> list[dict[str, Any]]:
         return [
             {
@@ -59,12 +65,16 @@ class LiteLLMGateway:
         from uuid import UUID
         proj_uuid = UUID(project_id)
 
+        adapted = self._get_adapted_params()
+
         for _ in range(max_tool_iterations + 1):
             response = await acompletion(
-                model=self.model_name,
+                model=adapted["model"],
                 messages=current_messages,
                 tools=tools,
-                tool_choice="auto"
+                tool_choice="auto",
+                api_key=adapted.get("api_key"),
+                **adapted.get("kwargs", {})
             )
 
             response_message = response.choices[0].message
@@ -143,10 +153,14 @@ Tu trabajo es identificar vulnerabilidades arquitectónicas, pero estás sujeto 
             f"Emite un reporte en formato Markdown siguiendo el Marco de Evidencia Estricto."
         )
 
+        adapted = self._get_adapted_params()
+
         response_iterator = await acompletion(
-            model=self.model_name,
+            model=adapted["model"],
             messages=[{"role": "user", "content": prompt}],
-            stream=True
+            stream=True,
+            api_key=adapted.get("api_key"),
+            **adapted.get("kwargs", {})
         )
 
         try:
