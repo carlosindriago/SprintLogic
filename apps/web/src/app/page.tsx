@@ -35,6 +35,8 @@ import { Switch } from "@/components/ui/switch";
 import SprintLogicChat from "@/components/SprintLogicChat";
 import KanbanBoard from "@/components/KanbanBoard";
 import LLMSettingsPanel from "@/components/LLMSettingsPanel";
+import PromptStudioTab from "@/components/PromptStudioTab";
+import PlanningStudioTab from "@/components/PlanningStudioTab";
 import FileTree from "@/components/FileTree";
 import { useTabsStore } from '@/store/tabsStore';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -71,6 +73,12 @@ const DiffTab = dynamic(
   () => import('@/components/DiffTab').then((m) => m.default),
   { ssr: false },
 );
+
+const AutoFixTab = dynamic(
+  () => import('@/components/AutoFixTab').then((m) => m.default),
+  { ssr: false },
+);
+
 
 const AIAuditPanel = dynamic(
   () => import('@/components/AIAuditPanel').then((m) => m.default),
@@ -449,6 +457,10 @@ export default function Home() {
             {projectId ? <InsightDashboard projectId={projectId} key={projectId} /> : <div className="p-4 text-zinc-400">Selecciona un proyecto...</div>}
           </div>
         );
+      case 'planning-studio':
+        return <PlanningStudioTab key={activeTab.id} />;
+      case 'prompt-studio':
+        return <PromptStudioTab key={activeTab.id} />;
       case 'graph':
         return <GraphScene projectId={projectId} key={projectId} onNodeClick={handleNodeClick} />;
       case 'kanban':
@@ -470,6 +482,9 @@ export default function Home() {
       case 'diff':
         if (!projectId || !activeTab.data?.hash || !activeTab.data?.filePath) return null;
         return <DiffTab projectId={projectId} hash={activeTab.data.hash} filePath={activeTab.data.filePath} />;
+      case 'auto-fix':
+        if (!projectId || !activeTab.data?.hash || !activeTab.data?.filePath || !activeTab.data?.markdown) return null;
+        return <AutoFixTab projectId={projectId} ticketId={activeTab.data.hash} filePath={activeTab.data.filePath} instruction={activeTab.data.markdown} />;
       case 'audit':
         if (!projectId) return null;
         return <AIAuditPanel projectId={projectId} />;

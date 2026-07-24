@@ -1,4 +1,5 @@
 "use client";
+import { useTabsStore } from "@/store/tabsStore";
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { toast } from "sonner";
@@ -860,6 +861,15 @@ export default function LLMSettingsPanel() {
             Tools
           </span>
         </div>
+        <button
+          onClick={() => {
+            useTabsStore.getState().addTab({ id: 'prompt-studio', title: 'Prompt Studio', type: 'prompt-studio' });
+          }}
+          className="text-left px-4 py-2 text-sm transition-colors flex items-center gap-2 text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200 border-l-2 border-transparent"
+        >
+          <Sparkles className="w-4 h-4 shrink-0" />
+          Prompt Studio
+        </button>
         <button
           onClick={() => setActiveSection('predictive-fim')}
           className={`text-left px-4 py-2 text-sm transition-colors flex items-center gap-2 ${

@@ -8,11 +8,14 @@ from app.interfaces.api.v1.ai import router as ai_router
 from app.interfaces.api.v1.chat import router as chat_router
 from app.interfaces.api.v1.editor import router as editor_router
 from app.interfaces.api.v1.git import router as git_router
+from app.interfaces.api.v1.kanban import router as kanban_router
 from app.interfaces.api.v1.lsp import router as lsp_router
 from app.interfaces.api.v1.projects import router as projects_router
 from app.interfaces.api.v1.settings import router as settings_router
 from app.interfaces.api.v1.sync import router as sync_router
 from app.interfaces.api.v1.telemetry import router as telemetry_router
+from app.interfaces.api.v1.prompts import router as prompts_router
+from app.interfaces.api.v1.planning_studio import router as planning_studio_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -44,6 +47,15 @@ async def lifespan(app: FastAPI):
 
 
     # Startup
+    from app.infrastructure.db.database import AsyncSessionLocal
+
+    from app.infrastructure.repositories.prompt_repository import initialize_prompts
+
+    async with AsyncSessionLocal() as session:
+
+        await initialize_prompts(session)
+
+
     try:
         app.state.process_pool = ProcessPoolExecutor(max_workers=2)
 
@@ -90,6 +102,7 @@ app.add_middleware(
 )
 
 app.include_router(projects_router, prefix="/api/v1")
+app.include_router(kanban_router, prefix="/api/v1")
 app.include_router(settings_router, prefix="/api/v1/settings")
 app.include_router(telemetry_router, prefix="/api/v1/telemetry")
 app.include_router(chat_router, prefix="/api/v1/chat")
@@ -98,6 +111,8 @@ app.include_router(lsp_router, prefix="/api/v1/lsp")
 app.include_router(editor_router, prefix="/api/v1/editor")
 app.include_router(ai_router, prefix="/api/v1/ai")
 app.include_router(sync_router, prefix="/api/v1/sync")
+app.include_router(prompts_router, prefix="/api/v1")
+app.include_router(planning_studio_router, prefix="/api/v1/planning-studio")
 
 
 from pathlib import Path

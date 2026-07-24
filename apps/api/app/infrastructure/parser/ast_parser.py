@@ -232,16 +232,23 @@ def resolve_import_edges(
                     continue
 
                 if target:
-                    target_id = f"file:{target}"
-                    if source_id != target_id:
-                        edges.append(
-                            GraphEdge(
-                                project_id=project_id,
-                                source_id=source_id,
-                                target_id=target_id,
-                                type=EdgeType.IMPORTS,
+                    # Enforce strict ecosystem isolation for code-level IMPORTS edges
+                    ts_exts = {".ts", ".tsx", ".js", ".jsx", ".mjs", ".json"}
+                    src_ext = Path(source_path_str).suffix.lower()
+                    tgt_ext = Path(target).suffix.lower()
+                    is_compatible = (tgt_ext in ts_exts) if (src_ext in ts_exts) else (src_ext == tgt_ext)
+
+                    if is_compatible:
+                        target_id = f"file:{target}"
+                        if source_id != target_id:
+                            edges.append(
+                                GraphEdge(
+                                    project_id=project_id,
+                                    source_id=source_id,
+                                    target_id=target_id,
+                                    type=EdgeType.IMPORTS,
+                                )
                             )
-                        )
 
     return edges
 

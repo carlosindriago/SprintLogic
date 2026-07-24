@@ -24,6 +24,8 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
 
+from app.interfaces.api.v1.wbs_schemas import WBSHierarchicalResponse
+
 from app.application.scan_repo import ScanCodebaseUseCase, ScanLocalRepository
 from app.domain.exceptions import PathBlockedError, ScannerError
 from app.infrastructure.db.database import AsyncSessionLocal, get_db_session
@@ -388,26 +390,186 @@ async def analyze_project_graph(
 
         from app.application.graph_metrics import _compute_graph_metrics_cpu_bound
 
-        nx_edges = [
-            {
-                "source": e.source_id,
-                "target": e.target_id,
-                "type": e.type.value if hasattr(e.type, "value") else str(e.type)
-            }
-            for e in pruned_edges
-        ]
-
-        nodes_for_metrics = []
+        file_nodes_dict: dict[str, dict] = {}
         for n in filtered_nodes:
-            label = n.label.value if hasattr(n.label, "value") else str(n.label)
-            is_test = n.file_path.endswith(".spec.ts") or n.file_path.endswith("Test.java")
-            nodes_for_metrics.append({"id": n.id, "label": label, "is_test": is_test, "file_path": n.file_path})
+            if not n.file_path:
+                continue
+            abs_path = os.path.abspath(n.file_path)
+            if abs_path not in file_nodes_dict:
+                fname = os.path.basename(abs_path)
+                is_test_flag = abs_path.endswith(".spec.ts") or abs_path.endswith("Test.java")
+                file_nodes_dict[abs_path] = {
+                    "id": abs_path,
+                    "label": fname,
+                    "is_test": is_test_flag,
+                    "file_path": abs_path,
+                }
+
+        nodes_for_metrics = list(file_nodes_dict.values())
+
+        seen_file_edges: set[tuple[str, str]] = set()
+        nx_edges = []
+        for e in pruned_edges:
+            src_file = node_file_paths.get(e.source_id)
+            tgt_file = node_file_paths.get(e.target_id)
+            if src_file and tgt_file and src_file != tgt_file:
+                pair = (src_file, tgt_file)
+                if pair not in seen_file_edges:
+                    seen_file_edges.add(pair)
+                    edge_type = e.type.value if hasattr(e.type, "value") else str(e.type)
+                    nx_edges.append({
+                        "source": src_file,
+                        "target": tgt_file,
+                        "type": edge_type
+                    })
+
+        # --- IRON PROMPT V3 CONTEXT EXTRACTION ---
+        all_file_paths = {os.path.abspath(n.file_path) for n in filtered_nodes if n.file_path}
+        total_files = len(all_file_paths)
+
+        extensions: dict[str, int] = {}
+        for path in all_file_paths:
+            ext = os.path.splitext(path)[1].lower()
+            if ext:
+                extensions[ext] = extensions.get(ext, 0) + 1
+
+        sorted_exts = sorted(extensions.items(), key=lambda x: x[1], reverse=True)[:3]
+        main_langs_str = ", ".join([f"{ext} ({count})" for ext, count in sorted_exts])
+
+        class DirNode:
+            def __init__(self):
+                self.children = {}
+
+        root_dir = DirNode()
+        for path in all_file_paths:
+            rel_path = os.path.relpath(path, project_path)
+            parts = rel_path.split(os.sep)[:-1]
+            current = root_dir
+            for part in parts:
+                if part not in current.children:
+                    current.children[part] = DirNode()
+                current = current.children[part]
+
+        def collapse_tree(node, current_name=""):
+            while len(node.children) == 1:
+                child_name, child_node = next(iter(node.children.items()))
+                current_name = f"{current_name}/{child_name}" if current_name else child_name
+                node = child_node
+
+            result_children = {}
+            for child_name, child_node in node.children.items():
+                res_name, res_node = collapse_tree(child_node, child_name)
+                result_children[res_name] = res_node
+
+            class DummyNode:
+                pass
+            ret_node = DummyNode()
+            ret_node.children = result_children
+            return current_name, ret_node
+
+        _, collapsed_root = collapse_tree(root_dir)
+
+        def format_tree(node, prefix="", depth=1, max_depth=3):
+            lines = []
+            if depth > max_depth:
+                return lines
+            for child_name, child_node in sorted(node.children.items()):
+                lines.append(f"{prefix}- {child_name}/")
+                lines.extend(format_tree(child_node, prefix + "  ", depth + 1, max_depth))
+            return lines
+
+        dir_structure = "\n".join(format_tree(collapsed_root))
+
+        # -----------------------------------------
 
         metrics = await _asyncio.to_thread(
             _compute_graph_metrics_cpu_bound,
             nodes_for_metrics,
             nx_edges,
         )
+
+        top_files_xml = "<archivos_con_mas_dependencias>\n"
+        for go in metrics.get("god_objects_in", [])[:5]:
+            fpath = go.get("file_path", go.get("node"))
+            test_str = "test" if go.get("is_test") else "fuente"
+            code_cnt = go.get("code_count", go["count"])
+            api_cnt = go.get("api_count", 0)
+            top_files_xml += (
+                f'  <archivo nombre="{fpath}" tipo="{test_str}">\n'
+                f"    <dependencias_codigo_entrantes>{code_cnt}</dependencias_codigo_entrantes>\n"
+                f"    <llamadas_api_http_entrantes>{api_cnt}</llamadas_api_http_entrantes>\n"
+                f"  </archivo>\n"
+            )
+        for go in metrics.get("god_objects_out", [])[:5]:
+            fpath = go.get("file_path", go.get("node"))
+            test_str = "test" if go.get("is_test") else "fuente"
+            code_cnt = go.get("code_count", go["count"])
+            api_cnt = go.get("api_count", 0)
+            top_files_xml += (
+                f'  <archivo nombre="{fpath}" tipo="{test_str}">\n'
+                f"    <dependencias_codigo_salientes>{code_cnt}</dependencias_codigo_salientes>\n"
+                f"    <llamadas_api_http_salientes>{api_cnt}</llamadas_api_http_salientes>\n"
+                f"  </archivo>\n"
+            )
+        top_files_xml += "</archivos_con_mas_dependencias>"
+
+        # 1. Calcular grados usando matemáticas de grafos O(1)
+        in_degrees = {}
+        out_degrees = {}
+        for e in nx_edges:
+            src = e["source"]
+            tgt = e["target"]
+            out_degrees[src] = out_degrees.get(src, 0) + 1
+            in_degrees[tgt] = in_degrees.get(tgt, 0) + 1
+
+        file_nodes = list(file_nodes_dict.values())
+
+        # 2. El Radar: Seleccionar los 3 archivos clave
+        # El Orquestador: Mayor Out-Degree
+        top_out_node = max(file_nodes, key=lambda n: out_degrees.get(n["id"], 0), default=None)
+
+        # El Core/Dominio: Mayores In-Degree
+        top_in_nodes = sorted(
+            [n for n in file_nodes if n != top_out_node], 
+            key=lambda n: in_degrees.get(n["id"], 0), 
+            reverse=True
+        )[:2]
+
+        key_nodes = [n for n in [top_out_node] + top_in_nodes if n is not None]
+
+        # 3. Leer el código fuente (Salvaguardando el FinOps)
+        key_files_xml = "<archivos_clave_dominio>\n"
+        for node in key_nodes:
+            file_path = node["file_path"]
+            if not file_path or not os.path.exists(file_path):
+                continue
+                
+            try:
+                with open(file_path, "r", encoding="utf-8") as f:
+                    lines = f.readlines()
+                    content = "".join(lines[:300]) # Límite estricto de 300 líneas
+                    if len(lines) > 300:
+                        content += "\n... [CÓDIGO TRUNCADO PARA PROTEGER CONTEXTO] ..."
+                        
+                node_role = "Orquestador/Router (Alto Fan-Out)" if node == top_out_node else "Core/Dominio (Alto Fan-In)"
+                
+                key_files_xml += f"""  <archivo rol="{node_role}" ruta="{file_path}">\n    <codigo_fuente>\n{content}\n    </codigo_fuente>\n  </archivo>\n"""
+            except Exception:
+                pass # Silenciamos errores de lectura de archivos binarios/ilegibles
+
+        key_files_xml += "</archivos_clave_dominio>"
+
+        project_context_xml = f"""<contexto_del_proyecto>
+  <estadisticas>
+    <archivos_fuente_reales>{total_files}</archivos_fuente_reales>
+    <lenguajes_principales>{main_langs_str}</lenguajes_principales>
+  </estadisticas>
+  <estructura_directorios>
+{dir_structure}
+  </estructura_directorios>
+  {top_files_xml}
+  {key_files_xml}
+</contexto_del_proyecto>"""
 
         from app.infrastructure.llm.litellm_gateway import LiteLLMGateway
 
@@ -417,7 +579,7 @@ async def analyze_project_graph(
             try:
                 full_text = []
                 async for chunk in gateway.analyze_anomalies_stream(
-                    project.name, project.path, metrics, {}
+                    project.name, project.path, metrics, {}, project_context_xml
                 ):
                     full_text.append(chunk)
                     yield f"data: {json.dumps({'type': 'message_chunk', 'text': chunk})}\n\n"
@@ -439,6 +601,14 @@ async def analyze_project_graph(
                         )
                         db_session.add(new_report)
                         await db_session.commit()
+
+                try:
+                    extractor_model = request.fallback_model or request.model or "gemini/gemini-1.5-flash"
+                    extracted_tickets = await gateway.extract_kanban_tickets_phantom(final_content, extractor_model)
+                    if extracted_tickets:
+                        yield f"data: {json.dumps({'type': 'kanban_suggestions', 'tickets': extracted_tickets})}\n\n"
+                except Exception as ex:
+                    logger.error(f"Failed to generate kanban suggestions: {ex}")
 
                 yield f"data: {json.dumps({'type': 'done'})}\n\n"
             except _asyncio.CancelledError:
@@ -472,7 +642,36 @@ async def get_project_reports(project_id: str, session: AsyncSession = Depends(g
 
     result = await session.execute(
         select(AnalysisReportModel)
-        .where(AnalysisReportModel.project_id == project_uuid)
+        .where(AnalysisReportModel.project_id == project_uuid, AnalysisReportModel.is_deleted.is_(False))
+        .order_by(AnalysisReportModel.created_at.desc())
+    )
+    reports = result.scalars().all()
+
+    return AnalysisReportListResponse(
+        reports=[AnalysisReportResponse.model_validate(r, from_attributes=True) for r in reports]
+    )
+
+
+@router.get("/projects/{project_id}/reports/trash")
+async def get_project_reports_trash(
+    project_id: str, session: AsyncSession = Depends(get_db_session)
+):
+    try:
+        project_uuid = UUID(project_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+
+    from sqlalchemy import select
+
+    from app.infrastructure.db.models import AnalysisReportModel
+    from app.interfaces.api.v1.report_schemas import (
+        AnalysisReportListResponse,
+        AnalysisReportResponse,
+    )
+
+    result = await session.execute(
+        select(AnalysisReportModel)
+        .where(AnalysisReportModel.project_id == project_uuid, AnalysisReportModel.is_deleted.is_(True))
         .order_by(AnalysisReportModel.created_at.desc())
     )
     reports = result.scalars().all()
@@ -510,9 +709,163 @@ async def get_project_report(
     return AnalysisReportResponse.model_validate(report, from_attributes=True)
 
 
+@router.put("/projects/{project_id}/reports/{report_id}/trash")
+async def trash_project_report(
+    project_id: str, report_id: str, session: AsyncSession = Depends(get_db_session)
+):
+    try:
+        project_uuid = UUID(project_id)
+        report_uuid = UUID(report_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid ID format")
+
+    from sqlalchemy import select
+
+    from app.infrastructure.db.models import AnalysisReportModel
+
+    result = await session.execute(
+        select(AnalysisReportModel).where(
+            AnalysisReportModel.id == report_uuid, AnalysisReportModel.project_id == project_uuid
+        )
+    )
+    report = result.scalar_one_or_none()
+
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    report.is_deleted = True
+    await session.commit()
+    return {"status": "success", "message": "Report moved to trash"}
+
+
+@router.put("/projects/{project_id}/reports/{report_id}/restore")
+async def restore_project_report(
+    project_id: str, report_id: str, session: AsyncSession = Depends(get_db_session)
+):
+    try:
+        project_uuid = UUID(project_id)
+        report_uuid = UUID(report_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid ID format")
+
+    from sqlalchemy import select
+
+    from app.infrastructure.db.models import AnalysisReportModel
+
+    result = await session.execute(
+        select(AnalysisReportModel).where(
+            AnalysisReportModel.id == report_uuid, AnalysisReportModel.project_id == project_uuid
+        )
+    )
+    report = result.scalar_one_or_none()
+
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    report.is_deleted = False
+    await session.commit()
+    return {"status": "success", "message": "Report restored"}
+
+
+@router.delete("/projects/{project_id}/reports/{report_id}")
+async def delete_project_report(
+    project_id: str, report_id: str, session: AsyncSession = Depends(get_db_session)
+):
+    try:
+        project_uuid = UUID(project_id)
+        report_uuid = UUID(report_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid ID format")
+
+    from sqlalchemy import delete
+
+    from app.infrastructure.db.models import AnalysisReportModel
+
+    result = await session.execute(
+        delete(AnalysisReportModel).where(
+            AnalysisReportModel.id == report_uuid, AnalysisReportModel.project_id == project_uuid
+        )
+    )
+    if result.rowcount == 0:  # type: ignore[attr-defined]
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    await session.commit()
+    return {"status": "success", "message": "Report permanently deleted"}
+
+
 from sqlalchemy import select
 
+from app.domain.graph_schemas import BlastRadiusItem, BlastRadiusResponse
 from app.infrastructure.db.models import GraphNodeModel, ProjectModel
+
+
+@router.get(
+    "/projects/{project_id}/blast-radius",
+    response_model=BlastRadiusResponse,
+    summary="Calcular el Radio de Impacto (Blast Radius / Graph RAG) para un nodo o archivo",
+)
+async def get_project_blast_radius(
+    project_id: str,
+    node_id: str = Query(..., description="ID del nodo o ruta del archivo objetivo"),
+    max_depth: int = Query(default=3, ge=1, le=5, description="Nivel máximo de profundidad (1-5)"),
+    session: AsyncSession = Depends(get_db_session),
+):
+    try:
+        proj_uuid = UUID(project_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+
+    project_result = await session.execute(select(ProjectModel).where(ProjectModel.id == proj_uuid))
+    project = project_result.scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    target_id = node_id
+    target_file_path = node_id
+
+    # Resolution helper: Prefix file: if not prefixed
+    if not target_id.startswith("file:") and not target_id.startswith("class:") and not target_id.startswith("func:"):
+        target_id = f"file:{node_id}"
+
+    node_result = await session.execute(
+        select(GraphNodeModel).where(
+            GraphNodeModel.project_id == proj_uuid,
+            (GraphNodeModel.id == target_id) | (GraphNodeModel.file_path == node_id) | (GraphNodeModel.name == node_id)
+        )
+    )
+    target_node = node_result.scalars().first()
+
+    if target_node:
+        target_id = target_node.id
+        target_file_path = target_node.file_path or target_node.name
+
+    repo = SQLAlchemyGraphRepository(session)
+    raw_items = await repo.get_blast_radius(proj_uuid, target_id, max_depth)
+
+    items: list[BlastRadiusItem] = [
+        BlastRadiusItem(
+            source_id=row["source_id"],
+            target_id=row["target_id"],
+            source_file_path=row["source_file_path"],
+            edge_type=row["edge_type"],
+            depth=row["depth"],
+        )
+        for row in raw_items
+    ]
+
+    grouped: dict[int, list[BlastRadiusItem]] = {}
+    for item in items:
+        grouped.setdefault(item.depth, []).append(item)
+
+    return BlastRadiusResponse(
+        project_id=proj_uuid,
+        target_node_id=target_id,
+        target_file_path=target_file_path,
+        max_depth=max_depth,
+        total_affected_files=len(items),
+        items=items,
+        grouped_by_depth=grouped,
+    )
 
 
 @router.get("/projects/{project_id}/nodes/{node_id:path}")
@@ -1589,7 +1942,7 @@ class WBSRequest(BaseModel):
     model: str | None = None
 
 
-@router.post("/projects/{project_id}/kanban/wbs")
+@router.post("/projects/{project_id}/kanban/wbs", response_model=WBSHierarchicalResponse)
 async def generate_wbs(
     project_id: str, request: WBSRequest, session: AsyncSession = Depends(get_db_session)
 ):
@@ -1605,44 +1958,53 @@ async def generate_wbs(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    prompt = f"""Eres un Ingeniero de Software Principal y Gestor de Proyectos de gran experiencia. Descompón los siguientes requerimientos de la feature en tareas técnicas atómicas y ordenadas (Work Breakdown Structure - WBS):
+    prompt = f"""Eres un Ingeniero de Software Principal y Gestor de Proyectos de gran experiencia. Descompón los siguientes requerimientos en una estructura jerárquica (WBS).
 
 Requerimientos:
 {request.requirements}
 
 Instrucciones de descomposición:
-1. Divide la feature en tareas atómicas independientes (máximo 8 tareas). Cada tarea debe ser lo suficientemente pequeña como para mapear a un commit atómico y funcional.
-2. Sugiere un prefijo Conventional Commit para cada tarea (ej. 'feat(auth)', 'fix(api)', 'refactor(core)', 'test(db)', 'docs(readme)').
-3. El título de la tarea debe incluir el tipo y la descripción clara.
-4. Indica dependencias lógicas: ordena las tareas de modo que las dependencias técnicas vayan primero (ej. backend antes de frontend).
-5. Estima el tamaño/tiempo en minutos.
-6. Asigna prioridad: 'High', 'Medium', o 'Low'.
-7. Proporciona una explicación detallada del orden sugerido para educar al desarrollador en tu razonamiento de dependencias.
+1. Divide la feature en Work Packages (Epics).
+2. Para cada Work Package, define subtareas atómicas y secuenciales.
+3. Sugiere dependencias lógicas dentro de las subtareas de un paquete (por IDs, ej: 1.1, 1.2).
+4. Estima el tamaño en horas para cada subtarea.
+5. Suma el total de horas en total_estimated_hours.
+6. Devuelve la salida ESTRICTAMENTE en formato JSON.
 
-Debes responder ÚNICAMENTE con un objeto JSON válido con la siguiente estructura (sin bloques markdown ```json ni texto adicional fuera del JSON):
+Debes responder ÚNICAMENTE con un objeto JSON válido con esta estructura exacta:
 {{
-  "tasks": [
+  "work_packages": [
     {{
-      "title": "feat(component): add JWT validation middleware",
-      "estimated_mins": 45,
-      "priority": "High",
-      "type": "feat",
-      "tags": ["backend", "auth"]
+      "id": "1",
+      "title": "Configurar Backend",
+      "objective": "Establecer la base de datos y la API.",
+      "subtasks": [
+        {{
+          "id": "1.1",
+          "title": "Modelos BD",
+          "description": "Crear modelos con SQLAlchemy",
+          "estimated_hours": 2.5,
+          "dependencies": []
+        }}
+      ]
     }}
   ],
-  "explanation": "### Razón del orden propuesto\\n\\n1. **Base de Datos/Backend:** Creamos la base lógica primero para establecer el contrato de datos...\\n2. **UI/Integración:** Una vez el contrato del endpoint es estable, procedemos con el maquetado del frontend..."
+  "total_estimated_hours": 2.5
 }}"""
 
     from app.infrastructure.ai.llm_gateway import LiteLLMGateway
 
-    actual_model = request.model or DEFAULT_LLM_MODEL
+    # Use a Pro model for complex planning
+    actual_model = request.model or "gemini/gemini-2.5-pro"
     llm_gateway = LiteLLMGateway()
 
     try:
-        response_text = llm_gateway.generate_completion(prompt=prompt, model=actual_model)
+        response_text = llm_gateway.generate_completion(
+            prompt=prompt, 
+            model=actual_model,
+            response_format={"type": "json_object"}
+        )
 
-
-        # Clean response string to extract pure JSON
         clean_res = response_text.strip()
         if clean_res.startswith("```json"):
             clean_res = clean_res[7:]
@@ -1655,7 +2017,7 @@ Debes responder ÚNICAMENTE con un objeto JSON válido con la siguiente estructu
         clean_res = clean_res.strip()
 
         parsed_wbs = json.loads(clean_res)
-        return parsed_wbs
+        return WBSHierarchicalResponse(**parsed_wbs)
     except Exception as e:
         logger.error("WBS AI planning failed: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="An internal error occurred")

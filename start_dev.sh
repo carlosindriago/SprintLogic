@@ -91,12 +91,16 @@ fi
 # 2. Port cleanup -----------------------------------------------------------
 
 echo -e "\nChecking if port 8000 is free..."
-if lsof -Pi :8000 -sTCP:LISTEN -t >/dev/null ; then
+if fuser 8000/tcp >/dev/null 2>&1; then
     echo "[!] Port 8000 is occupied. Cleaning it up..."
-    # Only kill the listener on the exact port; do NOT kill -9 the
-    # entire process group here because the previous launcher should
-    # have already cleaned up.
-    kill -9 $(lsof -t -i:8000) 2>/dev/null || true
+    fuser -k -9 8000/tcp >/dev/null 2>&1 || true
+    sleep 1
+fi
+
+echo -e "\nChecking if port 3420 is free..."
+if fuser 3420/tcp >/dev/null 2>&1; then
+    echo "[!] Port 3420 is occupied. Cleaning it up..."
+    fuser -k -9 3420/tcp >/dev/null 2>&1 || true
     sleep 1
 fi
 
