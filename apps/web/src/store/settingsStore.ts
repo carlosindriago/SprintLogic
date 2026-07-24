@@ -18,9 +18,11 @@ interface SettingsState {
   isVimEnabled: boolean;
   isFimEnabled: boolean;
   language: SupportedLanguage;
+  settingsActiveSection: string;
   setVimEnabled: (enabled: boolean) => void;
   setFimEnabled: (enabled: boolean) => void;
   setLanguage: (lang: SupportedLanguage) => void;
+  setSettingsActiveSection: (section: string) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -29,9 +31,11 @@ export const useSettingsStore = create<SettingsState>()(
       isVimEnabled: false,
       isFimEnabled: true,
       language: getBrowserLanguage(),
+      settingsActiveSection: 'general',
       setVimEnabled: (enabled) => set({ isVimEnabled: enabled }),
       setFimEnabled: (enabled) => set({ isFimEnabled: enabled }),
       setLanguage: (lang) => set({ language: lang }),
+      setSettingsActiveSection: (section) => set({ settingsActiveSection: section }),
     }),
     {
       name: 'sprintlogic-settings',
@@ -39,6 +43,7 @@ export const useSettingsStore = create<SettingsState>()(
         isVimEnabled: state.isVimEnabled,
         isFimEnabled: state.isFimEnabled,
         language: state.language,
+        settingsActiveSection: state.settingsActiveSection,
       }),
     },
   ),

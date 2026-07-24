@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { GraphNode } from '../types';
 
-export type TabType = 'dashboard' | 'editor' | 'git-graph' | 'diff' | 'insights' | 'kanban' | 'graph' | 'audit' | 'ai-report' | 'ai-history' | 'auto-fix' | 'prompt-studio' | 'planning-studio';
+export type TabType = 'dashboard' | 'editor' | 'git-graph' | 'diff' | 'insights' | 'kanban' | 'graph' | 'audit' | 'ai-report' | 'ai-history' | 'auto-fix' | 'settings' | 'planning-studio';
 
 const FIXED_TABS = new Set(['dashboard']);
 
@@ -17,6 +17,7 @@ export interface TabData {
     reportId?: string;
     markdown?: string;
     projectId?: string;
+    initialSection?: string;
   };
 }
 
