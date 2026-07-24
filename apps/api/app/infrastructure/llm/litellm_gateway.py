@@ -134,8 +134,13 @@ class LiteLLMGateway:
         lang_code: str = "en"
     ) -> AsyncGenerator[str, None]:
 
+        from app.infrastructure.db.database import get_sessionmaker
         from app.infrastructure.repositories import prompt_repository
-        golden_prompt = prompt_repository.get_prompt(None, "architect_report_v5")
+
+        sessionmaker = get_sessionmaker()
+        async with sessionmaker() as session:
+            golden_prompt = await prompt_repository.get_prompt_async(session, "architect_report_v5")
+
         prompt_content = golden_prompt.content if golden_prompt else "Fallback"
 
         metrics_copy = dict(metrics)
@@ -182,8 +187,13 @@ class LiteLLMGateway:
 
         from litellm import acompletion
 
+        from app.infrastructure.db.database import get_sessionmaker
         from app.infrastructure.repositories import prompt_repository
-        phantom = prompt_repository.get_prompt(None, "phantom_extractor")
+
+        sessionmaker = get_sessionmaker()
+        async with sessionmaker() as session:
+            phantom = await prompt_repository.get_prompt_async(session, "phantom_extractor")
+
         if not phantom:
             prompt = (
                 "Extract actionable Kanban tickets from the report below.\n\n"

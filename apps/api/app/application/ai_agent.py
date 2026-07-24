@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.ai.context7_client import Context7Client
 from app.infrastructure.ai.provider_adapter import ProviderAdapter
-from app.infrastructure.db.database import AsyncSessionLocal
+from app.infrastructure.db.database import get_sessionmaker
 from app.infrastructure.db.models import AIMemoryModel, ContextSnippetModel, ProjectModel
 from app.infrastructure.security.credential_manager import CredentialManager
 
@@ -412,7 +412,7 @@ class AIAgent:
 
         # Use a fresh short-lived session for tool calls to avoid
         # holding the DB connection during LLM network I/O.
-        async with AsyncSessionLocal() as session:
+        async with get_sessionmaker()() as session:
             if name == "mem_save":
                 memory = AIMemoryModel(
                     project_id=self.project_id,
@@ -791,7 +791,7 @@ class AIAgent:
                     from app.infrastructure.db.models import DeveloperInsightModel
 
                     try:
-                        async with AsyncSessionLocal() as insight_session:
+                        async with get_sessionmaker()() as insight_session:
                             result = await insight_session.execute(select(DeveloperInsightModel))
                             all_insights = result.scalars().all()
 

@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.ai.provider_adapter import ProviderAdapter
 from app.infrastructure.config import DEFAULT_LLM_MODEL
-from app.infrastructure.db.database import AsyncSessionLocal
+from app.infrastructure.db.database import get_sessionmaker
 from app.infrastructure.db.models import ConversationModel, DeveloperInsightModel, MessageModel
 from app.infrastructure.security.credential_manager import CredentialManager
 
@@ -41,7 +41,7 @@ async def run_insight_worker_loop():
             if shutdown_event.is_set():
                 break
 
-            async with AsyncSessionLocal() as session:
+            async with get_sessionmaker()() as session:
                 # Fetch conversations that have not been processed
                 stmt = (
                     select(ConversationModel)

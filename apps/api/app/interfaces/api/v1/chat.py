@@ -104,11 +104,11 @@ class ChatResponse(BaseModel):
 
 async def _generate_conversation_title(conversation_id: int, first_message: str):
     """Background task to generate a short title for a new conversation."""
-    from app.infrastructure.db.database import AsyncSessionLocal
+    from app.infrastructure.db.database import get_sessionmaker
 
     # Pre-emptive short title to display immediately
     short_preview = " ".join(first_message.split()[:4]) + "..."
-    async with AsyncSessionLocal() as session:
+    async with get_sessionmaker()() as session:
         try:
             # Fallback title just in case the LLM fails
             conv = await session.get(ConversationModel, conversation_id)
@@ -232,8 +232,8 @@ async def chat_with_ai(request: ChatRequest, background_tasks: BackgroundTasks, 
 
             # Save the final AI response to DB
             if conversation_id and full_response:
-                from app.infrastructure.db.database import AsyncSessionLocal
-                async with AsyncSessionLocal() as bg_session:
+                from app.infrastructure.db.database import get_sessionmaker
+                async with get_sessionmaker()() as bg_session:
                     ai_msg = MessageModel(
                         conversation_id=conversation_id,
                         role="assistant",
@@ -315,9 +315,9 @@ class MentorResponse(BaseModel):
 
 async def _save_memory(project_id: str, agent_name: str, context_type: str, content: str) -> None:
     """Persist an interaction summary to project_memories FTS5."""
-    from app.infrastructure.db.database import AsyncSessionLocal
+    from app.infrastructure.db.database import get_sessionmaker
 
-    async with AsyncSessionLocal() as session:
+    async with get_sessionmaker()() as session:
         try:
             await session.execute(
                 text(

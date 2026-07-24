@@ -47,11 +47,11 @@ async def lifespan(app: FastAPI):
 
 
     # Startup
-    from app.infrastructure.db.database import AsyncSessionLocal
+    from app.infrastructure.db.database import get_sessionmaker
     from app.infrastructure.repositories.prompt_repository import initialize_prompts
 
-    async with AsyncSessionLocal() as session:
-
+    sessionmaker = get_sessionmaker()
+    async with sessionmaker() as session:
         await initialize_prompts(session)
 
 

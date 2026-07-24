@@ -49,6 +49,15 @@ Respond strictly in JSON format matching exactly this schema: {"tickets": [{"tit
 """
 PHANTOM_EXTRACTOR_VARS = ["report_text"]
 
+CODE_COACH_ID = "code_coach"
+CODE_COACH_CONTENT = """You are a senior Code Coach. Evaluate the following code snippet, provide actionable suggestions for improvement, and identify any anti-patterns.
+Be direct and concise.
+
+Code:
+{code_snippet}
+"""
+CODE_COACH_VARS = ["code_snippet"]
+
 async def initialize_prompts(session: AsyncSession):
     prompts_to_init = [
         {
@@ -62,6 +71,12 @@ async def initialize_prompts(session: AsyncSession):
             "description": "Phantom Extractor for Kanban tickets",
             "content": PHANTOM_EXTRACTOR_CONTENT,
             "required_variables": PHANTOM_EXTRACTOR_VARS
+        },
+        {
+            "id": CODE_COACH_ID,
+            "description": "Code Coach for snippet evaluation",
+            "content": CODE_COACH_CONTENT,
+            "required_variables": CODE_COACH_VARS
         }
     ]
 
@@ -126,6 +141,8 @@ async def restore_prompt(session: AsyncSession, prompt_id: str) -> PromptRegistr
         golden_content = IRON_PROMPT_V5_CONTENT
     elif prompt_id == PHANTOM_EXTRACTOR_ID:
         golden_content = PHANTOM_EXTRACTOR_CONTENT
+    elif prompt_id == CODE_COACH_ID:
+        golden_content = CODE_COACH_CONTENT
     else:
         raise ValueError(f"No golden content available for {prompt_id}")
 

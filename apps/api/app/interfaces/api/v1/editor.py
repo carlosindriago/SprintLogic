@@ -85,14 +85,14 @@ class GenerateDocResponse(BaseModel):
 async def generate_docs(request: GenerateDocRequest):
     try:
         from app.application.ai_agent import AIAgent
-        from app.infrastructure.db.database import AsyncSessionLocal
+        from app.infrastructure.db.database import get_sessionmaker
 
         prompt = f"""Escribe ÚNICAMENTE un comentario JSDoc válido y profesional para la siguiente firma de función/variable exportada.
 NO inventes lógica interna. Usa el formato /** ... */.
 Firma: {request.signature}
 Solo devuelve el bloque JSDoc, sin bloques de código markdown, sin texto adicional."""
 
-        async with AsyncSessionLocal() as session:
+        async with get_sessionmaker()() as session:
             agent = AIAgent(session=session)
             response = ""
             async for chunk_str in agent.chat_stream([{"role": "user", "content": prompt}], model="gemini/gemini-2.5-flash"):

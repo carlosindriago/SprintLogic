@@ -26,7 +26,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from app.application.scan_repo import ScanCodebaseUseCase, ScanLocalRepository
 from app.domain.exceptions import PathBlockedError, ScannerError
-from app.infrastructure.db.database import AsyncSessionLocal, get_db_session
+from app.infrastructure.db.database import get_sessionmaker, get_db_session
 from app.infrastructure.db.project_repository import SQLAlchemyProjectRepository
 from app.infrastructure.events.active_scans import active_scans
 from app.infrastructure.events.event_bus import global_event_bus
@@ -587,10 +587,10 @@ async def analyze_project_graph(
                 if final_content.strip():
                     import uuid
 
-                    from app.infrastructure.db.database import AsyncSessionLocal
+                    from app.infrastructure.db.database import get_sessionmaker
                     from app.infrastructure.db.models import AnalysisReportModel
 
-                    async with AsyncSessionLocal() as db_session:
+                    async with get_sessionmaker()() as db_session:
                         new_report = AnalysisReportModel(
                             id=uuid.uuid4(),
                             project_id=project_uuid,
@@ -1214,7 +1214,7 @@ async def build_search_index(project_root: str, session: AsyncSession | None = N
 
     own_session = session is None
     if own_session:
-        session = AsyncSessionLocal()
+        session = get_sessionmaker()()
 
     assert session is not None
 
@@ -1588,7 +1588,7 @@ async def project_ws(websocket: WebSocket, project_id: str):
         await websocket.close(code=1008, reason="Invalid project ID")
         return
 
-    async with AsyncSessionLocal() as session:
+    async with get_sessionmaker()() as session:
         repo = SQLAlchemyProjectRepository(session)
         project = await repo.get_project(project_uuid)
 
