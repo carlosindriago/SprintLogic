@@ -13,6 +13,8 @@ import {
   BlastRadiusResponse,
 } from '../types';
 
+import { useSettingsStore } from '../store/settingsStore';
+
 export interface ModelResult {
   id: string;
   name: string;
@@ -119,6 +121,7 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   const url = `${API_BASE_URL}${endpoint}`;
   const headers = {
     'Content-Type': 'application/json',
+    'Accept-Language': useSettingsStore.getState().language,
     ...options.headers,
   };
 
@@ -461,7 +464,8 @@ export const chatTicketMentor = async (payload: TicketMentorPayload) => {
   return fetch(`${API_BASE_URL}/chat/ticket-mentor`, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
+      'Accept-Language': useSettingsStore.getState().language
     },
     body: JSON.stringify(payload)
   });
@@ -500,7 +504,7 @@ export const sendPlanningMessage = async (
 ) => {
   const res = await fetch(`${API_BASE_URL}/planning-studio/message`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "Accept-Language": useSettingsStore.getState().language },
     body: JSON.stringify(payload),
   });
 

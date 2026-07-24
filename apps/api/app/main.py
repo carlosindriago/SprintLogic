@@ -10,12 +10,12 @@ from app.interfaces.api.v1.editor import router as editor_router
 from app.interfaces.api.v1.git import router as git_router
 from app.interfaces.api.v1.kanban import router as kanban_router
 from app.interfaces.api.v1.lsp import router as lsp_router
+from app.interfaces.api.v1.planning_studio import router as planning_studio_router
 from app.interfaces.api.v1.projects import router as projects_router
+from app.interfaces.api.v1.prompts import router as prompts_router
 from app.interfaces.api.v1.settings import router as settings_router
 from app.interfaces.api.v1.sync import router as sync_router
 from app.interfaces.api.v1.telemetry import router as telemetry_router
-from app.interfaces.api.v1.prompts import router as prompts_router
-from app.interfaces.api.v1.planning_studio import router as planning_studio_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -48,7 +48,6 @@ async def lifespan(app: FastAPI):
 
     # Startup
     from app.infrastructure.db.database import AsyncSessionLocal
-
     from app.infrastructure.repositories.prompt_repository import initialize_prompts
 
     async with AsyncSessionLocal() as session:

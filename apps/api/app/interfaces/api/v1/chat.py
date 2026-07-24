@@ -9,7 +9,6 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import desc, select, text
-from collections.abc import AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.ai_agent import AIAgent
@@ -452,8 +451,8 @@ async def ticket_mentor(
     request: TicketMentorRequest,
     session: AsyncSession = Depends(get_db_session)
 ):
-    import uuid
     import os
+    import uuid
     try:
         proj_uuid = uuid.UUID(request.project_id)
     except ValueError:
@@ -468,15 +467,15 @@ async def ticket_mentor(
     target_path = request.node_id
     if target_path.startswith("file:"):
         target_path = target_path[5:]
-    
+
     file_content = ""
     try:
-        with open(target_path, "r", encoding="utf-8") as f:
+        with open(target_path, encoding="utf-8") as f:
             file_content = f.read()
-    except Exception as e:
+    except Exception:
         abs_path = os.path.join(project.path, target_path)
         try:
-            with open(abs_path, "r", encoding="utf-8") as f:
+            with open(abs_path, encoding="utf-8") as f:
                 file_content = f.read()
         except Exception:
             file_content = f"Error reading file {target_path}"
@@ -499,7 +498,7 @@ async def ticket_mentor(
             raise HTTPException(status_code=400, detail="API key not configured")
 
     system_msg = "Eres el 'Sensei del Código', enfocado en asistir con tickets de un tablero Kanban (Ticket Mentor). Recibirás el contenido del archivo afectado y la topología de impacto (Blast Radius) de las dependencias. Responde socráticamente."
-    
+
     user_msg = (
         f"Ticket ID: {request.ticket_id}\n"
         f"Archivo objetivo: {request.node_id}\n\n"
@@ -539,8 +538,8 @@ async def auto_fix(
     request: AutoFixRequest,
     session: AsyncSession = Depends(get_db_session)
 ):
-    import uuid
     import os
+    import uuid
     try:
         proj_uuid = uuid.UUID(request.project_id)
     except ValueError:
@@ -555,15 +554,15 @@ async def auto_fix(
     target_path = request.node_id
     if target_path.startswith("file:"):
         target_path = target_path[5:]
-    
+
     file_content = ""
     try:
-        with open(target_path, "r", encoding="utf-8") as f:
+        with open(target_path, encoding="utf-8") as f:
             file_content = f.read()
     except Exception:
         abs_path = os.path.join(project.path, target_path)
         try:
-            with open(abs_path, "r", encoding="utf-8") as f:
+            with open(abs_path, encoding="utf-8") as f:
                 file_content = f.read()
         except Exception:
             raise HTTPException(status_code=404, detail="Target file not found")
@@ -577,14 +576,14 @@ async def auto_fix(
             raise HTTPException(status_code=400, detail="API key not configured")
 
     system_msg = "Eres un asistente experto de refactorización rápida. Debes responder SOLO con un Unified Diff o un bloque de código completo modificado que aplique la instrucción al archivo provisto. Nada de texto introductorio."
-    
+
     user_msg = (
         f"Archivo: {target_path}\n"
         f"Instrucción: {request.instruction}\n\n"
         f"Código Original:\n```\n{file_content}\n```\n\n"
         f"Genera el código actualizado."
     )
-    
+
     try:
         response = await litellm.acompletion(
             model=DEFAULT_LLM_MODEL,

@@ -22,6 +22,14 @@ class LiteLLMGateway:
         api_key = self.cred_manager.get_api_key(provider)
         return ProviderAdapter.adapt(self.model_name, api_key)
 
+
+    def _build_language_clause(self, lang_code: str) -> str:
+        if lang_code == "es":
+            return "\n\nIMPORTANT: Please write your entire response in Spanish."
+        elif lang_code == "pt":
+            return "\n\nIMPORTANT: Please write your entire response in Portuguese."
+        return ""
+
     def _get_tools(self) -> list[dict[str, Any]]:
         return [
             {
@@ -122,7 +130,8 @@ class LiteLLMGateway:
         project_path: str,
         metrics: dict[str, Any],
         skeletons: dict[str, Any],
-        project_context_xml: str = ""
+        project_context_xml: str = "",
+        lang_code: str = "en"
     ) -> AsyncGenerator[str, None]:
 
         from app.infrastructure.repositories import prompt_repository
@@ -143,6 +152,8 @@ class LiteLLMGateway:
             metrics_xml=metrics_xml,
             skeletons_xml=skeletons_xml
         )
+
+        prompt += self._build_language_clause(lang_code)
 
         adapted = self._get_adapted_params()
 
@@ -166,9 +177,11 @@ class LiteLLMGateway:
             if hasattr(response_iterator, "aclose"):
                 await response_iterator.aclose()
 
-    async def extract_kanban_tickets_phantom(self, report_text: str, extractor_model: str) -> list[dict[str, Any]]:
+    async def extract_kanban_tickets_phantom(self, report_text: str, extractor_model: str, lang_code: str = "en") -> list[dict[str, Any]]:
         import json
+
         from litellm import acompletion
+
         from app.infrastructure.repositories import prompt_repository
         phantom = prompt_repository.get_prompt(None, "phantom_extractor")
         if not phantom:
@@ -180,13 +193,15 @@ class LiteLLMGateway:
             )
         else:
             prompt = phantom.content.format(report_text=report_text)
-        
+
+        prompt += self._build_language_clause(lang_code)
+
         try:
             from app.infrastructure.ai.provider_adapter import ProviderAdapter
             provider = ProviderAdapter.get_provider(extractor_model)
             api_key = self.cred_manager.get_api_key(provider)
             adapted = ProviderAdapter.adapt(extractor_model, api_key)
-            
+
             response = await acompletion(
                 model=adapted["model"],
                 messages=[{"role": "user", "content": prompt}],

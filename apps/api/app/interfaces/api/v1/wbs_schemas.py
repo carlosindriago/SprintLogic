@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
 
+
 class WBSSubtask(BaseModel):
     id: str = Field(..., description="Unique identifier for the subtask, e.g., '1.1'")
     title: str = Field(..., description="Short title of the subtask")

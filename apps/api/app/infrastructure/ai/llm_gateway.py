@@ -10,13 +10,21 @@ class LiteLLMGateway:
     def __init__(self) -> None:
         pass
 
+
+    def _build_language_clause(self, lang_code: str) -> str:
+        if lang_code == "es":
+            return "\n\nIMPORTANT: Please write your entire response in Spanish."
+        elif lang_code == "pt":
+            return "\n\nIMPORTANT: Please write your entire response in Portuguese."
+        return ""
+
     def _resolve_key(self, model: str) -> tuple[str, str | None]:
         """Return provider and API key for the requested model."""
         provider = ProviderAdapter.get_provider(model)
         api_key = CredentialManager.get_api_key(provider)
         return provider, api_key
 
-    def generate_completion(self, prompt: str, model: str, **kwargs) -> str:
+    def generate_completion(self, prompt: str, model: str, lang_code: str = "en", **kwargs) -> str:
         """
         Sends a prompt to the specified model.
         Retrieves the API key securely from the credential manager based on provider.
@@ -28,6 +36,7 @@ class LiteLLMGateway:
         if not api_key and provider != "openrouter" and "ollama" not in model.lower():
             raise ValueError(f"AI API Key for {provider} not found in the secure keyring.")
 
+        prompt += self._build_language_clause(lang_code)
         messages = [{"role": "user", "content": prompt}]
 
         adapted = ProviderAdapter.adapt(model, api_key)

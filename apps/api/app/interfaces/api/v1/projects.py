@@ -24,8 +24,6 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
 
-from app.interfaces.api.v1.wbs_schemas import WBSHierarchicalResponse
-
 from app.application.scan_repo import ScanCodebaseUseCase, ScanLocalRepository
 from app.domain.exceptions import PathBlockedError, ScannerError
 from app.infrastructure.db.database import AsyncSessionLocal, get_db_session
@@ -46,6 +44,7 @@ from app.interfaces.api.v1.project_schemas import (
 from app.interfaces.api.v1.project_schemas import (
     UpdateProjectRequest as UpdateProjectRequestDTO,
 )
+from app.interfaces.api.v1.wbs_schemas import WBSHierarchicalResponse
 
 logger = logging.getLogger(__name__)
 
@@ -345,7 +344,6 @@ def get_process_pool(request: Request) -> ProcessPoolExecutor:
     return request.app.state.process_pool
 
 
-from app.infrastructure.config import DEFAULT_LLM_MODEL
 
 
 class AnalyzeGraphRequest(BaseModel):
@@ -358,7 +356,7 @@ from fastapi.responses import StreamingResponse
 
 @router.post("/projects/{project_id}/graph/analyze")
 async def analyze_project_graph(
-    project_id: str, request: AnalyzeGraphRequest, session: AsyncSession = Depends(get_db_session)
+    req: Request, project_id: str, request: AnalyzeGraphRequest, session: AsyncSession = Depends(get_db_session)
 ):
     try:
         project_uuid = UUID(project_id)
@@ -530,8 +528,8 @@ async def analyze_project_graph(
 
         # El Core/Dominio: Mayores In-Degree
         top_in_nodes = sorted(
-            [n for n in file_nodes if n != top_out_node], 
-            key=lambda n: in_degrees.get(n["id"], 0), 
+            [n for n in file_nodes if n != top_out_node],
+            key=lambda n: in_degrees.get(n["id"], 0),
             reverse=True
         )[:2]
 
@@ -543,16 +541,16 @@ async def analyze_project_graph(
             file_path = node["file_path"]
             if not file_path or not os.path.exists(file_path):
                 continue
-                
+
             try:
-                with open(file_path, "r", encoding="utf-8") as f:
+                with open(file_path, encoding="utf-8") as f:
                     lines = f.readlines()
                     content = "".join(lines[:300]) # Límite estricto de 300 líneas
                     if len(lines) > 300:
                         content += "\n... [CÓDIGO TRUNCADO PARA PROTEGER CONTEXTO] ..."
-                        
+
                 node_role = "Orquestador/Router (Alto Fan-Out)" if node == top_out_node else "Core/Dominio (Alto Fan-In)"
-                
+
                 key_files_xml += f"""  <archivo rol="{node_role}" ruta="{file_path}">\n    <codigo_fuente>\n{content}\n    </codigo_fuente>\n  </archivo>\n"""
             except Exception:
                 pass # Silenciamos errores de lectura de archivos binarios/ilegibles
@@ -578,8 +576,9 @@ async def analyze_project_graph(
         async def event_generator():
             try:
                 full_text = []
+                lang_code = req.headers.get("Accept-Language", "en").split("-")[0]
                 async for chunk in gateway.analyze_anomalies_stream(
-                    project.name, project.path, metrics, {}, project_context_xml
+                    project.name, project.path, metrics, {}, project_context_xml, lang_code=lang_code
                 ):
                     full_text.append(chunk)
                     yield f"data: {json.dumps({'type': 'message_chunk', 'text': chunk})}\n\n"
@@ -604,7 +603,7 @@ async def analyze_project_graph(
 
                 try:
                     extractor_model = request.fallback_model or request.model or "gemini/gemini-1.5-flash"
-                    extracted_tickets = await gateway.extract_kanban_tickets_phantom(final_content, extractor_model)
+                    extracted_tickets = await gateway.extract_kanban_tickets_phantom(final_content, extractor_model, lang_code=lang_code)
                     if extracted_tickets:
                         yield f"data: {json.dumps({'type': 'kanban_suggestions', 'tickets': extracted_tickets})}\n\n"
                 except Exception as ex:
@@ -1944,7 +1943,7 @@ class WBSRequest(BaseModel):
 
 @router.post("/projects/{project_id}/kanban/wbs", response_model=WBSHierarchicalResponse)
 async def generate_wbs(
-    project_id: str, request: WBSRequest, session: AsyncSession = Depends(get_db_session)
+    req: Request, project_id: str, request: WBSRequest, session: AsyncSession = Depends(get_db_session)
 ):
     import json
 
@@ -2000,7 +1999,7 @@ Debes responder ÚNICAMENTE con un objeto JSON válido con esta estructura exact
 
     try:
         response_text = llm_gateway.generate_completion(
-            prompt=prompt, 
+            prompt=prompt,
             model=actual_model,
             response_format={"type": "json_object"}
         )

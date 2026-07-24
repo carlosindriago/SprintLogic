@@ -1,19 +1,20 @@
-from pydantic import BaseModel
-from typing import List, Dict, Optional, Any
 from datetime import datetime
 
+from pydantic import BaseModel
+
+
 class PromptBase(BaseModel):
-    description: Optional[str] = None
+    description: str | None = None
     content: str
-    required_variables: Optional[List[str]] = None
+    required_variables: list[str] | None = None
 
 class PromptCreate(PromptBase):
     id: str
 
 class PromptUpdate(BaseModel):
-    content: Optional[str] = None
-    description: Optional[str] = None
-    required_variables: Optional[List[str]] = None
+    content: str | None = None
+    description: str | None = None
+    required_variables: list[str] | None = None
 
 class PromptResponse(PromptBase):
     id: str

@@ -1,10 +1,10 @@
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from app.infrastructure.db.models import PromptRegistryModel
-from typing import Optional, Dict
-import asyncio
 
-_prompt_cache: Dict[str, PromptRegistryModel] = {}
+from app.infrastructure.db.models import PromptRegistryModel
+
+_prompt_cache: dict[str, PromptRegistryModel] = {}
 
 IRON_PROMPT_V5_ID = "architect_report_v5"
 IRON_PROMPT_V5_CONTENT = """Eres un Principal Software Architect realizando el onboarding y la auditoría inicial de un proyecto de software.
@@ -83,17 +83,17 @@ async def initialize_prompts(session: AsyncSession):
 
     await session.commit()
 
-async def get_prompt_async(session: AsyncSession, prompt_id: str) -> Optional[PromptRegistryModel]:
+async def get_prompt_async(session: AsyncSession, prompt_id: str) -> PromptRegistryModel | None:
     if prompt_id in _prompt_cache:
         return _prompt_cache[prompt_id]
-    
+
     result = await session.execute(select(PromptRegistryModel).filter_by(id=prompt_id))
     prompt = result.scalars().first()
     if prompt:
         _prompt_cache[prompt_id] = prompt
     return prompt
 
-def get_prompt(session: Optional[AsyncSession], prompt_id: str) -> Optional[PromptRegistryModel]:
+def get_prompt(session: AsyncSession | None, prompt_id: str) -> PromptRegistryModel | None:
     """Synchronous read for places without session"""
     return _prompt_cache.get(prompt_id)
 
@@ -102,7 +102,7 @@ async def update_prompt(session: AsyncSession, prompt_id: str, new_content: str,
     prompt = result.scalars().first()
     if not prompt:
         raise ValueError(f"Prompt {prompt_id} not found")
-    
+
     prompt.content = new_content
     prompt.required_variables = required_variables
     await session.commit()
@@ -119,7 +119,7 @@ async def restore_prompt(session: AsyncSession, prompt_id: str) -> PromptRegistr
     prompt = result.scalars().first()
     if not prompt:
         raise ValueError(f"Prompt {prompt_id} not found")
-    
+
     # Restore from default golden prompts
     golden_content = ""
     if prompt_id == IRON_PROMPT_V5_ID:
@@ -128,7 +128,7 @@ async def restore_prompt(session: AsyncSession, prompt_id: str) -> PromptRegistr
         golden_content = PHANTOM_EXTRACTOR_CONTENT
     else:
         raise ValueError(f"No golden content available for {prompt_id}")
-        
+
     prompt.content = golden_content
     await session.commit()
     await session.refresh(prompt)

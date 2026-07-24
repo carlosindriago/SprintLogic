@@ -1,3 +1,6 @@
+import asyncio
+import logging
+import re
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -9,11 +12,8 @@ from app.domain.kanban_schemas import (
     KanbanTicketUpdate,
 )
 from app.infrastructure.db.database import get_db_session
-from app.infrastructure.repositories.kanban_repository import SQLAlchemyKanbanRepository
 from app.infrastructure.db.project_repository import SQLAlchemyProjectRepository
-import asyncio
-import re
-import logging
+from app.infrastructure.repositories.kanban_repository import SQLAlchemyKanbanRepository
 
 logger = logging.getLogger(__name__)
 
@@ -65,12 +65,12 @@ async def create_project_ticket(
 
     repo = SQLAlchemyKanbanRepository(session)
     ticket = await repo.create_ticket(project_uuid, payload)
-    
+
     project_repo = SQLAlchemyProjectRepository(session)
     project = await project_repo.get_project(project_uuid)
     if project and project.path:
         asyncio.create_task(create_git_branch_for_ticket(project.path, ticket))
-        
+
     return ticket
 
 
