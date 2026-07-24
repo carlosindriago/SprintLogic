@@ -132,7 +132,7 @@ export default function SettingsTab({ data }: SettingsTabProps) {
 
       {/* Viewport */}
       <main className="flex-1 overflow-y-auto">
-        <div className="max-w-4xl mx-auto px-8 py-8">
+        <div className="w-full h-full px-12 py-10">
           <ActiveComponent />
         </div>
       </main>
