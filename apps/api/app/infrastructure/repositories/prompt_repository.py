@@ -1,4 +1,6 @@
 
+from typing import Any, cast
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
@@ -69,7 +71,7 @@ Code:
 CODE_COACH_VARS = ["code_snippet"]
 
 async def initialize_prompts(session: AsyncSession):
-    prompts_to_init = [
+    prompts_to_init: list[dict[str, Any]] = [
         {
             "id": IRON_PROMPT_V5_ID,
             "description": "Golden prompt for architectural onboarding (V5)",
@@ -143,10 +145,10 @@ async def initialize_prompts(session: AsyncSession):
         existing = result.scalars().first()
         if not existing:
             new_prompt = PromptRegistryModel(
-                id=p["id"],
-                description=p["description"],
-                content=p["content"],
-                required_variables=p["required_variables"]
+                id=str(p["id"]),
+                description=str(p["description"]),
+                content=cast(str, p["content"]),
+                required_variables=cast(list[str], p["required_variables"]),
             )
             session.add(new_prompt)
             await session.flush()
@@ -157,8 +159,8 @@ async def initialize_prompts(session: AsyncSession):
             # user explicitly customized the prompt via the UI (they can always
             # restore the golden version via the /restore endpoint).
             if existing.content != p["content"]:
-                existing.content = p["content"]
-                existing.required_variables = p["required_variables"]
+                existing.content = cast(str, p["content"])
+                existing.required_variables = cast(list[str], p["required_variables"])
                 await session.flush()
             _prompt_cache[str(p["id"])] = existing
 
