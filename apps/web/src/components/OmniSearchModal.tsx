@@ -101,9 +101,10 @@ export default function OmniSearchModal({ open, onClose, onSelect }: Props) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-2 px-4 py-3 border-b border-zinc-800">
-          <Search className="w-4 h-4 text-zinc-500 shrink-0" />
+          <Search className="w-4 h-4 text-zinc-500 shrink-0" aria-hidden="true" />
           <input
             ref={inputRef}
+            aria-label="Buscar archivos, símbolos..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
