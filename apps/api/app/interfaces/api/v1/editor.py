@@ -4,6 +4,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from app.application.ast_auditor import ast_auditor
+from app.infrastructure.config import DEFAULT_LLM_MODEL
 
 router = APIRouter()
 
@@ -95,7 +96,7 @@ Solo devuelve el bloque JSDoc, sin bloques de código markdown, sin texto adicio
         async with get_sessionmaker()() as session:
             agent = AIAgent(session=session)
             response = ""
-            async for chunk_str in agent.chat_stream([{"role": "user", "content": prompt}], model="gemini/gemini-2.5-flash"):
+            async for chunk_str in agent.chat_stream([{"role": "user", "content": prompt}], model=DEFAULT_LLM_MODEL):
                 try:
                     import json
                     chunk = json.loads(chunk_str)

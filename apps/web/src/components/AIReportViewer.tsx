@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { WBSPlannerModal } from "./WBSPlannerModal";
 import { generateWBS, WBSHierarchicalResponse } from "../lib/api";
 import { useTabsStore } from "@/store/tabsStore";
+import { useSettingsStore } from "@/store/settingsStore";
 
 interface AIReportViewerProps {
   projectId: string | null;
@@ -188,7 +189,8 @@ export function AIReportViewer({ projectId, reportId, markdown: initialMarkdown 
     }
     try {
       setGeneratingWbs(true);
-      const res = await generateWBS(projectId, cleanText.substring(0, 5000), "google/gemini-2.5-pro");
+      const defaultModel = useSettingsStore.getState().globalDefault || "gemini/gemini-2.5-pro";
+      const res = await generateWBS(projectId, cleanText.substring(0, 5000), defaultModel);
       setWbsData(res);
       setWbsModalOpen(true);
     } catch (err: any) {
