@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 import litellm
 from sqlalchemy import text
 
-from app.infrastructure.db.database import AsyncSessionLocal
+from app.infrastructure.db.database import get_sessionmaker
 from app.infrastructure.events.event_bus import EventBus
 from app.infrastructure.security.credential_manager import CredentialManager
 
@@ -94,7 +94,7 @@ class TelemetryDaemon:
         notificación. Si el último disparo fue hace menos de COOLDOWN_SECONDS,
         ningún worker puede adquirir el lock.
         """
-        async with AsyncSessionLocal() as session:
+        async with get_sessionmaker()() as session:
             result = await session.execute(
                 text("""
                     SELECT last_fired_at FROM daemon_locks
@@ -131,7 +131,7 @@ class TelemetryDaemon:
             return True
 
     async def _detect_anomaly(self, project_id: str) -> dict | None:
-        async with AsyncSessionLocal() as session:
+        async with get_sessionmaker()() as session:
             result = await session.execute(
                 text("""
                     SELECT

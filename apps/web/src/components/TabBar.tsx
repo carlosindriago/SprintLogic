@@ -5,7 +5,7 @@ import { useTabsStore } from '@/store/tabsStore';
 import { useMarkersStore } from '@/store/markersStore';
 import { useUnsavedStore } from '@/store/unsavedStore';
 import { draftStore } from '@/lib/draftStore';
-import { X, BarChart3, Layout, Network, GitBranch, FilePlus, FolderGit2, Save, Trash2, AlertTriangle } from 'lucide-react';
+import { X, BarChart3, Layout, Network, GitBranch, FilePlus, FolderGit2, Save, Trash2, AlertTriangle, Bot } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import FileIcon from './FileIcon';
 
@@ -15,6 +15,7 @@ const TAB_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   kanban: Layout,
   graph: Network,
   'git-graph': GitBranch,
+  'prompt-studio': Bot,
   audit: FolderGit2,
 };
 

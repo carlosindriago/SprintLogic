@@ -129,6 +129,31 @@ async def fetch_provider_models(provider: str, api_key: str) -> list[dict]:
                 data = res.json()
                 models = [{"id": f"opencode-go/{m['id']}" if not m["id"].startswith("opencode-go/") else m["id"], "name": m["id"]} for m in data.get("data", [])]
 
+            elif provider == "groq":
+                headers["Authorization"] = f"Bearer {api_key}"
+                res = await client.get("https://api.groq.com/openai/v1/models", headers=headers)
+                if res.status_code != 200:
+                    raise ProviderFetchError("Invalid Groq Key")
+                data = res.json()
+                models = [{"id": f"groq/{m['id']}" if not m["id"].startswith("groq/") else m["id"], "name": m["id"]} for m in data.get("data", [])]
+
+            elif provider == "ollama_cloud":
+                headers["Authorization"] = f"Bearer {api_key}"
+                res = await client.get("https://ollama.com/api/tags", headers=headers)
+                if res.status_code != 200:
+                    raise ProviderFetchError("Invalid Ollama Cloud Key")
+                data = res.json()
+                models = [{"id": f"ollama_cloud/{m['name']}" if not m['name'].startswith("ollama_cloud/") else m['name'], "name": m["name"]} for m in data.get("models", [])]
+
+            elif provider == "ollama":
+                # For ollama local, api_key is actually the Base URL
+                url = api_key.rstrip("/")
+                res = await client.get(f"{url}/api/tags")
+                if res.status_code != 200:
+                    raise ProviderFetchError("Cannot reach Ollama")
+                data = res.json()
+                models = [{"id": f"ollama/{m['name']}" if not m['name'].startswith("ollama/") else m['name'], "name": m["name"]} for m in data.get("models", [])]
+
 
             elif provider == "nvidia":
                 headers["Authorization"] = f"Bearer {api_key}"
@@ -229,6 +254,15 @@ CURATED_MODELS = {
     "opencode-go": [
         {"id": "opencode-go/deepseek-v4-flash", "name": "OpenCode Go"},
     ],
+    "groq": [
+        {"id": "groq/llama-3.1-8b-instant", "name": "Llama 3.1 8B"},
+    ],
+    "ollama_cloud": [
+        {"id": "ollama_cloud/gpt-oss:120b-cloud", "name": "GPT-OSS 120B"},
+    ],
+    "ollama": [
+        {"id": "ollama/llama3.2:1b", "name": "Llama 3.2 1B"},
+    ],
     "nvidia": [
         {"id": "nvidia_nim/meta/llama-3.1-70b-instruct", "name": "Llama 3.1 70B (NIM)"},
         {"id": "nvidia_nim/meta/llama-3.1-8b-instruct", "name": "Llama 3.1 8B (NIM)"},
@@ -244,6 +278,9 @@ PROVIDER_LABELS = {
     "openrouter": "OpenRouter",
     "opencode-zen": "OpenCode Zen",
     "opencode-go": "OpenCode Go",
+    "groq": "Groq",
+    "ollama_cloud": "Ollama Cloud",
+    "ollama": "Ollama Local",
     "nvidia": "Nvidia NIM",
 }
 

@@ -5,7 +5,7 @@ import time
 from typing import Any, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -155,6 +155,7 @@ class GenerateCommitMessageRequest(BaseModel):
 
 @router.post("/{project_id}/git/generate-commit-message")
 async def generate_commit_message(
+    req: Request,
     project_id: str,
     request: GenerateCommitMessageRequest,
     session: AsyncSession = Depends(get_db_session),
@@ -182,7 +183,8 @@ async def generate_commit_message(
 
         from app.infrastructure.config import DEFAULT_LLM_MODEL
         actual_model = request.model or DEFAULT_LLM_MODEL
-        message = llm_gateway.generate_completion(prompt=prompt, model=actual_model)
+        lang_code = req.headers.get("Accept-Language", "en").split("-")[0]
+        message = llm_gateway.generate_completion(prompt=prompt, model=actual_model, lang_code=lang_code)
 
         # Clean up any potential markdown formatting the LLM might have returned
         message = message.strip()

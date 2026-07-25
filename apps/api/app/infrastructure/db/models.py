@@ -3,11 +3,12 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, LargeBinary, String
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, LargeBinary, String, Text
 from sqlalchemy import Enum as SQLAlchemyEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.domain.graph_models import EdgeType, NodeLabel
+from app.domain.kanban_models import TicketPriority, TicketStatus, TicketType
 from app.infrastructure.db.database import Base
 
 
@@ -159,6 +160,7 @@ class AnalysisReportModel(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=datetime.utcnow
     )
+    is_deleted: Mapped[bool] = mapped_column(Boolean, server_default="0", default=False, nullable=False)
 
 from sqlalchemy import BigInteger
 
@@ -215,3 +217,78 @@ class DaemonLockModel(Base):
     project_id: Mapped[str] = mapped_column(String, primary_key=True)
     rule: Mapped[str] = mapped_column(String, primary_key=True)
     last_fired_at: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class KanbanTicketModel(Base):
+    __tablename__ = "kanban_tickets"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    project_id: Mapped[UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    report_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("analysis_reports.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    type: Mapped[TicketType] = mapped_column(
+        SQLAlchemyEnum(TicketType), nullable=False, default=TicketType.TECHNICAL_DEBT
+    )
+    status: Mapped[TicketStatus] = mapped_column(
+        SQLAlchemyEnum(TicketStatus), nullable=False, default=TicketStatus.TODO
+    )
+    priority: Mapped[TicketPriority] = mapped_column(
+        SQLAlchemyEnum(TicketPriority), nullable=False, default=TicketPriority.MEDIUM
+    )
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=datetime.utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+
+class KanbanTicketNodeModel(Base):
+    __tablename__ = "kanban_ticket_nodes"
+
+    ticket_id: Mapped[UUID] = mapped_column(
+        ForeignKey("kanban_tickets.id", ondelete="CASCADE"), primary_key=True
+    )
+    node_id: Mapped[str] = mapped_column(
+        ForeignKey("graph_nodes.id", ondelete="CASCADE"), primary_key=True
+    )
+    file_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+
+
+class PromptRegistryModel(Base):
+    __tablename__ = "prompt_registry"
+
+    id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    description: Mapped[str | None] = mapped_column(String, nullable=True)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    required_variables: Mapped[list | dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=datetime.utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+
+class CustomLLMProviderModel(Base):
+    __tablename__ = "custom_llm_providers"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    base_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    keyring_service_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+class ToolModelMappingModel(Base):
+    __tablename__ = "tool_model_mappings"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    tool_name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    provider_id: Mapped[str] = mapped_column(ForeignKey("custom_llm_providers.id", ondelete="CASCADE"), nullable=False)
+    model_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)

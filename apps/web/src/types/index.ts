@@ -121,3 +121,61 @@ export interface FileTreeNode {
   type: "file" | "directory";
   children?: FileTreeNode[];
 }
+
+export type TicketType = "Technical Debt" | "Security" | "Refactor" | "Feature";
+export type TicketStatus = "todo" | "in_progress" | "done" | "archived";
+export type TicketPriority = "High" | "Medium" | "Low";
+
+export interface TicketNodeLink {
+  node_id: string;
+  file_path?: string;
+}
+
+export interface KanbanTicket {
+  id: string;
+  project_id: string;
+  report_id?: string;
+  title: string;
+  type: TicketType;
+  status: TicketStatus;
+  priority: TicketPriority;
+  description: string;
+  created_at: string;
+  updated_at: string;
+  affected_nodes: TicketNodeLink[];
+}
+
+export interface KanbanTicketCreate {
+  title: string;
+  type?: TicketType;
+  priority?: TicketPriority;
+  description: string;
+  report_id?: string;
+  affected_nodes?: TicketNodeLink[];
+}
+
+export interface KanbanTicketUpdate {
+  title?: string;
+  type?: TicketType;
+  status?: TicketStatus;
+  priority?: TicketPriority;
+  description?: string;
+}
+
+export interface BlastRadiusItem {
+  source_id: string;
+  target_id: string;
+  source_file_path: string;
+  edge_type: string;
+  depth: number;
+}
+
+export interface BlastRadiusResponse {
+  project_id: string;
+  target_node_id: string;
+  target_file_path: string;
+  max_depth: number;
+  total_affected_files: number;
+  items: BlastRadiusItem[];
+  grouped_by_depth: Record<number, BlastRadiusItem[]>;
+}

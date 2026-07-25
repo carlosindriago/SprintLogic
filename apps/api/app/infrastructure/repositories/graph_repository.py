@@ -106,24 +106,33 @@ class SQLAlchemyGraphRepository(GraphRepository):
             LEFT JOIN graph_nodes n ON b.source_id = n.id AND n.project_id = :project_id
         """)
 
-        # Let SQLAlchemy handle the UUID parameter binding correctly.
         result = await self.session.execute(
             query,
             {
                 "initial_node_id": target_node_id,
-                "project_id": project_id.hex,  # SQLite UUID is often stored as hex, but wait, SQLAlchemy handles UUID natively.
+                "project_id": str(project_id),
                 "max_depth": max_depth,
             }
         )
 
         rows = result.fetchall()
-        return [
-            {
-                "source_id": row[0],
-                "target_id": row[1],
-                "edge_type": row[2],
-                "depth": row[3],
-                "source_file_path": row[4],
-            }
-            for row in rows
-        ]
+        # Deduplicate by minimum depth (collapsing multi-path diamond imports)
+        seen_nodes: dict[str, dict] = {}
+        for row in rows:
+            source_id, target_id, edge_type, depth, file_path = (
+                row[0],
+                row[1],
+                row[2],
+                row[3],
+                row[4] or "",
+            )
+            if source_id not in seen_nodes or depth < seen_nodes[source_id]["depth"]:
+                seen_nodes[source_id] = {
+                    "source_id": source_id,
+                    "target_id": target_id,
+                    "edge_type": str(edge_type),
+                    "depth": depth,
+                    "source_file_path": file_path,
+                }
+
+        return sorted(list(seen_nodes.values()), key=lambda x: (x["depth"], x["source_file_path"]))

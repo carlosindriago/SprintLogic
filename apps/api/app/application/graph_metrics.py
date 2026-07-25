@@ -29,17 +29,27 @@ def _compute_graph_metrics_cpu_bound(nodes_data: list, edges_data: list) -> dict
         if count > 10:  # Threshold
             node_data = G.nodes[node]
             dependents = []
+            code_count = 0
+            api_count = 0
             for pred in G.predecessors(node):
                 edge_data = G.get_edge_data(pred, node)
                 pred_data = G.nodes[pred]
+                etype = edge_data.get('type', 'UNKNOWN')
+                if etype == 'API_CALL':
+                    api_count += 1
+                else:
+                    code_count += 1
                 test_flag = " (Test)" if pred_data.get("is_test") else ""
-                dependents.append(f"[{edge_data.get('type', 'UNKNOWN')}] {pred_data.get('label', pred)}{test_flag}")
+                dependents.append(f"[{etype}] {pred_data.get('label', pred)}{test_flag}")
 
             summary = dependents[:10] + [f"+{count - 10} más"] if count > 10 else dependents
             god_objects_in.append({
                 "node": node_data.get("label", node),
+                "file_path": node_data.get("file_path", ""),
                 "is_test": node_data.get("is_test", False),
                 "count": count,
+                "code_count": code_count,
+                "api_count": api_count,
                 "top_dependents": summary
             })
 
@@ -50,22 +60,32 @@ def _compute_graph_metrics_cpu_bound(nodes_data: list, edges_data: list) -> dict
         if count > 10:  # Threshold
             node_data = G.nodes[node]
             dependencies = []
+            code_count = 0
+            api_count = 0
             for succ in G.successors(node):
                 edge_data = G.get_edge_data(node, succ)
                 succ_data = G.nodes[succ]
+                etype = edge_data.get('type', 'UNKNOWN')
+                if etype == 'API_CALL':
+                    api_count += 1
+                else:
+                    code_count += 1
                 test_flag = " (Test)" if succ_data.get("is_test") else ""
-                dependencies.append(f"[{edge_data.get('type', 'UNKNOWN')}] {succ_data.get('label', succ)}{test_flag}")
+                dependencies.append(f"[{etype}] {succ_data.get('label', succ)}{test_flag}")
 
             summary = dependencies[:10] + [f"+{count - 10} más"] if count > 10 else dependencies
             god_objects_out.append({
                 "node": node_data.get("label", node),
+                "file_path": node_data.get("file_path", ""),
                 "is_test": node_data.get("is_test", False),
                 "count": count,
+                "code_count": code_count,
+                "api_count": api_count,
                 "top_dependencies": summary
             })
 
-    # 4. Isolated components (for Domain boundaries)
-    isolated = nx.number_weakly_connected_components(G)
+    # 4. Isolated components (Files with 0 degree connection to any other file)
+    isolated = len([node for node, degree in G.degree() if degree == 0])
 
     return {
         "cyclic_dependencies": cycles[:10], # Truncate to save tokens

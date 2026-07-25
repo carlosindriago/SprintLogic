@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.ai.context7_client import Context7Client
 from app.infrastructure.ai.provider_adapter import ProviderAdapter
-from app.infrastructure.db.database import AsyncSessionLocal
+from app.infrastructure.db.database import get_sessionmaker
 from app.infrastructure.db.models import AIMemoryModel, ContextSnippetModel, ProjectModel
 from app.infrastructure.security.credential_manager import CredentialManager
 
@@ -412,7 +412,7 @@ class AIAgent:
 
         # Use a fresh short-lived session for tool calls to avoid
         # holding the DB connection during LLM network I/O.
-        async with AsyncSessionLocal() as session:
+        async with get_sessionmaker()() as session:
             if name == "mem_save":
                 memory = AIMemoryModel(
                     project_id=self.project_id,
@@ -745,30 +745,24 @@ class AIAgent:
         if not root:
             return ""
 
-        base_prompt = (
-            f"Eres SprintLogic AI (El Crisol), el arquitecto de software socrático integrado en el IDE del usuario.\n"
-            f"Proyecto alojado en: {root}\n\n"
-        )
-
+        awareness_xml = ""
         try:
             from app.infrastructure.ai.project_scanner import get_project_awareness_xml
             awareness_xml = await get_project_awareness_xml(root)
-            if awareness_xml:
-                base_prompt += f"{awareness_xml}\n\n"
+            if not awareness_xml:
+                awareness_xml = ""
         except Exception:
             pass
 
-        base_prompt += (
-            "=== IRON PROMPT (MANDATO SOCRÁTICO) ===\n"
-            "1. NO eres un asistente sumiso. Eres un compañero de debate implacable.\n"
-            "2. Exige justificaciones para decisiones arquitectónicas. Obliga al usuario a pensar en Edge Cases.\n"
-            "3. Eres el Enforcer de TDD y Docs-as-Code. ANTES de escribir código de producción, "
-            "debes exigir o proponer la creación de un TASK-spec usando la herramienta `generate_task_spec`.\n"
-            "4. Si el usuario toma una decisión estructural importante, usa `generate_adr` para proponer un registro.\n"
-            "5. NO devuelvas bloques de texto gigantes con Markdown de tareas. Usa SIEMPRE las herramientas `generate_task_spec` "
-            "y `generate_adr` para proponer borradores que el usuario revisará en su editor interactivo.\n"
-            "6. Si usas herramientas de lectura y no hay resultados, busca alternativas. NUNCA digas 'No memories found'."
-        )
+        from app.infrastructure.ai.prompt_renderer import render_prompt
+        from app.infrastructure.repositories.prompt_repository import get_prompt_async
+
+        prompt_model = await get_prompt_async(self.session, "ai_agent_base")
+        if prompt_model:
+            base_prompt = render_prompt(prompt_model.content, root=root, awareness_xml=awareness_xml)
+        else:
+            base_prompt = f"Eres SprintLogic AI (El Crisol), el arquitecto de software socrático integrado en el IDE del usuario.\nProyecto alojado en: {root}\n\n"
+
 
         # Pipeline Telescópico - Inyectar Developer RAG
         if user_query:
@@ -791,7 +785,7 @@ class AIAgent:
                     from app.infrastructure.db.models import DeveloperInsightModel
 
                     try:
-                        async with AsyncSessionLocal() as insight_session:
+                        async with get_sessionmaker()() as insight_session:
                             result = await insight_session.execute(select(DeveloperInsightModel))
                             all_insights = result.scalars().all()
 

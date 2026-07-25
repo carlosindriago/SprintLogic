@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Settings, FolderOpen, ChevronRight, Edit2, Trash2, PlusCircle, ChevronsUpDown, FilePlus, RefreshCw, RotateCcw, ScanSearch, Layout, Network, GitBranch, BarChart3, FolderGit2, HelpCircle, Bot } from "lucide-react";
+import { Settings, FolderOpen, ChevronRight, Edit2, Trash2, PlusCircle, ChevronsUpDown, FilePlus, RefreshCw, RotateCcw, ScanSearch, Layout, Network, GitBranch, BarChart3, FolderGit2, HelpCircle, Bot, Play } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { scanProject, getProjects, updateProject, deleteProject, rescanProject, analyzeProject, renameFile, duplicateFile, deleteFile, initSidecarPort } from "@/lib/api";
@@ -35,6 +35,8 @@ import { Switch } from "@/components/ui/switch";
 import SprintLogicChat from "@/components/SprintLogicChat";
 import KanbanBoard from "@/components/KanbanBoard";
 import LLMSettingsPanel from "@/components/LLMSettingsPanel";
+import SettingsTab from "@/components/Settings/SettingsTab";
+import PlanningStudioTab from "@/components/PlanningStudioTab";
 import FileTree from "@/components/FileTree";
 import { useTabsStore } from '@/store/tabsStore';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -72,6 +74,12 @@ const DiffTab = dynamic(
   { ssr: false },
 );
 
+const AutoFixTab = dynamic(
+  () => import('@/components/AutoFixTab').then((m) => m.default),
+  { ssr: false },
+);
+
+
 const AIAuditPanel = dynamic(
   () => import('@/components/AIAuditPanel').then((m) => m.default),
   { ssr: false },
@@ -95,8 +103,7 @@ export default function Home() {
   const { projectId, setProjectId } = useProjectStore();
   const [loading, setLoading] = useState(false);
   const [apiReady, setApiReady] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [helpOpen, setHelpOpen] = useState(false);
+    const [helpOpen, setHelpOpen] = useState(false);
   const [cheatSheetOpen, setCheatSheetOpen] = useState(false);
   const [addProjectOpen, setAddProjectOpen] = useState(false);
   const isVimEnabled = useSettingsStore((s) => s.isVimEnabled);
@@ -107,8 +114,7 @@ export default function Home() {
   const { accentColor, setAccentColor, uiScale, setUiScale } = useThemeStore();
   const startScan = useBackgroundJobsStore(state => state.startScan);
 
-  const [settingsTab, setSettingsTab] = useState<'llms' | 'appearance'>('llms');
-  const [newFileDialogOpen, setNewFileDialogOpen] = useState(false);
+    const [newFileDialogOpen, setNewFileDialogOpen] = useState(false);
   const [newFileDirectory, setNewFileDirectory] = useState('');
   const [newFileInitialContent, setNewFileInitialContent] = useState('');
   const [fileTreeRefreshKey, setFileTreeRefreshKey] = useState(0);
@@ -449,6 +455,10 @@ export default function Home() {
             {projectId ? <InsightDashboard projectId={projectId} key={projectId} /> : <div className="p-4 text-zinc-400">Selecciona un proyecto...</div>}
           </div>
         );
+      case 'planning-studio':
+        return <PlanningStudioTab key={activeTab.id} />;
+      case 'settings':
+        return <SettingsTab data={activeTab.data} key={activeTab.id} />;
       case 'graph':
         return <GraphScene projectId={projectId} key={projectId} onNodeClick={handleNodeClick} />;
       case 'kanban':
@@ -470,6 +480,9 @@ export default function Home() {
       case 'diff':
         if (!projectId || !activeTab.data?.hash || !activeTab.data?.filePath) return null;
         return <DiffTab projectId={projectId} hash={activeTab.data.hash} filePath={activeTab.data.filePath} />;
+      case 'auto-fix':
+        if (!projectId || !activeTab.data?.hash || !activeTab.data?.filePath || !activeTab.data?.markdown) return null;
+        return <AutoFixTab projectId={projectId} ticketId={activeTab.data.hash} filePath={activeTab.data.filePath} instruction={activeTab.data.markdown} />;
       case 'audit':
         if (!projectId) return null;
         return <AIAuditPanel projectId={projectId} />;
@@ -499,75 +512,9 @@ export default function Home() {
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
                   </Button>
                 </div>
-                <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-                  <DialogContent className="sm:max-w-5xl w-full bg-zinc-900 text-zinc-200 border-zinc-800/50 ring-zinc-700/50">
-                    <DialogHeader>
-                      <DialogTitle>Configuración</DialogTitle>
-                      <DialogDescription className="text-zinc-400">
-                        Ajusta tus preferencias de IA y Apariencia.
-                      </DialogDescription>
-                    </DialogHeader>
-                    
-                    <div className="flex items-center gap-2 mb-2 border-b border-zinc-800/50 pb-2">
-                      <button 
-                        className={`text-sm font-medium px-2 py-1 rounded transition-colors ${settingsTab === 'llms' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-zinc-300'}`}
-                        onClick={() => setSettingsTab('llms')}
-                      >
-                        IA & Modelos
-                      </button>
-                      <button 
-                        className={`text-sm font-medium px-2 py-1 rounded transition-colors ${settingsTab === 'appearance' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-zinc-300'}`}
-                        onClick={() => setSettingsTab('appearance')}
-                      >
-                        Apariencia
-                      </button>
-                    </div>
-
-                    <div className="grid gap-4 py-2">
-                      {settingsTab === 'llms' ? (
-                        <>
-                          <LLMSettingsPanel />
-                          <div className="flex items-center space-x-2 pt-2 border-t border-zinc-800/50 mt-2">
-                            <Switch id="vim-mode" checked={isVimEnabled} onCheckedChange={setVimEnabled} />
-                            <Label htmlFor="vim-mode">Habilitar Modo Vim</Label>
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <div className="grid grid-cols-4 items-center gap-4">
-                            <Label className="text-right text-xs">Color de Acento</Label>
-                            <Select value={accentColor} onValueChange={(val: AccentColor | null) => { if (val) setAccentColor(val); }}>
-                              <SelectTrigger className="col-span-3 bg-zinc-800 border-zinc-700/50 text-zinc-200">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent className="bg-zinc-800 border-zinc-700/50 text-zinc-200">
-                                <SelectItem value="blue">Azul</SelectItem>
-                                <SelectItem value="purple">Púrpura</SelectItem>
-                                <SelectItem value="emerald">Esmeralda</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="grid grid-cols-4 items-center gap-4 mt-2">
-                            <Label className="text-right text-xs">Tamaño de UI</Label>
-                            <Select value={uiScale} onValueChange={(val: UiScale | null) => { if (val) setUiScale(val); }}>
-                              <SelectTrigger className="col-span-3 bg-zinc-800 border-zinc-700/50 text-zinc-200">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent className="bg-zinc-800 border-zinc-700/50 text-zinc-200">
-                                <SelectItem value="compact">Compacto</SelectItem>
-                                <SelectItem value="normal">Normal</SelectItem>
-                                <SelectItem value="large">Grande</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                    <div className="flex justify-end mt-4">
-                      <Button onClick={() => setSettingsOpen(false)}>Cerrar Configuración</Button>
-                    </div>
-                  </DialogContent>
-                </Dialog>
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-zinc-400 hover:text-white" onClick={() => addTab({ id: 'settings', title: '⚙️ Configuración', type: 'settings' })} title="Configuración">
+                  <Settings className="w-4 h-4" />
+                </Button>
               </div>
 
               {/* Activity Bar — global tool launchers */}
@@ -631,6 +578,16 @@ export default function Home() {
                   aria-label="Historial IA"
                 >
                   <Bot className="w-4 h-4" aria-hidden="true" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-700"
+                  onClick={() => addTab({ id: 'planning-studio', title: 'Planning Studio', type: 'planning-studio' })}
+                  title="Planning Studio"
+                  aria-label="Planning Studio"
+                >
+                  <Play className="w-4 h-4" aria-hidden="true" />
                 </Button>
               </div>
 
@@ -902,7 +859,7 @@ export default function Home() {
               <Button
                 variant="ghost"
                 className="justify-start text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 flex-1"
-                onClick={() => setSettingsOpen(true)}
+                onClick={() => addTab({ id: 'settings', title: '⚙️ Configuración', type: 'settings' })}
               >
                 <Settings className="mr-2 h-4 w-4" />
                 Configuración
@@ -991,8 +948,7 @@ export default function Home() {
                 // The CTA in the chat always invites the user to configure
                 // their LLM provider, so land them on the 'llms' tab even
                 // if the dialog was last closed on 'appearance'.
-                setSettingsTab('llms');
-                setSettingsOpen(true);
+                addTab({ id: 'settings', title: '⚙️ Configuración', type: 'settings' });
               }}
             />
           </div>
@@ -1085,8 +1041,7 @@ export default function Home() {
             fileContent={mentorContent}
             techStack={mentorTechStack}
             onOpenSettings={() => {
-              setSettingsTab('llms');
-              setSettingsOpen(true);
+              addTab({ id: 'settings', title: '⚙️ Configuración', type: 'settings' });
             }}
           />
         )}

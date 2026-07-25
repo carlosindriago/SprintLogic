@@ -1,4 +1,5 @@
 "use client";
+import { useTabsStore } from "@/store/tabsStore";
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { toast } from "sonner";
@@ -167,7 +168,7 @@ function ProviderConfig({
   ), [curatedModels, modelSearch]);
 
   return (
-    <div className="flex flex-col gap-8 p-6 max-w-2xl">
+    <div className="flex flex-col gap-8 p-6 max-w-4xl">
       <div className="flex flex-col gap-2 p-4 bg-zinc-900/50 border border-zinc-800/80 rounded-xl relative overflow-hidden">
         <div className="absolute top-0 left-0 w-1 h-full bg-blue-500/50"></div>
         <div className="flex items-center justify-between mb-2">
@@ -320,7 +321,7 @@ function Context7Section({
   };
 
   return (
-    <div className="flex flex-col gap-8 p-6 max-w-2xl">
+    <div className="flex flex-col gap-8 p-6 max-w-4xl">
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <Label className="text-sm font-semibold text-zinc-200">
@@ -447,7 +448,7 @@ function FimConfigSection({ providers }: { providers: CuratedProvider[] }) {
   ), [allModels, modelSearchFallback]);
 
   return (
-    <div className="flex flex-col gap-8 p-6 max-w-2xl">
+    <div className="flex flex-col gap-8 p-6 max-w-4xl">
       <div className="flex flex-col gap-3">
         <Label className="text-sm font-semibold text-zinc-200">
           Modelo Coach Principal
@@ -586,7 +587,7 @@ function PredictiveFimSection() {
   };
 
   return (
-    <div className="flex flex-col gap-8 p-6 max-w-2xl">
+    <div className="flex flex-col gap-8 p-6 max-w-4xl">
       <div className="flex flex-col gap-4 p-5 bg-zinc-900/50 border border-zinc-800/80 rounded-xl relative overflow-hidden">
         <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500/50"></div>
         <div className="flex items-center justify-between">
@@ -678,7 +679,7 @@ function AnalysisConfigSection({ providers }: { providers: CuratedProvider[] }) 
   ), [allModels, modelSearchFallback]);
 
   return (
-    <div className="flex flex-col gap-8 p-6 max-w-2xl">
+    <div className="flex flex-col gap-8 p-6 max-w-4xl">
       <div className="flex flex-col gap-3">
         <Label className="text-sm font-semibold text-zinc-200">
           Modelo Principal para Análisis
@@ -817,7 +818,7 @@ export default function LLMSettingsPanel() {
   const activeProviderData = providers.find(p => p.provider_id === activeSection);
 
   return (
-    <div className="flex h-[480px] bg-zinc-950/80 border border-zinc-800/60 rounded-xl shadow-2xl overflow-hidden backdrop-blur-xl">
+    <div className="flex h-full min-h-[600px] bg-transparent border border-zinc-800/50 rounded-lg overflow-hidden">
       {/* Sidebar */}
       <div className="w-[240px] bg-zinc-900/40 border-r border-zinc-800/50 flex flex-col overflow-y-auto shrink-0">
         <div className="px-4 pt-5 pb-2">
@@ -860,6 +861,15 @@ export default function LLMSettingsPanel() {
             Tools
           </span>
         </div>
+        <button
+          onClick={() => {
+            useTabsStore.getState().addTab({ id: 'prompt-studio', title: 'Prompt Studio', type: 'settings', data: { initialSection: 'prompts' } });
+          }}
+          className="text-left px-4 py-2 text-sm transition-colors flex items-center gap-2 text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200 border-l-2 border-transparent"
+        >
+          <Sparkles className="w-4 h-4 shrink-0" />
+          Prompt Studio
+        </button>
         <button
           onClick={() => setActiveSection('predictive-fim')}
           className={`text-left px-4 py-2 text-sm transition-colors flex items-center gap-2 ${

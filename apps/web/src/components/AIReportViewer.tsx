@@ -1,14 +1,21 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable react-hooks/preserve-manual-memoization */
 "use client";
 
 import React, { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { getProjectReport } from "../lib/api";
+import { getProjectReport, createKanbanTicket } from "../lib/api";
+import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MarkdownLink } from "./MarkdownLink";
 
-import { Copy, Check, Download } from "lucide-react";
+import { Copy, Check, Download, Kanban, AlertTriangle, Plus, Network } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { WBSPlannerModal } from "./WBSPlannerModal";
+import { generateWBS, WBSHierarchicalResponse } from "../lib/api";
+import { useTabsStore } from "@/store/tabsStore";
 
 interface AIReportViewerProps {
   projectId: string | null;
@@ -21,6 +28,10 @@ export function AIReportViewer({ projectId, reportId, markdown: initialMarkdown 
   const [loading, setLoading] = useState<boolean>(!initialMarkdown && !!reportId);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  
+  const [wbsModalOpen, setWbsModalOpen] = useState(false);
+  const [wbsData, setWbsData] = useState<WBSHierarchicalResponse | null>(null);
+  const [generatingWbs, setGeneratingWbs] = useState(false);
 
   const handleCopy = () => {
     if (content) {
@@ -100,6 +111,119 @@ export function AIReportViewer({ projectId, reportId, markdown: initialMarkdown 
     };
   }, [projectId, reportId, initialMarkdown]);
 
+  const { cleanText, issues } = React.useMemo(() => {
+    if (!content) return { cleanText: "", issues: [] };
+    const match = content.match(/<kanban_issues>([\s\S]*?)<\/kanban_issues>/);
+    if (!match) return { cleanText: content, issues: [] };
+
+    const parsedText = content.replace(/<kanban_issues>[\s\S]*?<\/kanban_issues>/g, "").trim();
+    const issuesXml = match[1];
+
+    const issueRegex = /<issue>([\s\S]*?)<\/issue>/g;
+    const extractedIssues = [];
+    let issueMatch;
+
+    while ((issueMatch = issueRegex.exec(issuesXml)) !== null) {
+      const issueBody = issueMatch[1];
+      const getTag = (tag: string) => {
+        const m = issueBody.match(new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`));
+        return m ? m[1].trim() : "";
+      };
+      extractedIssues.push({
+        title: getTag("title"),
+        type: getTag("type"),
+        description: getTag("description"),
+        priority: getTag("priority")
+      });
+    }
+
+    return { cleanText: parsedText, issues: extractedIssues };
+  }, [content]);
+
+  const handleCreateTicket = async (issue: any) => {
+    if (!projectId) {
+      toast.error("No se encontró el ID del proyecto");
+      return;
+    }
+
+    const fileMatches = (issue.description + " " + issue.title).match(/[\w-]+\.(java|ts|tsx|py|php|go)/gi) || [];
+    const affectedNodes = Array.from(new Set<string>(fileMatches)).map((f: string) => ({
+      node_id: f,
+      file_path: f,
+    }));
+
+    try {
+      await createKanbanTicket(projectId, {
+        title: issue.title,
+        type: issue.type,
+        priority: issue.priority,
+        description: issue.description,
+        report_id: reportId,
+        affected_nodes: affectedNodes,
+      });
+      toast.success("Ticket registrado en el Kanban", {
+        description: `"${issue.title}" ha sido enviado a la columna TODO.`,
+      });
+    } catch (err: any) {
+      console.error("Failed to create kanban ticket:", err);
+      toast.error("Error al crear el ticket", {
+        description: err.message || "No se pudo conectar con el servidor.",
+      });
+    }
+  };
+
+  const handleLaunchPlanningStudio = () => {
+    useTabsStore.getState().addTab({
+      id: "planning-studio",
+      title: "Planning Studio",
+      type: "planning-studio",
+      data: { markdown: cleanText, projectId: projectId || undefined }
+    });
+  };
+
+  const handleGenerateWbs = async () => {
+    if (!projectId || !cleanText) {
+      toast.error("Faltan datos para generar el WBS");
+      return;
+    }
+    try {
+      setGeneratingWbs(true);
+      const res = await generateWBS(projectId, cleanText.substring(0, 5000), "google/gemini-2.5-pro");
+      setWbsData(res);
+      setWbsModalOpen(true);
+    } catch (err: any) {
+      toast.error("Error al generar WBS", {
+        description: err.message || "Fallo la conexión con el servidor LLM",
+      });
+    } finally {
+      setGeneratingWbs(false);
+    }
+  };
+
+  const handleSaveWbs = async (data: WBSHierarchicalResponse) => {
+    if (!projectId) return;
+    try {
+      let createdCount = 0;
+      for (const pkg of data.work_packages) {
+        const epicBadge = `[📦 ${pkg.title}]`;
+        for (const sub of pkg.subtasks) {
+          await createKanbanTicket(projectId, {
+            title: `${epicBadge} ${sub.title}`,
+            type: "Feature",
+            priority: "Medium",
+            description: sub.description + `\n\nEstimated: ${sub.estimated_hours}h`,
+            report_id: reportId,
+            affected_nodes: [],
+          });
+          createdCount++;
+        }
+      }
+      toast.success(`Se crearon ${createdCount} tickets de WBS en el Kanban`);
+    } catch (err: any) {
+      toast.error("Error guardando tareas WBS", { description: err.message });
+    }
+  };
+
   if (loading) {
     return (
       <div className="p-6 space-y-4">
@@ -151,6 +275,16 @@ export function AIReportViewer({ projectId, reportId, markdown: initialMarkdown 
             <Download className="w-3.5 h-3.5 mr-2" />
             Exportar .md
           </Button>
+          <Button 
+            variant="default" 
+            size="sm" 
+            onClick={handleLaunchPlanningStudio}
+            disabled={generatingWbs}
+            className="bg-blue-600 hover:bg-blue-700 text-white h-8"
+          >
+            <Network className="w-3.5 h-3.5 mr-2" />
+            {generatingWbs ? "Generando WBS..." : "Planificador WBS"}
+          </Button>
         </div>
 
         <div className="bg-[#151515] border border-[#27272a] rounded-xl shadow-2xl p-8 lg:p-12">
@@ -173,10 +307,57 @@ export function AIReportViewer({ projectId, reportId, markdown: initialMarkdown 
               a: MarkdownLink,
             }}
           >
-            {content}
+            {cleanText}
           </ReactMarkdown>
         </div>
+
+        {issues.length > 0 && (
+          <div className="mt-12 pt-8 border-t border-[#27272a]">
+            <div className="flex items-center gap-2 mb-6">
+              <Kanban className="w-6 h-6 text-blue-400" />
+              <h2 className="text-2xl font-bold text-zinc-100">Tareas Accionables (Kanban)</h2>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {issues.map((issue, idx) => (
+                <div key={idx} className="bg-[#0f0f0f] border border-[#27272a] rounded-lg p-5 flex flex-col justify-between hover:border-blue-500/50 transition-colors">
+                  <div>
+                    <div className="flex justify-between items-start mb-3">
+                      <span className={`text-xs font-semibold px-2 py-1 rounded-md uppercase tracking-wider ${
+                        issue.priority.toLowerCase().includes('high') ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 
+                        issue.priority.toLowerCase().includes('medium') ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20' : 
+                        'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                      }`}>
+                        {issue.priority}
+                      </span>
+                      <span className="text-xs text-zinc-500 flex items-center gap-1 bg-zinc-900 px-2 py-1 rounded-md border border-zinc-800">
+                        {issue.type}
+                      </span>
+                    </div>
+                    <h3 className="text-zinc-200 font-bold mb-2 leading-tight">{issue.title}</h3>
+                    <p className="text-sm text-zinc-400 mb-6 line-clamp-4">{issue.description}</p>
+                  </div>
+                  
+                  <Button 
+                    onClick={() => handleCreateTicket(issue)}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-900/20"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Crear Ticket
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
+      
+      <WBSPlannerModal 
+        open={wbsModalOpen} 
+        onOpenChange={setWbsModalOpen} 
+        wbsData={wbsData} 
+        onSave={handleSaveWbs} 
+      />
     </div>
     </div>
   );

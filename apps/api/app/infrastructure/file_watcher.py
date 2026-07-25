@@ -33,7 +33,7 @@ class FileWatcherService:
 
         from sqlalchemy import delete, select
 
-        from app.infrastructure.db.database import AsyncSessionLocal
+        from app.infrastructure.db.database import get_sessionmaker
         from app.infrastructure.db.models import ASTNodeMapModel
         from app.infrastructure.parser.ast_parser import TreeSitterParser
 
@@ -56,7 +56,7 @@ class FileWatcherService:
                 continue  # Ignorar archivos no parseables
 
         # 2. EJECUCIÓN: Transacción relámpago
-        async with AsyncSessionLocal() as session:
+        async with get_sessionmaker()() as session:
             pass
 
             async with session.begin():

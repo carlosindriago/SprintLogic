@@ -2,10 +2,14 @@ import logging
 import re
 
 import litellm
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.infrastructure.ai.prompt_renderer import render_prompt
 from app.infrastructure.ai.provider_adapter import ProviderAdapter
+from app.infrastructure.db.database import get_db_session
+from app.infrastructure.repositories.prompt_repository import get_prompt_async
 from app.infrastructure.security.credential_manager import CredentialManager
 from app.interfaces.api.v1.settings import (
     CURATED_MODELS,
@@ -368,7 +372,10 @@ async def health_overview(request: CodeCoachRequest):
 
 
 @router.post("/contextual-mentorship", response_model=list[CodeCoachMarker])
-async def contextual_mentorship(request: CodeCoachRequest):
+async def contextual_mentorship(
+    request: CodeCoachRequest,
+    session: AsyncSession = Depends(get_db_session)
+):
     """Analizador de código que detecta antipatrones (Mentoría Contextual)."""
     try:
         if not request.model:
@@ -380,21 +387,25 @@ async def contextual_mentorship(request: CodeCoachRequest):
 
         last_error = None
 
-        system = (
-            "Eres un Mentor Senior de programación. Analiza el código proporcionado. "
-            "Devuelve EXCLUSIVAMENTE un arreglo JSON de consejos pedagógicos mapeados a las líneas del código.\n\n"
-            "El código proporcionado tiene números de línea explícitos al inicio de cada renglón (ej. [Line 45]). NUNCA adivines ni cuentes las líneas. Cuando reportes un error, extrae EXACTAMENTE el número que aparece entre corchetes en esa línea de código y ponlo en el campo line_number del JSON.\n\n"
-            "Si recibes native_errors, prioriza explicar y resolver estos errores de compilación antes de sugerir mejoras de estilo.\n\n"
-            "Estructura EXACTA requerida:\n"
-            "[\n"
-            '  { "line": 12, "severity": "hint" | "warning" | "error", "title": "Título corto", "message": "Consejo breve", "explanation": "El campo explanation DEBE ser extenso, profundo y altamente pedagógico. No te limites a decir qué está mal. Explica el \\"Por qué\\", los riesgos reales (ej. memoria, seguridad, mantenibilidad) y por qué la solución propuesta (snippet_after) es el estándar de un Senior Engineer. Habla como un mentor experto y paciente.", "snippet_before": "Líneas exactas del código original del usuario", "snippet_after": "Versión corregida y nivel Senior", "suggested_code": "null" }\n'
-            "]\n\n"
-            "EJEMPLO DE SALIDA ESPERADA:\n"
-            '[{"line": 12, "title": "Uso de let en constantes", "message": "Usa const en lugar de let.", "explanation": "La inmutabilidad previene errores de reasignación accidental y facilita la lectura.", "snippet_before": "let config = {};", "snippet_after": "const config = {};", "severity": "warning", "suggested_code": null}]\n\n'
-            "Usa SIEMPRE variables reales del archivo, NUNCA código genérico (foo/bar). "
-            "No incluyas markdown, explicaciones previas ni texto fuera del arreglo JSON. "
-            "CRÍTICO: TIENES PROHIBIDO PENSAR EN VOZ ALTA. NO expliques tu razonamiento fuera del JSON."
-        )
+        prompt_model = await get_prompt_async(session, "contextual_mentor")
+        if prompt_model:
+            system = render_prompt(prompt_model.content)
+        else:
+            system = (
+                "Eres un Mentor Senior de programación. Analiza el código proporcionado. "
+                "Devuelve EXCLUSIVAMENTE un arreglo JSON de consejos pedagógicos mapeados a las líneas del código.\n\n"
+                "El código proporcionado tiene números de línea explícitos al inicio de cada renglón (ej. [Line 45]). NUNCA adivines ni cuentes las líneas. Cuando reportes un error, extrae EXACTAMENTE el número que aparece entre corchetes en esa línea de código y ponlo en el campo line_number del JSON.\n\n"
+                "Si recibes native_errors, prioriza explicar y resolver estos errores de compilación antes de sugerir mejoras de estilo.\n\n"
+                "Estructura EXACTA requerida:\n"
+                "[\n"
+                '  { "line": 12, "severity": "hint" | "warning" | "error", "title": "Título corto", "message": "Consejo breve", "explanation": "El campo explanation DEBE ser extenso, profundo y altamente pedagógico. No te limites a decir qué está mal. Explica el \\"Por qué\\", los riesgos reales (ej. memoria, seguridad, mantenibilidad) y por qué la solución propuesta (snippet_after) es el estándar de un Senior Engineer. Habla como un mentor experto y paciente.", "snippet_before": "Líneas exactas del código original del usuario", "snippet_after": "Versión corregida y nivel Senior", "suggested_code": "null" }\n'
+                "]\n\n"
+                "EJEMPLO DE SALIDA ESPERADA:\n"
+                '[{"line": 12, "title": "Uso de let en constantes", "message": "Usa const en lugar de let.", "explanation": "La inmutabilidad previene errores de reasignación accidental y facilita la lectura.", "snippet_before": "let config = {};", "snippet_after": "const config = {};", "severity": "warning", "suggested_code": null}]\n\n'
+                "Usa SIEMPRE variables reales del archivo, NUNCA código genérico (foo/bar). "
+                "No incluyas markdown, explicaciones previas ni texto fuera del arreglo JSON. "
+                "CRÍTICO: TIENES PROHIBIDO PENSAR EN VOZ ALTA. NO expliques tu razonamiento fuera del JSON."
+            )
 
         original_lines = request.file_content.split('\n')
         # Inyectar números de línea absolutos

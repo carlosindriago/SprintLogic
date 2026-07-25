@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.ai.provider_adapter import ProviderAdapter
 from app.infrastructure.config import DEFAULT_LLM_MODEL
-from app.infrastructure.db.database import AsyncSessionLocal
+from app.infrastructure.db.database import get_sessionmaker
 from app.infrastructure.db.models import ConversationModel, DeveloperInsightModel, MessageModel
 from app.infrastructure.security.credential_manager import CredentialManager
 
@@ -41,7 +41,7 @@ async def run_insight_worker_loop():
             if shutdown_event.is_set():
                 break
 
-            async with AsyncSessionLocal() as session:
+            async with get_sessionmaker()() as session:
                 # Fetch conversations that have not been processed
                 stmt = (
                     select(ConversationModel)
@@ -83,18 +83,25 @@ async def _extract_and_save_insight(session: AsyncSession, conv: ConversationMod
         for m in messages:
             chat_text += f"[{m.role.upper()}]: {m.content}\n"
 
-        system_prompt = (
-            "Eres el Consolidator de Memoria (Insight Worker) de SprintLogic. "
-            "Tu objetivo es leer un hilo de conversación de un desarrollador y extraer una única 'Pepita de Sabiduría'. "
-            "Debe representar un anti-patrón corregido, un bug sutil, o una regla de arquitectura acordada.\n\n"
-            "Devuelve un JSON estrictamente estructurado así:\n"
-            "{\n"
-            '  "sintoma": "Descripción breve del problema o anti-patrón encontrado",\n'
-            '  "solucion": "El razonamiento arquitectónico o el código correcto a usar",\n'
-            '  "snippet_corregido": {"codigo": "..."}\n'
-            "}\n"
-            "Si la conversación no contiene nada valioso (charlas genéricas), devuelve un JSON vacío: {}."
-        )
+        from app.infrastructure.ai.prompt_renderer import render_prompt
+        from app.infrastructure.repositories.prompt_repository import get_prompt_async
+
+        prompt_model = await get_prompt_async(session, "insight_worker_consolidator")
+        if prompt_model:
+            system_prompt = render_prompt(prompt_model.content)
+        else:
+            system_prompt = (
+                "Eres el Consolidator de Memoria (Insight Worker) de SprintLogic. "
+                "Tu objetivo es leer un hilo de conversación de un desarrollador y extraer una única 'Pepita de Sabiduría'. "
+                "Debe representar un anti-patrón corregido, un bug sutil, o una regla de arquitectura acordada.\n\n"
+                "Devuelve un JSON estrictamente estructurado así:\n"
+                "{\n"
+                '  "sintoma": "Descripción breve del problema o anti-patrón encontrado",\n'
+                '  "solucion": "El razonamiento arquitectónico o el código correcto a usar",\n'
+                '  "snippet_corregido": {"codigo": "..."}\n'
+                "}\n"
+                "Si la conversación no contiene nada valioso (charlas genéricas), devuelve un JSON vacío: {}."
+            )
 
         provider = ProviderAdapter.get_provider(DEFAULT_LLM_MODEL)
         api_key = CredentialManager.get_api_key(provider)

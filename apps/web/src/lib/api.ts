@@ -6,8 +6,14 @@ import {
   Task,
   ProjectRepoInsights,
   ProjectFlowInsights,
-  GitStatus
+  GitStatus,
+  KanbanTicket,
+  KanbanTicketCreate,
+  KanbanTicketUpdate,
+  BlastRadiusResponse,
 } from '../types';
+
+import { useSettingsStore } from '../store/settingsStore';
 
 export interface ModelResult {
   id: string;
@@ -115,6 +121,7 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   const url = `${API_BASE_URL}${endpoint}`;
   const headers = {
     'Content-Type': 'application/json',
+    'Accept-Language': useSettingsStore.getState().language,
     ...options.headers,
   };
 
@@ -147,6 +154,8 @@ export const api = {
     request<T>(endpoint, { ...init, method: 'POST', body: JSON.stringify(body) }),
   put: <T>(endpoint: string, body?: unknown, init?: RequestInit) => 
     request<T>(endpoint, { ...init, method: 'PUT', body: JSON.stringify(body) }),
+  patch: <T>(endpoint: string, body?: unknown, init?: RequestInit) => 
+    request<T>(endpoint, { ...init, method: 'PATCH', body: JSON.stringify(body) }),
   delete: <T>(endpoint: string, init?: RequestInit) => 
     request<T>(endpoint, { ...init, method: 'DELETE' }),
 };
@@ -257,16 +266,24 @@ export interface KanbanColumn {
   rule?: 'manual' | 'auto-on-test-fail' | 'auto-on-test-pass';
 }
 
-export interface WBSTask {
+export interface WBSSubtask {
+  id: string;
   title: string;
-  priority: 'Low' | 'Medium' | 'High' | undefined;
-  tags: string[];
-  estimated_mins: number;
+  description: string;
+  estimated_hours: number;
+  dependencies: string[];
 }
 
-export interface WBSResponse {
-  tasks: WBSTask[];
-  explanation?: string;
+export interface WorkPackage {
+  id: string;
+  title: string;
+  objective: string;
+  subtasks: WBSSubtask[];
+}
+
+export interface WBSHierarchicalResponse {
+  work_packages: WorkPackage[];
+  total_estimated_hours: number;
 }
 
 export const getProjectTasks = (projectId: string) => api.get<{ tasks: Task[] }>(`/projects/${projectId}/tasks`);
@@ -275,7 +292,7 @@ export const getKanbanConfig = (projectId: string) => api.get<{ columns: KanbanC
 export const saveKanbanConfig = (projectId: string, columns: KanbanColumn[]) => api.post<{ status: string }>(`/projects/${projectId}/kanban/config`, { columns });
 export const syncKanbanCommits = (projectId: string) => api.post<unknown>(`/projects/${projectId}/tasks/sync-commits`);
 export const generateWBS = (projectId: string, requirements: string, model: string) => 
-  api.post<WBSResponse>(`/projects/${projectId}/kanban/wbs`, { requirements, model });
+  api.post<WBSHierarchicalResponse>(`/projects/${projectId}/kanban/wbs`, { requirements, model });
 
 // --- Providers & Settings ---
 export const fetchProviderModels = (provider: string) => api.get<ModelResult[]>(`/settings/providers/${provider}/models`);
@@ -294,7 +311,12 @@ export const rescanProject = (projectId: string) => api.post<{ status: string; m
 export const analyzeProject = (projectId: string) => api.post<any>(`/projects/${projectId}/analyze`);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const getProjectReports = (projectId: string) => api.get<{ reports: any[] }>(`/projects/${projectId}/reports`);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const getProjectReportsTrash = (projectId: string) => api.get<{ reports: any[] }>(`/projects/${projectId}/reports/trash`);
 export const getProjectReport = (projectId: string, reportId: string) => api.get<{ content: string; id: string; created_at: string; ai_model_version: string }>(`/projects/${projectId}/reports/${reportId}`);
+export const trashProjectReport = (projectId: string, reportId: string) => api.put<{ status: string; message: string }>(`/projects/${projectId}/reports/${reportId}/trash`);
+export const restoreProjectReport = (projectId: string, reportId: string) => api.put<{ status: string; message: string }>(`/projects/${projectId}/reports/${reportId}/restore`);
+export const deleteProjectReport = (projectId: string, reportId: string) => api.delete<{ status: string; message: string }>(`/projects/${projectId}/reports/${reportId}`);
 export const fetchFimCompletion = async (prefix: string, suffix: string, language: string) => {
   try {
     return await api.post<unknown>('/ai/fim-completion', { prefix, suffix, language });
@@ -390,3 +412,164 @@ export const auditCode = async (code: string, language: string): Promise<Undocum
 export const generateDocs = async (signature: string): Promise<{ jsdoc: string }> => {
   return await api.post<{ jsdoc: string }>('/editor/generate_docs', { signature });
 };
+
+export const fetchProjectTickets = async (projectId: string): Promise<KanbanTicket[]> => {
+  return await api.get<KanbanTicket[]>(`/projects/${projectId}/kanban/tickets`);
+};
+
+export const createKanbanTicket = async (projectId: string, payload: KanbanTicketCreate): Promise<KanbanTicket> => {
+  return await api.post<KanbanTicket>(`/projects/${projectId}/kanban/tickets`, payload);
+};
+
+export const updateKanbanTicket = async (ticketId: string, payload: KanbanTicketUpdate): Promise<KanbanTicket> => {
+  return await api.patch<KanbanTicket>(`/kanban/tickets/${ticketId}`, payload);
+};
+
+export const deleteKanbanTicket = async (ticketId: string): Promise<void> => {
+  return await api.delete<void>(`/kanban/tickets/${ticketId}`);
+};
+
+export const fetchBlastRadius = async (
+  projectId: string,
+  nodeId: string,
+  maxDepth = 3
+): Promise<BlastRadiusResponse> => {
+  const encodedNodeId = encodeURIComponent(nodeId);
+  return await api.get<BlastRadiusResponse>(
+    `/projects/${projectId}/blast-radius?node_id=${encodedNodeId}&max_depth=${maxDepth}`
+  );
+};
+
+export interface TicketMentorPayload {
+  ticket_id: string;
+  node_id: string;
+  project_id: string;
+  user_query: string;
+  tech_stack?: Record<string, unknown>;
+}
+
+export interface AutoFixPayload {
+  ticket_id: string;
+  node_id: string;
+  instruction: string;
+  project_id: string;
+}
+
+export interface AutoFixResponse {
+  original: string;
+  modified: string;
+}
+
+export const chatTicketMentor = async (payload: TicketMentorPayload) => {
+  return fetch(`${API_BASE_URL}/chat/ticket-mentor`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept-Language': useSettingsStore.getState().language
+    },
+    body: JSON.stringify(payload)
+  });
+};
+
+export const generateAutoFix = async (payload: AutoFixPayload): Promise<AutoFixResponse> => {
+  return await api.post<AutoFixResponse>('/chat/auto-fix', payload);
+};
+
+// --- Prompt Registry ---
+export interface PromptRegistryItem {
+  id: string;
+  description?: string;
+  content: string;
+  required_variables?: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export const getPrompts = () => api.get<PromptRegistryItem[]>('/prompts');
+export const updatePrompt = (id: string, current_content: string) => 
+  api.patch<PromptRegistryItem>(`/prompts/${id}`, { current_content });
+export const restorePrompt = (id: string) => 
+  api.post<PromptRegistryItem>(`/prompts/${id}/restore`);
+
+export interface PlanningMessagePayload {
+  messages: { role: string; content: string }[];
+  project_id: string;
+  model?: string;
+}
+
+export const sendPlanningMessage = async (
+  payload: PlanningMessagePayload,
+  onTextUpdate?: (text: string) => void,
+  onToolCall?: (toolCalls: unknown[]) => void
+) => {
+  const res = await fetch(`${API_BASE_URL}/planning-studio/message`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Accept-Language": useSettingsStore.getState().language },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Error: ${res.statusText}`);
+  }
+
+  if (!res.body) {
+    throw new Error("No response body");
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let accumulatedText = "";
+  let finalToolCalls: unknown[] = [];
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    
+    let newlineIndex = buffer.indexOf("\n");
+    while (newlineIndex !== -1) {
+      const line = buffer.slice(0, newlineIndex);
+      buffer = buffer.slice(newlineIndex + 1);
+      newlineIndex = buffer.indexOf("\n");
+
+      if (line.startsWith("data: ")) {
+        const jsonStr = line.replace("data: ", "").trim();
+        if (!jsonStr) continue;
+
+        try {
+          const parsed = JSON.parse(jsonStr);
+
+          if (parsed.text) {
+            accumulatedText += parsed.text;
+            onTextUpdate?.(accumulatedText);
+          }
+
+          if (parsed.tool_calls) {
+            finalToolCalls = parsed.tool_calls;
+            onToolCall?.(finalToolCalls);
+          }
+          
+          if (parsed.is_done) {
+            // Done
+          }
+        } catch (e) {
+          console.warn("Failed to parse SSE line", e, "Line:", line);
+        }
+      }
+    }
+  }
+
+  return { text: accumulatedText, toolCalls: finalToolCalls };
+};
+
+export async function applyPatch(projectId: string, filePath: string, originalContent: string, newContent: string) {
+  const res = await fetch(`${API_BASE_URL}/projects/${projectId}/apply_patch`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ file_path: filePath, original_content: originalContent, new_content: newContent }),
+  });
+  if (!res.ok) throw new Error("Failed to apply patch");
+  return res.json();
+}

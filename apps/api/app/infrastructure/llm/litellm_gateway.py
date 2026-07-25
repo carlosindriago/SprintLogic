@@ -22,6 +22,14 @@ class LiteLLMGateway:
         api_key = self.cred_manager.get_api_key(provider)
         return ProviderAdapter.adapt(self.model_name, api_key)
 
+
+    def _build_language_clause(self, lang_code: str) -> str:
+        if lang_code == "es":
+            return "\n\nIMPORTANT: Please write your entire response in Spanish."
+        elif lang_code == "pt":
+            return "\n\nIMPORTANT: Please write your entire response in Portuguese."
+        return ""
+
     def _get_tools(self) -> list[dict[str, Any]]:
         return [
             {
@@ -121,39 +129,36 @@ class LiteLLMGateway:
         project_name: str,
         project_path: str,
         metrics: dict[str, Any],
-        skeletons: dict[str, Any]
+        skeletons: dict[str, Any],
+        project_context_xml: str = "",
+        lang_code: str = "en"
     ) -> AsyncGenerator[str, None]:
 
-        _IRON_PROMPT_PREAMBLE = """\
-Eres un Principal Software Architect analizando la radiografía de un proyecto (Abstract Syntax Tree + Grafo de Dependencias). Tu objetivo no es listar métricas crudas, sino interpretar el diseño, encontrar deuda técnica real y proponer mejoras accionables.
+        from app.infrastructure.db.database import get_sessionmaker
+        from app.infrastructure.repositories import prompt_repository
 
-Tienes prohibido considerar DTOs o Entities con múltiples métodos/getters como 'God Objects'. Un God Object es aquel que importa demasiados dominios externos, no el que tiene muchos métodos internos. Reconoce que las aristas de tipo API_CALL representan comunicación HTTP entre microservicios o Front/Back, no errores de parseo.
+        sessionmaker = get_sessionmaker()
+        async with sessionmaker() as session:
+            golden_prompt = await prompt_repository.get_prompt_async(session, "architect_report_v5")
 
-Estructura tu reporte ESTRICTAMENTE bajo estos apartados, usando lenguaje técnico avanzado:
+        prompt_content = golden_prompt.content if golden_prompt else "Fallback"
 
-# Visión General y Patrones Detectados
-Infiere qué arquitectura usan. ¿Es Hexagonal? ¿MVC? ¿Monolito modular? Basándote en nombres de carpetas como 'infrastructure', 'domain', 'features'.
+        metrics_copy = dict(metrics)
+        for k in ["dependencies", "isolated_components", "edge_count", "in_degree"]:
+            metrics_copy.pop(k, None)
 
-# Deuda Técnica y Cuellos de Botella
-Identifica God Objects reales: Controladores que hablan con demasiados repositorios, o Servicios con excesivo fan-out. Identifica código muerto real entre los nodos aislados, ignorando archivos de configuración. Utiliza el formato URI de archivo como `ide://ruta/al/archivo` para citar evidencia.
-
-# Seguridad y Resiliencia (Riesgos Estructurales)
-Busca cruces de límites peligrosos. Ej: ¿Hay componentes del frontend saltándose servicios y llamando directamente a APIs no autorizadas? ¿El dominio de Java está importando librerías de infraestructura rompiendo Clean Architecture?
-
-# Plan de Refactorización (Top 3 Acciones)
-Da 3 pasos accionables para mejorar la mantenibilidad del código.
-"""
-
-        metrics_xml = "<networkx_metrics>\n" + json.dumps(metrics, indent=2) + "\n</networkx_metrics>"
+        metrics_xml = "<networkx_metrics>\n" + json.dumps(metrics_copy, indent=2) + "\n</networkx_metrics>"
         skeletons_xml = "<code_skeletons>\n" + json.dumps(skeletons, indent=2) + "\n</code_skeletons>"
 
-        prompt = (
-            f"{_IRON_PROMPT_PREAMBLE}\n\n"
-            f"Ruta del proyecto: {project_path}\n"
-            f"Nombre del proyecto: {project_name}\n\n"
-            f"{metrics_xml}\n\n"
-            f"{skeletons_xml}\n"
+        prompt = prompt_content.format(
+            project_path=project_path,
+            project_name=project_name,
+            project_context_xml=project_context_xml,
+            metrics_xml=metrics_xml,
+            skeletons_xml=skeletons_xml
         )
+
+        prompt += self._build_language_clause(lang_code)
 
         adapted = self._get_adapted_params()
 
@@ -176,3 +181,47 @@ Da 3 pasos accionables para mejorar la mantenibilidad del código.
             logger.info("Cerrando iterador de streaming (Guillotina de Socket)")
             if hasattr(response_iterator, "aclose"):
                 await response_iterator.aclose()
+
+    async def extract_kanban_tickets_phantom(self, report_text: str, extractor_model: str, lang_code: str = "en") -> list[dict[str, Any]]:
+        import json
+
+        from litellm import acompletion
+
+        from app.infrastructure.db.database import get_sessionmaker
+        from app.infrastructure.repositories import prompt_repository
+
+        sessionmaker = get_sessionmaker()
+        async with sessionmaker() as session:
+            phantom = await prompt_repository.get_prompt_async(session, "phantom_extractor")
+
+        if not phantom:
+            prompt = (
+                "Extract actionable Kanban tickets from the report below.\n\n"
+                f"Report:\n{report_text}\n\n"
+                "Respond strictly in JSON format matching exactly this schema: "
+                "{\"tickets\": [{\"title\": \"...\", \"description\": \"...\"}]}"
+            )
+        else:
+            prompt = phantom.content.format(report_text=report_text)
+
+        prompt += self._build_language_clause(lang_code)
+
+        try:
+            from app.infrastructure.ai.provider_adapter import ProviderAdapter
+            provider = ProviderAdapter.get_provider(extractor_model)
+            api_key = self.cred_manager.get_api_key(provider)
+            adapted = ProviderAdapter.adapt(extractor_model, api_key)
+
+            response = await acompletion(
+                model=adapted["model"],
+                messages=[{"role": "user", "content": prompt}],
+                response_format={"type": "json_object"},
+                api_key=adapted.get("api_key"),
+                **adapted.get("kwargs", {})
+            )
+            content = response.choices[0].message.content
+            data = json.loads(content)
+            return data.get("tickets", [])
+        except Exception as e:
+            logger.error(f"Phantom Extractor failed: {e}")
+            return []

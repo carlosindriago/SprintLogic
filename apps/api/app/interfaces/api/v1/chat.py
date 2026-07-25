@@ -104,11 +104,11 @@ class ChatResponse(BaseModel):
 
 async def _generate_conversation_title(conversation_id: int, first_message: str):
     """Background task to generate a short title for a new conversation."""
-    from app.infrastructure.db.database import AsyncSessionLocal
+    from app.infrastructure.db.database import get_sessionmaker
 
     # Pre-emptive short title to display immediately
     short_preview = " ".join(first_message.split()[:4]) + "..."
-    async with AsyncSessionLocal() as session:
+    async with get_sessionmaker()() as session:
         try:
             # Fallback title just in case the LLM fails
             conv = await session.get(ConversationModel, conversation_id)
@@ -126,12 +126,21 @@ async def _generate_conversation_title(conversation_id: int, first_message: str)
                 if not api_key:
                     return
 
+            from app.infrastructure.ai.prompt_renderer import render_prompt
+            from app.infrastructure.repositories.prompt_repository import get_prompt_async
+
+            prompt_model = await get_prompt_async(session, "chat_title_generator")
+            if prompt_model:
+                system_content = render_prompt(prompt_model.content)
+            else:
+                system_content = "Resume este problema o pregunta de código en máximo 4 palabras. Solo responde con el título corto. Sin comillas ni puntuación final."
+
             response = await litellm.acompletion(
                 model=DEFAULT_LLM_MODEL,
                 messages=[
                     {
                         "role": "system",
-                        "content": "Resume este problema o pregunta de código en máximo 4 palabras. Solo responde con el título corto. Sin comillas ni puntuación final."
+                        "content": system_content
                     },
                     {"role": "user", "content": first_message}
                 ],
@@ -232,8 +241,8 @@ async def chat_with_ai(request: ChatRequest, background_tasks: BackgroundTasks, 
 
             # Save the final AI response to DB
             if conversation_id and full_response:
-                from app.infrastructure.db.database import AsyncSessionLocal
-                async with AsyncSessionLocal() as bg_session:
+                from app.infrastructure.db.database import get_sessionmaker
+                async with get_sessionmaker()() as bg_session:
                     ai_msg = MessageModel(
                         conversation_id=conversation_id,
                         role="assistant",
@@ -315,9 +324,9 @@ class MentorResponse(BaseModel):
 
 async def _save_memory(project_id: str, agent_name: str, context_type: str, content: str) -> None:
     """Persist an interaction summary to project_memories FTS5."""
-    from app.infrastructure.db.database import AsyncSessionLocal
+    from app.infrastructure.db.database import get_sessionmaker
 
-    async with AsyncSessionLocal() as session:
+    async with get_sessionmaker()() as session:
         try:
             await session.execute(
                 text(
@@ -384,20 +393,29 @@ async def mentor_sensei(
     async def generate() -> AsyncGenerator[str, None]:
         full_response = ""
         try:
+            from app.infrastructure.ai.prompt_renderer import render_prompt
+            from app.infrastructure.repositories.prompt_repository import get_prompt_async
+
+            prompt_model = await get_prompt_async(session, "chat_sensei_architect")
+            if prompt_model:
+                system_content = render_prompt(prompt_model.content)
+            else:
+                system_content = (
+                    "Eres un Arquitecto de Software Socrático (Modo Sensei). "
+                    "1. Analiza el archivo en el contexto de la arquitectura global. "
+                    "2. USA PRIMERO la información de documentación proporcionada para basar "
+                    "tus respuestas en la documentación oficial del Tech Stack. "
+                    "3. Guía al usuario explicando la lógica y el flujo de datos. "
+                    "4. TIENES ESTRICTAMENTE PROHIBIDO ESCRIBIR BLOQUES DE CÓDIGO LISTOS "
+                    "PARA COPIAR Y PEGAR. Usa solo pseudocódigo abstracto o snippets de 1 línea."
+                )
+
             response = await litellm.acompletion(
                 model=actual_model,
                 messages=[
                     {
                         "role": "system",
-                        "content": (
-                            "Eres un Arquitecto de Software Socrático (Modo Sensei). "
-                            "1. Analiza el archivo en el contexto de la arquitectura global. "
-                            "2. USA PRIMERO la información de documentación proporcionada para basar "
-                            "tus respuestas en la documentación oficial del Tech Stack. "
-                            "3. Guía al usuario explicando la lógica y el flujo de datos. "
-                            "4. TIENES ESTRICTAMENTE PROHIBIDO ESCRIBIR BLOQUES DE CÓDIGO LISTOS "
-                            "PARA COPIAR Y PEGAR. Usa solo pseudocódigo abstracto o snippets de 1 línea."
-                        ),
+                        "content": system_content,
                     },
                     {"role": "user", "content": user_message},
                 ],
@@ -431,3 +449,183 @@ async def mentor_sensei(
             yield f"data: {json.dumps({'text': '', 'is_done': True, 'error': 'Stream error'})}\n\n"
 
     return StreamingResponse(generate(), media_type="text/event-stream")
+
+
+class TicketMentorRequest(BaseModel):
+    ticket_id: str
+    node_id: str
+    project_id: str
+    user_query: str
+    tech_stack: dict[str, Any] = {}
+
+class AutoFixRequest(BaseModel):
+    ticket_id: str
+    node_id: str
+    instruction: str
+    project_id: str
+
+@router.post("/ticket-mentor")
+async def ticket_mentor(
+    request: TicketMentorRequest,
+    session: AsyncSession = Depends(get_db_session)
+):
+    import os
+    import uuid
+    try:
+        proj_uuid = uuid.UUID(request.project_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID")
+
+    from app.infrastructure.db.project_repository import SQLAlchemyProjectRepository
+    proj_repo = SQLAlchemyProjectRepository(session)
+    project = await proj_repo.get_project(proj_uuid)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    target_path = request.node_id
+    if target_path.startswith("file:"):
+        target_path = target_path[5:]
+
+    file_content = ""
+    try:
+        with open(target_path, encoding="utf-8") as f:
+            file_content = f.read()
+    except Exception:
+        abs_path = os.path.join(project.path, target_path)
+        try:
+            with open(abs_path, encoding="utf-8") as f:
+                file_content = f.read()
+        except Exception:
+            file_content = f"Error reading file {target_path}"
+
+    from app.infrastructure.repositories.graph_repository import SQLAlchemyGraphRepository
+    graph_repo = SQLAlchemyGraphRepository(session)
+    try:
+        raw_items = await graph_repo.get_blast_radius(proj_uuid, request.node_id, 3)
+        topology = [f"{row['source_file_path']} -> {row['target_id']} ({row['edge_type']})" for row in raw_items]
+        topology_str = "\n".join(topology)
+    except Exception as e:
+        topology_str = f"Error computing blast radius: {e}"
+
+    from app.infrastructure.config import DEFAULT_LLM_MODEL
+    provider = DEFAULT_LLM_MODEL.split("/")[0] if "/" in DEFAULT_LLM_MODEL else DEFAULT_LLM_MODEL
+    api_key = CredentialManager.get_api_key(f"sprintlogic_{provider}") or CredentialManager.get_api_key(provider)
+    if not api_key:
+        api_key = CredentialManager.get_api_key("sprintlogic_openrouter")
+        if not api_key:
+            raise HTTPException(status_code=400, detail="API key not configured")
+
+    from app.infrastructure.ai.prompt_renderer import render_prompt
+    from app.infrastructure.repositories.prompt_repository import get_prompt_async
+
+    prompt_model = await get_prompt_async(session, "ticket_mentor")
+    if prompt_model:
+        system_msg = render_prompt(prompt_model.content)
+    else:
+        system_msg = "Eres el 'Sensei del Código', enfocado en asistir con tickets de un tablero Kanban (Ticket Mentor). Recibirás el contenido del archivo afectado y la topología de impacto (Blast Radius) de las dependencias. Responde socráticamente."
+
+    user_msg = (
+        f"Ticket ID: {request.ticket_id}\n"
+        f"Archivo objetivo: {request.node_id}\n\n"
+        f"Código del archivo:\n```\n{file_content[:8000]}\n```\n\n"
+        f"Topología de impacto (Dependencias):\n{topology_str[:4000]}\n\n"
+        f"Pregunta del usuario: {request.user_query}"
+    )
+
+    async def generate() -> AsyncGenerator[str, None]:
+        full_response = ""
+        try:
+            response = await litellm.acompletion(
+                model=DEFAULT_LLM_MODEL,
+                messages=[
+                    {"role": "system", "content": system_msg},
+                    {"role": "user", "content": user_msg},
+                ],
+                api_key=api_key,
+                stream=True,
+                stream_options={"include_usage": True},
+            )
+            async for chunk in response:
+                delta = chunk.choices[0].delta
+                if delta and delta.content:
+                    full_response += delta.content
+                    yield f"data: {json.dumps({'text': delta.content, 'is_done': False})}\n\n"
+                if hasattr(chunk, "usage") and chunk.usage:
+                    yield f"data: {json.dumps({'text': '', 'is_done': True, 'usage': {}})}\n\n"
+        except Exception:
+            yield f"data: {json.dumps({'text': '', 'is_done': True, 'error': 'Stream error'})}\n\n"
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
+
+
+@router.post("/auto-fix")
+async def auto_fix(
+    request: AutoFixRequest,
+    session: AsyncSession = Depends(get_db_session)
+):
+    import os
+    import uuid
+    try:
+        proj_uuid = uuid.UUID(request.project_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID")
+
+    from app.infrastructure.db.project_repository import SQLAlchemyProjectRepository
+    proj_repo = SQLAlchemyProjectRepository(session)
+    project = await proj_repo.get_project(proj_uuid)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    target_path = request.node_id
+    if target_path.startswith("file:"):
+        target_path = target_path[5:]
+
+    file_content = ""
+    try:
+        with open(target_path, encoding="utf-8") as f:
+            file_content = f.read()
+    except Exception:
+        abs_path = os.path.join(project.path, target_path)
+        try:
+            with open(abs_path, encoding="utf-8") as f:
+                file_content = f.read()
+        except Exception:
+            raise HTTPException(status_code=404, detail="Target file not found")
+
+    from app.infrastructure.config import DEFAULT_LLM_MODEL
+    provider = DEFAULT_LLM_MODEL.split("/")[0] if "/" in DEFAULT_LLM_MODEL else DEFAULT_LLM_MODEL
+    api_key = CredentialManager.get_api_key(f"sprintlogic_{provider}") or CredentialManager.get_api_key(provider)
+    if not api_key:
+        api_key = CredentialManager.get_api_key("sprintlogic_openrouter")
+        if not api_key:
+            raise HTTPException(status_code=400, detail="API key not configured")
+
+    from app.infrastructure.ai.prompt_renderer import render_prompt
+    from app.infrastructure.repositories.prompt_repository import get_prompt_async
+
+    prompt_model = await get_prompt_async(session, "auto_fix_assistant")
+    if prompt_model:
+        system_msg = render_prompt(prompt_model.content)
+    else:
+        system_msg = "Eres un asistente experto de refactorización rápida. Debes responder SOLO con un Unified Diff o un bloque de código completo modificado que aplique la instrucción al archivo provisto. Nada de texto introductorio."
+
+    user_msg = (
+        f"Archivo: {target_path}\n"
+        f"Instrucción: {request.instruction}\n\n"
+        f"Código Original:\n```\n{file_content}\n```\n\n"
+        f"Genera el código actualizado."
+    )
+
+    try:
+        response = await litellm.acompletion(
+            model=DEFAULT_LLM_MODEL,
+            messages=[
+                {"role": "system", "content": system_msg},
+                {"role": "user", "content": user_msg},
+            ],
+            api_key=api_key,
+        )
+        new_content = response.choices[0].message.content
+        return {"original": file_content, "modified": new_content}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

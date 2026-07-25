@@ -8,9 +8,11 @@ import { CSS } from "@dnd-kit/utilities";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import ReactMarkdown from "react-markdown";
-import { getProjectTasks, saveProjectTasks, getKanbanConfig, saveKanbanConfig, syncKanbanCommits, generateWBS, WBSResponse, WBSTask, KanbanColumn } from '@/lib/api';
+import { getProjectTasks, saveProjectTasks, getKanbanConfig, saveKanbanConfig, syncKanbanCommits, generateWBS, WBSHierarchicalResponse, KanbanColumn, fetchProjectTickets, updateKanbanTicket, deleteKanbanTicket } from '@/lib/api';
+import { toast } from "sonner";
 import { useLLMConfigStore } from '@/store/llmConfigStore';
-import { Task } from "@/types";
+import { useTabsStore } from '@/store/tabsStore';
+import { Task, TicketStatus } from "@/types";
 import { cn } from "@/lib/utils";
 import { 
   Settings, 
@@ -24,10 +26,14 @@ import {
   ChevronLeft, 
   ChevronRight, 
   Edit2, 
-  AlertTriangle, 
+  AlertTriangle,
   GitBranch,
-  X
+  X,
+  GraduationCap,
+  Zap
 } from "lucide-react";
+import TicketMentorDrawer from "./TicketMentorDrawer";
+import { useRouter } from "next/navigation";
 
 interface KanbanBoardProps {
   projectId: string | null;
@@ -36,11 +42,16 @@ interface KanbanBoardProps {
 
 function SortableTask({ 
   task, 
-  onNodeClick
+  onNodeClick,
+  onMentorClick,
+  onAutoFixClick
 }: { 
   task: Task; 
   onNodeClick?: (nodeId: string) => void; 
+  onMentorClick?: (ticketId: string, nodeId: string) => void;
+  onAutoFixClick?: (ticketId: string, nodeId: string, instruction: string) => void;
 }) {
+  const router = useRouter();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id });
 
   const style = {
@@ -57,7 +68,7 @@ function SortableTask({
   };
 
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="mb-2 cursor-grab active:cursor-grabbing">
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="mb-2 cursor-grab active:cursor-grabbing group">
       <Card className="bg-zinc-800 border-zinc-700/50 hover:border-zinc-600 transition-colors">
         <CardContent className="p-3 text-xs text-zinc-200 flex flex-col gap-2">
           {/* Header with task ID and priority */}
@@ -105,22 +116,52 @@ function SortableTask({
           </div>
 
           {task.affected_nodes && task.affected_nodes.length > 0 && (
-            <div className="flex flex-wrap gap-1 border-t border-zinc-700/30 pt-2 mt-1">
+            <div className="flex flex-col gap-1 border-t border-zinc-700/30 pt-2 mt-1">
               {task.affected_nodes.map((node) => (
-                <span
-                  key={node}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (onNodeClick) onNodeClick(node);
-                  }}
-                  className="px-1.5 py-0.5 bg-blue-900/30 text-blue-300 rounded border border-blue-800 text-[9px] cursor-pointer hover:bg-blue-800 transition-colors"
-                >
-                  {node}
-                </span>
+                <div key={node} className="flex items-center gap-1 group/node">
+                  <span
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (onNodeClick) onNodeClick(node);
+                    }}
+                    className="px-1.5 py-0.5 bg-blue-900/30 text-blue-300 rounded border border-blue-800 text-[9px] cursor-pointer hover:bg-blue-800 transition-colors truncate max-w-[200px]"
+                    title={node}
+                  >
+                    {node}
+                  </span>
+                  {task.has_id && (
+                    <div className="flex items-center gap-1 opacity-0 group-hover/node:opacity-100 transition-opacity">
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); onMentorClick?.(task.id, node); }}
+                        className="p-1 rounded hover:bg-indigo-900/50 text-indigo-400"
+                        title="Mentor IA"
+                      ><GraduationCap className="w-3 h-3" /></button>
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); onAutoFixClick?.(task.id, node, task.content); }}
+                        className="p-1 rounded hover:bg-emerald-900/50 text-emerald-400"
+                        title="Parche Rápido"
+                      ><Zap className="w-3 h-3" /></button>
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
           )}
 
+          {task.status === "in-progress" && (
+            <div className="mt-2 border-t border-zinc-700/30 pt-2">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  router.push(`/execution-room?ticketId=${task.id}`);
+                }}
+                className="w-full flex items-center justify-center gap-1.5 text-[10px] py-1.5 bg-yellow-950/40 text-yellow-500 hover:bg-yellow-900/60 rounded border border-yellow-900/50 transition-colors"
+              >
+                <Zap className="w-3 h-3" />
+                Resolver con IA
+              </button>
+            </div>
+          )}
 
         </CardContent>
       </Card>
@@ -133,6 +174,9 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
   const [columns, setColumns] = useState<KanbanColumn[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  
+  const [activeMentorTicket, setActiveMentorTicket] = useState<{ticketId: string, projectId: string, filePath: string} | null>(null);
+  const addTab = useTabsStore(state => state.addTab);
 
   const handleSyncCommits = async () => {
     if (!projectId) return;
@@ -159,7 +203,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
   // WBS Planner States
   const [showWbsModal, setShowWbsModal] = useState(false);
   const [wbsRequirements, setWbsRequirements] = useState("");
-  const [wbsResponse, setWbsResponse] = useState<WBSResponse | null>(null);
+  const [wbsResponse, setWbsResponse] = useState<WBSHierarchicalResponse | null>(null);
   const [isWbsGenerating, setIsWbsGenerating] = useState(false);
   const wbsModel = useLLMConfigStore((s) => s.defaultModel);
   const [wbsError, setWbsError] = useState<string | null>(null);
@@ -185,16 +229,23 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
     const firstCol = columns[0] || { id: "todo", title: "To Do" };
     
     try {
-      const newTasks: Task[] = wbsResponse.tasks.map((t, idx) => ({
-        id: `wbs-temp-${idx}`,
-        content: t.title,
-        status: firstCol.id,
-        category: firstCol.title,
-        priority: t.priority,
-        tags: t.tags,
-        raw_line: -1,
-        time_spent: 0
-      }));
+      const newTasks: Task[] = [];
+      let idx = 0;
+      for (const pkg of wbsResponse.work_packages) {
+        const epicBadge = `[📦 ${pkg.title}]`;
+        for (const sub of pkg.subtasks) {
+          newTasks.push({
+            id: `wbs-temp-${idx++}`,
+            content: `${epicBadge} ${sub.title}\n\n${sub.description}\n\nEstimated: ${sub.estimated_hours}h`,
+            status: firstCol.id,
+            category: firstCol.title,
+            priority: "Medium",
+            tags: ["feat"],
+            raw_line: -1,
+            time_spent: 0
+          });
+        }
+      }
 
       const mergedTasks = [...tasks, ...newTasks];
       await saveProjectTasks(projectId, mergedTasks);
@@ -225,7 +276,30 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
     if (!projectId) return;
     try {
       const data = await getProjectTasks(projectId);
-      setTasks(data.tasks);
+      let combinedTasks = [...data.tasks];
+
+      try {
+        const dbTickets = await fetchProjectTickets(projectId);
+        const ticketTasks: Task[] = dbTickets.map((t) => ({
+          id: t.id,
+          content: t.title + (t.description ? `\n\n${t.description}` : ""),
+          status: t.status,
+          category: t.type,
+          priority: t.priority,
+          affected_nodes: t.affected_nodes.map((n) => n.file_path || n.node_id),
+          raw_line: -1,
+          tags: [t.type],
+          has_id: true,
+        }));
+
+        const existingIds = new Set(data.tasks.map((t) => t.id));
+        const newDbTasks = ticketTasks.filter((t) => !existingIds.has(t.id));
+        combinedTasks = [...combinedTasks, ...newDbTasks];
+      } catch (err) {
+        console.error("Failed to fetch DB tickets", err);
+      }
+
+      setTasks(combinedTasks);
     } catch (e) {
       console.error("Failed to fetch tasks", e);
     }
@@ -277,7 +351,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
     setActiveId(event.active.id as string);
   };
 
-  const handleDragEnd = (event: DragEndEvent) => {
+  const handleDragEnd = async (event: DragEndEvent) => {
     setActiveId(null);
     const { active, over } = event;
 
@@ -288,41 +362,55 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
 
     if (activeIdStr === overIdStr) return;
 
-    // Check if dragging over a column container
-    const isOverColumn = columns.some(c => c.id === overIdStr);
+    const isOverColumn = columns.some((c) => c.id === overIdStr);
+    const prevTasksState = [...tasks];
 
-    setTasks(prevTasks => {
-      const activeIndex = prevTasks.findIndex(t => t.id === activeIdStr);
-      const overIndex = prevTasks.findIndex(t => t.id === overIdStr);
+    const activeIndex = tasks.findIndex((t) => t.id === activeIdStr);
+    if (activeIndex === -1) return;
 
-      const newTasks = [...prevTasks];
-      const activeTask = { ...newTasks[activeIndex] };
+    const newTasks = [...tasks];
+    const activeTask = { ...newTasks[activeIndex] };
+    let newStatus = activeTask.status;
 
-      if (isOverColumn) {
-        activeTask.status = overIdStr;
-        
-        // Find column title to keep tasks category updated
-        const targetCol = columns.find(c => c.id === overIdStr);
-        if (targetCol) {
-          activeTask.category = targetCol.title;
-        }
-        
-        newTasks[activeIndex] = activeTask;
-      } else {
-        const overTask = prevTasks[overIndex];
+    if (isOverColumn) {
+      newStatus = overIdStr;
+      activeTask.status = overIdStr;
+      const targetCol = columns.find((c) => c.id === overIdStr);
+      if (targetCol) {
+        activeTask.category = targetCol.title;
+      }
+      newTasks[activeIndex] = activeTask;
+    } else {
+      const overIndex = tasks.findIndex((t) => t.id === overIdStr);
+      if (overIndex !== -1) {
+        const overTask = tasks[overIndex];
         if (activeTask.status !== overTask.status) {
+          newStatus = overTask.status;
           activeTask.status = overTask.status;
           activeTask.category = overTask.category;
           newTasks[activeIndex] = activeTask;
         }
-        const moved = arrayMove(newTasks, activeIndex, overIndex);
-        saveTasks(moved);
-        return moved;
       }
+    }
 
+    // ⚡ Optimistic UI update: instant feedback for the user
+    setTasks(newTasks);
+
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(activeIdStr);
+
+    if (isUuid) {
+      try {
+        await updateKanbanTicket(activeIdStr, { status: newStatus as TicketStatus });
+      } catch (err) {
+        // Rollback Optimistic UI state on error!
+        setTasks(prevTasksState);
+        toast.error("Error al actualizar estado en el servidor", {
+          description: "Se ha revertido el movimiento de la tarjeta.",
+        });
+      }
+    } else {
       saveTasks(newTasks);
-      return newTasks;
-    });
+    }
   };
 
 
@@ -468,6 +556,18 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
                           key={task.id}
                           task={task}
                           onNodeClick={onNodeClick}
+                          onMentorClick={(ticketId, nodeId) => {
+                            setActiveMentorTicket({ ticketId, projectId: projectId!, filePath: nodeId });
+                          }}
+                          onAutoFixClick={(ticketId, nodeId, instruction) => {
+                            const tabId = `autofix-${ticketId}-${nodeId}`;
+                            addTab({
+                              id: tabId,
+                              title: `Fix: ${nodeId.split('/').pop()}`,
+                              type: 'auto-fix',
+                              data: { hash: ticketId, filePath: nodeId, markdown: instruction }
+                            });
+                          }}
                         />
                       ))}
                     </div>
@@ -698,41 +798,31 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
               {wbsResponse && (
                 <div className="flex flex-col gap-4">
                   <div>
-                    <h4 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Tareas Sugeridas (WBS)</h4>
+                    <h4 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
+                      Paquetes de Trabajo (WBS) - Total: {wbsResponse.total_estimated_hours}h
+                    </h4>
                     <div className="flex flex-col gap-2 bg-[#111112] p-3 rounded-md border border-[#27272a]">
-                      {wbsResponse.tasks.map((task, idx) => (
-                        <div key={idx} className="flex items-center justify-between bg-zinc-800/40 border border-zinc-700/30 px-3 py-2 rounded">
-                          <div className="flex flex-col gap-0.5">
-                            <span className="text-zinc-200 font-medium text-xs">{task.title}</span>
-                            <div className="flex items-center gap-2 text-[9px] text-zinc-500 mt-0.5">
-                              <span>⏱️ {task.estimated_mins} mins</span>
-                              <span>•</span>
-                              <span className={cn(
-                                "font-medium",
-                                task.priority === "High" ? "text-red-400" :
-                                task.priority === "Medium" ? "text-blue-400" :
-                                "text-zinc-400"
-                              )}>
-                                {task.priority}
-                              </span>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            {task.tags.slice(0, 2).map(tag => (
-                              <span key={tag} className="text-[9px] bg-zinc-900 border border-zinc-700 text-zinc-400 px-1.5 py-0.5 rounded">
-                                {tag}
-                              </span>
+                      {wbsResponse.work_packages.map((pkg) => (
+                        <div key={pkg.id} className="mb-4">
+                          <h5 className="text-sm font-bold text-zinc-200 mb-2">
+                            [📦 {pkg.title}] <span className="text-zinc-500 font-normal">{pkg.objective}</span>
+                          </h5>
+                          <div className="pl-4 border-l border-zinc-800 space-y-2">
+                            {pkg.subtasks.map((task) => (
+                              <div key={task.id} className="flex items-center justify-between bg-zinc-800/40 border border-zinc-700/30 px-3 py-2 rounded">
+                                <div className="flex flex-col gap-0.5">
+                                  <span className="text-zinc-200 font-medium text-xs">{task.title}</span>
+                                  <div className="flex items-center gap-2 text-[9px] text-zinc-500 mt-0.5">
+                                    <span>⏱️ {task.estimated_hours} hrs</span>
+                                    <span>•</span>
+                                    <span className="font-medium text-zinc-400">{task.id}</span>
+                                  </div>
+                                </div>
+                              </div>
                             ))}
                           </div>
                         </div>
                       ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <h4 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">Razonamiento & Dependencias</h4>
-                    <div className="bg-[#111112] p-4 rounded-md border border-[#27272a] max-h-48 overflow-y-auto custom-scrollbar text-xs leading-relaxed text-zinc-300 prose prose-invert max-w-none">
-                      <ReactMarkdown>{wbsResponse.explanation}</ReactMarkdown>
                     </div>
                   </div>
                 </div>
@@ -767,6 +857,16 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
             </div>
           </div>
         </div>
+      )}
+
+      {/* Ticket Mentor Drawer */}
+      {activeMentorTicket && (
+        <TicketMentorDrawer
+          ticketId={activeMentorTicket.ticketId}
+          projectId={activeMentorTicket.projectId}
+          filePath={activeMentorTicket.filePath}
+          onClose={() => setActiveMentorTicket(null)}
+        />
       )}
     </div>
   );
