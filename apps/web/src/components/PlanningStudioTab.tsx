@@ -80,10 +80,16 @@ export default function PlanningStudioTab() {
           const wbsCall = calls.find(c => c.function.name === 'render_wbs_tree');
           if (wbsCall && wbsCall.function.arguments) {
             try {
-              const data = JSON.parse(wbsCall.function.arguments);
-              setWbsData(data);
+              let args = wbsCall.function.arguments;
+              if (typeof args === 'string') {
+                args = args.replace(/```json/g, '').replace(/```/g, '').trim();
+                const data = JSON.parse(args);
+                setWbsData(data);
+              } else {
+                setWbsData(args);
+              }
             } catch (e) {
-              console.error("Failed to parse WBS data", e);
+              // Ignore partial JSON parsing errors during streaming
             }
           }
         }
