@@ -9,20 +9,24 @@ SprintLogic is a **Local-First Desktop Application (Linux First)**, open-source,
 - **Absolute Local Privacy**: No multi-tenancy. No cloud databases. All project and work information resides in a local SQLite file, and the AI API key (e.g., Gemini) is securely saved only on your machine.
 - **Codebase Memory Graph (Pillar 1)**: SprintLogic will map the local codebase using tree-sitter (supporting Python, TS, Java, Go, PHP, etc.), store the nodes/edges in SQLite, and render them in 2D. SDD tasks will be directly linked to the affected nodes.
 - **Persistent and Autonomous Memory (Pillar 2)**: SprintLogic AI features long-term memory. An `ai_memories` table is maintained in SQLite. SprintLogic AI has tools (`mem_save`, `mem_search`) to autonomously save architectural decisions and session summaries at the end of a Pomodoro cycle.
+- **Autonomous Execution Agent (El Quirófano)**: Advanced code patch engine that applies AST-safe, unified diffs directly to the codebase from LLM proposals without manual copying.
 - **Dependency and Context RAG (Pillar 3)**: Implementation of 'Dependency-Aware Context'. The AST Parser reads `package.json`/`pyproject.toml` to identify libraries. Before generating code, SprintLogic AI retrieves updated snippets to prevent hallucinations. It uses local semantic search and allows BYOD (Bring Your Own Docs) for users to add their company's PDFs or Markdown documentation.
 - **Zero Friction**: Being a local application, it interacts instantly with your local repositories without cumbersome API integrations.
 - **Interactive AI Code Coach**: A real-time contextual mentor powered by the Monaco Editor integration, which offers "Quick Fix" Code Actions, pedagogical refactoring explanations, native TypeScript linting (TSServer) injection, and Fill-in-the-Middle (FIM) Ghost Text completion.
+- **Telemetry Daemon**: Intelligent productivity monitor that detects friction and distraction, triggering contextual AI mentorship.
 
 ## 3. MVP Scope
 The focus is the solo developer.
 - Local desktop environment (Tauri).
-- SQLite database (including `sqlite-vec` for semantic search).
+- SQLite database (including `sqlite-vec` for semantic search, and robust Git branch tracking).
 - AI Assistant (SprintLogic AI) using a local LLM gateway for project planning and commit assistance.
-- Visual control of local Git history.
+- **Prompt Registry (Enterprise Settings)**: Modular AI prompts configurable by the user, persisted safely in the DB.
+- **Internationalization (i18n)**: Out-of-the-box support for English, Spanish, and Portuguese across the entire application and AI prompts.
+- Visual control of local Git history, including automatic branch creation.
 - **2D Code Visualization**: Rendering of the Codebase Memory Graph using AST.
 - Persistent Memory and integrated dependency RAG.
-- Focus Timer integrated with the machine's log.
-- **Kanban Board & Sticky Notes**: Interactive drag-and-drop task management board and globally persistent workspace sticky notes.
+- Focus Timer integrated with the machine's log and Telemetry Daemon.
+- **Kanban Board & Sticky Notes**: Interactive drag-and-drop task management board mapped precisely to the local file system.
 - **Optimistic Concurrency Control**: Protection against external file system mutations (e.g. `git pull`) while drafting in the IDE, using ETag/MD5 hashes.
 
 *Explicitly excluded*: multi-tenancy, cloud authentication, corporate Docker, external network infrastructure.

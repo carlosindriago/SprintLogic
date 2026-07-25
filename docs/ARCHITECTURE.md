@@ -26,9 +26,15 @@ The platform is designed as a **Desktop Architecture**, offering native performa
 
 The backend exposes local routes to interact with the AI in a structured manner.
 - **Bring Your Own Key (BYOK) Architecture**: Support for major providers (e.g., Gemini, Anthropic, OpenAI).
-- **Unified API**: `LiteLLM` is utilized in the Python sidecar to unify and standardize calls regardless of the LLM chosen by the user.
-- **SDD Pipeline**: Asynchronous generation of project planning artifacts (`proposal.md`, `specs/`, `design.md`, `tasks.md`).
+- **Unified API (`litellm_gateway.py`)**: `LiteLLM` is utilized in the Python sidecar to unify and standardize calls regardless of the LLM chosen by the user. Includes support for "Phantom Extractors" using JSON mode structured outputs.
+- **Prompt Registry**: Database-persisted prompts that power the various AI flows. Prompts define `required_variables` validated at runtime.
+- **SDD Pipeline**: Asynchronous generation of project planning artifacts (`proposal.md`, `specs/`, `design.md`, `tasks.md`), streamed via Server-Sent Events (SSE).
 - **Code Coach & Mentorship**: Deep contextual integration mapping frontend code to the LLM. It includes pedagogical refactoring feedback and natively injects IDE/Linter (TSServer) errors into the AI payload for better context awareness.
+
+## 4.5 Execution Agent & Telemetry
+
+- **El Quirófano (Execution Agent)**: An autonomous patching engine (`patch_engine.py`) that applies unified diffs from the AI directly into the local file system. It relies on `diff-match-patch` and strict AST boundaries to prevent breaking the code.
+- **Telemetry Daemon**: A background task (`telemetry_daemon.py`) that continuously monitors developer activity (coding, testing, idle times) and triggers contextual AI interventions via EventBus when high friction or distraction is detected.
 
 ## 5. IDE & Interactive Frontend
 

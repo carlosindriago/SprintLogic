@@ -1,36 +1,46 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SprintLogic Web Frontend
 
-## Getting Started
+This is the Next.js (App Router) frontend for SprintLogic, designed to be bundled into a desktop application (via Tauri) or run as a local web interface.
 
-First, run the development server:
+## Tech Stack
+
+- **Framework**: Next.js (App Router, Static Export `output: export`)
+- **Language**: TypeScript
+- **State Management**: Zustand
+- **Styling**: TailwindCSS, Radix UI (shadcn/ui)
+- **Editor**: Monaco Editor (`@monaco-editor/react`)
+- **i18n**: Custom hook (`useTranslation`) with strict typings
+
+## Key Features
+
+- **Planning Studio**: An interactive interface for breaking down ideas into SDD plans and WBS (Work Breakdown Structures).
+- **Execution Room**: The main coding environment featuring a 3-pane layout (Chat, Code Editor, Task Context).
+- **Enterprise Settings**: Deep configuration for AI Models, System Prompts (Prompt Registry), and Visual Appearance.
+- **Kanban Board**: Drag-and-drop offline kanban tracking synced with the SQLite backend.
+
+## Development
+
+First, make sure the backend (FastAPI in `apps/api`) is running on `localhost:8000`.
+
+Then, install dependencies and run the development server:
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3420](http://localhost:3420) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Build Requirements
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Because SprintLogic is designed for a local desktop environment, the Next.js app must be fully statically exportable:
+- No dynamic route segments (e.g., `[id]`) without `generateStaticParams`.
+- We use query parameters (`?id=...`) and `Suspense` boundaries for dynamic routing.
+- See `next.config.mjs` for the `output: export` configuration.
 
-## Learn More
+## i18n (Internationalization)
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+SprintLogic supports English (`en`), Spanish (`es`), and Portuguese (`pt`).
+- Dictionaries are located in `src/i18n/`.
+- Use the `useT()` hook from `src/hooks/useTranslation.ts` to consume translations with full autocomplete support.
+- Language is auto-detected on first load (`navigator.language`) and persisted in `settingsStore`.
