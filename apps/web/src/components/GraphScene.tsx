@@ -28,6 +28,7 @@ interface ForceNode extends GraphNode {
   fx?: number;
   fy?: number;
   fz?: number;
+  _modCache?: string | null;
 }
 
 interface ForceLink extends GraphEdge {
@@ -534,9 +535,10 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
         
         // 1. Calculate the dynamic centroid for each Module
         nodes.forEach(d => {
-          if (!d.folder || d.folder === "/") return;
-          const parts = d.folder.split('/').filter(Boolean);
-          const mod = parts.slice(0, 2).join('/');
+          if (d._modCache === undefined) {
+             d._modCache = (d.folder && d.folder !== "/") ? d.folder.split('/').filter(Boolean).slice(0, 2).join('/') : null;
+          }
+          const mod = d._modCache;
           if (!mod) return;
           
           const c = centroids.get(mod);
@@ -552,9 +554,8 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
         // 2. Apply gentle magnetic pull towards the centroid
         const strength = 0.08 * alpha; // Force that decays with time
         nodes.forEach(d => {
-          if (!d.folder || d.folder === "/") return;
-          const parts = d.folder.split('/').filter(Boolean);
-          const mod = parts.slice(0, 2).join('/');
+          const mod = d._modCache;
+          if (!mod) return;
           const centroid = centroids.get(mod);
           
           if (centroid && d.vx !== undefined && d.vy !== undefined && d.x !== undefined && d.y !== undefined) {
@@ -671,11 +672,11 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     const centroids = new Map<string, { x: number; y: number; count: number }>();
     
     displayGraphData.nodes.forEach((n: ForceNode) => {
-      if (!n.folder || n.folder === "/") return;
       if (cutoffTimeRef.current && getSafeTime(n) > cutoffTimeRef.current) return;
-
-      const parts = n.folder.split('/').filter(Boolean);
-      const mod = parts.slice(0, 2).join('/');
+      if (n._modCache === undefined) {
+         n._modCache = (n.folder && n.folder !== "/") ? n.folder.split('/').filter(Boolean).slice(0, 2).join('/') : null;
+      }
+      const mod = n._modCache;
       if (!mod) return;
       
       const c = centroids.get(mod);
