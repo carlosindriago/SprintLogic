@@ -111,7 +111,13 @@ export default function PlanningStudioTab() {
           });
         },
         (calls) => {
-          const wbsCall = calls.find(c => c.function.name === 'render_wbs_tree');
+          interface ToolCall {
+            function: {
+              name: string;
+              arguments: string | Record<string, unknown>;
+            };
+          }
+          const wbsCall = (calls as ToolCall[]).find(c => c?.function?.name === 'render_wbs_tree');
           if (wbsCall && wbsCall.function.arguments) {
             try {
               let args = wbsCall.function.arguments;
