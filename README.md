@@ -34,35 +34,56 @@ SprintLogic uses a unified, split-architecture tailored for local desktop use:
 - Node.js (v18+)
 - Python 3.12+ 
 - `uv` (Python Package Manager)
+- Rust (only required if building the desktop app)
 
-### 1. Start the Backend (API)
+### ⚡ Quick Start (Recommended)
+
+The easiest way to boot up both the backend and frontend simultaneously is using our unified development script:
 
 ```bash
+# Make the script executable (only needed once)
+chmod +x start_dev.sh
+
+# Run the unified development server
+./start_dev.sh
+```
+This script will automatically handle virtual environments, database migrations, and boot both Next.js and FastAPI.
+
+### Manual Start
+
+If you prefer to run them separately:
+
+**1. Start the Backend (API)**
+```bash
 cd apps/api
-# Create a virtual environment and install dependencies
 uv venv
 source .venv/bin/activate
 uv pip install -r requirements.txt
-
-# Run migrations to set up the SQLite database
 alembic upgrade head
-
-# Start the FastAPI server on port 8000
 npm run dev # or `uvicorn app.main:app --reload`
 ```
 
-### 2. Start the Frontend (Web)
-
+**2. Start the Frontend (Web)**
 ```bash
 cd apps/web
-# Install dependencies
 npm install
-
-# Start the Next.js development server on port 3000
 npm run dev
 ```
 
 Navigate to `http://localhost:3000` to start using SprintLogic!
+
+## 📦 Building the Desktop App
+
+SprintLogic is designed to be a native desktop application powered by Tauri. Once you are ready to compile the production bundle for your operating system (Linux `.AppImage`/`.deb`, Windows `.exe`, or macOS `.dmg`):
+
+1. Ensure you have Rust and the Tauri CLI system dependencies installed.
+2. Run the build command from the `apps/web` directory:
+
+```bash
+cd apps/web
+npm run tauri build
+```
+*Note: The Python backend sidecar packaging is currently in development. For now, running the backend locally alongside the Tauri dev build (`npm run tauri dev`) is the recommended approach for desktop testing.*
 
 ## 🔐 Security & Keys
 
