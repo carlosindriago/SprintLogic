@@ -568,6 +568,7 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
             onClick={handleNewChat}
             className="p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors"
             title="Nuevo Chat"
+            aria-label="Nuevo Chat"
           >
             <Plus className="w-3.5 h-3.5" aria-hidden="true" />
           </button>
@@ -575,6 +576,7 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
             onClick={() => setIsDrawerOpen(true)}
             className="p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors mr-1"
             title="Historial de Chats"
+            aria-label="Historial de Chats"
           >
             <History className="w-3.5 h-3.5" aria-hidden="true" />
           </button>
