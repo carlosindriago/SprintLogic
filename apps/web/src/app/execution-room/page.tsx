@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
+import React, { useState, useEffect, useRef, Suspense } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { ArrowLeft, Send, Download, Play, Check } from "lucide-react";
 import { DiffEditor } from "@monaco-editor/react";
 import { useProjectStore } from "@/store/projectStore";
@@ -17,8 +17,9 @@ interface DiffBlock {
   modified: string;
 }
 
-export default function ExecutionRoomPage() {
-  const { ticketId } = useParams() as { ticketId: string };
+function ExecutionRoomContent() {
+  const searchParams = useSearchParams();
+  const ticketId = searchParams.get("ticketId");
   const router = useRouter();
   const projectId = useProjectStore((s) => s.projectId);
 
@@ -286,5 +287,13 @@ export default function ExecutionRoomPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ExecutionRoomPage() {
+  return (
+    <Suspense fallback={<div className="h-screen w-screen bg-zinc-950 flex items-center justify-center text-zinc-500">Cargando...</div>}>
+      <ExecutionRoomContent />
+    </Suspense>
   );
 }

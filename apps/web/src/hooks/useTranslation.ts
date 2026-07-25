@@ -5,12 +5,13 @@ import { translations, Language } from '../i18n';
 // Simple nested path resolver for objects
 // e.g., getNestedValue({ a: { b: 1 } }, 'a.b') => 1
 function getNestedValue(obj: Record<string, unknown> | unknown, path: string): string | undefined {
-  return path.split('.').reduce((acc: unknown, part: string) => {
+  const result = path.split('.').reduce((acc: unknown, part: string) => {
     if (acc && typeof acc === 'object') {
       return (acc as Record<string, unknown>)[part];
     }
     return undefined;
   }, obj);
+  return result as string | undefined;
 }
 
 export const useTranslation = () => {
