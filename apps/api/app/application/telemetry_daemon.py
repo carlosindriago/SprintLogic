@@ -5,10 +5,10 @@ from datetime import datetime, timezone
 import litellm
 from sqlalchemy import text
 
+from app.infrastructure.config import DEFAULT_LLM_MODEL
 from app.infrastructure.db.database import get_sessionmaker
 from app.infrastructure.events.event_bus import EventBus
 from app.infrastructure.security.credential_manager import CredentialManager
-from app.infrastructure.config import DEFAULT_LLM_MODEL
 
 logger = logging.getLogger("sprintlogic.daemon")
 
