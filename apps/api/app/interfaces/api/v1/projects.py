@@ -514,9 +514,9 @@ async def analyze_project_graph(
         # 1. Calcular grados usando matemáticas de grafos O(1)
         in_degrees: dict[str, int] = {}
         out_degrees: dict[str, int] = {}
-        for e in nx_edges:
-            src = e["source"]
-            tgt = e["target"]
+        for edge_dict in nx_edges:
+            src = edge_dict["source"]
+            tgt = edge_dict["target"]
             out_degrees[src] = out_degrees.get(src, 0) + 1
             in_degrees[tgt] = in_degrees.get(tgt, 0) + 1
 
