@@ -7,12 +7,22 @@ from app.infrastructure.db.models import PromptRegistryModel
 _prompt_cache: dict[str, PromptRegistryModel] = {}
 
 IRON_PROMPT_V5_ID = "architect_report_v5"
+# Bump this version whenever the golden prompt content changes.
+# initialize_prompts will auto-update the DB record if its stored version is older.
+IRON_PROMPT_V5_VERSION = "v5.1"
 IRON_PROMPT_V5_CONTENT = """Eres un Principal Software Architect realizando el onboarding y la auditoría inicial de un proyecto de software.
 Tu objetivo es emitir un reporte estratégico, denso en valor técnico y accionable para los desarrolladores.
 
 Tienes acceso al <contexto_del_proyecto> que incluye: el árbol de directorios, los archivos de configuración (para deducir el stack) y el código fuente de las 3 clases/orquestadores más centrales del sistema detectados matemáticamente.
 
 REGLA DE ORO: No alucines dependencias, no cuentes archivos y no asumas errores estáticos. Enfócate estrictamente en la semántica, la seguridad, los flujos de ejecución y el diseño del dominio basándote en el código inyectado.
+
+[DIRECTIVA CRÍTICA — REPORTE BASADO EN EVIDENCIA]:
+No generalices patrones. Por cada vulnerabilidad o deuda técnica que reportes, TIENES LA OBLIGACIÓN ESTRICTA de citar el nombre exacto del archivo y el número de línea aproximado donde ocurre el fallo.
+- Si detectas un error en un método, NO asumas que el resto de métodos de la misma clase tienen el mismo error. Analiza cada uno por separado.
+- Si mencionas "Dependencias Circulares", debes nombrar exactamente qué archivo importa a qué archivo creando el ciclo. Si no tienes evidencia física en el código, OMITIR la observación.
+- Formato obligatorio para citar evidencia: `NombreArchivo.ext:L{número}` (ej. `User.php:L251`).
+- Si no puedes anclar un hallazgo a una ubicación concreta en el código provisto, NO lo incluyas en el reporte.
 
 Estructura tu reporte ESTRICTAMENTE bajo estos apartados en Markdown:
 
@@ -142,6 +152,14 @@ async def initialize_prompts(session: AsyncSession):
             await session.flush()
             _prompt_cache[str(p["id"])] = new_prompt
         else:
+            # Auto-sync golden prompts: if the stored content differs from the
+            # canonical source, update it. User edits are preserved only if the
+            # user explicitly customized the prompt via the UI (they can always
+            # restore the golden version via the /restore endpoint).
+            if existing.content != p["content"]:
+                existing.content = p["content"]
+                existing.required_variables = p["required_variables"]
+                await session.flush()
             _prompt_cache[str(p["id"])] = existing
 
     await session.commit()
