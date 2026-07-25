@@ -44,3 +44,9 @@ class KanbanTicketResponse(BaseModel):
     affected_nodes: list[TicketNodeLink] = []
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class KanbanTicketPatch(BaseModel):
+    file_path: str
+    search_content: str
+    replace_content: str

@@ -274,3 +274,21 @@ class PromptRegistryModel(Base):
         DateTime(timezone=True), nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
     )
 
+
+class CustomLLMProviderModel(Base):
+    __tablename__ = "custom_llm_providers"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    base_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    keyring_service_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+class ToolModelMappingModel(Base):
+    __tablename__ = "tool_model_mappings"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    tool_name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    provider_id: Mapped[str] = mapped_column(ForeignKey("custom_llm_providers.id", ondelete="CASCADE"), nullable=False)
+    model_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)

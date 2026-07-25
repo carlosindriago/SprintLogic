@@ -1,13 +1,13 @@
 import { useCallback } from 'react';
 import { useSettingsStore } from '../store/settingsStore';
-import { translations, Language, TranslationScope } from '../i18n';
+import { translations, Language } from '../i18n';
 
 // Simple nested path resolver for objects
 // e.g., getNestedValue({ a: { b: 1 } }, 'a.b') => 1
-function getNestedValue(obj: any, path: string): string | undefined {
-  return path.split('.').reduce((acc, part) => {
+function getNestedValue(obj: Record<string, unknown> | unknown, path: string): string | undefined {
+  return path.split('.').reduce((acc: unknown, part: string) => {
     if (acc && typeof acc === 'object') {
-      return acc[part];
+      return (acc as Record<string, unknown>)[part];
     }
     return undefined;
   }, obj);

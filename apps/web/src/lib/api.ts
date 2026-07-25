@@ -445,7 +445,7 @@ export interface TicketMentorPayload {
   node_id: string;
   project_id: string;
   user_query: string;
-  tech_stack?: Record<string, any>;
+  tech_stack?: Record<string, unknown>;
 }
 
 export interface AutoFixPayload {
@@ -500,7 +500,7 @@ export interface PlanningMessagePayload {
 export const sendPlanningMessage = async (
   payload: PlanningMessagePayload,
   onTextUpdate?: (text: string) => void,
-  onToolCall?: (toolCalls: any[]) => void
+  onToolCall?: (toolCalls: unknown[]) => void
 ) => {
   const res = await fetch(`${API_BASE_URL}/planning-studio/message`, {
     method: "POST",
@@ -519,16 +519,21 @@ export const sendPlanningMessage = async (
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let accumulatedText = "";
-  let finalToolCalls: any[] = [];
+  let finalToolCalls: unknown[] = [];
+  let buffer = "";
 
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
 
-    const chunk = decoder.decode(value, { stream: true });
-    const lines = chunk.split("\n");
+    buffer += decoder.decode(value, { stream: true });
+    
+    let newlineIndex = buffer.indexOf("\n");
+    while (newlineIndex !== -1) {
+      const line = buffer.slice(0, newlineIndex);
+      buffer = buffer.slice(newlineIndex + 1);
+      newlineIndex = buffer.indexOf("\n");
 
-    for (const line of lines) {
       if (line.startsWith("data: ")) {
         const jsonStr = line.replace("data: ", "").trim();
         if (!jsonStr) continue;
@@ -550,7 +555,7 @@ export const sendPlanningMessage = async (
             // Done
           }
         } catch (e) {
-          console.warn("Failed to parse SSE line", e);
+          console.warn("Failed to parse SSE line", e, "Line:", line);
         }
       }
     }
@@ -558,3 +563,13 @@ export const sendPlanningMessage = async (
 
   return { text: accumulatedText, toolCalls: finalToolCalls };
 };
+
+export async function applyPatch(projectId: string, filePath: string, originalContent: string, newContent: string) {
+  const res = await fetch(`${API_BASE_URL}/projects/${projectId}/apply_patch`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ file_path: filePath, original_content: originalContent, new_content: newContent }),
+  });
+  if (!res.ok) throw new Error("Failed to apply patch");
+  return res.json();
+}

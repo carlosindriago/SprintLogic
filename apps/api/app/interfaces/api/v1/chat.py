@@ -126,12 +126,21 @@ async def _generate_conversation_title(conversation_id: int, first_message: str)
                 if not api_key:
                     return
 
+            from app.infrastructure.ai.prompt_renderer import render_prompt
+            from app.infrastructure.repositories.prompt_repository import get_prompt_async
+
+            prompt_model = await get_prompt_async(session, "chat_title_generator")
+            if prompt_model:
+                system_content = render_prompt(prompt_model.content)
+            else:
+                system_content = "Resume este problema o pregunta de código en máximo 4 palabras. Solo responde con el título corto. Sin comillas ni puntuación final."
+
             response = await litellm.acompletion(
                 model=DEFAULT_LLM_MODEL,
                 messages=[
                     {
                         "role": "system",
-                        "content": "Resume este problema o pregunta de código en máximo 4 palabras. Solo responde con el título corto. Sin comillas ni puntuación final."
+                        "content": system_content
                     },
                     {"role": "user", "content": first_message}
                 ],
@@ -384,20 +393,29 @@ async def mentor_sensei(
     async def generate() -> AsyncGenerator[str, None]:
         full_response = ""
         try:
+            from app.infrastructure.ai.prompt_renderer import render_prompt
+            from app.infrastructure.repositories.prompt_repository import get_prompt_async
+
+            prompt_model = await get_prompt_async(session, "chat_sensei_architect")
+            if prompt_model:
+                system_content = render_prompt(prompt_model.content)
+            else:
+                system_content = (
+                    "Eres un Arquitecto de Software Socrático (Modo Sensei). "
+                    "1. Analiza el archivo en el contexto de la arquitectura global. "
+                    "2. USA PRIMERO la información de documentación proporcionada para basar "
+                    "tus respuestas en la documentación oficial del Tech Stack. "
+                    "3. Guía al usuario explicando la lógica y el flujo de datos. "
+                    "4. TIENES ESTRICTAMENTE PROHIBIDO ESCRIBIR BLOQUES DE CÓDIGO LISTOS "
+                    "PARA COPIAR Y PEGAR. Usa solo pseudocódigo abstracto o snippets de 1 línea."
+                )
+
             response = await litellm.acompletion(
                 model=actual_model,
                 messages=[
                     {
                         "role": "system",
-                        "content": (
-                            "Eres un Arquitecto de Software Socrático (Modo Sensei). "
-                            "1. Analiza el archivo en el contexto de la arquitectura global. "
-                            "2. USA PRIMERO la información de documentación proporcionada para basar "
-                            "tus respuestas en la documentación oficial del Tech Stack. "
-                            "3. Guía al usuario explicando la lógica y el flujo de datos. "
-                            "4. TIENES ESTRICTAMENTE PROHIBIDO ESCRIBIR BLOQUES DE CÓDIGO LISTOS "
-                            "PARA COPIAR Y PEGAR. Usa solo pseudocódigo abstracto o snippets de 1 línea."
-                        ),
+                        "content": system_content,
                     },
                     {"role": "user", "content": user_message},
                 ],
@@ -497,7 +515,14 @@ async def ticket_mentor(
         if not api_key:
             raise HTTPException(status_code=400, detail="API key not configured")
 
-    system_msg = "Eres el 'Sensei del Código', enfocado en asistir con tickets de un tablero Kanban (Ticket Mentor). Recibirás el contenido del archivo afectado y la topología de impacto (Blast Radius) de las dependencias. Responde socráticamente."
+    from app.infrastructure.ai.prompt_renderer import render_prompt
+    from app.infrastructure.repositories.prompt_repository import get_prompt_async
+
+    prompt_model = await get_prompt_async(session, "ticket_mentor")
+    if prompt_model:
+        system_msg = render_prompt(prompt_model.content)
+    else:
+        system_msg = "Eres el 'Sensei del Código', enfocado en asistir con tickets de un tablero Kanban (Ticket Mentor). Recibirás el contenido del archivo afectado y la topología de impacto (Blast Radius) de las dependencias. Responde socráticamente."
 
     user_msg = (
         f"Ticket ID: {request.ticket_id}\n"
@@ -575,7 +600,14 @@ async def auto_fix(
         if not api_key:
             raise HTTPException(status_code=400, detail="API key not configured")
 
-    system_msg = "Eres un asistente experto de refactorización rápida. Debes responder SOLO con un Unified Diff o un bloque de código completo modificado que aplique la instrucción al archivo provisto. Nada de texto introductorio."
+    from app.infrastructure.ai.prompt_renderer import render_prompt
+    from app.infrastructure.repositories.prompt_repository import get_prompt_async
+
+    prompt_model = await get_prompt_async(session, "auto_fix_assistant")
+    if prompt_model:
+        system_msg = render_prompt(prompt_model.content)
+    else:
+        system_msg = "Eres un asistente experto de refactorización rápida. Debes responder SOLO con un Unified Diff o un bloque de código completo modificado que aplique la instrucción al archivo provisto. Nada de texto introductorio."
 
     user_msg = (
         f"Archivo: {target_path}\n"

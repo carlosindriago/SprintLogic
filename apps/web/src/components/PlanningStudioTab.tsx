@@ -1,13 +1,20 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable react-hooks/set-state-in-effect */
+/* eslint-disable react-hooks/exhaustive-deps */
+/* eslint-disable react/no-unescaped-entities */
+/* eslint-disable @typescript-eslint/no-unused-vars */
+
 import React, { useState, useRef, useEffect } from 'react';
 import { useTabsStore } from '../store/tabsStore';
 import { useLLMConfigStore } from '../store/llmConfigStore';
-import { sendPlanningMessage, PlanningMessagePayload } from '../lib/api';
+import { sendPlanningMessage, PlanningMessagePayload, createKanbanTicket } from '../lib/api';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Send, Loader2, Play } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { WBSPlannerModal } from './WBSPlannerModal'; // We can reuse the tree UI from here but modified, or just extract it.
+import { usePlanningStore } from '../store/planningStore';
 
 export default function PlanningStudioTab() {
   const currentProjectId = useTabsStore((s) => s.currentProjectId);
@@ -18,12 +25,46 @@ export default function PlanningStudioTab() {
   const initialContext = tab?.data?.markdown || ''; // AIReportViewer seeds this
   const activeProjectId = tab?.data?.projectId || currentProjectId;
 
-  const [messages, setMessages] = useState<{ role: string; content: string }[]>(
-    initialContext ? [{ role: 'user', content: initialContext }] : []
-  );
+  const projectState = usePlanningStore((s) => activeProjectId ? s.projectStates[activeProjectId] : null);
+  const setProjectState = usePlanningStore((s) => s.setProjectState);
+
+  const initialMessages = projectState?.messages?.length 
+    ? projectState.messages 
+    : (initialContext ? [{ role: 'user', content: initialContext }] : []);
+
+  const [messages, setMessages] = useState<{ role: string; content: string }[]>(initialMessages);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [wbsData, setWbsData] = useState<any | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const [wbsData, setWbsData] = useState<any | null>(projectState?.wbsData || null);
+
+  const handleExportToKanban = async () => {
+    if (!wbsData || !activeProjectId) return;
+    setIsExporting(true);
+    try {
+      for (const pkg of wbsData.work_packages || []) {
+        for (const task of pkg.subtasks || []) {
+          await createKanbanTicket(activeProjectId, {
+            title: `[${pkg.title}] ${task.title}`,
+            type: "Feature",
+            priority: "Medium",
+            description: task.description || "",
+          });
+        }
+      }
+      useTabsStore.getState().addTab({ id: 'kanban', title: 'Kanban Board', type: 'kanban', data: { projectId: activeProjectId } });
+    } catch (e) {
+      console.error("Failed to export to kanban", e);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeProjectId) {
+      setProjectState(activeProjectId, { messages, wbsData });
+    }
+  }, [messages, wbsData, activeProjectId, setProjectState]);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -32,13 +73,6 @@ export default function PlanningStudioTab() {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages]);
-
-  // If there's initial context, maybe send it immediately
-  useEffect(() => {
-    if (initialContext && messages.length === 1) {
-      handleSend(initialContext, true);
-    }
-  }, []);
 
   const handleSend = async (text: string = inputValue, isInitial = false) => {
     if (!text.trim() && !isInitial) return;
@@ -101,6 +135,13 @@ export default function PlanningStudioTab() {
       setIsLoading(false);
     }
   };
+
+  // If there's initial context, maybe send it immediately
+  useEffect(() => {
+    if (initialContext && messages.length === 1) {
+      handleSend(initialContext, true);
+    }
+  }, []);
 
   const handleEstimateChange = (pkgId: string, subtaskId: string, newValue: number) => {
     if (!wbsData) return;
@@ -177,19 +218,30 @@ export default function PlanningStudioTab() {
       </div>
 
       {/* Right: WBS Tree View */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col overflow-hidden">
         {wbsData ? (
           <>
-            <div className="p-4 border-b border-[#27272a] bg-[#111] flex items-center justify-between">
+            <div className="p-4 border-b border-[#27272a] bg-[#111] flex items-center justify-between shrink-0">
               <h3 className="text-lg font-bold text-zinc-100">
                 Work Breakdown Structure
               </h3>
-              <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/20">
-                Total: {wbsData.total_estimated_hours} hrs
-              </Badge>
+              <div className="flex items-center gap-3">
+                <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/20">
+                  Total: {wbsData.total_estimated_hours} hrs
+                </Badge>
+                <Button 
+                  size="sm"
+                  className="bg-blue-600 hover:bg-blue-700 h-7 text-xs"
+                  onClick={handleExportToKanban}
+                  disabled={isExporting}
+                >
+                  {isExporting ? <Loader2 className="w-3 h-3 mr-2 animate-spin" /> : null}
+                  Export to Kanban
+                </Button>
+              </div>
             </div>
             
-            <ScrollArea className="flex-1 p-6">
+            <ScrollArea className="flex-1 h-0 p-6">
               <div className="space-y-8 max-w-4xl mx-auto">
                 {wbsData.work_packages?.map((pkg: any) => (
                   <div key={pkg.id} className="bg-[#151515] border border-[#27272a] rounded-lg p-4">

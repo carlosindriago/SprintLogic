@@ -13,6 +13,7 @@ from app.interfaces.api.v1.lsp import router as lsp_router
 from app.interfaces.api.v1.planning_studio import router as planning_studio_router
 from app.interfaces.api.v1.projects import router as projects_router
 from app.interfaces.api.v1.prompts import router as prompts_router
+from app.interfaces.api.v1.providers import router as providers_router
 from app.interfaces.api.v1.settings import router as settings_router
 from app.interfaces.api.v1.sync import router as sync_router
 from app.interfaces.api.v1.telemetry import router as telemetry_router
@@ -103,6 +104,7 @@ app.add_middleware(
 app.include_router(projects_router, prefix="/api/v1")
 app.include_router(kanban_router, prefix="/api/v1")
 app.include_router(settings_router, prefix="/api/v1/settings")
+app.include_router(providers_router, prefix="/api/v1/providers")
 app.include_router(telemetry_router, prefix="/api/v1/telemetry")
 app.include_router(chat_router, prefix="/api/v1/chat")
 app.include_router(git_router, prefix="/api/v1/projects")

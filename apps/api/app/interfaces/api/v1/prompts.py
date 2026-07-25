@@ -25,7 +25,7 @@ async def update_prompt(prompt_id: str, request: PromptPatchRequest, session: As
     if not prompt:
         raise HTTPException(status_code=404, detail="Prompt not found")
 
-    req_vars = prompt.required_variables or []
+    req_vars = list(prompt.required_variables) if isinstance(prompt.required_variables, list) else []
     # Check if all required variables are in the current_content as "{var_name}"
     missing_vars = [var for var in req_vars if f"{{{var}}}" not in request.current_content]
 

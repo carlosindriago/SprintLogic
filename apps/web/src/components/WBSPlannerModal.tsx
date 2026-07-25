@@ -18,6 +18,7 @@ export function WBSPlannerModal({ open, onOpenChange, wbsData, onSave }: WBSPlan
 
   // Sync state when props change
   React.useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (wbsData) setEditedData(JSON.parse(JSON.stringify(wbsData)));
   }, [wbsData]);
 

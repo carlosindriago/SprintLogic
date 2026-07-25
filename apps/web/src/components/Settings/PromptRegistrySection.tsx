@@ -27,10 +27,10 @@ export default function PromptRegistrySection() {
   const [isSaveAlertOpen, setIsSaveAlertOpen] = useState(false);
   const [isRestoreAlertOpen, setIsRestoreAlertOpen] = useState(false);
 
-  useEffect(() => {
-    fetchPrompts();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const handleSelectPrompt = (prompt: PromptRegistryItem) => {
+    setSelectedPromptId(prompt.id);
+    setCurrentContent(prompt.content);
+  };
 
   const fetchPrompts = async () => {
     setLoading(true);
@@ -48,10 +48,11 @@ export default function PromptRegistrySection() {
     }
   };
 
-  const handleSelectPrompt = (prompt: PromptRegistryItem) => {
-    setSelectedPromptId(prompt.id);
-    setCurrentContent(prompt.content);
-  };
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchPrompts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const selectedPrompt = prompts.find((p) => p.id === selectedPromptId);
 

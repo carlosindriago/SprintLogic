@@ -26,13 +26,14 @@ import {
   ChevronLeft, 
   ChevronRight, 
   Edit2, 
-  AlertTriangle, 
+  AlertTriangle,
   GitBranch,
   X,
   GraduationCap,
   Zap
 } from "lucide-react";
 import TicketMentorDrawer from "./TicketMentorDrawer";
+import { useRouter } from "next/navigation";
 
 interface KanbanBoardProps {
   projectId: string | null;
@@ -50,6 +51,7 @@ function SortableTask({
   onMentorClick?: (ticketId: string, nodeId: string) => void;
   onAutoFixClick?: (ticketId: string, nodeId: string, instruction: string) => void;
 }) {
+  const router = useRouter();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id });
 
   const style = {
@@ -146,6 +148,20 @@ function SortableTask({
             </div>
           )}
 
+          {task.status === "in-progress" && (
+            <div className="mt-2 border-t border-zinc-700/30 pt-2">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  router.push(`/execution-room/${task.id}`);
+                }}
+                className="w-full flex items-center justify-center gap-1.5 text-[10px] py-1.5 bg-yellow-950/40 text-yellow-500 hover:bg-yellow-900/60 rounded border border-yellow-900/50 transition-colors"
+              >
+                <Zap className="w-3 h-3" />
+                Resolver con IA
+              </button>
+            </div>
+          )}
 
         </CardContent>
       </Card>

@@ -1,6 +1,7 @@
 import json
 import logging
 from collections.abc import AsyncGenerator
+from typing import Any
 
 import litellm
 from fastapi import APIRouter, HTTPException, Request
@@ -47,10 +48,21 @@ async def process_planning_message(req: Request, request: PlanningRequest):
         }
     ]
 
+    from app.infrastructure.ai.prompt_renderer import render_prompt
+    from app.infrastructure.db.database import get_sessionmaker
+    from app.infrastructure.repositories.prompt_repository import get_prompt_async
+
+    async with get_sessionmaker()() as session:
+        prompt_model = await get_prompt_async(session, "planning_studio_assistant")
+        if prompt_model:
+            system_msg = render_prompt(prompt_model.content)
+        else:
+            system_msg = "You are an AI planning assistant. If the user asks for a project plan, tasks, or WBS, use the 'render_wbs_tree' tool to show the plan."
+
     messages_to_send = [
         {
             "role": "system",
-            "content": "You are an AI planning assistant. If the user asks for a project plan, tasks, or WBS, use the 'render_wbs_tree' tool to show the plan."
+            "content": system_msg
         }
     ]
     for msg in request.messages:
@@ -67,7 +79,7 @@ async def process_planning_message(req: Request, request: PlanningRequest):
                 **adapted["kwargs"],
             )
 
-            tool_calls_buffer = {}
+            tool_calls_buffer: dict[int, Any] = {}
 
             async for chunk in response:
                 delta = chunk.choices[0].delta

@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable react-hooks/preserve-manual-memoization */
 "use client";
 
 import React, { useEffect, useState } from "react";

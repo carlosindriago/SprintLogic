@@ -62,6 +62,32 @@ class SQLAlchemyKanbanRepository:
             affected_nodes=node_links,
         )
 
+    async def get_ticket(self, ticket_id: UUID) -> KanbanTicketResponse | None:
+        query = select(KanbanTicketModel).where(KanbanTicketModel.id == ticket_id)
+        result = await self.session.execute(query)
+        ticket = result.scalar_one_or_none()
+        if not ticket:
+            return None
+
+        node_query = select(KanbanTicketNodeModel).where(KanbanTicketNodeModel.ticket_id == ticket.id)
+        nodes_res = await self.session.execute(node_query)
+        nodes = nodes_res.scalars().all()
+        links = [TicketNodeLink(node_id=n.node_id, file_path=n.file_path) for n in nodes]
+
+        return KanbanTicketResponse(
+            id=ticket.id,
+            project_id=ticket.project_id,
+            report_id=ticket.report_id,
+            title=ticket.title,
+            type=ticket.type,
+            status=ticket.status,
+            priority=ticket.priority,
+            description=ticket.description,
+            created_at=ticket.created_at,
+            updated_at=ticket.updated_at,
+            affected_nodes=links,
+        )
+
     async def get_tickets_by_project(self, project_id: UUID) -> list[KanbanTicketResponse]:
         query = (
             select(KanbanTicketModel)

@@ -26,7 +26,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from app.application.scan_repo import ScanCodebaseUseCase, ScanLocalRepository
 from app.domain.exceptions import PathBlockedError, ScannerError
-from app.infrastructure.db.database import get_sessionmaker, get_db_session
+from app.infrastructure.db.database import get_db_session, get_sessionmaker
 from app.infrastructure.db.project_repository import SQLAlchemyProjectRepository
 from app.infrastructure.events.active_scans import active_scans
 from app.infrastructure.events.event_bus import global_event_bus
@@ -512,8 +512,8 @@ async def analyze_project_graph(
         top_files_xml += "</archivos_con_mas_dependencias>"
 
         # 1. Calcular grados usando matemáticas de grafos O(1)
-        in_degrees = {}
-        out_degrees = {}
+        in_degrees: dict[str, int] = {}
+        out_degrees: dict[str, int] = {}
         for e in nx_edges:
             src = e["source"]
             tgt = e["target"]

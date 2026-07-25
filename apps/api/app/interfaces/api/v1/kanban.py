@@ -6,12 +6,15 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application.patch_engine import apply_patch
 from app.domain.kanban_schemas import (
     KanbanTicketCreate,
+    KanbanTicketPatch,
     KanbanTicketResponse,
     KanbanTicketUpdate,
 )
 from app.infrastructure.db.database import get_db_session
+from app.infrastructure.db.models import GraphNodeModel
 from app.infrastructure.db.project_repository import SQLAlchemyProjectRepository
 from app.infrastructure.repositories.kanban_repository import SQLAlchemyKanbanRepository
 
@@ -107,3 +110,78 @@ async def delete_ticket(
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket not found")
     return None
+
+from sqlalchemy import or_, select
+
+
+@router.get("/tickets/{ticket_id}/context")
+async def get_ticket_context(ticket_id: str, session: AsyncSession = Depends(get_db_session)):
+    try:
+        ticket_uuid = UUID(ticket_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid ticket ID format")
+
+    repo = SQLAlchemyKanbanRepository(session)
+    ticket = await repo.get_ticket(ticket_uuid)
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+
+    context_files = set()
+
+    # 1. Affected nodes directly linked
+    for node in ticket.affected_nodes:
+        if node.file_path:
+            context_files.add(node.file_path)
+
+    # 2. Query GraphNodeModel heuristic (title/description keywords)
+    # Using simplistic keywords heuristic if not enough files
+    if len(context_files) < 3:
+        keywords = set(re.findall(r'\b\w{4,}\b', ticket.title.lower()))
+        # limit keywords to prevent huge OR query
+        keyword_list = list(keywords)[:5]
+
+        if keyword_list:
+            conditions = [GraphNodeModel.file_path.ilike(f"%{kw}%") for kw in keyword_list]
+            query = select(GraphNodeModel.file_path).where(
+                GraphNodeModel.project_id == ticket.project_id,
+                or_(*conditions)
+            ).limit(5)
+
+            result = await session.execute(query)
+            heuristic_files = result.scalars().all()
+            for hf in heuristic_files:
+                context_files.add(hf)
+
+    return {"context_files": list(context_files)[:5]}
+
+
+@router.post("/tickets/{ticket_id}/apply_patch")
+async def apply_ticket_patch(
+    ticket_id: str,
+    payload: KanbanTicketPatch,
+    session: AsyncSession = Depends(get_db_session)
+):
+    try:
+        ticket_uuid = UUID(ticket_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid ticket ID format")
+
+    repo = SQLAlchemyKanbanRepository(session)
+    ticket = await repo.get_ticket(ticket_uuid)
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+
+    project_repo = SQLAlchemyProjectRepository(session)
+    project = await project_repo.get_by_id(ticket.project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    try:
+        success = apply_patch(project.path, payload.file_path, payload.search_content, payload.replace_content)
+        return {"success": success}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
