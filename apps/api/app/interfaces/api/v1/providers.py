@@ -1,3 +1,6 @@
+import logging
+
+logger = logging.getLogger(__name__)
 import uuid
 
 import keyring
@@ -93,4 +96,5 @@ async def test_provider(req: TestProviderRequest):
         response = litellm.completion(**kwargs)
         return {"status": "success", "message": "Test successful", "content": response.choices[0].message.content}
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error("Provider test failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred")
