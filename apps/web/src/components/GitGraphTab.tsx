@@ -707,8 +707,8 @@ export default function GitGraphTab({ projectId }: { projectId: string }) {
               <ResizableHandle className="bg-zinc-800" />
               <ResizablePanel defaultSize={40} minSize={20}>
                 <div className="h-full flex flex-col bg-zinc-900 border-l border-zinc-800/50 relative">
-                  <Button variant="ghost" size="sm" className="absolute right-4 top-4 h-8 w-8 p-0 text-zinc-400 hover:text-white rounded-full bg-zinc-800" onClick={() => setShowDetails(false)}>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <Button variant="ghost" size="sm" className="absolute right-4 top-4 h-8 w-8 p-0 text-zinc-400 hover:text-white rounded-full bg-zinc-800" onClick={() => setShowDetails(false)} aria-label="Cerrar detalles" title="Cerrar detalles">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <path d="M18 6 6 18" /><path d="m6 6 12 12" />
                     </svg>
                   </Button>
