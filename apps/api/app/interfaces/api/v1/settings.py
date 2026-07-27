@@ -317,7 +317,7 @@ async def get_curated_models():
                     "provider": PROVIDER_LABELS.get(provider, provider),
                     "provider_id": provider,
                     "is_configured": False,
-                    "models": [],
+                    "models": fallback_models,
                 }
             )
     return results
