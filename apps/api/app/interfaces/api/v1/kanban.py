@@ -180,8 +180,11 @@ async def apply_ticket_patch(
         success = apply_patch(project.path, payload.file_path, payload.search_content, payload.replace_content)
         return {"success": success}
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error("Apply patch failed with ValueError: %s", e, exc_info=True)
+        raise HTTPException(status_code=400, detail="Invalid patch format or contents")
     except FileNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        logger.error("Apply patch failed with FileNotFoundError: %s", e, exc_info=True)
+        raise HTTPException(status_code=404, detail="File to patch not found")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Apply patch failed with an internal error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred")

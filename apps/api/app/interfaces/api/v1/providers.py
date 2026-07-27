@@ -1,7 +1,10 @@
+import logging
 import uuid
 
 import keyring
 import litellm
+
+logger = logging.getLogger(__name__)
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -93,4 +96,5 @@ async def test_provider(req: TestProviderRequest):
         response = litellm.completion(**kwargs)
         return {"status": "success", "message": "Test successful", "content": response.choices[0].message.content}
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error("Test provider failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=400, detail="Test provider failed")

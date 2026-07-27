@@ -1,3 +1,6 @@
+import logging
+
+logger = logging.getLogger(__name__)
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -41,4 +44,5 @@ async def restore_prompt(prompt_id: str, session: AsyncSession = Depends(get_db_
         updated = await prompt_repository.restore_prompt(session, prompt_id)
         return updated
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        logger.error("Restore prompt failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=404, detail="Prompt restore failed")

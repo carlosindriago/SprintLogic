@@ -18,6 +18,7 @@ from app.infrastructure.db.models import ConversationModel, MessageModel
 from app.infrastructure.security.credential_manager import CredentialManager
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 SENSEI_SYSTEM_PROMPT_TEMPLATE = """Eres el 'Sensei del Código', un Maestro Arquitecto de Software con más de 30 años de experiencia profesional. Dominas todos los lenguajes, frameworks y arquitecturas modernas.
@@ -628,4 +629,5 @@ async def auto_fix(
         new_content = response.choices[0].message.content
         return {"original": file_content, "modified": new_content}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Auto-fix failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred")

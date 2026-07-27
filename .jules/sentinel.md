@@ -1,7 +1,10 @@
-## 2024-07-04 - [Fix SQL Injection in SQLite Full Text Search]
-**Vulnerability:** SQL injection vulnerability when indexing project files due to manually constructing `INSERT` statements with string concatenation rather than using parameterized queries. The values were partially manually escaped using `.replace("'", "''")` and `chr(39)` replacements, which is error-prone and a security risk.
-**Learning:** This existed because the developer might not be familiar with passing a list of dictionaries to `session.execute(text("..."), list_of_dicts)` in SQLAlchemy to perform a bulk insert, and thus resorted to building the values string manually.
-**Prevention:** Use SQLAlchemy's built-in parameter binding with `session.execute` and a list of dictionaries for bulk operations. Avoid string concatenation for SQL statements whenever possible.
-- When semantic pull request CI checks fail due to an unknown release type (e.g., 'sec:'), ensure the PR title uses a valid Conventional Commits prefix like 'fix:', 'feat:', or 'refactor:'.
-- Run `ruff check . --fix` to resolve formatting errors that may break CI checks before submitting changes in the backend application.
-Ensure that internal server details, including exception strings (str(e)), are never directly leaked in HTTP or WebSocket error responses. Always use logging (e.g., logging.error(..., exc_info=True)) to capture full details internally, and return generic, safe messages (e.g., 'Error interno') to clients to prevent potential exposure of system internals or stack traces.
+# Sentinel Learnings
+
+## API Error Handling
+- Never leak internal system details (like exception strings or stack traces) directly to the user in HTTP responses (e.g. `raise HTTPException(status_code=500, detail=str(e))`).
+- Instead, log the detailed error using `logger.error("Context message: %s", e, exc_info=True)` and return a generic `HTTPException(status_code=500, detail="An internal error occurred")`.
+
+## Git Operations & File Management
+- Be extremely careful to not commit generated build artifacts like `apps/api/sprintlogic_api.egg-info` or temporary scripts (e.g. `fix_sec.py`).
+- Always run `rm -rf` on temporary files and build artifacts before running git commands.
+- Never use `git add .`; explicitly specify paths.
