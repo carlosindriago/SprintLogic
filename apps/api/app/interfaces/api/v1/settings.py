@@ -336,7 +336,8 @@ async def list_tool_model_mappings(
     session: AsyncSession = Depends(get_db_session),
 ):
     """List all known tools with their effective model configuration."""
-    return await list_tool_mappings(session)
+    data = await list_tool_mappings(session)
+    return data
 
 
 @router.put("/tool-models/{tool_name}")

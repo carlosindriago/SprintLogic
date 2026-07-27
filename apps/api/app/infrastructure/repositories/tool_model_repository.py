@@ -21,6 +21,10 @@ class ToolDef(TypedDict):
 
 
 KNOWN_TOOLS: dict[str, ToolDef] = {
+    "__default__": {
+        "display_name": "Modelo Global por Defecto",
+        "description": "Modelo predeterminado para todas las herramientas que no tienen override especifico",
+    },
     "chat": {
         "display_name": "SprintLogic Chat",
         "description": "Asistente de chat principal del IDE — responde preguntas, revisa codigo, propone soluciones",
@@ -72,8 +76,31 @@ KNOWN_TOOLS: dict[str, ToolDef] = {
 }
 
 
+async def resolve_default_model(session: AsyncSession) -> tuple[str, str]:
+    """Return (provider_id, model_name) for the global default model.
+
+    Resolution order:
+    1. ToolModelMappingModel entry for "__default__" (user override via UI)
+    2. DEFAULT_LLM_MODEL env var
+    """
+    result = await session.execute(
+        select(ToolModelMappingModel).where(
+            ToolModelMappingModel.tool_name == "__default__"
+        )
+    )
+    mapping = result.scalars().first()
+    if mapping is not None:
+        return mapping.provider_id, mapping.model_name
+
+    if "/" in DEFAULT_LLM_MODEL:
+        provider, model = DEFAULT_LLM_MODEL.split("/", 1)
+    else:
+        provider = model = DEFAULT_LLM_MODEL
+    return provider, model
+
+
 def parse_default_model() -> tuple[str, str]:
-    """Parse DEFAULT_LLM_MODEL into (provider, model_id)."""
+    """Legacy sync fallback. Use resolve_default_model(session) when possible."""
     if "/" in DEFAULT_LLM_MODEL:
         provider, model = DEFAULT_LLM_MODEL.split("/", 1)
     else:
@@ -100,8 +127,8 @@ async def get_tool_model(
     return mapping.provider_id, mapping.model_name
 
 
-async def list_tool_mappings(session: AsyncSession) -> list[dict]:
-    """Return all stored tool → model overrides with tool display metadata."""
+async def list_tool_mappings(session: AsyncSession) -> dict:
+    """Return tool list + global default info."""
     result = await session.execute(select(ToolModelMappingModel))
     stored = result.scalars().all()
 
@@ -109,10 +136,14 @@ async def list_tool_mappings(session: AsyncSession) -> list[dict]:
         m.tool_name: (m.provider_id, m.model_name) for m in stored
     }
 
-    default_provider, default_model_id = parse_default_model()
+    default_provider, default_model_id = await resolve_default_model(session)
+    default_override = stored_map.get("__default__")
 
     tools = []
     for tool_name, tool_def in KNOWN_TOOLS.items():
+        if tool_name == "__default__":
+            continue
+
         entry = stored_map.get(tool_name)
         tools.append({
             "tool_name": tool_name,
@@ -126,7 +157,15 @@ async def list_tool_mappings(session: AsyncSession) -> list[dict]:
             "effective_provider": entry[0] if entry else default_provider,
             "effective_model": entry[1] if entry else default_model_id,
         })
-    return tools
+
+    return {
+        "tools": tools,
+        "global_default": {
+            "provider": default_provider,
+            "model": default_model_id,
+            "is_overridden": default_override is not None,
+        },
+    }
 
 
 async def upsert_tool_mapping(

@@ -316,7 +316,18 @@ export interface ToolModelEntry {
   effective_model: string;
 }
 
-export const fetchToolModels = () => api.get<ToolModelEntry[]>('/settings/tool-models');
+export interface GlobalDefaultEntry {
+  provider: string;
+  model: string;
+  is_overridden: boolean;
+}
+
+export interface ToolModelResponse {
+  tools: ToolModelEntry[];
+  global_default: GlobalDefaultEntry;
+}
+
+export const fetchToolModels = () => api.get<ToolModelResponse>('/settings/tool-models');
 export const updateToolModel = (toolName: string, providerId: string, modelName: string) =>
   api.put<{ tool_name: string; provider_id: string; model_name: string }>(
     `/settings/tool-models/${toolName}`,
