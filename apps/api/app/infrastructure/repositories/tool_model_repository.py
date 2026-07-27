@@ -23,23 +23,51 @@ class ToolDef(TypedDict):
 KNOWN_TOOLS: dict[str, ToolDef] = {
     "chat": {
         "display_name": "SprintLogic Chat",
-        "description": "Asistente de chat principal del IDE",
+        "description": "Asistente de chat principal del IDE — responde preguntas, revisa codigo, propone soluciones",
     },
     "graph_analysis": {
         "display_name": "Analisis IA del Grafo",
-        "description": "Analisis topologico y auditoria arquitectonica del grafo de dependencias",
+        "description": "Auditoria arquitectonica del grafo de dependencias — detecta anomalias, deuda tecnica y patrones",
     },
     "insight_worker": {
         "display_name": "Consolidacion de Memoria",
-        "description": "Worker en background que extrae aprendizajes de conversaciones pasadas",
+        "description": "Worker en background que extrae aprendizajes y anti-patrones de conversaciones pasadas",
     },
     "code_coach": {
         "display_name": "Code Coach",
-        "description": "Evaluador de snippets de codigo en el editor",
+        "description": "Evaluador de calidad de codigo — analiza snippets y sugiere mejoras de patrones, seguridad y estilo",
     },
     "auto_fix": {
         "display_name": "Auto Fix",
-        "description": "Refactorizacion automatica de archivos",
+        "description": "Refactorizacion automatica de archivos — aplica correcciones sugeridas por el Code Coach o el Chat",
+    },
+    "fim": {
+        "display_name": "Relleno Predictivo (FIM)",
+        "description": "Fill-in-the-Middle — sugiere completaciones de codigo inline mientras escribis en el editor",
+    },
+    "contextual_mentor": {
+        "display_name": "Mentoria Contextual",
+        "description": "Analisis pedagogico del archivo abierto en el editor — detecta anti-patrones y explica por que",
+    },
+    "chat_sensei": {
+        "display_name": "Modo Sensei",
+        "description": "Chat en modo Arquitecto Socratico — debate decisiones de diseno y evalua tradeoffs",
+    },
+    "ticket_mentor": {
+        "display_name": "Ticket Mentor",
+        "description": "Asistente de tickets Kanban — analiza el archivo afectado y el blast radius de dependencias",
+    },
+    "phantom_extractor": {
+        "display_name": "Phantom Extractor",
+        "description": "Extrae tickets Kanban accionables a partir de reportes de analisis arquitectonico",
+    },
+    "planning_studio": {
+        "display_name": "Planning Studio",
+        "description": "Asistente de planificacion — genera WBS, tareas y roadmaps a partir de requerimientos",
+    },
+    "chat_title_gen": {
+        "display_name": "Generador de Titulos",
+        "description": "Genera titulos cortos y descriptivos para nuevas conversaciones del chat",
     },
 }
 
