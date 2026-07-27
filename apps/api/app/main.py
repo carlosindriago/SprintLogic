@@ -27,11 +27,21 @@ logging.basicConfig(
 
 import os
 import signal
+import threading
 from concurrent.futures import ProcessPoolExecutor
 from contextlib import asynccontextmanager
 
 
 def kill_zombie_on_parent_death():
+    """Cordón umbilical STDIN: detecta cuando el proceso padre (Tauri) muere.
+
+    Cuando Tauri cierra, su proceso principal termina y el pipe de STDIN
+    hacia este hijo Python se rompe — sys.stdin.read() devuelve EOF.
+    En ese momento enviamos SIGINT a nosotros mismos para que uvicorn
+    ejecute el shutdown graceful (lifespan teardown, insight_worker cierre,
+    process_pool.shutdown). Sin esto, el proceso Python queda huérfano
+    en RAM consumiendo recursos.
+    """
     try:
         sys.stdin.read()
     except Exception:
@@ -42,10 +52,12 @@ def kill_zombie_on_parent_death():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Activar el asesino de Zombis (Cordón umbilical STDIN) solo en prod/Tauri
-    # if os.getenv("SPRINTLOGIC_DESKTOP") == "1":
-    #     threading.Thread(target=kill_zombie_on_parent_death, daemon=True).start()
-
+    # Activar el asesino de Zombis (Cordón umbilical STDIN) solo cuando
+    # estamos bajo Tauri (modo desktop). SPRINTLOGIC_DESKTOP=1 lo configura
+    # lib.rs al spawn del sidecar. En dev puro (sin Tauri) no queremos
+    # que un Ctrl-C en la terminal dispare shutdown espurio.
+    if os.getenv("SPRINTLOGIC_DESKTOP") == "1":
+        threading.Thread(target=kill_zombie_on_parent_death, daemon=True).start()
 
     # Startup
     from app.infrastructure.db.database import get_sessionmaker

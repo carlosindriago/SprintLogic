@@ -1,4 +1,4 @@
-use tauri::Manager;
+use tauri::{Manager, RunEvent};
 use std::sync::Mutex;
 use std::process::{Command, Stdio};
 use std::io::{BufRead, BufReader};
@@ -7,6 +7,12 @@ use std::env;
 struct AppState {
     sidecar_port: Mutex<Option<u16>>,
 }
+
+/// Wraps the spawned sidecar so we can recover it from app state on exit
+/// and kill it explicitly. Without this the uvicorn Python process keeps
+/// running orphaned after Tauri closes (especially on Linux, where closing
+/// the parent does not auto-SIGTERM the child).
+struct SidecarChild(Mutex<Option<std::process::Child>>);
 
 #[tauri::command]
 fn get_sidecar_port(state: tauri::State<'_, AppState>) -> Result<u16, String> {
@@ -35,19 +41,20 @@ pub fn run() {
         .manage(AppState {
             sidecar_port: Mutex::new(None),
         })
+        .manage(SidecarChild(Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![get_sidecar_port, show_main_window])
         .setup(|app| {
             let app_handle = app.handle().clone();
-            
-            // In dev mode, we spawn the raw python script. 
+
+            // In dev mode, we spawn the raw python script.
             // We use std::env::current_dir to accurately find the monorepo root
             let current_dir = env::current_dir().unwrap();
             // In tauri dev, current_dir is usually `apps/web/src-tauri`
             let root_dir = current_dir.parent().unwrap().parent().unwrap();
-            
+
             let python_bin = root_dir.join("api").join(".venv").join("bin").join("python");
             let script_path = root_dir.join("api").join("app").join("main.py");
-            
+
             println!("Spawning python: {:?} {:?}", python_bin, script_path);
 
             let mut child = Command::new(python_bin)
@@ -61,7 +68,7 @@ pub fn run() {
                 .expect("Failed to spawn Python sidecar in dev mode");
 
             let stdout = child.stdout.take().expect("Failed to get stdout");
-            
+
             std::thread::spawn(move || {
                 let reader = BufReader::new(stdout);
                 for line in reader.lines() {
@@ -79,8 +86,12 @@ pub fn run() {
                 }
             });
 
-            // Keep the child alive in the app state so it doesn't get dropped
-            app.manage(std::sync::Mutex::new(child));
+            // Keep the child handle in app state so the RunEvent::Exit handler
+            // can kill it explicitly when the app closes. This is the primary
+            // defense against zombie processes; the STDIN umbilical cord in
+            // main.py is the secondary defense.
+            let sidecar_state = app.state::<SidecarChild>();
+            *sidecar_state.0.lock().unwrap() = Some(child);
 
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -91,6 +102,21 @@ pub fn run() {
             }
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(move |app_handle, event| {
+            // On app exit, kill the Python sidecar explicitly. Without this
+            // the uvicorn server (and its insight_worker asyncio loop) keeps
+            // running orphaned, leaking RAM and holding the port.
+            if let RunEvent::Exit = event {
+                let sidecar_state = app_handle.state::<SidecarChild>();
+                let mut guard = sidecar_state.0.lock().unwrap();
+                if let Some(mut child) = guard.take() {
+                    // Try graceful kill first (SIGTERM on Unix). Python's
+                    // lifespan() teardown closes insight_worker + process_pool.
+                    let _ = child.kill();
+                    let _ = child.wait();
+                }
+            }
+        });
 }
