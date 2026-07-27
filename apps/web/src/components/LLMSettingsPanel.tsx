@@ -773,7 +773,7 @@ function ToolModelsSection({ providers }: { providers: CuratedProvider[] }) {
     setLoading(true);
     try {
       const data = await fetchToolModels();
-      setToolModels(data);
+      setToolModels(data.tools ?? []);
     } catch {
       toast.error("Failed to load tool model mappings");
     } finally {

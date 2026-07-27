@@ -6,7 +6,7 @@
 import React, { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { getProjectReport, createKanbanTicket } from "../lib/api";
+import { getProjectReport, createKanbanTicket, fetchToolModels } from "../lib/api";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MarkdownLink } from "./MarkdownLink";
@@ -16,7 +16,6 @@ import { Button } from "@/components/ui/button";
 import { WBSPlannerModal } from "./WBSPlannerModal";
 import { generateWBS, WBSHierarchicalResponse } from "../lib/api";
 import { useTabsStore } from "@/store/tabsStore";
-import { useSettingsStore } from "@/store/settingsStore";
 
 interface AIReportViewerProps {
   projectId: string | null;
@@ -33,6 +32,7 @@ export function AIReportViewer({ projectId, reportId, markdown: initialMarkdown 
   const [wbsModalOpen, setWbsModalOpen] = useState(false);
   const [wbsData, setWbsData] = useState<WBSHierarchicalResponse | null>(null);
   const [generatingWbs, setGeneratingWbs] = useState(false);
+  const [defaultModel, setDefaultModel] = useState<string | null>(null);
 
   const handleCopy = () => {
     if (content) {
@@ -112,6 +112,16 @@ export function AIReportViewer({ projectId, reportId, markdown: initialMarkdown 
     };
   }, [projectId, reportId, initialMarkdown]);
 
+  useEffect(() => {
+    fetchToolModels().then((data) => {
+      if (data.global_default) {
+        setDefaultModel(`${data.global_default.provider}/${data.global_default.model}`);
+      }
+    }).catch(() => {
+      setDefaultModel("gemini/gemini-2.5-pro");
+    });
+  }, []);
+
   const { cleanText, issues } = React.useMemo(() => {
     if (!content) return { cleanText: "", issues: [] };
     const match = content.match(/<kanban_issues>([\s\S]*?)<\/kanban_issues>/);
@@ -189,8 +199,8 @@ export function AIReportViewer({ projectId, reportId, markdown: initialMarkdown 
     }
     try {
       setGeneratingWbs(true);
-      const defaultModel = useSettingsStore.getState().globalDefault || "gemini/gemini-2.5-pro";
-      const res = await generateWBS(projectId, cleanText.substring(0, 5000), defaultModel);
+      const model = defaultModel || "gemini/gemini-2.5-pro";
+      const res = await generateWBS(projectId, cleanText.substring(0, 5000), model);
       setWbsData(res);
       setWbsModalOpen(true);
     } catch (err: any) {
