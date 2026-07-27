@@ -152,9 +152,10 @@ export default function TicketMentorDrawer({ ticketId, projectId, filePath, onCl
           <button
             onClick={() => sendMessage(input)}
             disabled={!input.trim() || (loading && !isStreaming)}
-            className="absolute right-1.5 p-1.5 rounded-full bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-50 disabled:hover:bg-indigo-600 transition-colors"
+            className="absolute right-1.5 p-1.5 rounded-full bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-50 disabled:hover:bg-indigo-600 transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-indigo-500"
+            aria-label="Enviar mensaje"
           >
-            {loading && !isStreaming ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            {loading && !isStreaming ? <Loader2 aria-hidden="true" className="w-4 h-4 animate-spin" /> : <Send aria-hidden="true" className="w-4 h-4" />}
           </button>
         </div>
       </div>
