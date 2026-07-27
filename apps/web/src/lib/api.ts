@@ -302,6 +302,29 @@ export const checkApiKeyStatus = (provider: string) => api.get<{ is_configured: 
 export const deleteProviderKey = (provider: string) => api.delete<{ status: string }>(`/settings/api-key/${provider}`);
 export const getCuratedModels = () => api.get<CuratedProvider[]>('/ai/models');
 
+// --- Tool Model Mappings ---
+export interface ToolModelEntry {
+  tool_name: string;
+  display_name: string;
+  description: string;
+  provider_id: string | null;
+  model_name: string | null;
+  is_overridden: boolean;
+  default_provider: string;
+  default_model: string;
+  effective_provider: string;
+  effective_model: string;
+}
+
+export const fetchToolModels = () => api.get<ToolModelEntry[]>('/settings/tool-models');
+export const updateToolModel = (toolName: string, providerId: string, modelName: string) =>
+  api.put<{ tool_name: string; provider_id: string; model_name: string }>(
+    `/settings/tool-models/${toolName}`,
+    { provider_id: providerId, model_name: modelName }
+  );
+export const deleteToolModel = (toolName: string) =>
+  api.delete<{ status: string; tool_name: string }>(`/settings/tool-models/${toolName}`);
+
 // --- AI / Analysis ---
 export const getGlobalFlowInsights = () => api.get<ProjectFlowInsights>('/insights/flow');
 export const getProjectFlowInsights = (projectId: string) => api.get<ProjectFlowInsights>(`/projects/${projectId}/insights/flow`);

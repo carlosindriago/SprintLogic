@@ -9,7 +9,7 @@ from sqlalchemy import asc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.ai.provider_adapter import ProviderAdapter
-from app.infrastructure.config import DEFAULT_LLM_MODEL, INSIGHT_WORKER_MODEL
+from app.infrastructure.config import INSIGHT_WORKER_MODEL
 from app.infrastructure.db.database import get_sessionmaker
 from app.infrastructure.db.models import ConversationModel, DeveloperInsightModel, MessageModel
 from app.infrastructure.repositories.tool_model_repository import get_tool_model
