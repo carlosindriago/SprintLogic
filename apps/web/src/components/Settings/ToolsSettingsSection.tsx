@@ -42,8 +42,8 @@ export default function ToolsSettingsSection() {
         fetchToolModels(),
         getCuratedModels(),
       ]);
-      setToolModels(data.tools);
-      setGlobalDefault(data.global_default);
+      setToolModels(data.tools ?? []);
+      setGlobalDefault(data.global_default ?? null);
       setProviders(provs);
     } catch {
       toast.error("Failed to load tool models");
@@ -154,7 +154,7 @@ export default function ToolsSettingsSection() {
     );
   }
 
-  if (toolModels.length === 0) {
+  if (!toolModels || toolModels.length === 0) {
     return (
       <div className="flex flex-col gap-8 h-full">
         <div>
