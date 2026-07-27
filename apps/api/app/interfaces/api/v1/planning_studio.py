@@ -8,6 +8,10 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from app.infrastructure.repositories.tool_model_repository import (
+    resolve_tool_model,
+    tool_model_label,
+)
 from app.infrastructure.security.credential_manager import CredentialManager
 from app.interfaces.api.v1.wbs_schemas import WBSHierarchicalResponse
 
@@ -24,7 +28,14 @@ class PlanningRequest(BaseModel):
 
 @router.post("/message")
 async def process_planning_message(req: Request, request: PlanningRequest):
-    model = request.model or "gemini/gemini-2.5-pro"
+    # BD es la única fuente de verdad: resolve planning_studio tool override
+    # (o el global default) desde tool_model_mappings. El request.body ya NO
+    # dicta el modelo.
+    from app.infrastructure.db.database import get_sessionmaker
+
+    async with get_sessionmaker()() as session:
+        ps_provider, ps_model = await resolve_tool_model(session, "planning_studio")
+        model = tool_model_label(ps_provider, ps_model)
 
     from app.infrastructure.ai.provider_adapter import ProviderAdapter
     provider = ProviderAdapter.get_provider(model)

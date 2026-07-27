@@ -34,6 +34,10 @@ from app.infrastructure.git.git_gateway import LocalGitGateway
 from app.infrastructure.parser.ast_parser import ASTParserService
 from app.infrastructure.providers.local_fs import LocalFileSystemProvider
 from app.infrastructure.repositories.graph_repository import SQLAlchemyGraphRepository
+from app.infrastructure.repositories.tool_model_repository import (
+    resolve_tool_model,
+    tool_model_label,
+)
 from app.interfaces.api.v1.project_schemas import (
     ProjectDeletedResponse,
     ProjectListResponse,
@@ -571,7 +575,18 @@ async def analyze_project_graph(
 
         from app.infrastructure.llm.litellm_gateway import LiteLLMGateway
 
-        gateway = LiteLLMGateway(model_name=request.model)
+        # BD es la única fuente de verdad: el override del tool `graph_analysis`
+        # (o el global default) se resuelve desde tool_model_mappings. El
+        # request.body ya NO dicta el modelo — ver resolve_tool_model().
+        resolved_provider, resolved_model = await resolve_tool_model(session, "graph_analysis")
+        resolved_model_id = tool_model_label(resolved_provider, resolved_model)
+        gateway = LiteLLMGateway(model_name=resolved_model_id)
+
+        # Resolvemos también el modelo del Phantom Extractor ANTES de entrar al
+        # event_generator, porque la session del request se cierra al devolver
+        # el StreamingResponse y no estará disponible dentro del stream.
+        extractor_provider, extractor_model_id = await resolve_tool_model(session, "phantom_extractor")
+        extractor_model = tool_model_label(extractor_provider, extractor_model_id)
 
         async def event_generator():
             try:
@@ -595,14 +610,13 @@ async def analyze_project_graph(
                             id=uuid.uuid4(),
                             project_id=project_uuid,
                             content=final_content,
-                            ai_model_version=request.model or "default",
+                            ai_model_version=resolved_model_id,
                             structural_metrics=metrics
                         )
                         db_session.add(new_report)
                         await db_session.commit()
 
                 try:
-                    extractor_model = request.fallback_model or request.model or "gemini/gemini-1.5-flash"
                     extracted_tickets = await gateway.extract_kanban_tickets_phantom(final_content, extractor_model, lang_code=lang_code)
                     if extracted_tickets:
                         yield f"data: {json.dumps({'type': 'kanban_suggestions', 'tickets': extracted_tickets})}\n\n"
@@ -1993,8 +2007,9 @@ Debes responder ÚNICAMENTE con un objeto JSON válido con esta estructura exact
 
     from app.infrastructure.ai.llm_gateway import LiteLLMGateway
 
-    # Use a Pro model for complex planning
-    actual_model = request.model or "gemini/gemini-2.5-pro"
+    # BD source of truth: planning_studio tool override (or global default).
+    wbs_provider, wbs_model = await resolve_tool_model(session, "planning_studio")
+    actual_model = tool_model_label(wbs_provider, wbs_model)
     llm_gateway = LiteLLMGateway()
 
     try:

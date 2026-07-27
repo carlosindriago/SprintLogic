@@ -127,6 +127,31 @@ async def get_tool_model(
     return mapping.provider_id, mapping.model_name
 
 
+async def resolve_tool_model(
+    session: AsyncSession, tool_name: str
+) -> tuple[str, str]:
+    """Resolve the effective (provider_id, model_name) for a tool.
+
+    Tiered resolution — DB is the single source of truth:
+    1. tool-specific override in tool_model_mappings (tool_name)
+    2. global default override ("__default__")
+    3. DEFAULT_LLM_MODEL env var
+
+    Use this in every tool endpoint so the frontend never dictates the model
+    via request params. The DB-driven Tools settings UI is the only place
+    that mutates overrides.
+    """
+    override = await get_tool_model(session, tool_name)
+    if override is not None:
+        return override
+    return await resolve_default_model(session)
+
+
+def tool_model_label(provider_id: str, model_name: str) -> str:
+    """Return the canonical <provider>/<model> string used for logging/audit."""
+    return f"{provider_id}/{model_name}"
+
+
 async def list_tool_mappings(session: AsyncSession) -> dict:
     """Return tool list + global default info."""
     result = await session.execute(select(ToolModelMappingModel))

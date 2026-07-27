@@ -13,6 +13,10 @@ from app.infrastructure.ai.llm_gateway import LiteLLMGateway
 from app.infrastructure.db.database import get_db_session
 from app.infrastructure.db.project_repository import SQLAlchemyProjectRepository
 from app.infrastructure.git.git_gateway import LocalGitGateway
+from app.infrastructure.repositories.tool_model_repository import (
+    resolve_tool_model,
+    tool_model_label,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -182,7 +186,11 @@ async def generate_commit_message(
         )
 
         from app.infrastructure.config import DEFAULT_LLM_MODEL
-        actual_model = request.model or DEFAULT_LLM_MODEL
+        # BD source of truth: reutilizamos el tool 'chat_title_gen' para
+        # generación de mensajes cortos (commit msg). El request.body ya no
+        # dicta el modelo.
+        cm_provider, cm_model = await resolve_tool_model(session, "chat_title_gen")
+        actual_model = tool_model_label(cm_provider, cm_model)
         lang_code = req.headers.get("Accept-Language", "en").split("-")[0]
         message = llm_gateway.generate_completion(prompt=prompt, model=actual_model, lang_code=lang_code)
 

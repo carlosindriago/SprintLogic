@@ -15,6 +15,10 @@ from app.application.ai_agent import AIAgent
 from app.infrastructure.ai.context_builder import build_agent_context
 from app.infrastructure.db.database import get_db_session
 from app.infrastructure.db.models import ConversationModel, MessageModel
+from app.infrastructure.repositories.tool_model_repository import (
+    resolve_tool_model,
+    tool_model_label,
+)
 from app.infrastructure.security.credential_manager import CredentialManager
 
 router = APIRouter()
@@ -117,9 +121,12 @@ async def _generate_conversation_title(conversation_id: int, first_message: str)
                 await session.commit()
 
             from app.infrastructure.config import DEFAULT_LLM_MODEL
-            # Request LLM for a better title
+            # Request LLM for a better title — BD source of truth:
+            # chat_title_gen tool override (or global default).
+            title_provider, title_model = await resolve_tool_model(session, "chat_title_gen")
+            title_model_id = tool_model_label(title_provider, title_model)
 
-            provider = DEFAULT_LLM_MODEL.split("/")[0] if "/" in DEFAULT_LLM_MODEL else DEFAULT_LLM_MODEL
+            provider = title_provider
             api_key = CredentialManager.get_api_key(f"sprintlogic_{provider}") or CredentialManager.get_api_key(provider)
             if not api_key:
                 api_key = CredentialManager.get_api_key("sprintlogic_openrouter")
@@ -136,7 +143,7 @@ async def _generate_conversation_title(conversation_id: int, first_message: str)
                 system_content = "Resume este problema o pregunta de código en máximo 4 palabras. Solo responde con el título corto. Sin comillas ni puntuación final."
 
             response = await litellm.acompletion(
-                model=DEFAULT_LLM_MODEL,
+                model=title_model_id,
                 messages=[
                     {
                         "role": "system",
@@ -161,8 +168,11 @@ async def _generate_conversation_title(conversation_id: int, first_message: str)
 @router.post("/")
 async def chat_with_ai(request: ChatRequest, background_tasks: BackgroundTasks, session: AsyncSession = Depends(get_db_session)):
     """Handles chat messages with the AI and manages tool calls."""
-    from app.infrastructure.config import DEFAULT_LLM_MODEL
-    actual_model = request.model or DEFAULT_LLM_MODEL
+    # BD source of truth: resolve tool override (chat / chat_sensei) or global
+    # default. The request.body no longer dictates the model — settings do.
+    chat_tool_name = "chat_sensei" if request.is_sensei else "chat"
+    chat_provider, chat_model = await resolve_tool_model(session, chat_tool_name)
+    actual_model = tool_model_label(chat_provider, chat_model)
 
     # DB Persistence setup
     conversation_id = request.conversation_id
@@ -351,10 +361,11 @@ async def mentor_sensei(
     background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_db_session),
 ):
-    from app.infrastructure.config import DEFAULT_LLM_MODEL
-    actual_model = DEFAULT_LLM_MODEL
+    # BD source of truth: chat_sensei tool override (or global default).
+    sensei_provider, sensei_model = await resolve_tool_model(session, "chat_sensei")
+    actual_model = tool_model_label(sensei_provider, sensei_model)
 
-    provider = actual_model.split("/")[0] if "/" in actual_model else actual_model
+    provider = sensei_provider
     api_key = CredentialManager.get_api_key(f"sprintlogic_{provider}") or CredentialManager.get_api_key(provider)
     if not api_key:
         api_key = CredentialManager.get_api_key("sprintlogic_openrouter")
@@ -508,7 +519,10 @@ async def ticket_mentor(
         topology_str = f"Error computing blast radius: {e}"
 
     from app.infrastructure.config import DEFAULT_LLM_MODEL
-    provider = DEFAULT_LLM_MODEL.split("/")[0] if "/" in DEFAULT_LLM_MODEL else DEFAULT_LLM_MODEL
+    # BD source of truth: ticket_mentor tool override (or global default).
+    tm_provider, tm_model = await resolve_tool_model(session, "ticket_mentor")
+    tm_model_id = tool_model_label(tm_provider, tm_model)
+    provider = tm_provider
     api_key = CredentialManager.get_api_key(f"sprintlogic_{provider}") or CredentialManager.get_api_key(provider)
     if not api_key:
         api_key = CredentialManager.get_api_key("sprintlogic_openrouter")
@@ -536,7 +550,7 @@ async def ticket_mentor(
         full_response = ""
         try:
             response = await litellm.acompletion(
-                model=DEFAULT_LLM_MODEL,
+                model=tm_model_id,
                 messages=[
                     {"role": "system", "content": system_msg},
                     {"role": "user", "content": user_msg},
@@ -593,7 +607,10 @@ async def auto_fix(
             raise HTTPException(status_code=404, detail="Target file not found")
 
     from app.infrastructure.config import DEFAULT_LLM_MODEL
-    provider = DEFAULT_LLM_MODEL.split("/")[0] if "/" in DEFAULT_LLM_MODEL else DEFAULT_LLM_MODEL
+    # BD source of truth: auto_fix tool override (or global default).
+    af_provider, af_model = await resolve_tool_model(session, "auto_fix")
+    af_model_id = tool_model_label(af_provider, af_model)
+    provider = af_provider
     api_key = CredentialManager.get_api_key(f"sprintlogic_{provider}") or CredentialManager.get_api_key(provider)
     if not api_key:
         api_key = CredentialManager.get_api_key("sprintlogic_openrouter")
@@ -618,7 +635,7 @@ async def auto_fix(
 
     try:
         response = await litellm.acompletion(
-            model=DEFAULT_LLM_MODEL,
+            model=af_model_id,
             messages=[
                 {"role": "system", "content": system_msg},
                 {"role": "user", "content": user_msg},

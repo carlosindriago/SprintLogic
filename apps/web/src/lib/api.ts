@@ -291,8 +291,8 @@ export const saveProjectTasks = (projectId: string, tasks: Task[]) => api.post<{
 export const getKanbanConfig = (projectId: string) => api.get<{ columns: KanbanColumn[] }>(`/projects/${projectId}/kanban/config`);
 export const saveKanbanConfig = (projectId: string, columns: KanbanColumn[]) => api.post<{ status: string }>(`/projects/${projectId}/kanban/config`, { columns });
 export const syncKanbanCommits = (projectId: string) => api.post<unknown>(`/projects/${projectId}/tasks/sync-commits`);
-export const generateWBS = (projectId: string, requirements: string, model: string) => 
-  api.post<WBSHierarchicalResponse>(`/projects/${projectId}/kanban/wbs`, { requirements, model });
+export const generateWBS = (projectId: string, requirements: string, model?: string) => 
+  api.post<WBSHierarchicalResponse>(`/projects/${projectId}/kanban/wbs`, model ? { requirements, model } : { requirements });
 
 // --- Providers & Settings ---
 export const fetchProviderModels = (provider: string) => api.get<ModelResult[]>(`/settings/providers/${provider}/models`);

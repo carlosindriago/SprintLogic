@@ -10,6 +10,10 @@ from app.infrastructure.ai.prompt_renderer import render_prompt
 from app.infrastructure.ai.provider_adapter import ProviderAdapter
 from app.infrastructure.db.database import get_db_session
 from app.infrastructure.repositories.prompt_repository import get_prompt_async
+from app.infrastructure.repositories.tool_model_repository import (
+    resolve_tool_model,
+    tool_model_label,
+)
 from app.infrastructure.security.credential_manager import CredentialManager
 from app.interfaces.api.v1.settings import (
     CURATED_MODELS,
@@ -242,14 +246,18 @@ async def tech_scan(request: TechScanRequest):
 
 
 @router.post("/health-overview", response_model=CodeCoachOverview)
-async def health_overview(request: CodeCoachRequest):
+async def health_overview(request: CodeCoachRequest, session: AsyncSession = Depends(get_db_session)):
     """Analizador de código que devuelve una vista general (Health & Overview)."""
     try:
-        if not request.model:
-            raise ValueError("No model specified in request")
+        # BD source of truth: code_coach tool override (or global default). El
+        # request.body ya NO dicta el modelo — settings sí.
+        cc_provider, cc_model = await resolve_tool_model(session, "code_coach")
+        primary_model_id = tool_model_label(cc_provider, cc_model)
 
-        models_to_try = [request.model]
-        if request.fallback_model and request.fallback_model != request.model:
+        models_to_try = [primary_model_id]
+        # El fallback sigue siendo optativo vía request, pero el primario lo
+        # dicta la BD. Caso de uso: querer un modelo más barato como respaldo.
+        if request.fallback_model and request.fallback_model != primary_model_id:
             models_to_try.append(request.fallback_model)
 
         last_error = None
@@ -378,11 +386,12 @@ async def contextual_mentorship(
 ):
     """Analizador de código que detecta antipatrones (Mentoría Contextual)."""
     try:
-        if not request.model:
-            raise ValueError("No model specified in request")
+        # BD source of truth: contextual_mentor tool override (or global default).
+        cm_provider, cm_model = await resolve_tool_model(session, "contextual_mentor")
+        primary_model_id = tool_model_label(cm_provider, cm_model)
 
-        models_to_try = [request.model]
-        if request.fallback_model and request.fallback_model != request.model:
+        models_to_try = [primary_model_id]
+        if request.fallback_model and request.fallback_model != primary_model_id:
             models_to_try.append(request.fallback_model)
 
         last_error = None

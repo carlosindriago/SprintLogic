@@ -6,7 +6,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useTabsStore } from '../store/tabsStore';
-import { useLLMConfigStore } from '../store/llmConfigStore';
+
 import { sendPlanningMessage, PlanningMessagePayload, createKanbanTicket } from '../lib/api';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -20,7 +20,6 @@ export default function PlanningStudioTab() {
   const currentProjectId = useTabsStore((s) => s.currentProjectId);
   const activeTabId = useTabsStore((s) => s.activeTabId);
   const tab = useTabsStore((s) => s.tabs.find((t) => t.id === activeTabId));
-  const analysisDefaultModel = useLLMConfigStore((s) => s.analysisDefaultModel);
 
   const initialContext = tab?.data?.markdown || ''; // AIReportViewer seeds this
   const activeProjectId = tab?.data?.projectId || currentProjectId;
@@ -93,7 +92,6 @@ export default function PlanningStudioTab() {
       const payload: PlanningMessagePayload = {
         messages: newMsgs,
         project_id: activeProjectId,
-        model: analysisDefaultModel,
       };
 
       setMessages((prev) => [...prev, { role: 'assistant', content: '' }]);
