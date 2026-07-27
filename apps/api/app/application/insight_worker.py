@@ -9,7 +9,7 @@ from sqlalchemy import asc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.ai.provider_adapter import ProviderAdapter
-from app.infrastructure.config import DEFAULT_LLM_MODEL
+from app.infrastructure.config import INSIGHT_WORKER_MODEL
 from app.infrastructure.db.database import get_sessionmaker
 from app.infrastructure.db.models import ConversationModel, DeveloperInsightModel, MessageModel
 from app.infrastructure.security.credential_manager import CredentialManager
@@ -103,12 +103,12 @@ async def _extract_and_save_insight(session: AsyncSession, conv: ConversationMod
                 "Si la conversación no contiene nada valioso (charlas genéricas), devuelve un JSON vacío: {}."
             )
 
-        provider = ProviderAdapter.get_provider(DEFAULT_LLM_MODEL)
+        provider = ProviderAdapter.get_provider(INSIGHT_WORKER_MODEL)
         api_key = CredentialManager.get_api_key(provider)
         if not api_key:
             return
 
-        adapted = ProviderAdapter.adapt(DEFAULT_LLM_MODEL, api_key)
+        adapted = ProviderAdapter.adapt(INSIGHT_WORKER_MODEL, api_key)
 
         response = await litellm.acompletion(
             model=adapted["model"],
