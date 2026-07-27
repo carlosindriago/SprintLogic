@@ -2,10 +2,17 @@ import logging
 
 import httpx
 from cachetools import TTLCache
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.ai.llm_gateway import LiteLLMGateway
+from app.infrastructure.db.database import get_db_session
+from app.infrastructure.repositories.tool_model_repository import (
+    delete_tool_mapping,
+    list_tool_mappings,
+    upsert_tool_mapping,
+)
 from app.infrastructure.security.credential_manager import CredentialManager
 
 logger = logging.getLogger(__name__)
@@ -314,3 +321,63 @@ async def get_curated_models():
                 }
             )
     return results
+
+
+# ── Tool Model Mappings ──────────────────────────────────────────────────────
+
+
+class ToolModelMappingRequest(BaseModel):
+    provider_id: str
+    model_name: str
+
+
+@router.get("/tool-models")
+async def list_tool_model_mappings(
+    session: AsyncSession = Depends(get_db_session),
+):
+    """List all known tools with their effective model configuration."""
+    return await list_tool_mappings(session)
+
+
+@router.put("/tool-models/{tool_name}")
+async def update_tool_model_mapping(
+    tool_name: str,
+    request: ToolModelMappingRequest,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Override the model for a specific tool. The tool name must be one of
+    the known tools defined in KNOWN_TOOLS.
+    """
+    from app.infrastructure.repositories.tool_model_repository import KNOWN_TOOLS
+
+    if tool_name not in KNOWN_TOOLS:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Unknown tool '{tool_name}'. Known tools: {', '.join(KNOWN_TOOLS)}",
+        )
+
+    mapping = await upsert_tool_mapping(
+        session,
+        tool_name=tool_name,
+        provider_id=request.provider_id,
+        model_name=request.model_name,
+    )
+    await session.commit()
+    return {
+        "tool_name": mapping.tool_name,
+        "provider_id": mapping.provider_id,
+        "model_name": mapping.model_name,
+    }
+
+
+@router.delete("/tool-models/{tool_name}")
+async def remove_tool_model_mapping(
+    tool_name: str,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Remove the model override for a tool, reverting it to the global default."""
+    deleted = await delete_tool_mapping(session, tool_name)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"No override found for tool '{tool_name}'")
+    await session.commit()
+    return {"status": "deleted", "tool_name": tool_name}
