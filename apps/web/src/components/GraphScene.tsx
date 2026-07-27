@@ -28,13 +28,17 @@ interface ForceNode extends GraphNode {
   fx?: number;
   fy?: number;
   fz?: number;
-  _modCache?: string | null;
+  _extCache?: string;
 }
 
 interface ForceLink extends GraphEdge {
   source: string | ForceNode;
   target: string | ForceNode;
 }
+
+
+
+const modCache = new WeakMap<ForceNode, string | null>();
 
 // Dynamically import react-force-graph to avoid SSR issues
 const ForceGraph2D = dynamic(
@@ -535,10 +539,10 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
         
         // 1. Calculate the dynamic centroid for each Module
         nodes.forEach(d => {
-          if (d._modCache === undefined) {
-             d._modCache = (d.folder && d.folder !== "/") ? d.folder.split('/').filter(Boolean).slice(0, 2).join('/') : null;
+          if (!modCache.has(d)) {
+             modCache.set(d, (d.folder && d.folder !== "/") ? d.folder.split('/').filter(Boolean).slice(0, 2).join('/') : null);
           }
-          const mod = d._modCache;
+          const mod = modCache.get(d);
           if (!mod) return;
           
           const c = centroids.get(mod);
@@ -554,7 +558,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
         // 2. Apply gentle magnetic pull towards the centroid
         const strength = 0.08 * alpha; // Force that decays with time
         nodes.forEach(d => {
-          const mod = d._modCache;
+          const mod = modCache.get(d);
           if (!mod) return;
           const centroid = centroids.get(mod);
           
@@ -673,10 +677,10 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     
     displayGraphData.nodes.forEach((n: ForceNode) => {
       if (cutoffTimeRef.current && getSafeTime(n) > cutoffTimeRef.current) return;
-      if (n._modCache === undefined) {
-         n._modCache = (n.folder && n.folder !== "/") ? n.folder.split('/').filter(Boolean).slice(0, 2).join('/') : null;
+      if (!modCache.has(n)) {
+         modCache.set(n, (n.folder && n.folder !== "/") ? n.folder.split('/').filter(Boolean).slice(0, 2).join('/') : null);
       }
-      const mod = n._modCache;
+      const mod = modCache.get(n);
       if (!mod) return;
       
       const c = centroids.get(mod);
@@ -756,7 +760,10 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     let glowColor = "rgba(148, 163, 184, 0.4)";
 
     if (label === "File") {
-      const ext = name.split(".").pop()?.toLowerCase() || "";
+      if (n._extCache === undefined) {
+         n._extCache = name.split(".").pop()?.toLowerCase() || "";
+      }
+      const ext = n._extCache;
       color = extColorHash(ext);
       glowColor = bloomGlow(color, 0.45);
       radius = Math.max(3.5, degreeRadius * 0.9);
@@ -830,7 +837,10 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     // ── File icons (devicon — drawn over bloom) ──────────────────────────────
     let isIconDrawn = false;
     if (label === "File") {
-      const ext = name.split(".").pop()?.toLowerCase() || "";
+      if (n._extCache === undefined) {
+         n._extCache = name.split(".").pop()?.toLowerCase() || "";
+      }
+      const ext = n._extCache;
       const img = iconImages.current[ext];
       if (img && img.complete && img.naturalWidth !== 0) {
         ctx.save();
