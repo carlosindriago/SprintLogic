@@ -607,3 +607,45 @@ export async function applyPatch(projectId: string, filePath: string, originalCo
   if (!res.ok) throw new Error("Failed to apply patch");
   return res.json();
 }
+
+// --- Database Studio ---
+export interface ColumnIR {
+  name: string;
+  type: string;
+  is_pk: boolean;
+  is_fk: boolean;
+  is_nullable: boolean;
+  target_table?: string | null;
+}
+
+export interface TableIR {
+  name: string;
+  columns: ColumnIR[];
+  indexes: string[];
+}
+
+export interface SchemaIR {
+  tables: TableIR[];
+  orm_type: string;
+}
+
+export interface DBAuditAlert {
+  severity: 'critical' | 'warning' | 'info';
+  title: string;
+  table: string;
+  description: string;
+  migration_suggestion?: string | null;
+}
+
+export interface DBAuditResponse {
+  summary: string;
+  score: number;
+  alerts: DBAuditAlert[];
+  recommendations: string[];
+}
+
+export const fetchProjectSchema = (projectId: string) =>
+  api.get<SchemaIR>(`/projects/${projectId}/database/schema`);
+
+export const auditProjectSchema = (projectId: string, payload?: SchemaIR) =>
+  api.post<DBAuditResponse>(`/projects/${projectId}/database/audit`, payload);

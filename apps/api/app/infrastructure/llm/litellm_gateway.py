@@ -22,6 +22,17 @@ class LiteLLMGateway:
         api_key = self.cred_manager.get_api_key(provider)
         return ProviderAdapter.adapt(self.model_name, api_key)
 
+    async def generate_completion(self, prompt: str, lang_code: str = "en") -> str:
+        prompt += self._build_language_clause(lang_code)
+        adapted = self._get_adapted_params()
+        response = await acompletion(
+            model=adapted["model"],
+            messages=[{"role": "user", "content": prompt}],
+            api_key=adapted.get("api_key"),
+            **adapted.get("kwargs", {}),
+        )
+        return response.choices[0].message.content or ""
+
 
     def _build_language_clause(self, lang_code: str) -> str:
         if lang_code == "es":

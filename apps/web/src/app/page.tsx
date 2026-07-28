@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Settings, FolderOpen, ChevronRight, Edit2, Trash2, PlusCircle, ChevronsUpDown, FilePlus, RefreshCw, RotateCcw, ScanSearch, Layout, Network, GitBranch, BarChart3, FolderGit2, HelpCircle, Bot, Play } from "lucide-react";
+import { Settings, FolderOpen, ChevronRight, Edit2, Trash2, PlusCircle, ChevronsUpDown, FilePlus, RefreshCw, RotateCcw, ScanSearch, Layout, Network, GitBranch, BarChart3, FolderGit2, HelpCircle, Bot, Play, Database } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { scanProject, getProjects, updateProject, deleteProject, rescanProject, analyzeProject, renameFile, duplicateFile, deleteFile, initSidecarPort } from "@/lib/api";
@@ -96,6 +96,7 @@ const ReportHistoryPanel = dynamic(
 );
 
 const GraphScene = dynamic(() => import("@/components/GraphScene"), { ssr: false });
+const DatabaseStudioTab = dynamic(() => import("@/components/DatabaseStudio/DatabaseStudioTab"), { ssr: false });
 
 export default function Home() {
   const [path, setPath] = useState("");
@@ -457,6 +458,8 @@ export default function Home() {
         );
       case 'planning-studio':
         return <PlanningStudioTab key={activeTab.id} />;
+      case 'database-studio':
+        return <DatabaseStudioTab key={activeTab.id} />;
       case 'settings':
         return <SettingsTab data={activeTab.data} key={activeTab.id} />;
       case 'graph':
@@ -588,6 +591,16 @@ export default function Home() {
                   aria-label="Planning Studio"
                 >
                   <Play className="w-4 h-4" aria-hidden="true" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-700"
+                  onClick={() => addTab({ id: 'database-studio', title: 'Database Studio', type: 'database-studio' })}
+                  title="Database Studio"
+                  aria-label="Database Studio"
+                >
+                  <Database className="w-4 h-4" aria-hidden="true" />
                 </Button>
               </div>
 

@@ -137,6 +137,12 @@ async def initialize_prompts(session: AsyncSession):
             "description": "Contextual mentor prompt for anti-patterns",
             "content": CONTEXTUAL_MENTOR_CONTENT,
             "required_variables": CONTEXTUAL_MENTOR_VARS
+        },
+        {
+            "id": DB_ARCHITECT_AUDITOR_ID,
+            "description": "Database Studio AI DB Architect Auditor",
+            "content": DB_ARCHITECT_AUDITOR_CONTENT,
+            "required_variables": DB_ARCHITECT_AUDITOR_VARS
         }
     ]
 
@@ -227,6 +233,8 @@ async def restore_prompt(session: AsyncSession, prompt_id: str) -> PromptRegistr
         golden_content = AUTO_FIX_CONTENT
     elif prompt_id == CONTEXTUAL_MENTOR_ID:
         golden_content = CONTEXTUAL_MENTOR_CONTENT
+    elif prompt_id == DB_ARCHITECT_AUDITOR_ID:
+        golden_content = DB_ARCHITECT_AUDITOR_CONTENT
     else:
         raise ValueError(f"No golden content available for {prompt_id}")
 
@@ -312,3 +320,39 @@ EJEMPLO DE SALIDA ESPERADA:
 
 Usa SIEMPRE variables reales del archivo, NUNCA código genérico (foo/bar). No incluyas markdown, explicaciones previas ni texto fuera del arreglo JSON. CRÍTICO: TIENES PROHIBIDO PENSAR EN VOZ ALTA. NO expliques tu razonamiento fuera del JSON."""
 CONTEXTUAL_MENTOR_VARS: list[str] = []
+
+DB_ARCHITECT_AUDITOR_ID = "db_architect_auditor"
+DB_ARCHITECT_AUDITOR_CONTENT = """Eres un Arquitecto de Base de Datos Senior (Database Architect Auditor). Tu objetivo es analizar el esquema de base de datos provisto en formato JSON (SchemaIR) y generar un reporte de auditoría completo y profundo.
+
+Esquema JSON (SchemaIR):
+{schema_json}
+
+INSTRUCCIONES DE AUDITORÍA:
+1. Analiza las tablas, columnas, tipos de datos, claves primarias (PK), claves foráneas (FK) e índices.
+2. Identifica riesgos clave:
+   - Claves foráneas (FK) sin índice correspondiente (riesgo de locks/slow joins).
+   - Tipos de datos riesgosos (ej. FLOAT/REAL para dinero, VARCHAR sin límite, falta de campos timestamp).
+   - Riesgos N+1 en relaciones o falta de claves primarias.
+   - Consideraciones de seguridad y multitenancy (ej. falta de tenant_id u org_id en tablas principales).
+3. Devuelve EXCLUSIVAMENTE un objeto JSON válido con la siguiente estructura exacta (sin markdown extra alrededor):
+
+{{
+  "summary": "Resumen ejecutivo del estado de la base de datos",
+  "score": 85,
+  "alerts": [
+    {{
+      "severity": "critical" | "warning" | "info",
+      "title": "Título corto de la alerta",
+      "table": "nombre_tabla",
+      "description": "Explicación detallada del problema y su impacto",
+      "migration_suggestion": "ALTER TABLE ... / CREATE INDEX ..."
+    }}
+  ],
+  "recommendations": [
+    "Sugerencia accionable 1",
+    "Sugerencia accionable 2"
+  ]
+}}
+"""
+DB_ARCHITECT_AUDITOR_VARS = ["schema_json"]
+

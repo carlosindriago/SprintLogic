@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.interfaces.api.v1.ai import router as ai_router
 from app.interfaces.api.v1.chat import router as chat_router
+from app.interfaces.api.v1.db_studio import router as db_studio_router
 from app.interfaces.api.v1.editor import router as editor_router
 from app.interfaces.api.v1.git import router as git_router
 from app.interfaces.api.v1.kanban import router as kanban_router
@@ -126,6 +127,7 @@ app.include_router(ai_router, prefix="/api/v1/ai")
 app.include_router(sync_router, prefix="/api/v1/sync")
 app.include_router(prompts_router, prefix="/api/v1")
 app.include_router(planning_studio_router, prefix="/api/v1/planning-studio")
+app.include_router(db_studio_router, prefix="/api/v1")
 
 
 from pathlib import Path
