@@ -29,6 +29,7 @@ interface ForceNode extends GraphNode {
   fy?: number;
   fz?: number;
   _modCache?: string | null;
+  _extCache?: string;
 }
 
 interface ForceLink extends GraphEdge {
@@ -111,6 +112,7 @@ interface GraphSceneProps {
   projectId: string | null;
   onNodeClick?: (node: GraphNode) => void;
 }
+
 
 const extCache = new WeakMap<object, string>();
 
@@ -756,8 +758,8 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     let glowColor = "rgba(148, 163, 184, 0.4)";
 
     if (label === "File") {
-      let ext = extCache.get(n);
-      if (ext === undefined) { ext = name.split(".").pop()?.toLowerCase() || ""; extCache.set(n, ext); }
+      let ext = n._extCache;
+      if (ext === undefined) { ext = name.split(".").pop()?.toLowerCase() || ""; n._extCache = ext; }
       color = extColorHash(ext);
       glowColor = bloomGlow(color, 0.45);
       radius = Math.max(3.5, degreeRadius * 0.9);
@@ -831,8 +833,8 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     // ── File icons (devicon — drawn over bloom) ──────────────────────────────
     let isIconDrawn = false;
     if (label === "File") {
-      let ext = extCache.get(n);
-      if (ext === undefined) { ext = name.split(".").pop()?.toLowerCase() || ""; extCache.set(n, ext); }
+      let ext = n._extCache;
+      if (ext === undefined) { ext = name.split(".").pop()?.toLowerCase() || ""; n._extCache = ext; }
       const img = iconImages.current[ext];
       if (img && img.complete && img.naturalWidth !== 0) {
         ctx.save();
