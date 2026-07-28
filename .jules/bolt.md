@@ -1,1 +1,4 @@
 Performance Coding Standards (Frontend): Avoid creating new array or string allocations (e.g., using `.split().filter()`) inside high-frequency execution loops (like D3 force ticks or rendering frames) to prevent garbage collection pressure. When caching pre-computed values for objects in React state, use a `WeakMap` defined outside the component (e.g., `const cache = new WeakMap()`) instead of mutating the state objects directly to maintain immutability.
+
+## Performance Caching & Memory Leaks
+When caching data in components dealing with both React state and D3 (e.g., GraphScene), do not replace a module-level `WeakMap` with a standard `Map`, as this causes memory leaks when nodes are destroyed. Maintain `WeakMap` for caching immutable React state objects to prevent `react-hooks/immutability` errors, and strictly use direct property mutation only on cloned D3 nodes inside high-frequency rendering loops.
