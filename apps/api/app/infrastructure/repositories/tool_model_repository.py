@@ -73,6 +73,10 @@ KNOWN_TOOLS: dict[str, ToolDef] = {
         "display_name": "Generador de Titulos",
         "description": "Genera titulos cortos y descriptivos para nuevas conversaciones del chat",
     },
+    "database_studio": {
+        "display_name": "Database Studio",
+        "description": "Asistente de arquitectura de base de datos — analiza esquemas ERD y audita problemas",
+    },
 }
 
 
