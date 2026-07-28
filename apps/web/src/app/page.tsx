@@ -38,7 +38,7 @@ import LLMSettingsPanel from "@/components/LLMSettingsPanel";
 import SettingsTab from "@/components/Settings/SettingsTab";
 import PlanningStudioTab from "@/components/PlanningStudioTab";
 import FileTree from "@/components/FileTree";
-import { useTabsStore } from '@/store/tabsStore';
+import { useTabsStore, TabType } from '@/store/tabsStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useProjectStore } from '@/store/projectStore';
 import { useBackgroundJobsStore } from '@/store/backgroundJobsStore';
