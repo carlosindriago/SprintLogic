@@ -120,7 +120,6 @@ async def _generate_conversation_title(conversation_id: int, first_message: str)
                 conv.title = short_preview
                 await session.commit()
 
-            from app.infrastructure.config import DEFAULT_LLM_MODEL
             # Request LLM for a better title — BD source of truth:
             # chat_title_gen tool override (or global default).
             title_provider, title_model = await resolve_tool_model(session, "chat_title_gen")
@@ -518,7 +517,6 @@ async def ticket_mentor(
     except Exception as e:
         topology_str = f"Error computing blast radius: {e}"
 
-    from app.infrastructure.config import DEFAULT_LLM_MODEL
     # BD source of truth: ticket_mentor tool override (or global default).
     tm_provider, tm_model = await resolve_tool_model(session, "ticket_mentor")
     tm_model_id = tool_model_label(tm_provider, tm_model)
@@ -606,7 +604,6 @@ async def auto_fix(
         except Exception:
             raise HTTPException(status_code=404, detail="Target file not found")
 
-    from app.infrastructure.config import DEFAULT_LLM_MODEL
     # BD source of truth: auto_fix tool override (or global default).
     af_provider, af_model = await resolve_tool_model(session, "auto_fix")
     af_model_id = tool_model_label(af_provider, af_model)

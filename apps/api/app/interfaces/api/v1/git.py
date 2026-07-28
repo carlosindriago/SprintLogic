@@ -185,7 +185,6 @@ async def generate_commit_message(
             f"Diff:\n{diff}"
         )
 
-        from app.infrastructure.config import DEFAULT_LLM_MODEL
         # BD source of truth: reutilizamos el tool 'chat_title_gen' para
         # generación de mensajes cortos (commit msg). El request.body ya no
         # dicta el modelo.

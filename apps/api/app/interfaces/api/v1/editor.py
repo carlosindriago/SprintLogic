@@ -4,7 +4,6 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from app.application.ast_auditor import ast_auditor
-from app.infrastructure.config import DEFAULT_LLM_MODEL
 from app.infrastructure.repositories.tool_model_repository import (
     resolve_tool_model,
     tool_model_label,
