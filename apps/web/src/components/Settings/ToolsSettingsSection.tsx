@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
@@ -35,26 +35,28 @@ export default function ToolsSettingsSection() {
     [providers]
   );
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [data, provs] = await Promise.all([
-        fetchToolModels(),
-        getCuratedModels(),
-      ]);
-      setToolModels(data.tools ?? []);
-      setGlobalDefault(data.global_default ?? null);
-      setProviders(provs);
-    } catch {
-      toast.error("Failed to load tool models");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
-    load();
-  }, [load]);
+    let cancelled = false;
+    const doLoad = async () => {
+      setLoading(true);
+      try {
+        const [data, provs] = await Promise.all([
+          fetchToolModels(),
+          getCuratedModels(),
+        ]);
+        if (cancelled) return;
+        setToolModels(data.tools ?? []);
+        setGlobalDefault(data.global_default ?? null);
+        setProviders(provs);
+      } catch {
+        toast.error("Failed to load tool models");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    doLoad();
+    return () => { cancelled = true; };
+  }, []);
 
   const handleOverride = async (toolName: string, providerId: string, modelId: string) => {
     setSaving(toolName);

@@ -769,21 +769,23 @@ function ToolModelsSection({ providers }: { providers: CuratedProvider[] }) {
     [providers]
   );
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await fetchToolModels();
-      setToolModels(data.tools ?? []);
-    } catch {
-      toast.error("Failed to load tool model mappings");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
-    load();
-  }, [load]);
+    let cancelled = false;
+    const doLoad = async () => {
+      setLoading(true);
+      try {
+        const data = await fetchToolModels();
+        if (cancelled) return;
+        setToolModels(data.tools ?? []);
+      } catch {
+        toast.error("Failed to load tool model mappings");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    doLoad();
+    return () => { cancelled = true; };
+  }, []);
 
   const handleOverride = async (toolName: string, providerId: string, modelId: string) => {
     setSaving(toolName);
