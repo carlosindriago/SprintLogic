@@ -291,8 +291,8 @@ export const saveProjectTasks = (projectId: string, tasks: Task[]) => api.post<{
 export const getKanbanConfig = (projectId: string) => api.get<{ columns: KanbanColumn[] }>(`/projects/${projectId}/kanban/config`);
 export const saveKanbanConfig = (projectId: string, columns: KanbanColumn[]) => api.post<{ status: string }>(`/projects/${projectId}/kanban/config`, { columns });
 export const syncKanbanCommits = (projectId: string) => api.post<unknown>(`/projects/${projectId}/tasks/sync-commits`);
-export const generateWBS = (projectId: string, requirements: string, model: string) => 
-  api.post<WBSHierarchicalResponse>(`/projects/${projectId}/kanban/wbs`, { requirements, model });
+export const generateWBS = (projectId: string, requirements: string, model?: string) => 
+  api.post<WBSHierarchicalResponse>(`/projects/${projectId}/kanban/wbs`, model ? { requirements, model } : { requirements });
 
 // --- Providers & Settings ---
 export const fetchProviderModels = (provider: string) => api.get<ModelResult[]>(`/settings/providers/${provider}/models`);
@@ -301,6 +301,40 @@ export const verifyAndSaveProviderKey = (provider: string, apiKey: string) =>
 export const checkApiKeyStatus = (provider: string) => api.get<{ is_configured: boolean }>(`/settings/api-key/${provider}`);
 export const deleteProviderKey = (provider: string) => api.delete<{ status: string }>(`/settings/api-key/${provider}`);
 export const getCuratedModels = () => api.get<CuratedProvider[]>('/ai/models');
+
+// --- Tool Model Mappings ---
+export interface ToolModelEntry {
+  tool_name: string;
+  display_name: string;
+  description: string;
+  provider_id: string | null;
+  model_name: string | null;
+  is_overridden: boolean;
+  default_provider: string;
+  default_model: string;
+  effective_provider: string;
+  effective_model: string;
+}
+
+export interface GlobalDefaultEntry {
+  provider: string;
+  model: string;
+  is_overridden: boolean;
+}
+
+export interface ToolModelResponse {
+  tools: ToolModelEntry[];
+  global_default: GlobalDefaultEntry;
+}
+
+export const fetchToolModels = () => api.get<ToolModelResponse>('/settings/tool-models');
+export const updateToolModel = (toolName: string, providerId: string, modelName: string) =>
+  api.put<{ tool_name: string; provider_id: string; model_name: string }>(
+    `/settings/tool-models/${toolName}`,
+    { provider_id: providerId, model_name: modelName }
+  );
+export const deleteToolModel = (toolName: string) =>
+  api.delete<{ status: string; tool_name: string }>(`/settings/tool-models/${toolName}`);
 
 // --- AI / Analysis ---
 export const getGlobalFlowInsights = () => api.get<ProjectFlowInsights>('/insights/flow');

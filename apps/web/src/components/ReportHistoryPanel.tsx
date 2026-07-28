@@ -8,7 +8,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useTabsStore } from "../store/tabsStore";
-import { useLLMConfigStore } from "../store/llmConfigStore";
+
 import { 
   getProjectReports, 
   getProjectReportsTrash, 
@@ -75,16 +75,12 @@ export function ReportHistoryPanel() {
     setAnalyzing(true);
     setAnalyzingText("Iniciando análisis...");
     try {
-      const defaultModel = useLLMConfigStore.getState().analysisDefaultModel;
-      const fallbackModel = useLLMConfigStore.getState().analysisFallbackModel;
-
+      // El backend resuelve el modelo desde tool_model_mappings (BD).
+      // No enviamos model/fallback_model: la BD es la única fuente de verdad.
       const res = await fetch(`${API_BASE_URL}/projects/${currentProjectId}/graph/analyze`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: defaultModel,
-          fallback_model: fallbackModel === 'none' || fallbackModel === '' ? undefined : fallbackModel,
-        }),
+        body: JSON.stringify({}),
       });
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);

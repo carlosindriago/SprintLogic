@@ -4,7 +4,10 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from app.application.ast_auditor import ast_auditor
-from app.infrastructure.config import DEFAULT_LLM_MODEL
+from app.infrastructure.repositories.tool_model_repository import (
+    resolve_tool_model,
+    tool_model_label,
+)
 
 router = APIRouter()
 
@@ -94,9 +97,13 @@ Firma: {request.signature}
 Solo devuelve el bloque JSDoc, sin bloques de código markdown, sin texto adicional."""
 
         async with get_sessionmaker()() as session:
+            # BD source of truth: usamos el global default (no existe tool
+            # específico para generación de JSDoc — cae a '__default__').
+            doc_provider, doc_model = await resolve_tool_model(session, "__default__")
+            doc_model_id = tool_model_label(doc_provider, doc_model)
             agent = AIAgent(session=session)
             response = ""
-            async for chunk_str in agent.chat_stream([{"role": "user", "content": prompt}], model=DEFAULT_LLM_MODEL):
+            async for chunk_str in agent.chat_stream([{"role": "user", "content": prompt}], model=doc_model_id):
                 try:
                     import json
                     chunk = json.loads(chunk_str)

@@ -10,7 +10,7 @@ import { LinkObject, NodeObject } from "react-force-graph-2d";
 import { graphTheme, extColorHash, bloomGlow, graphUI } from "@/lib/graph-theme";
 import { Search, RotateCcw, ZoomIn, ZoomOut, Maximize, Brain, Play, Pause, Zap, ZapOff, ScanSearch, FileCode, RefreshCw, X, FolderOpen, ChevronRight, File, Folder } from "lucide-react";
 import { useTabsStore } from "../store/tabsStore";
-import { useLLMConfigStore } from "../store/llmConfigStore";
+
 import { useBackgroundJobsStore } from "../store/backgroundJobsStore";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -316,16 +316,12 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     setAnalyzing(true);
     setAnalyzingText("");
     try {
-      const defaultModel = useLLMConfigStore.getState().analysisDefaultModel;
-      const fallbackModel = useLLMConfigStore.getState().analysisFallbackModel;
-
+      // El backend resuelve el modelo desde tool_model_mappings (BD).
+      // No enviamos model/fallback_model: la BD es la única fuente de verdad.
       const res = await fetch(`${API_BASE_URL}/projects/${projectId}/graph/analyze`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: defaultModel,
-          fallback_model: fallbackModel === 'none' || fallbackModel === '' ? undefined : fallbackModel,
-        }),
+        body: JSON.stringify({}),
       });
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);

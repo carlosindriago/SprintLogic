@@ -289,6 +289,6 @@ class ToolModelMappingModel(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     tool_name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
-    provider_id: Mapped[str] = mapped_column(ForeignKey("custom_llm_providers.id", ondelete="CASCADE"), nullable=False)
+    provider_id: Mapped[str] = mapped_column(String(255), nullable=False)
     model_name: Mapped[str] = mapped_column(String(255), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)

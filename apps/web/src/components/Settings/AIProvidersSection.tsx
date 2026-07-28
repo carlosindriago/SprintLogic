@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -27,7 +27,16 @@ import {
 import { cn } from "@/lib/utils";
 import { useFimStore } from "@/store/fimStore";
 import { useSettingsStore } from "@/store/settingsStore";
-import { getCuratedModels, verifyAndSaveProviderKey, CuratedProvider } from "@/lib/api";
+import {
+  getCuratedModels,
+  verifyAndSaveProviderKey,
+  fetchToolModels,
+  updateToolModel,
+  deleteToolModel,
+  type CuratedProvider,
+  type GlobalDefaultEntry,
+} from "@/lib/api";
+import { toast } from "sonner";
 
 // ─────────────────────────────────────────────
 // Types
@@ -408,9 +417,11 @@ function PresetCard({ preset, configuredModelId, backendProviderData, onModelCon
 // ─────────────────────────────────────────────
 
 export default function AIProvidersSection() {
-  const { globalDefault, setGlobalDefault, configuredModels, setConfiguredModel } = useSettingsStore();
-  
+  const { configuredModels, setConfiguredModel } = useSettingsStore();
+
   const [curatedProviders, setCuratedProviders] = useState<CuratedProvider[]>([]);
+  const [globalDefault, setGlobalDefault] = useState<GlobalDefaultEntry | null>(null);
+  const [globalDefaultSaving, setGlobalDefaultSaving] = useState(false);
   const [showCustomForm, setShowCustomForm] = useState(false);
   const [customProviders, setCustomProviders] = useState<CustomProvider[]>([]);
   const [customTestStatus, setCustomTestStatus] = useState<
@@ -424,12 +435,29 @@ export default function AIProvidersSection() {
     modelSlug: "",
   });
 
+  const allModels = useMemo(
+    () =>
+      curatedProviders.flatMap((p) =>
+        p.models.map((m) => ({
+          id: m.id,
+          name: m.name,
+          provider: p.provider,
+          provider_id: p.provider_id,
+        }))
+      ),
+    [curatedProviders]
+  );
+
   const loadBackendProviders = useCallback(async () => {
     try {
-      const data = await getCuratedModels();
-      setCuratedProviders(data);
+      const [data, provs] = await Promise.all([
+        fetchToolModels(),
+        getCuratedModels(),
+      ]);
+      setGlobalDefault(data.global_default ?? null);
+      setCuratedProviders(provs);
     } catch (e) {
-      console.error("Failed to load curated models from backend", e);
+      console.error("Failed to load providers or global default", e);
     }
   }, []);
 
@@ -456,17 +484,32 @@ export default function AIProvidersSection() {
     setShowCustomForm(false);
   };
 
-  // Global dropdown: merge preset configured models + custom endpoints
-  const globalOptions = [
-    ...NATIVE_PRESETS.map((p) => {
-      const activeModel = configuredModels[p.id] ?? p.defaultModels[0] ?? "";
-      return { value: `${p.id}__${activeModel}`, label: `${p.name} · ${activeModel}` };
-    }),
-    ...customProviders.map((c) => ({
-      value: `custom__${c.id}`,
-      label: `${c.name} · ${c.modelSlug}`,
-    })),
-  ];
+  const handleGlobalDefaultChange = async (val: string) => {
+    if (!val) return;
+    setGlobalDefaultSaving(true);
+    try {
+      if (val === "__default__") {
+        await deleteToolModel("__default__");
+        const data = await fetchToolModels();
+        setGlobalDefault(data.global_default ?? null);
+        toast.success("Restablecido al DEFAULT_LLM_MODEL del entorno");
+      } else {
+        const [providerId, ...modelParts] = val.split("/");
+        const modelName = modelParts.join("/");
+        await updateToolModel("__default__", providerId, modelName);
+        setGlobalDefault({ provider: providerId, model: modelName, is_overridden: true });
+        toast.success("Modelo global por defecto actualizado");
+      }
+    } catch {
+      toast.error("Error al actualizar el modelo global por defecto");
+    } finally {
+      setGlobalDefaultSaving(false);
+    }
+  };
+
+  const defaultLabel = globalDefault
+    ? `${globalDefault.provider}/${globalDefault.model}`
+    : "DEFAULT_LLM_MODEL";
 
   return (
     <div className="flex flex-col gap-8 h-full">
@@ -489,22 +532,64 @@ export default function AIProvidersSection() {
           <div className="p-4 bg-zinc-900 border border-zinc-800 rounded-xl">
             <p className="text-xs text-zinc-500 mb-3">
               Fallback usado por todas las Tools cuando no se especifica un override.
+              {!globalDefault?.is_overridden && (
+                <span className="text-zinc-500 ml-1">
+                  (proviene de <code className="text-zinc-400 bg-zinc-800 px-1 rounded">DEFAULT_LLM_MODEL</code>)
+                </span>
+              )}
             </p>
-            <Select
-              value={globalDefault}
-              onValueChange={(v) => { if (v !== null) setGlobalDefault(v); }}
-            >
-              <SelectTrigger className="w-full bg-zinc-950 border-zinc-800 text-zinc-200 text-sm">
-                <SelectValue placeholder="Selecciona un modelo..." />
-              </SelectTrigger>
-              <SelectContent>
-                {globalOptions.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {!globalDefault && allModels.length === 0 ? (
+              <Loader2 className="w-4 h-4 animate-spin text-zinc-500" />
+            ) : (
+              <Select
+                value={
+                  globalDefault?.is_overridden
+                    ? `${globalDefault.provider}/${globalDefault.model}`
+                    : "__default__"
+                }
+                onValueChange={(v) => { if (v) handleGlobalDefaultChange(v); }}
+                disabled={globalDefaultSaving}
+              >
+                <SelectTrigger className="w-full bg-zinc-950 border-zinc-800 text-zinc-200 text-sm">
+                  {globalDefaultSaving ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-zinc-400" />
+                  ) : globalDefault?.is_overridden ? (
+                    <span className="truncate">
+                      <span className="text-blue-400">{globalDefault.provider}</span>
+                      <span className="text-zinc-500 mx-1">/</span>
+                      <span className="text-zinc-300">{globalDefault.model}</span>
+                    </span>
+                  ) : (
+                    <span className="text-zinc-400 truncate">{defaultLabel}</span>
+                  )}
+                </SelectTrigger>
+                <SelectContent className="bg-zinc-900 border-zinc-800 text-zinc-200 max-h-[320px]">
+                  {globalDefault?.is_overridden && (
+                    <SelectItem value="__default__" className="cursor-pointer py-2 text-zinc-400">
+                      Restablecer a {defaultLabel}
+                    </SelectItem>
+                  )}
+                  {[...new Set(allModels.map((m) => m.provider))].map((provider) => (
+                    <div key={provider}>
+                      <div className="px-2 py-1 text-xs text-zinc-500 font-semibold uppercase bg-zinc-950">
+                        {provider}
+                      </div>
+                      {allModels
+                        .filter((m) => m.provider === provider)
+                        .map((m) => (
+                          <SelectItem
+                            key={m.id}
+                            value={m.id}
+                            className="cursor-pointer py-1.5 pl-6"
+                          >
+                            {m.name}
+                          </SelectItem>
+                        ))}
+                    </div>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
         </section>
 

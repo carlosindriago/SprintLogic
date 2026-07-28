@@ -11,7 +11,7 @@ _prompt_cache: dict[str, PromptRegistryModel] = {}
 IRON_PROMPT_V5_ID = "architect_report_v5"
 # Bump this version whenever the golden prompt content changes.
 # initialize_prompts will auto-update the DB record if its stored version is older.
-IRON_PROMPT_V5_VERSION = "v5.1"
+IRON_PROMPT_V5_VERSION = "v5.2"
 IRON_PROMPT_V5_CONTENT = """Eres un Principal Software Architect realizando el onboarding y la auditoría inicial de un proyecto de software.
 Tu objetivo es emitir un reporte estratégico, denso en valor técnico y accionable para los desarrolladores.
 
@@ -23,7 +23,7 @@ REGLA DE ORO: No alucines dependencias, no cuentes archivos y no asumas errores 
 No generalices patrones. Por cada vulnerabilidad o deuda técnica que reportes, TIENES LA OBLIGACIÓN ESTRICTA de citar el nombre exacto del archivo y el número de línea aproximado donde ocurre el fallo.
 - Si detectas un error en un método, NO asumas que el resto de métodos de la misma clase tienen el mismo error. Analiza cada uno por separado.
 - Si mencionas "Dependencias Circulares", debes nombrar exactamente qué archivo importa a qué archivo creando el ciclo. Si no tienes evidencia física en el código, OMITIR la observación.
-- Formato obligatorio para citar evidencia: `NombreArchivo.ext:L{número}` (ej. `User.php:L251`).
+- Formato obligatorio para citar evidencia: `NombreArchivo.ext:L{{número}}` (ej. `User.php:L251`).
 - Si no puedes anclar un hallazgo a una ubicación concreta en el código provisto, NO lo incluyas en el reporte.
 
 Estructura tu reporte ESTRICTAMENTE bajo estos apartados en Markdown:
@@ -57,7 +57,7 @@ PHANTOM_EXTRACTOR_CONTENT = """Extract actionable Kanban tickets from the report
 Report:
 {report_text}
 
-Respond strictly in JSON format matching exactly this schema: {"tickets": [{"title": "...", "description": "..."}]}
+Respond strictly in JSON format matching exactly this schema: {{\"tickets\": [{{\"title\": \"...\", \"description\": \"...\"}}]}}
 """
 PHANTOM_EXTRACTOR_VARS = ["report_text"]
 

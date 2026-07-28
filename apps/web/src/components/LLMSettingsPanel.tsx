@@ -22,11 +22,15 @@ import {
   getCuratedModels,
   CuratedProvider,
   fetchHealthOverview,
+  fetchToolModels,
+  updateToolModel,
+  deleteToolModel,
+  ToolModelEntry,
 } from "@/lib/api";
 import { useLLMConfigStore } from "@/store/llmConfigStore";
 import { useFimStore } from "@/store/fimStore";
 import { Switch } from "@/components/ui/switch";
-import { Key, Loader2, CheckCircle2, XCircle, Trash2, Brain, Sparkles, Play, Wand2 } from "lucide-react";
+import { Key, Loader2, CheckCircle2, XCircle, Trash2, Brain, Sparkles, Play, Wand2, Wrench } from "lucide-react";
 
 const KEY_MIN_LENGTH = 8;
 
@@ -748,6 +752,196 @@ function AnalysisConfigSection({ providers }: { providers: CuratedProvider[] }) 
   );
 }
 
+function ToolModelsSection({ providers }: { providers: CuratedProvider[] }) {
+  const [toolModels, setToolModels] = useState<ToolModelEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState<string | null>(null);
+
+  const allModels = useMemo(
+    () =>
+      providers.flatMap((p) =>
+        p.models.map((m) => ({
+          ...m,
+          provider: p.provider,
+          provider_id: p.provider_id,
+        }))
+      ),
+    [providers]
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    const doLoad = async () => {
+      setLoading(true);
+      try {
+        const data = await fetchToolModels();
+        if (cancelled) return;
+        setToolModels(data.tools ?? []);
+      } catch {
+        toast.error("Failed to load tool model mappings");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    doLoad();
+    return () => { cancelled = true; };
+  }, []);
+
+  const handleOverride = async (toolName: string, providerId: string, modelId: string) => {
+    setSaving(toolName);
+    try {
+      await updateToolModel(toolName, providerId, modelId);
+      setToolModels((prev) =>
+        prev.map((t) =>
+          t.tool_name === toolName
+            ? {
+                ...t,
+                provider_id: providerId,
+                model_name: modelId,
+                is_overridden: true,
+                effective_provider: providerId,
+                effective_model: modelId,
+              }
+            : t
+        )
+      );
+      toast.success(`${toolName}: model updated`);
+    } catch {
+      toast.error(`Failed to update model for ${toolName}`);
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  const handleReset = async (toolName: string) => {
+    setSaving(toolName);
+    try {
+      await deleteToolModel(toolName);
+      setToolModels((prev) =>
+        prev.map((t) =>
+          t.tool_name === toolName
+            ? {
+                ...t,
+                provider_id: null,
+                model_name: null,
+                is_overridden: false,
+                effective_provider: t.default_provider,
+                effective_model: t.default_model,
+              }
+            : t
+        )
+      );
+      toast.success(`${toolName}: reset to default`);
+    } catch {
+      toast.error(`Failed to reset model for ${toolName}`);
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="p-6">
+        <div className="h-4 w-48 bg-zinc-800 animate-pulse rounded mb-4" />
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="h-12 bg-zinc-800 animate-pulse rounded mb-3" />
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-6 p-6 max-w-4xl">
+      <div>
+        <h3 className="text-sm font-semibold text-zinc-200">Modelos por Herramienta</h3>
+        <p className="text-xs text-zinc-500 mt-1">
+          Configura que modelo de IA usa cada herramienta. Por defecto, todas usan el modelo
+          global (<span className="font-mono text-blue-400">{toolModels[0]?.default_provider}/{toolModels[0]?.default_model}</span>).
+        </p>
+      </div>
+
+      {toolModels.map((tool) => {
+        const currentValue = tool.is_overridden
+          ? `${tool.provider_id}/${tool.model_name}`
+          : "__default__";
+        const isBusy = saving === tool.tool_name;
+
+        return (
+          <div
+            key={tool.tool_name}
+            className="flex flex-col gap-2 p-4 rounded-lg border border-zinc-800/50 bg-zinc-900/30"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex flex-col gap-0.5">
+                <span className="text-sm font-medium text-zinc-200">{tool.display_name}</span>
+                <span className="text-xs text-zinc-500">{tool.description}</span>
+              </div>
+              {tool.is_overridden && (
+                <Badge variant="outline" className="text-[10px] border-blue-500/30 text-blue-400 bg-blue-500/10">
+                  personalizado
+                </Badge>
+              )}
+            </div>
+
+            <div className="flex items-center gap-3 mt-1">
+              <Select
+                value={currentValue}
+                onValueChange={(val) => {
+                  if (!val) return;
+                  if (val === "__default__") {
+                    handleReset(tool.tool_name);
+                  } else {
+                    const [providerId, ...modelParts] = val.split("/");
+                    handleOverride(tool.tool_name, providerId, modelParts.join("/"));
+                  }
+                }}
+                disabled={isBusy}
+              >
+                <SelectTrigger className="bg-zinc-950 border-zinc-800 text-zinc-200 h-9 text-sm flex-1">
+                  <SelectValue>
+                    {isBusy ? (
+                      "Guardando..."
+                    ) : tool.is_overridden ? (
+                      <span>
+                        <span className="text-blue-400">{tool.effective_provider}</span>
+                        <span className="text-zinc-500 mx-1">/</span>
+                        <span className="text-zinc-300">{tool.effective_model}</span>
+                      </span>
+                    ) : (
+                      <span>
+                        <span className="text-zinc-500">Default — </span>
+                        <span className="text-zinc-400">{tool.effective_provider}/{tool.effective_model}</span>
+                      </span>
+                    )}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent className="bg-zinc-900 border-zinc-800 text-zinc-200 max-h-[300px]">
+                  <SelectItem value="__default__" className="focus:bg-zinc-800 focus:text-zinc-100 cursor-pointer py-2 text-zinc-400">
+                    Usar modelo por defecto ({tool.default_provider}/{tool.default_model})
+                  </SelectItem>
+                  {allModels.map((m) => {
+                    const val = `${m.provider_id}/${m.id}`;
+                    return (
+                      <SelectItem
+                        key={val}
+                        value={val}
+                        className="focus:bg-zinc-800 focus:text-zinc-100 cursor-pointer py-2"
+                      >
+                        {m.name}{" "}
+                        <span className="text-zinc-500 text-xs ml-1">({m.provider})</span>
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function LLMSettingsPanel() {
   const defaultModel = useLLMConfigStore((s) => s.defaultModel);
   const setDefaultModel = useLLMConfigStore((s) => s.setDefaultModel);
@@ -903,6 +1097,17 @@ export default function LLMSettingsPanel() {
           <Sparkles className="w-4 h-4 shrink-0" />
           Análisis Arquitectura
         </button>
+        <button
+          onClick={() => setActiveSection('tool-models')}
+          className={`text-left px-4 py-2 text-sm transition-colors flex items-center gap-2 ${
+            activeSection === 'tool-models'
+              ? "bg-blue-500/10 text-blue-300 border-l-2 border-blue-500 font-medium"
+              : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200 border-l-2 border-transparent"
+          }`}
+        >
+          <Wrench className="w-4 h-4 shrink-0" />
+          Modelos x Herramienta
+        </button>
 
         <div className="px-4 pt-6 pb-2 mt-2 border-t border-zinc-800/50">
           <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
@@ -934,6 +1139,8 @@ export default function LLMSettingsPanel() {
           <FimConfigSection key="fim-config" providers={providers} />
         ) : activeSection === 'analysis-config' ? (
           <AnalysisConfigSection key="analysis-config" providers={providers} />
+        ) : activeSection === 'tool-models' ? (
+          <ToolModelsSection key="tool-models" providers={providers} />
         ) : activeSection === 'context7' ? (
           <Context7Section
             apiKey={context7ApiKey}
