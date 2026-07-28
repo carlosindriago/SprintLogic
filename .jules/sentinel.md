@@ -5,3 +5,5 @@
 - When semantic pull request CI checks fail due to an unknown release type (e.g., 'sec:'), ensure the PR title uses a valid Conventional Commits prefix like 'fix:', 'feat:', or 'refactor:'.
 - Run `ruff check . --fix` to resolve formatting errors that may break CI checks before submitting changes in the backend application.
 Ensure that internal server details, including exception strings (str(e)), are never directly leaked in HTTP or WebSocket error responses. Always use logging (e.g., logging.error(..., exc_info=True)) to capture full details internally, and return generic, safe messages (e.g., 'Error interno') to clients to prevent potential exposure of system internals or stack traces.
+- Sentinel replaced  exception leakage with generic security errors in the  kanban endpoint to prevent local server paths being leaked.
+- Sentinel replaced str(e) exception leakage with generic security errors in the apply_ticket_patch kanban endpoint to prevent local server paths being leaked.
