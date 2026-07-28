@@ -184,4 +184,5 @@ async def apply_ticket_patch(
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Failed to apply patch: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred")

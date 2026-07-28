@@ -628,4 +628,5 @@ async def auto_fix(
         new_content = response.choices[0].message.content
         return {"original": file_content, "modified": new_content}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logging.error("Chat edit failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred")
