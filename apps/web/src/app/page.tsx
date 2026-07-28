@@ -425,7 +425,7 @@ export default function Home() {
     });
   };
 
-  const launchTool = (tabId: string, title: string, type: 'insights' | 'kanban' | 'graph' | 'git-graph' | 'audit' | 'ai-history') => {
+  const launchTool = (tabId: string, title: string, type: TabType) => {
     addTab({ id: tabId, title, type });
   };
 
@@ -521,7 +521,7 @@ export default function Home() {
               </div>
 
               {/* Activity Bar — global tool launchers */}
-              <div className="flex items-center gap-1 px-1 py-1.5 bg-zinc-800/50 rounded-lg">
+              <div className="flex flex-wrap items-center gap-1 p-1 bg-zinc-800/50 rounded-lg">
                 <Button
                   variant="ghost"
                   size="icon"
@@ -586,7 +586,7 @@ export default function Home() {
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-700"
-                  onClick={() => addTab({ id: 'planning-studio', title: 'Planning Studio', type: 'planning-studio' })}
+                  onClick={() => launchTool('planning-studio', 'Planning Studio', 'planning-studio')}
                   title="Planning Studio"
                   aria-label="Planning Studio"
                 >
@@ -596,7 +596,7 @@ export default function Home() {
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-700"
-                  onClick={() => addTab({ id: 'database-studio', title: 'Database Studio', type: 'database-studio' })}
+                  onClick={() => launchTool('database-studio', 'Database Studio', 'database-studio')}
                   title="Database Studio"
                   aria-label="Database Studio"
                 >
