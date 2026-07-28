@@ -112,6 +112,8 @@ interface GraphSceneProps {
   onNodeClick?: (node: GraphNode) => void;
 }
 
+const extCache = new WeakMap<object, string>();
+
 export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) {
   const [graphData, setGraphData] = useState<GraphData>({ nodes: [], links: [] });
   const containerRef = useRef<HTMLDivElement>(null);
@@ -209,7 +211,8 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     for (const n of graphData.nodes) {
       const node = n as ForceNode;
       if (node.label !== "File") continue;
-      const ext = node.name?.split(".").pop()?.toLowerCase() || "";
+      let ext = extCache.get(node);
+      if (ext === undefined) { ext = node.name?.split(".").pop()?.toLowerCase() || ""; extCache.set(node, ext); }
       if (ext && !extMap.has(ext)) {
         extMap.set(ext, extColorHash(ext));
       }
@@ -274,7 +277,8 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
       if (n.label === 'File') {
         files++;
         loc += n.loc || 0;
-        const ext = n.name.split('.').pop()?.toLowerCase() || 'unknown';
+        let ext = extCache.get(n);
+        if (ext === undefined) { ext = n.name.split(".").pop()?.toLowerCase() || "unknown"; extCache.set(n, ext); }
         extMap[ext] = (extMap[ext] || 0) + 1;
       } else if (n.label === 'Class') {
         classes++;
@@ -756,7 +760,8 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     let glowColor = "rgba(148, 163, 184, 0.4)";
 
     if (label === "File") {
-      const ext = name.split(".").pop()?.toLowerCase() || "";
+      let ext = extCache.get(n);
+      if (ext === undefined) { ext = name.split(".").pop()?.toLowerCase() || ""; extCache.set(n, ext); }
       color = extColorHash(ext);
       glowColor = bloomGlow(color, 0.45);
       radius = Math.max(3.5, degreeRadius * 0.9);
@@ -830,7 +835,8 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     // ── File icons (devicon — drawn over bloom) ──────────────────────────────
     let isIconDrawn = false;
     if (label === "File") {
-      const ext = name.split(".").pop()?.toLowerCase() || "";
+      let ext = extCache.get(n);
+      if (ext === undefined) { ext = name.split(".").pop()?.toLowerCase() || ""; extCache.set(n, ext); }
       const img = iconImages.current[ext];
       if (img && img.complete && img.naturalWidth !== 0) {
         ctx.save();
