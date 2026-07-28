@@ -60,8 +60,8 @@ export default function ChatHistoryDrawer({
     <div className="absolute inset-0 bg-zinc-950 z-50 flex flex-col border-l border-zinc-800 shadow-xl overflow-hidden transition-all duration-300">
       <div className="flex items-center justify-between p-4 border-b border-zinc-800 bg-zinc-900/50">
         <h3 className="font-semibold text-zinc-100">Historial de Chats</h3>
-        <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8 text-zinc-400 hover:text-white">
-          <X size={18} />
+        <Button variant="ghost" size="icon" onClick={onClose} aria-label="Cerrar historial" className="h-8 w-8 text-zinc-400 hover:text-white">
+          <X size={18} aria-hidden="true" />
         </Button>
       </div>
       
@@ -92,9 +92,10 @@ export default function ChatHistoryDrawer({
                   variant="ghost"
                   size="icon"
                   onClick={(e) => handleDelete(e, conv.id)}
+                  aria-label="Eliminar chat"
                   className="opacity-0 group-hover:opacity-100 h-6 w-6 text-zinc-500 hover:text-red-400 hover:bg-zinc-800"
                 >
-                  <Trash2 size={14} />
+                  <Trash2 size={14} aria-hidden="true" />
                 </Button>
               </div>
             ))}
