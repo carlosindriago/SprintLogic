@@ -154,6 +154,9 @@ class AnalysisReportModel(Base):
     project_id: Mapped[UUID] = mapped_column(
         ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    type: Mapped[str] = mapped_column(
+        String(50), nullable=False, server_default="code_analysis", default="code_analysis"
+    )
     content: Mapped[str] = mapped_column(String, nullable=False)
     ai_model_version: Mapped[str] = mapped_column(String(50), nullable=False)
     structural_metrics: Mapped[dict | None] = mapped_column(JSON, nullable=True)

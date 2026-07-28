@@ -609,6 +609,7 @@ async def analyze_project_graph(
                         new_report = AnalysisReportModel(
                             id=uuid.uuid4(),
                             project_id=project_uuid,
+                            type="code_analysis",
                             content=final_content,
                             ai_model_version=resolved_model_id,
                             structural_metrics=metrics

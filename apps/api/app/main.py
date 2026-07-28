@@ -61,11 +61,18 @@ async def lifespan(app: FastAPI):
         threading.Thread(target=kill_zombie_on_parent_death, daemon=True).start()
 
     # Startup
+    from sqlalchemy import text
+
     from app.infrastructure.db.database import get_sessionmaker
     from app.infrastructure.repositories.prompt_repository import initialize_prompts
 
     sessionmaker = get_sessionmaker()
     async with sessionmaker() as session:
+        try:
+            await session.execute(text("ALTER TABLE analysis_reports ADD COLUMN type VARCHAR(50) DEFAULT 'code_analysis'"))
+            await session.commit()
+        except Exception:
+            pass
         await initialize_prompts(session)
 
 

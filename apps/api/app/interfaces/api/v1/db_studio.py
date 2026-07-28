@@ -37,6 +37,30 @@ class DBAuditResponse(BaseModel):
     recommendations: list[str] = Field(default_factory=list)
 
 
+def format_db_audit_markdown(audit: DBAuditResponse) -> str:
+    lines = [
+        "# 🗄️ Auditoría de Arquitectura de Base de Datos",
+        f"**Score de Salud**: `{audit.score}/100`\n",
+        f"## Resumen Ejecutivo\n{audit.summary}\n",
+    ]
+    if audit.alerts:
+        lines.append(f"## Alertas y Riesgos ({len(audit.alerts)})\n")
+        for alert in audit.alerts:
+            lines.append(f"### {alert.title}")
+            lines.append(f"- **Tabla**: `{alert.table}`")
+            lines.append(f"- **Severidad**: `{alert.severity.upper()}`\n")
+            lines.append(f"{alert.description}\n")
+            if alert.migration_suggestion:
+                lines.append("```sql")
+                lines.append(alert.migration_suggestion)
+                lines.append("```\n")
+    if audit.recommendations:
+        lines.append("## Recomendaciones\n")
+        for rec in audit.recommendations:
+            lines.append(f"- {rec}")
+    return "\n".join(lines)
+
+
 @router.get("/projects/{project_id}/database/schema", response_model=SchemaIR)
 async def get_project_database_schema(
     project_id: str, session: AsyncSession = Depends(get_db_session)
@@ -92,8 +116,9 @@ async def audit_project_database_schema(
     schema_json_str = schema.model_dump_json(indent=2)
     formatted_prompt = prompt_template.replace("{schema_json}", schema_json_str)
 
+    resolved_label = "default"
     try:
-        provider, model_id = await resolve_tool_model(session, "db_architect_auditor")
+        provider, model_id = await resolve_tool_model(session, "database_studio")
         resolved_label = tool_model_label(provider, model_id)
         gateway = LiteLLMGateway(model_name=resolved_label)
     except Exception as e:
@@ -115,10 +140,10 @@ async def audit_project_database_schema(
 
     try:
         parsed_dict = json.loads(cleaned)
-        return DBAuditResponse.model_validate(parsed_dict)
+        audit_res = DBAuditResponse.model_validate(parsed_dict)
     except Exception as parse_err:
         logger.warning("Failed to parse LLM JSON response for DB audit: %s", parse_err)
-        return DBAuditResponse(
+        audit_res = DBAuditResponse(
             summary=cleaned[:300] if cleaned else "Audit completed.",
             score=70,
             alerts=[
@@ -131,3 +156,25 @@ async def audit_project_database_schema(
             ],
             recommendations=[],
         )
+
+    # Persist report in AnalysisReportModel with type="db_audit"
+    try:
+        import uuid
+
+        from app.infrastructure.db.models import AnalysisReportModel
+
+        report_md = format_db_audit_markdown(audit_res)
+        new_report = AnalysisReportModel(
+            id=uuid.uuid4(),
+            project_id=project_uuid,
+            type="db_audit",
+            content=report_md,
+            ai_model_version=resolved_label,
+            structural_metrics={"score": audit_res.score, "alerts_count": len(audit_res.alerts)}
+        )
+        session.add(new_report)
+        await session.commit()
+    except Exception as persist_err:
+        logger.error("Failed to persist DB audit report: %s", persist_err, exc_info=True)
+
+    return audit_res
