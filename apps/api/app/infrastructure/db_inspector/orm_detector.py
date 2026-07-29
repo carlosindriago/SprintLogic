@@ -57,17 +57,6 @@ def detect_framework(project_path: str) -> str | None:
         except Exception as e:
             logger.warning("Error reading %s: %s", req_file, e)
 
-    # 4. Flutter/Dart: check pubspec.yaml
-    for pubspec_file in root.rglob("pubspec.yaml"):
-        if any(part in EXCLUDE_DIRS for part in pubspec_file.parts):
-            continue
-        try:
-            text = pubspec_file.read_text(encoding="utf-8", errors="ignore")
-            if "flutter:" in text or any(dep in text for dep in ["sqflite:", "drift:", "floor:", "isar:", "realm:"]):
-                logger.info("Framework detected via pubspec.yaml: flutter")
-                return "flutter"
-        except Exception as e:
-            logger.warning("Error reading %s: %s", pubspec_file, e)
 
     # =========================================================================
     # STEP B: Direct Root Signatures
@@ -75,6 +64,10 @@ def detect_framework(project_path: str) -> str | None:
     if (root / "artisan").exists() or (root / "database" / "migrations").is_dir():
         logger.info("Framework detected via root signature: laravel")
         return "laravel"
+
+    if (root / "pubspec.yaml").exists() and (root / "lib").is_dir():
+        logger.info("Framework detected via root signature: flutter")
+        return "flutter"
 
     if (root / "prisma" / "schema.prisma").exists():
         logger.info("Framework detected via root signature: prisma")
