@@ -9,6 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.domain.models.schema_ir import SchemaIR
 from app.infrastructure.db.database import get_db_session
 from app.infrastructure.db.project_repository import SQLAlchemyProjectRepository
+from app.infrastructure.db_inspector.env_finder import discover_db_url_from_project
+from app.infrastructure.db_inspector.live_extractor import extract_schema_from_live_db
+from app.infrastructure.db_inspector.orm_detector import detect_framework
+from app.infrastructure.db_inspector.orm_extractor import extract_schema_from_orm
 from app.infrastructure.db_inspector.sql_extractor import scan_project_schema
 from app.infrastructure.llm.litellm_gateway import LiteLLMGateway
 from app.infrastructure.repositories import prompt_repository
@@ -20,6 +24,82 @@ from app.infrastructure.repositories.tool_model_repository import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+async def resolve_schema(
+    project_path: str,
+    mode: str = "auto",
+    db_url: str | None = None,
+    session: AsyncSession | None = None,
+) -> SchemaIR:
+    """
+    Resolves database schema using a 3-Tier Survival Chain:
+    Level 1 (Live DB): SQLAlchemy inspector + .env auto-discovery
+    Level 2 (ORM Parser): LLM-based parsing of framework ORM/migration source code
+    Level 3 (Static SQL): DDL parser of .sql files
+    """
+    detected_fw = detect_framework(project_path)
+    logger.info(
+        "[DB Studio] Initiating schema resolution. Path=%s | Mode=%s | Detected Framework=%s",
+        project_path,
+        mode,
+        detected_fw,
+    )
+
+    # 1. Level 1: Live DB Connection
+    if mode in ("auto", "live"):
+        target_url = db_url or discover_db_url_from_project(project_path)
+        if target_url:
+            try:
+                live_schema = extract_schema_from_live_db(target_url)
+                if live_schema.tables:
+                    live_schema.extraction_level = "live"
+                    live_schema.detected_framework = detected_fw
+                    logger.info(
+                        "[DB Studio] Schema successfully resolved via Level 1 (Live DB). Found %d tables.",
+                        len(live_schema.tables),
+                    )
+                    return live_schema
+            except Exception as e:
+                logger.info("Live DB extraction failed: %s", e)
+                if mode == "live":
+                    raise HTTPException(
+                        status_code=400, detail=f"Could not connect to live DB: {e}"
+                    )
+
+    # 2. Level 2: ORM Parser (LLM)
+    if mode in ("auto", "orm"):
+        if detected_fw and session:
+            try:
+                orm_schema = await extract_schema_from_orm(project_path, detected_fw, session)
+                if orm_schema.tables:
+                    orm_schema.extraction_level = "orm"
+                    orm_schema.detected_framework = detected_fw
+                    logger.info(
+                        "[DB Studio] Schema successfully resolved via Level 2 (ORM Parser LLM - %s). Found %d tables.",
+                        detected_fw,
+                        len(orm_schema.tables),
+                    )
+                    return orm_schema
+            except Exception as e:
+                logger.warning("All LLM fallbacks failed, falling back to Static SQL: %s", e)
+                if mode == "orm":
+                    return SchemaIR(
+                        tables=[],
+                        orm_type=detected_fw,
+                        extraction_level="orm",
+                        detected_framework=detected_fw,
+                    )
+
+    # 3. Level 3: Static SQL Scan
+    static_schema = scan_project_schema(project_path)
+    static_schema.extraction_level = "static"
+    static_schema.detected_framework = detected_fw
+    logger.info(
+        "[DB Studio] Schema resolved via Level 3 (Static SQL Scan). Found %d tables.",
+        len(static_schema.tables),
+    )
+    return static_schema
 
 
 class DBAuditAlert(BaseModel):
@@ -63,7 +143,10 @@ def format_db_audit_markdown(audit: DBAuditResponse) -> str:
 
 @router.get("/projects/{project_id}/database/schema", response_model=SchemaIR)
 async def get_project_database_schema(
-    project_id: str, session: AsyncSession = Depends(get_db_session)
+    project_id: str,
+    mode: str = "auto",
+    db_url: str | None = None,
+    session: AsyncSession = Depends(get_db_session),
 ) -> SchemaIR:
     try:
         project_uuid = UUID(project_id)
@@ -75,14 +158,15 @@ async def get_project_database_schema(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    schema = scan_project_schema(project.path)
-    return schema
+    return await resolve_schema(project.path, mode=mode, db_url=db_url, session=session)
 
 
 @router.post("/projects/{project_id}/database/audit", response_model=DBAuditResponse)
 async def audit_project_database_schema(
     project_id: str,
     payload: SchemaIR | None = None,
+    mode: str = "auto",
+    db_url: str | None = None,
     session: AsyncSession = Depends(get_db_session),
 ) -> DBAuditResponse:
     try:
@@ -95,13 +179,17 @@ async def audit_project_database_schema(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    schema = payload if (payload and payload.tables) else scan_project_schema(project.path)
+    schema = (
+        payload
+        if (payload and payload.tables)
+        else await resolve_schema(project.path, mode=mode, db_url=db_url, session=session)
+    )
     if not schema.tables:
         return DBAuditResponse(
-            summary="No SQL tables were found in the scanned project repository.",
+            summary="No tables were found in the project repository or connected database.",
             score=100,
             alerts=[],
-            recommendations=["Add .sql schema or migration files to enable database architecture auditing."],
+            recommendations=["Connect to an active database or add .sql schema files to enable database architecture auditing."],
         )
 
     prompt_model = await prompt_repository.get_prompt_async(
@@ -118,7 +206,7 @@ async def audit_project_database_schema(
 
     resolved_label = "default"
     try:
-        provider, model_id = await resolve_tool_model(session, "database_studio")
+        provider, model_id, _ = await resolve_tool_model(session, "database_studio")
         resolved_label = tool_model_label(provider, model_id)
         gateway = LiteLLMGateway(model_name=resolved_label)
     except Exception as e:

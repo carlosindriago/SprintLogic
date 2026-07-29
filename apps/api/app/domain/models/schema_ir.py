@@ -19,3 +19,5 @@ class TableIR(BaseModel):
 class SchemaIR(BaseModel):
     tables: list[TableIR] = Field(default_factory=list)
     orm_type: str = "raw_sql"
+    extraction_level: str = "static"
+    detected_framework: str | None = None
