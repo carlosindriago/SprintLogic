@@ -21,3 +21,4 @@ class SchemaIR(BaseModel):
     orm_type: str = "raw_sql"
     extraction_level: str = "static"
     detected_framework: str | None = None
+    is_outdated: bool = False

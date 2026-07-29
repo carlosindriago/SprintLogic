@@ -78,6 +78,13 @@ async def lifespan(app: FastAPI):
             await session.commit()
         except Exception:
             pass
+        try:
+            await session.execute(text("ALTER TABLE projects ADD COLUMN cached_schema JSON"))
+            await session.execute(text("ALTER TABLE projects ADD COLUMN schema_hash VARCHAR(255)"))
+            await session.execute(text("ALTER TABLE projects ADD COLUMN schema_updated_at DATETIME"))
+            await session.commit()
+        except Exception:
+            pass
         await initialize_prompts(session)
 
 

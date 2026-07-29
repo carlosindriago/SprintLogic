@@ -158,8 +158,138 @@ async def get_project_database_schema(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    return await resolve_schema(project.path, mode=mode, db_url=db_url, session=session)
+    from datetime import datetime
 
+    from app.infrastructure.db_inspector.schema_hasher import calculate_schema_hash
+
+    current_hash = calculate_schema_hash(project.path)
+
+    if project.cached_schema:
+        # Load from cache
+        try:
+            cached_ir = SchemaIR(**project.cached_schema)
+            cached_ir.is_outdated = (current_hash != project.schema_hash)
+            return cached_ir
+        except Exception as e:
+            logger.warning("Failed to parse cached schema, will recalculate: %s", e)
+
+    # Recalculate
+    schema = await resolve_schema(project.path, mode=mode, db_url=db_url, session=session)
+
+    # Save to DB
+    from dataclasses import replace
+    project = replace(
+        project,
+        cached_schema=schema.model_dump(),
+        schema_hash=current_hash,
+        schema_updated_at=datetime.utcnow()
+    )
+    await repo.save(project)
+
+    schema.is_outdated = False
+    return schema
+
+
+@router.post("/projects/{project_id}/database/schema/rescan", response_model=SchemaIR)
+async def rescan_project_database_schema(
+    project_id: str,
+    mode: str = "auto",
+    db_url: str | None = None,
+    session: AsyncSession = Depends(get_db_session),
+) -> SchemaIR:
+    try:
+        project_uuid = UUID(project_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+
+    repo = SQLAlchemyProjectRepository(session)
+    project = await repo.get_project(project_uuid)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    from datetime import datetime
+
+    from app.infrastructure.db_inspector.schema_hasher import calculate_schema_hash
+
+    current_hash = calculate_schema_hash(project.path)
+
+    schema = await resolve_schema(project.path, mode=mode, db_url=db_url, session=session)
+
+    from dataclasses import replace
+    project = replace(
+        project,
+        cached_schema=schema.model_dump(),
+        schema_hash=current_hash,
+        schema_updated_at=datetime.utcnow()
+    )
+    await repo.save(project)
+
+    schema.is_outdated = False
+    return schema
+
+
+@router.get("/projects/{project_id}/database/export/sql")
+async def export_project_database_schema_sql(
+    project_id: str,
+    session: AsyncSession = Depends(get_db_session),
+):
+    try:
+        project_uuid = UUID(project_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+
+    repo = SQLAlchemyProjectRepository(session)
+    project = await repo.get_project(project_uuid)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    if project.cached_schema:
+        schema = SchemaIR(**project.cached_schema)
+    else:
+        schema = await resolve_schema(project.path, session=session)
+
+    from fastapi.responses import PlainTextResponse
+
+    from app.infrastructure.db_inspector.schema_exporter import export_to_sql
+
+    sql_content = export_to_sql(schema)
+
+    return PlainTextResponse(
+        content=sql_content,
+        headers={"Content-Disposition": f'attachment; filename="{project.name}_schema.sql"'}
+    )
+
+
+@router.get("/projects/{project_id}/database/export/markdown")
+async def export_project_database_schema_markdown(
+    project_id: str,
+    session: AsyncSession = Depends(get_db_session),
+):
+    try:
+        project_uuid = UUID(project_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+
+    repo = SQLAlchemyProjectRepository(session)
+    project = await repo.get_project(project_uuid)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    if project.cached_schema:
+        schema = SchemaIR(**project.cached_schema)
+    else:
+        schema = await resolve_schema(project.path, session=session)
+
+    from fastapi.responses import PlainTextResponse
+
+    from app.infrastructure.db_inspector.schema_exporter import export_to_markdown
+
+    md_content = export_to_markdown(schema)
+
+    return PlainTextResponse(
+        content=md_content,
+        headers={"Content-Disposition": f'attachment; filename="{project.name}_schema.md"'}
+    )
 
 @router.post("/projects/{project_id}/database/audit", response_model=DBAuditResponse)
 async def audit_project_database_schema(

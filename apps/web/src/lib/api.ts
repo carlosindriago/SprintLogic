@@ -631,6 +631,7 @@ export interface SchemaIR {
   orm_type: string;
   extraction_level?: 'live' | 'orm' | 'static' | 'none';
   detected_framework?: string | null;
+  is_outdated?: boolean;
 }
 
 export interface DBAuditAlert {
@@ -652,6 +653,20 @@ export const fetchProjectSchema = (projectId: string, mode = 'auto', dbUrl?: str
   const query = new URLSearchParams({ mode });
   if (dbUrl) query.append('db_url', dbUrl);
   return api.get<SchemaIR>(`/projects/${projectId}/database/schema?${query.toString()}`);
+};
+
+export const rescanProjectSchema = (projectId: string, mode = 'auto', dbUrl?: string) => {
+  const query = new URLSearchParams({ mode });
+  if (dbUrl) query.append('db_url', dbUrl);
+  return api.post<SchemaIR>(`/projects/${projectId}/database/schema/rescan?${query.toString()}`);
+};
+
+export const exportProjectSchemaSQL = (projectId: string) => {
+  return `${API_BASE_URL}/projects/${projectId}/database/export/sql`;
+};
+
+export const exportProjectSchemaMarkdown = (projectId: string) => {
+  return `${API_BASE_URL}/projects/${projectId}/database/export/markdown`;
 };
 
 export const auditProjectSchema = (projectId: string, payload?: SchemaIR, mode = 'auto', dbUrl?: string) => {

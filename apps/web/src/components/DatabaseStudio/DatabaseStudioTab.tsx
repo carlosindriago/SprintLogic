@@ -15,6 +15,9 @@ import { useProjectStore } from '@/store/projectStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import {
   fetchProjectSchema,
+  rescanProjectSchema,
+  exportProjectSchemaSQL,
+  exportProjectSchemaMarkdown,
   auditProjectSchema,
   SchemaIR,
   DBAuditResponse,
@@ -25,6 +28,12 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
   Database,
   Brain,
@@ -38,6 +47,9 @@ import {
   Plug,
   FileCode2,
   ChevronDown,
+  Download,
+  FileText,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -145,8 +157,82 @@ export default function DatabaseStudioTab() {
         setLoading(false);
       }
     },
-    [projectId, extractionMode, customDbUrl, setNodes, setEdges]
+    [projectId, extractionMode, customDbUrl, setNodes, setEdges, configuredModels.default_model]
   );
+
+  const handleRescan = useCallback(async () => {
+    if (!projectId) return;
+    setLoading(true);
+    setHasError(false);
+    
+    const aiModel = configuredModels.default_model || 'IA';
+    setLoadingStatus('Iniciando re-escaneo forzado...');
+    
+    const timer1 = setTimeout(() => {
+      setLoadingStatus('Buscando base de datos viva (PostgreSQL, MySQL, SQLite, etc)...');
+    }, 1000);
+    const timer2 = setTimeout(() => {
+      setLoadingStatus(`🧠 El modelo ${aiModel} está leyendo y estructurando tus migraciones. Esto requiere procesamiento profundo y puede tomar hasta un minuto. Dale tiempo para pensar...`);
+    }, 3500);
+
+    try {
+      const data = await rescanProjectSchema(projectId, extractionMode, customDbUrl);
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      setSchema(data);
+
+      const newNodes: Node[] = [];
+      const newEdges: Edge[] = [];
+      const tableNames = new Set(data.tables.map((t) => t.name));
+
+      data.tables.forEach((table, idx) => {
+        const cols = 3;
+        const x = (idx % cols) * 360;
+        const y = Math.floor(idx / cols) * 340;
+
+        newNodes.push({
+          id: table.name,
+          type: 'tableNode',
+          position: { x, y },
+          data: {
+            label: table.name,
+            columns: table.columns,
+            indexes: table.indexes,
+          },
+        });
+
+        table.columns.forEach((col) => {
+          if (col.is_fk && col.target_table && tableNames.has(col.target_table)) {
+            const edgeId = `e-${table.name}-${col.name}-${col.target_table}`;
+            if (!newEdges.some((e) => e.id === edgeId)) {
+              newEdges.push({
+                id: edgeId,
+                source: table.name,
+                target: col.target_table,
+                animated: true,
+                style: { stroke: '#06b6d4', strokeWidth: 2 },
+              });
+            }
+          }
+        });
+      });
+
+      setNodes(newNodes);
+      setEdges(newEdges);
+      if (data.tables.length > 0) {
+        toast.success(`Esquema actualizado: ${data.tables.length} tablas (${data.orm_type})`);
+      }
+    } catch (err: any) {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      console.error('Failed to rescan database schema:', err);
+      setHasError(true);
+      setErrorMessage(err?.message || 'Error de conexión o timeout al re-escanear el esquema.');
+      toast.error(err?.message || 'Error al re-escanear el esquema de la base de datos');
+    } finally {
+      setLoading(false);
+    }
+  }, [projectId, extractionMode, customDbUrl, setNodes, setEdges, configuredModels.default_model]);
 
   useEffect(() => {
     loadSchema();
@@ -266,6 +352,32 @@ export default function DatabaseStudioTab() {
               <ChevronDown className="absolute right-2.5 h-3.5 w-3.5 text-zinc-400 pointer-events-none" />
             </div>
 
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                disabled={!schema?.tables.length}
+                className="inline-flex items-center justify-center whitespace-nowrap rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 h-8 gap-1.5 border border-zinc-700 bg-zinc-900 px-3 text-xs text-zinc-300 hover:bg-zinc-800"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Exportar
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48 bg-zinc-900 border-zinc-800 text-zinc-200">
+                <DropdownMenuItem 
+                  onClick={() => window.open(exportProjectSchemaSQL(projectId!), '_blank')}
+                  className="text-xs cursor-pointer focus:bg-zinc-800 focus:text-zinc-100"
+                >
+                  <Database className="mr-2 h-4 w-4 text-cyan-400" />
+                  Exportar DDL (.sql)
+                </DropdownMenuItem>
+                <DropdownMenuItem 
+                  onClick={() => window.open(exportProjectSchemaMarkdown(projectId!), '_blank')}
+                  className="text-xs cursor-pointer focus:bg-zinc-800 focus:text-zinc-100"
+                >
+                  <FileText className="mr-2 h-4 w-4 text-emerald-400" />
+                  Exportar Doc (.md)
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
             <Button
               variant="outline"
               size="sm"
@@ -383,23 +495,40 @@ export default function DatabaseStudioTab() {
               </div>
             </div>
           ) : (
-            <ReactFlow
-              nodes={nodes}
-              edges={edges}
-              onNodesChange={onNodesChange}
-              onEdgesChange={onEdgesChange}
-              nodeTypes={nodeTypes}
-              fitView
-              attributionPosition="bottom-left"
-            >
-              <Background color="#27272a" gap={20} size={1} />
-              <Controls className="!border-zinc-700 !bg-zinc-900 !text-zinc-300" />
-              <MiniMap
-                nodeColor="#06b6d4"
-                maskColor="rgba(0, 0, 0, 0.75)"
-                className="!border-zinc-700 !bg-zinc-950"
-              />
-            </ReactFlow>
+            <>
+              {!loading && !hasError && schema?.is_outdated && (
+                <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-3 rounded-lg bg-amber-500/10 border border-amber-500/20 px-4 py-2 text-sm text-amber-200 shadow-xl backdrop-blur-md">
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400" />
+                  <span>El esquema del proyecto ha cambiado. El diagrama actual puede estar desactualizado.</span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleRescan}
+                    className="h-7 gap-1.5 border-amber-500/30 bg-amber-500/10 text-xs text-amber-400 hover:bg-amber-500/20 hover:text-amber-300 ml-2"
+                  >
+                    <RefreshCw className="h-3 w-3" />
+                    Actualizar ahora
+                  </Button>
+                </div>
+              )}
+              <ReactFlow
+                nodes={nodes}
+                edges={edges}
+                onNodesChange={onNodesChange}
+                onEdgesChange={onEdgesChange}
+                nodeTypes={nodeTypes}
+                fitView
+                attributionPosition="bottom-left"
+              >
+                <Background color="#27272a" gap={20} size={1} />
+                <Controls className="!border-zinc-700 !bg-zinc-900 !text-zinc-300" />
+                <MiniMap
+                  nodeColor="#06b6d4"
+                  maskColor="rgba(0, 0, 0, 0.75)"
+                  className="!border-zinc-700 !bg-zinc-950"
+                />
+              </ReactFlow>
+            </>
           )}
         </div>
       </div>
@@ -411,11 +540,24 @@ export default function DatabaseStudioTab() {
             <Sparkles className="h-4 w-4 text-cyan-400" />
             <h2 className="font-semibold text-sm text-zinc-100">AI DB Architect Audit</h2>
           </div>
-          {auditResult && (
-            <Badge variant="outline" className={getScoreBadgeColor(auditResult.score)}>
-              Score {auditResult.score}/100
-            </Badge>
-          )}
+          <div className="flex items-center gap-2">
+            {auditResult && (
+              <>
+                <Badge variant="outline" className={getScoreBadgeColor(auditResult.score)}>
+                  Score {auditResult.score}/100
+                </Badge>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-6 w-6 text-zinc-400 hover:text-cyan-400"
+                  onClick={() => window.open(exportProjectSchemaMarkdown(projectId!), '_blank')}
+                  title="Descargar Reporte (.md)"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                </Button>
+              </>
+            )}
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar text-xs">
