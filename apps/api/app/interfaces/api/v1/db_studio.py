@@ -335,8 +335,9 @@ async def audit_project_database_schema(
     formatted_prompt = prompt_template.replace("{schema_json}", schema_json_str)
 
     resolved_label = "default"
+    fallbacks = None
     try:
-        provider, model_id, _ = await resolve_tool_model(session, "database_studio")
+        provider, model_id, fallbacks = await resolve_tool_model(session, "database_studio")
         resolved_label = tool_model_label(provider, model_id)
         gateway = LiteLLMGateway(model_name=resolved_label)
     except Exception as e:
@@ -344,7 +345,7 @@ async def audit_project_database_schema(
         gateway = LiteLLMGateway()
 
     try:
-        raw_response = await gateway.generate_completion(formatted_prompt)
+        raw_response = await gateway.generate_completion(formatted_prompt, fallbacks=fallbacks)
     except Exception as e:
         logger.error("LLM completion failed for database audit: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to run AI database audit")
