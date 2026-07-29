@@ -62,6 +62,17 @@ def collect_orm_source_code(project_path: str, framework: str) -> str:
             if not any(part in EXCLUDE_DIRS for part in p.parts):
                 files_to_read.append(p)
 
+    elif framework == "flutter":
+        for folder in ["lib/database", "lib/models", "lib/data"]:
+            target_dir = root.joinpath(*folder.split("/"))
+            if target_dir.exists():
+                for p in target_dir.rglob("*.dart"):
+                    if not any(part in EXCLUDE_DIRS for part in p.parts):
+                        files_to_read.append(p)
+        for p in root.rglob("*.drift"):
+            if not any(part in EXCLUDE_DIRS for part in p.parts):
+                files_to_read.append(p)
+
     for fpath in files_to_read:
         if total_chars >= MAX_SOURCE_CHARS:
             break

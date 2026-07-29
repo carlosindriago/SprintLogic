@@ -341,10 +341,12 @@ export default function DatabaseStudioTab() {
                     ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'
                     : schema.detected_framework === 'prisma'
                     ? 'border-indigo-500/40 bg-indigo-500/10 text-indigo-400'
+                    : schema.detected_framework === 'flutter'
+                    ? 'border-blue-500/30 bg-blue-500/10 text-blue-400'
                     : 'border-cyan-500/40 bg-cyan-500/10 text-cyan-400'
                 }`}
               >
-                {schema.detected_framework}
+                {schema.detected_framework === 'flutter' ? 'Flutter (Dart)' : schema.detected_framework}
               </Badge>
             )}
 

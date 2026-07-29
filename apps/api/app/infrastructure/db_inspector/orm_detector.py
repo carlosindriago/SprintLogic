@@ -57,6 +57,18 @@ def detect_framework(project_path: str) -> str | None:
         except Exception as e:
             logger.warning("Error reading %s: %s", req_file, e)
 
+    # 4. Flutter/Dart: check pubspec.yaml
+    for pubspec_file in root.rglob("pubspec.yaml"):
+        if any(part in EXCLUDE_DIRS for part in pubspec_file.parts):
+            continue
+        try:
+            text = pubspec_file.read_text(encoding="utf-8", errors="ignore")
+            if "flutter:" in text or any(dep in text for dep in ["sqflite:", "drift:", "floor:", "isar:", "realm:"]):
+                logger.info("Framework detected via pubspec.yaml: flutter")
+                return "flutter"
+        except Exception as e:
+            logger.warning("Error reading %s: %s", pubspec_file, e)
+
     # =========================================================================
     # STEP B: Direct Root Signatures
     # =========================================================================
