@@ -99,7 +99,7 @@ Solo devuelve el bloque JSDoc, sin bloques de código markdown, sin texto adicio
         async with get_sessionmaker()() as session:
             # BD source of truth: usamos el global default (no existe tool
             # específico para generación de JSDoc — cae a '__default__').
-            doc_provider, doc_model = await resolve_tool_model(session, "__default__")
+            doc_provider, doc_model, _ = await resolve_tool_model(session, "__default__")
             doc_model_id = tool_model_label(doc_provider, doc_model)
             agent = AIAgent(session=session)
             response = ""

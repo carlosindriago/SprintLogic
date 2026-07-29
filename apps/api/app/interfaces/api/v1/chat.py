@@ -122,7 +122,7 @@ async def _generate_conversation_title(conversation_id: int, first_message: str)
 
             # Request LLM for a better title — BD source of truth:
             # chat_title_gen tool override (or global default).
-            title_provider, title_model = await resolve_tool_model(session, "chat_title_gen")
+            title_provider, title_model, _ = await resolve_tool_model(session, "chat_title_gen")
             title_model_id = tool_model_label(title_provider, title_model)
 
             provider = title_provider
@@ -170,7 +170,7 @@ async def chat_with_ai(request: ChatRequest, background_tasks: BackgroundTasks, 
     # BD source of truth: resolve tool override (chat / chat_sensei) or global
     # default. The request.body no longer dictates the model — settings do.
     chat_tool_name = "chat_sensei" if request.is_sensei else "chat"
-    chat_provider, chat_model = await resolve_tool_model(session, chat_tool_name)
+    chat_provider, chat_model, _ = await resolve_tool_model(session, chat_tool_name)
     actual_model = tool_model_label(chat_provider, chat_model)
 
     # DB Persistence setup
@@ -361,7 +361,7 @@ async def mentor_sensei(
     session: AsyncSession = Depends(get_db_session),
 ):
     # BD source of truth: chat_sensei tool override (or global default).
-    sensei_provider, sensei_model = await resolve_tool_model(session, "chat_sensei")
+    sensei_provider, sensei_model, _ = await resolve_tool_model(session, "chat_sensei")
     actual_model = tool_model_label(sensei_provider, sensei_model)
 
     provider = sensei_provider
@@ -518,7 +518,7 @@ async def ticket_mentor(
         topology_str = f"Error computing blast radius: {e}"
 
     # BD source of truth: ticket_mentor tool override (or global default).
-    tm_provider, tm_model = await resolve_tool_model(session, "ticket_mentor")
+    tm_provider, tm_model, _ = await resolve_tool_model(session, "ticket_mentor")
     tm_model_id = tool_model_label(tm_provider, tm_model)
     provider = tm_provider
     api_key = CredentialManager.get_api_key(f"sprintlogic_{provider}") or CredentialManager.get_api_key(provider)
@@ -605,7 +605,7 @@ async def auto_fix(
             raise HTTPException(status_code=404, detail="Target file not found")
 
     # BD source of truth: auto_fix tool override (or global default).
-    af_provider, af_model = await resolve_tool_model(session, "auto_fix")
+    af_provider, af_model, _ = await resolve_tool_model(session, "auto_fix")
     af_model_id = tool_model_label(af_provider, af_model)
     provider = af_provider
     api_key = CredentialManager.get_api_key(f"sprintlogic_{provider}") or CredentialManager.get_api_key(provider)

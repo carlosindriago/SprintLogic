@@ -496,12 +496,48 @@ export default function AIProvidersSection() {
       } else {
         const [providerId, ...modelParts] = val.split("/");
         const modelName = modelParts.join("/");
-        await updateToolModel("__default__", providerId, modelName);
-        setGlobalDefault({ provider: providerId, model: modelName, is_overridden: true });
+        await updateToolModel("__default__", providerId, modelName, globalDefault?.fallback_models || null);
+        setGlobalDefault({ provider: providerId, model: modelName, fallback_models: globalDefault?.fallback_models || null, is_overridden: true });
         toast.success("Modelo global por defecto actualizado");
       }
     } catch {
       toast.error("Error al actualizar el modelo global por defecto");
+    } finally {
+      setGlobalDefaultSaving(false);
+    }
+  };
+
+  const handleFallbackChange = async (index: number, val: string) => {
+    if (!globalDefault) return;
+    setGlobalDefaultSaving(true);
+    try {
+      const currentFallbacks = [...(globalDefault.fallback_models || [])];
+      
+      if (val === "__none__") {
+        currentFallbacks.splice(index, 1);
+      } else {
+        currentFallbacks[index] = val;
+      }
+      
+      const newFallbacks = currentFallbacks.length > 0 ? currentFallbacks : null;
+      
+      if (globalDefault.is_overridden) {
+        await updateToolModel("__default__", globalDefault.provider, globalDefault.model, newFallbacks);
+      } else {
+        const [defaultProvider, ...defaultModelParts] = defaultLabel.split("/");
+        const defaultModel = defaultModelParts.join("/");
+        await updateToolModel("__default__", defaultProvider, defaultModel, newFallbacks);
+      }
+      
+      setGlobalDefault({ 
+        provider: globalDefault.is_overridden ? globalDefault.provider : defaultLabel.split("/")[0], 
+        model: globalDefault.is_overridden ? globalDefault.model : defaultLabel.split("/").slice(1).join("/"), 
+        fallback_models: newFallbacks, 
+        is_overridden: true 
+      });
+      toast.success("Fallbacks actualizados");
+    } catch {
+      toast.error("Error al actualizar fallbacks");
     } finally {
       setGlobalDefaultSaving(false);
     }
@@ -529,67 +565,116 @@ export default function AIProvidersSection() {
               Modelo Predeterminado Global
             </h3>
           </div>
-          <div className="p-4 bg-zinc-900 border border-zinc-800 rounded-xl">
-            <p className="text-xs text-zinc-500 mb-3">
-              Fallback usado por todas las Tools cuando no se especifica un override.
-              {!globalDefault?.is_overridden && (
-                <span className="text-zinc-500 ml-1">
-                  (proviene de <code className="text-zinc-400 bg-zinc-800 px-1 rounded">DEFAULT_LLM_MODEL</code>)
-                </span>
-              )}
-            </p>
-            {!globalDefault && allModels.length === 0 ? (
-              <Loader2 className="w-4 h-4 animate-spin text-zinc-500" />
-            ) : (
-              <Select
-                value={
-                  globalDefault?.is_overridden
-                    ? `${globalDefault.provider}/${globalDefault.model}`
-                    : "__default__"
-                }
-                onValueChange={(v) => { if (v) handleGlobalDefaultChange(v); }}
-                disabled={globalDefaultSaving}
-              >
-                <SelectTrigger className="w-full bg-zinc-950 border-zinc-800 text-zinc-200 text-sm">
-                  {globalDefaultSaving ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin text-zinc-400" />
-                  ) : globalDefault?.is_overridden ? (
-                    <span className="truncate">
-                      <span className="text-blue-400">{globalDefault.provider}</span>
-                      <span className="text-zinc-500 mx-1">/</span>
-                      <span className="text-zinc-300">{globalDefault.model}</span>
-                    </span>
-                  ) : (
-                    <span className="text-zinc-400 truncate">{defaultLabel}</span>
-                  )}
-                </SelectTrigger>
-                <SelectContent className="bg-zinc-900 border-zinc-800 text-zinc-200 max-h-[320px]">
-                  {globalDefault?.is_overridden && (
-                    <SelectItem value="__default__" className="cursor-pointer py-2 text-zinc-400">
-                      Restablecer a {defaultLabel}
-                    </SelectItem>
-                  )}
-                  {[...new Set(allModels.map((m) => m.provider))].map((provider) => (
-                    <div key={provider}>
-                      <div className="px-2 py-1 text-xs text-zinc-500 font-semibold uppercase bg-zinc-950">
-                        {provider}
+          <div className="p-4 bg-zinc-900 border border-zinc-800 rounded-xl space-y-4">
+            <div>
+              <p className="text-xs text-zinc-500 mb-3">
+                Fallback usado por todas las Tools cuando no se especifica un override.
+                {!globalDefault?.is_overridden && (
+                  <span className="text-zinc-500 ml-1">
+                    (proviene de <code className="text-zinc-400 bg-zinc-800 px-1 rounded">DEFAULT_LLM_MODEL</code>)
+                  </span>
+                )}
+              </p>
+              {!globalDefault && allModels.length === 0 ? (
+                <Loader2 className="w-4 h-4 animate-spin text-zinc-500" />
+              ) : (
+                <Select
+                  value={
+                    globalDefault?.is_overridden
+                      ? `${globalDefault.provider}/${globalDefault.model}`
+                      : "__default__"
+                  }
+                  onValueChange={(v) => { if (v) handleGlobalDefaultChange(v); }}
+                  disabled={globalDefaultSaving}
+                >
+                  <SelectTrigger className="w-full bg-zinc-950 border-zinc-800 text-zinc-200 text-sm">
+                    {globalDefaultSaving ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-zinc-400" />
+                    ) : globalDefault?.is_overridden ? (
+                      <span className="truncate">
+                        <span className="text-blue-400">{globalDefault.provider}</span>
+                        <span className="text-zinc-500 mx-1">/</span>
+                        <span className="text-zinc-300">{globalDefault.model}</span>
+                      </span>
+                    ) : (
+                      <span className="text-zinc-400 truncate">{defaultLabel}</span>
+                    )}
+                  </SelectTrigger>
+                  <SelectContent className="bg-zinc-900 border-zinc-800 text-zinc-200 max-h-[320px]">
+                    {globalDefault?.is_overridden && (
+                      <SelectItem value="__default__" className="cursor-pointer py-2 text-zinc-400">
+                        Restablecer a {defaultLabel}
+                      </SelectItem>
+                    )}
+                    {[...new Set(allModels.map((m) => m.provider))].map((provider) => (
+                      <div key={provider}>
+                        <div className="px-2 py-1 text-xs text-zinc-500 font-semibold uppercase bg-zinc-950">
+                          {provider}
+                        </div>
+                        {allModels
+                          .filter((m) => m.provider === provider)
+                          .map((m) => (
+                            <SelectItem
+                              key={m.id}
+                              value={m.id}
+                              className="cursor-pointer py-1.5 pl-6"
+                            >
+                              {m.name}
+                            </SelectItem>
+                          ))}
                       </div>
-                      {allModels
-                        .filter((m) => m.provider === provider)
-                        .map((m) => (
-                          <SelectItem
-                            key={m.id}
-                            value={m.id}
-                            className="cursor-pointer py-1.5 pl-6"
-                          >
-                            {m.name}
-                          </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+
+            <div className="pt-4 border-t border-zinc-800/60">
+              <h4 className="text-sm font-semibold text-zinc-300 mb-2">Cadena de Resiliencia (Fallbacks)</h4>
+              <p className="text-xs text-zinc-500 mb-4">
+                Si el modelo principal falla (timeout, rate limit), se intentará automáticamente con estos modelos de respaldo en orden.
+              </p>
+              
+              <div className="space-y-3">
+                {[0, 1, 2].map((index) => (
+                  <div key={index} className="flex items-center gap-3">
+                    <span className="text-xs font-mono text-zinc-500 w-16">Fallback {index + 1}</span>
+                    <Select
+                      value={globalDefault?.fallback_models?.[index] || "__none__"}
+                      onValueChange={(v) => { if (v) handleFallbackChange(index, v); }}
+                      disabled={globalDefaultSaving || (!globalDefault && allModels.length === 0) || (index > 0 && !globalDefault?.fallback_models?.[index - 1])}
+                    >
+                      <SelectTrigger className="w-full bg-zinc-950 border-zinc-800 text-zinc-300 text-xs h-8">
+                        <SelectValue placeholder="Ninguno" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-zinc-900 border-zinc-800 text-zinc-200 max-h-[320px]">
+                        <SelectItem value="__none__" className="cursor-pointer py-1.5 text-zinc-400 text-xs">
+                          Ninguno
+                        </SelectItem>
+                        {[...new Set(allModels.map((m) => m.provider))].map((provider) => (
+                          <div key={provider}>
+                            <div className="px-2 py-1 text-[10px] text-zinc-500 font-semibold uppercase bg-zinc-950">
+                              {provider}
+                            </div>
+                            {allModels
+                              .filter((m) => m.provider === provider)
+                              .map((m) => (
+                                <SelectItem
+                                  key={m.id}
+                                  value={m.id}
+                                  className="cursor-pointer py-1 pl-6 text-xs"
+                                >
+                                  {m.name}
+                                </SelectItem>
+                              ))}
+                          </div>
                         ))}
-                    </div>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </section>
 

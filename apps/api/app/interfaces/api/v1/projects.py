@@ -578,14 +578,14 @@ async def analyze_project_graph(
         # BD es la única fuente de verdad: el override del tool `graph_analysis`
         # (o el global default) se resuelve desde tool_model_mappings. El
         # request.body ya NO dicta el modelo — ver resolve_tool_model().
-        resolved_provider, resolved_model = await resolve_tool_model(session, "graph_analysis")
+        resolved_provider, resolved_model, _ = await resolve_tool_model(session, "graph_analysis")
         resolved_model_id = tool_model_label(resolved_provider, resolved_model)
         gateway = LiteLLMGateway(model_name=resolved_model_id)
 
         # Resolvemos también el modelo del Phantom Extractor ANTES de entrar al
         # event_generator, porque la session del request se cierra al devolver
         # el StreamingResponse y no estará disponible dentro del stream.
-        extractor_provider, extractor_model_id = await resolve_tool_model(session, "phantom_extractor")
+        extractor_provider, extractor_model_id, _ = await resolve_tool_model(session, "phantom_extractor")
         extractor_model = tool_model_label(extractor_provider, extractor_model_id)
 
         async def event_generator():
@@ -2009,7 +2009,7 @@ Debes responder ÚNICAMENTE con un objeto JSON válido con esta estructura exact
     from app.infrastructure.ai.llm_gateway import LiteLLMGateway
 
     # BD source of truth: planning_studio tool override (or global default).
-    wbs_provider, wbs_model = await resolve_tool_model(session, "planning_studio")
+    wbs_provider, wbs_model, _ = await resolve_tool_model(session, "planning_studio")
     actual_model = tool_model_label(wbs_provider, wbs_model)
     llm_gateway = LiteLLMGateway()
 

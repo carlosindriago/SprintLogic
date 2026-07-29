@@ -70,6 +70,43 @@ Code:
 """
 CODE_COACH_VARS = ["code_snippet"]
 
+ORM_SCHEMA_EXTRACTOR_ID = "orm_schema_extractor"
+ORM_SCHEMA_EXTRACTOR_CONTENT = """Eres un parser de bases de datos y arquitecto de software experto.
+Analiza el siguiente código fuente del framework {framework} (migraciones, modelos, esquema) y extrae la estructura completa de la base de datos.
+
+Código Fuente del Proyecto:
+{source_code}
+
+INSTRUCCIONES DE EXTRACCIÓN:
+1. Mapea todas las tablas, columnas, tipos de datos, claves primarias (is_pk=true), claves foráneas (is_fk=true y target_table) e índices.
+2. Identifica relaciones entre tablas.
+3. Devuelve EXCLUSIVAMENTE un objeto JSON válido que cumpla estrictamente con esta estructura (sin bloques markdown ```json ni texto extra):
+
+{{
+  "tables": [
+    {{
+      "name": "nombre_tabla",
+      "columns": [
+        {{
+          "name": "nombre_columna",
+          "type": "VARCHAR/BIGINT/INT/TIMESTAMP/BOOLEAN/TEXT",
+          "is_pk": true,
+          "is_fk": false,
+          "is_nullable": false,
+          "target_table": null
+        }}
+      ],
+      "indexes": [
+        "CREATE INDEX idx_name ON table (col)"
+      ]
+    }}
+  ],
+  "orm_type": "{framework}"
+}}
+"""
+ORM_SCHEMA_EXTRACTOR_VARS = ["framework", "source_code"]
+
+
 async def initialize_prompts(session: AsyncSession):
     prompts_to_init: list[dict[str, Any]] = [
         {
@@ -143,6 +180,12 @@ async def initialize_prompts(session: AsyncSession):
             "description": "Database Studio AI DB Architect Auditor",
             "content": DB_ARCHITECT_AUDITOR_CONTENT,
             "required_variables": DB_ARCHITECT_AUDITOR_VARS
+        },
+        {
+            "id": ORM_SCHEMA_EXTRACTOR_ID,
+            "description": "Database Studio ORM Schema Extractor",
+            "content": ORM_SCHEMA_EXTRACTOR_CONTENT,
+            "required_variables": ORM_SCHEMA_EXTRACTOR_VARS
         }
     ]
 
@@ -235,6 +278,8 @@ async def restore_prompt(session: AsyncSession, prompt_id: str) -> PromptRegistr
         golden_content = CONTEXTUAL_MENTOR_CONTENT
     elif prompt_id == DB_ARCHITECT_AUDITOR_ID:
         golden_content = DB_ARCHITECT_AUDITOR_CONTENT
+    elif prompt_id == ORM_SCHEMA_EXTRACTOR_ID:
+        golden_content = ORM_SCHEMA_EXTRACTOR_CONTENT
     else:
         raise ValueError(f"No golden content available for {prompt_id}")
 
@@ -312,7 +357,7 @@ Si recibes native_errors, prioriza explicar y resolver estos errores de compilac
 
 Estructura EXACTA requerida:
 [
-  { "line": 12, "severity": "hint" | "warning" | "error", "title": "Título corto", "message": "Consejo breve", "explanation": "El campo explanation DEBE ser extenso, profundo y altamente pedagógico. No te limites a decir qué está mal. Explica el \\"Por qué\\", los riesgos reales (ej. memoria, seguridad, mantenibilidad) y por qué la solución propuesta (snippet_after) es el estándar de un Senior Engineer. Habla como un mentor experto y paciente.", "snippet_before": "Líneas exactas del código original del usuario", "snippet_after": "Versión corregida y nivel Senior", "suggested_code": "null" }
+  { "line": 12, "severity": "hint" | "warning" | "error", "title": "Título corto", "message": "Consejo breve", "explanation": "El campo explanation DEBE ser extenso, profundo y altamente pedagógico. No te limites a decir qué está mal. Explica el \"Por qué\", los riesgos reales (ej. memoria, seguridad, mantenibilidad) y por qué la solución propuesta (snippet_after) es el estándar de un Senior Engineer. Habla como un mentor experto y paciente.", "snippet_before": "Líneas exactas del código original del usuario", "snippet_after": "Versión corregida y nivel Senior", "suggested_code": "null" }
 ]
 
 EJEMPLO DE SALIDA ESPERADA:

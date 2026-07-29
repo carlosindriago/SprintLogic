@@ -329,6 +329,7 @@ async def get_curated_models():
 class ToolModelMappingRequest(BaseModel):
     provider_id: str
     model_name: str
+    fallback_models: list[str] | None = None
 
 
 @router.get("/tool-models")
@@ -362,12 +363,14 @@ async def update_tool_model_mapping(
         tool_name=tool_name,
         provider_id=request.provider_id,
         model_name=request.model_name,
+        fallback_models=request.fallback_models,
     )
     await session.commit()
     return {
         "tool_name": mapping.tool_name,
         "provider_id": mapping.provider_id,
         "model_name": mapping.model_name,
+        "fallback_models": mapping.fallback_models,
     }
 
 

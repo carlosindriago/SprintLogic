@@ -80,8 +80,8 @@ KNOWN_TOOLS: dict[str, ToolDef] = {
 }
 
 
-async def resolve_default_model(session: AsyncSession) -> tuple[str, str]:
-    """Return (provider_id, model_name) for the global default model.
+async def resolve_default_model(session: AsyncSession) -> tuple[str, str, list[str] | None]:
+    """Return (provider_id, model_name, fallback_models) for the global default model.
 
     Resolution order:
     1. ToolModelMappingModel entry for "__default__" (user override via UI)
@@ -94,13 +94,13 @@ async def resolve_default_model(session: AsyncSession) -> tuple[str, str]:
     )
     mapping = result.scalars().first()
     if mapping is not None:
-        return mapping.provider_id, mapping.model_name
+        return mapping.provider_id, mapping.model_name, mapping.fallback_models  # type: ignore
 
     if "/" in DEFAULT_LLM_MODEL:
         provider, model = DEFAULT_LLM_MODEL.split("/", 1)
     else:
         provider = model = DEFAULT_LLM_MODEL
-    return provider, model
+    return provider, model, None
 
 
 def parse_default_model() -> tuple[str, str]:
@@ -114,8 +114,8 @@ def parse_default_model() -> tuple[str, str]:
 
 async def get_tool_model(
     session: AsyncSession, tool_name: str
-) -> tuple[str, str] | None:
-    """Return (provider_id, model_name) if the tool has an explicit override.
+) -> tuple[str, str, list[str] | None] | None:
+    """Return (provider_id, model_name, fallback_models) if the tool has an explicit override.
 
     Returns None when the tool is not overridden — the caller should then use
     the global DEFAULT_LLM_MODEL (or its own fallback).
@@ -128,13 +128,13 @@ async def get_tool_model(
     mapping = result.scalars().first()
     if mapping is None:
         return None
-    return mapping.provider_id, mapping.model_name
+    return mapping.provider_id, mapping.model_name, mapping.fallback_models  # type: ignore
 
 
 async def resolve_tool_model(
     session: AsyncSession, tool_name: str
-) -> tuple[str, str]:
-    """Resolve the effective (provider_id, model_name) for a tool.
+) -> tuple[str, str, list[str] | None]:
+    """Resolve the effective (provider_id, model_name, fallback_models) for a tool.
 
     Tiered resolution — DB is the single source of truth:
     1. tool-specific override in tool_model_mappings (tool_name)
@@ -161,11 +161,11 @@ async def list_tool_mappings(session: AsyncSession) -> dict:
     result = await session.execute(select(ToolModelMappingModel))
     stored = result.scalars().all()
 
-    stored_map: dict[str, tuple[str, str]] = {
-        m.tool_name: (m.provider_id, m.model_name) for m in stored
+    stored_map: dict[str, tuple[str, str, list[str] | None]] = {
+        m.tool_name: (m.provider_id, m.model_name, m.fallback_models) for m in stored  # type: ignore
     }
 
-    default_provider, default_model_id = await resolve_default_model(session)
+    default_provider, default_model_id, _ = await resolve_default_model(session)
     default_override = stored_map.get("__default__")
 
     tools = []
@@ -180,6 +180,7 @@ async def list_tool_mappings(session: AsyncSession) -> dict:
             "description": tool_def["description"],
             "provider_id": entry[0] if entry else None,
             "model_name": entry[1] if entry else None,
+            "fallback_models": entry[2] if entry else None,
             "is_overridden": entry is not None,
             "default_provider": default_provider,
             "default_model": default_model_id,
@@ -193,6 +194,7 @@ async def list_tool_mappings(session: AsyncSession) -> dict:
             "provider": default_provider,
             "model": default_model_id,
             "is_overridden": default_override is not None,
+            "fallback_models": default_override[2] if default_override else None,
         },
     }
 
@@ -202,6 +204,7 @@ async def upsert_tool_mapping(
     tool_name: str,
     provider_id: str,
     model_name: str,
+    fallback_models: list[str] | None = None,
 ) -> ToolModelMappingModel:
     """Create or update a tool → model override."""
     import uuid as _uuid
@@ -216,6 +219,7 @@ async def upsert_tool_mapping(
     if existing:
         existing.provider_id = provider_id
         existing.model_name = model_name
+        existing.fallback_models = fallback_models
         await session.flush()
         return existing
 
@@ -224,6 +228,7 @@ async def upsert_tool_mapping(
         tool_name=tool_name,
         provider_id=provider_id,
         model_name=model_name,
+        fallback_models=fallback_models,
     )
     session.add(mapping)
     await session.flush()

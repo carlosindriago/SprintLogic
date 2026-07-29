@@ -309,6 +309,7 @@ export interface ToolModelEntry {
   description: string;
   provider_id: string | null;
   model_name: string | null;
+  fallback_models: string[] | null;
   is_overridden: boolean;
   default_provider: string;
   default_model: string;
@@ -319,6 +320,7 @@ export interface ToolModelEntry {
 export interface GlobalDefaultEntry {
   provider: string;
   model: string;
+  fallback_models: string[] | null;
   is_overridden: boolean;
 }
 
@@ -328,10 +330,10 @@ export interface ToolModelResponse {
 }
 
 export const fetchToolModels = () => api.get<ToolModelResponse>('/settings/tool-models');
-export const updateToolModel = (toolName: string, providerId: string, modelName: string) =>
-  api.put<{ tool_name: string; provider_id: string; model_name: string }>(
+export const updateToolModel = (toolName: string, providerId: string, modelName: string, fallbackModels: string[] | null = null) =>
+  api.put<{ tool_name: string; provider_id: string; model_name: string; fallback_models: string[] | null }>(
     `/settings/tool-models/${toolName}`,
-    { provider_id: providerId, model_name: modelName }
+    { provider_id: providerId, model_name: modelName, fallback_models: fallbackModels }
   );
 export const deleteToolModel = (toolName: string) =>
   api.delete<{ status: string; tool_name: string }>(`/settings/tool-models/${toolName}`);
@@ -627,6 +629,8 @@ export interface TableIR {
 export interface SchemaIR {
   tables: TableIR[];
   orm_type: string;
+  extraction_level?: 'live' | 'orm' | 'static' | 'none';
+  detected_framework?: string | null;
 }
 
 export interface DBAuditAlert {
@@ -644,8 +648,14 @@ export interface DBAuditResponse {
   recommendations: string[];
 }
 
-export const fetchProjectSchema = (projectId: string) =>
-  api.get<SchemaIR>(`/projects/${projectId}/database/schema`);
+export const fetchProjectSchema = (projectId: string, mode = 'auto', dbUrl?: string) => {
+  const query = new URLSearchParams({ mode });
+  if (dbUrl) query.append('db_url', dbUrl);
+  return api.get<SchemaIR>(`/projects/${projectId}/database/schema?${query.toString()}`);
+};
 
-export const auditProjectSchema = (projectId: string, payload?: SchemaIR) =>
-  api.post<DBAuditResponse>(`/projects/${projectId}/database/audit`, payload);
+export const auditProjectSchema = (projectId: string, payload?: SchemaIR, mode = 'auto', dbUrl?: string) => {
+  const query = new URLSearchParams({ mode });
+  if (dbUrl) query.append('db_url', dbUrl);
+  return api.post<DBAuditResponse>(`/projects/${projectId}/database/audit?${query.toString()}`, payload);
+};

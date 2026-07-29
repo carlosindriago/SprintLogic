@@ -107,7 +107,7 @@ async def _extract_and_save_insight(session: AsyncSession, conv: ConversationMod
         # 3-tier model resolution: DB override -> INSIGHT_WORKER_MODEL env -> DEFAULT_LLM_MODEL
         override = await get_tool_model(session, "insight_worker")
         if override:
-            provider_id, model_name = override
+            provider_id, model_name, _ = override
             api_key = CredentialManager.get_api_key(provider_id)
             if not api_key:
                 return

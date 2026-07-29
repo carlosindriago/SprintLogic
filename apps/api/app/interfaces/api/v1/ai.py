@@ -251,7 +251,7 @@ async def health_overview(request: CodeCoachRequest, session: AsyncSession = Dep
     try:
         # BD source of truth: code_coach tool override (or global default). El
         # request.body ya NO dicta el modelo — settings sí.
-        cc_provider, cc_model = await resolve_tool_model(session, "code_coach")
+        cc_provider, cc_model, _ = await resolve_tool_model(session, "code_coach")
         primary_model_id = tool_model_label(cc_provider, cc_model)
 
         models_to_try = [primary_model_id]
@@ -387,7 +387,7 @@ async def contextual_mentorship(
     """Analizador de código que detecta antipatrones (Mentoría Contextual)."""
     try:
         # BD source of truth: contextual_mentor tool override (or global default).
-        cm_provider, cm_model = await resolve_tool_model(session, "contextual_mentor")
+        cm_provider, cm_model, _ = await resolve_tool_model(session, "contextual_mentor")
         primary_model_id = tool_model_label(cm_provider, cm_model)
 
         models_to_try = [primary_model_id]

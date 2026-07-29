@@ -188,7 +188,7 @@ async def generate_commit_message(
         # BD source of truth: reutilizamos el tool 'chat_title_gen' para
         # generación de mensajes cortos (commit msg). El request.body ya no
         # dicta el modelo.
-        cm_provider, cm_model = await resolve_tool_model(session, "chat_title_gen")
+        cm_provider, cm_model, _ = await resolve_tool_model(session, "chat_title_gen")
         actual_model = tool_model_label(cm_provider, cm_model)
         lang_code = req.headers.get("Accept-Language", "en").split("-")[0]
         message = llm_gateway.generate_completion(prompt=prompt, model=actual_model, lang_code=lang_code)

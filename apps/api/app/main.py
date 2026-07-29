@@ -73,6 +73,11 @@ async def lifespan(app: FastAPI):
             await session.commit()
         except Exception:
             pass
+        try:
+            await session.execute(text("ALTER TABLE tool_model_mappings ADD COLUMN fallback_models JSON"))
+            await session.commit()
+        except Exception:
+            pass
         await initialize_prompts(session)
 
 

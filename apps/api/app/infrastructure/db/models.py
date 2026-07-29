@@ -294,4 +294,5 @@ class ToolModelMappingModel(Base):
     tool_name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
     provider_id: Mapped[str] = mapped_column(String(255), nullable=False)
     model_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    fallback_models: Mapped[list | dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
