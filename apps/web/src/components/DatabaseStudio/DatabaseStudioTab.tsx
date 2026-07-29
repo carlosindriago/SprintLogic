@@ -80,6 +80,47 @@ export default function DatabaseStudioTab() {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
+  const handleExport = async (type: 'sql' | 'markdown') => {
+    try {
+      const url = type === 'sql' 
+        ? exportProjectSchemaSQL(projectId!) 
+        : exportProjectSchemaMarkdown(projectId!);
+        
+      const response = await fetch(url, {
+        headers: {
+          'Accept-Language': useSettingsStore.getState().language,
+        }
+      });
+      
+      if (!response.ok) throw new Error('Export failed');
+      
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = downloadUrl;
+      
+      const contentDisposition = response.headers.get('Content-Disposition');
+      let filename = `schema.${type === 'sql' ? 'sql' : 'md'}`;
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="(.+)"/);
+        if (filenameMatch && filenameMatch.length === 2) {
+          filename = filenameMatch[1];
+        }
+      }
+      a.download = filename;
+      
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(downloadUrl);
+      document.body.removeChild(a);
+      toast.success(`Esquema exportado exitosamente como ${type.toUpperCase()}`);
+    } catch (err) {
+      console.error(err);
+      toast.error(`Error al exportar el esquema como ${type.toUpperCase()}`);
+    }
+  };
+
   const loadSchema = useCallback(
     async (overrideMode?: 'auto' | 'live' | 'static', overrideUrl?: string) => {
       if (!projectId) return;
@@ -361,15 +402,15 @@ export default function DatabaseStudioTab() {
                 Exportar
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48 bg-zinc-900 border-zinc-800 text-zinc-200">
-                <DropdownMenuItem 
-                  onClick={() => window.open(exportProjectSchemaSQL(projectId!), '_blank')}
+                <DropdownMenuItem
+                  onClick={() => handleExport('sql')}
                   className="text-xs cursor-pointer focus:bg-zinc-800 focus:text-zinc-100"
                 >
                   <Database className="mr-2 h-4 w-4 text-cyan-400" />
                   Exportar DDL (.sql)
                 </DropdownMenuItem>
-                <DropdownMenuItem 
-                  onClick={() => window.open(exportProjectSchemaMarkdown(projectId!), '_blank')}
+                <DropdownMenuItem
+                  onClick={() => handleExport('markdown')}
                   className="text-xs cursor-pointer focus:bg-zinc-800 focus:text-zinc-100"
                 >
                   <FileText className="mr-2 h-4 w-4 text-emerald-400" />
@@ -550,7 +591,7 @@ export default function DatabaseStudioTab() {
                   variant="ghost" 
                   size="icon" 
                   className="h-6 w-6 text-zinc-400 hover:text-cyan-400"
-                  onClick={() => window.open(exportProjectSchemaMarkdown(projectId!), '_blank')}
+                  onClick={() => handleExport('markdown')}
                   title="Descargar Reporte (.md)"
                 >
                   <Download className="h-3.5 w-3.5" />
