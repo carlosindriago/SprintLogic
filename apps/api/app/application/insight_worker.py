@@ -9,10 +9,8 @@ from sqlalchemy import asc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.ai.provider_adapter import ProviderAdapter
-from app.infrastructure.config import INSIGHT_WORKER_MODEL
 from app.infrastructure.db.database import get_sessionmaker
 from app.infrastructure.db.models import ConversationModel, DeveloperInsightModel, MessageModel
-from app.infrastructure.repositories.tool_model_repository import get_tool_model
 from app.infrastructure.security.credential_manager import CredentialManager
 
 logger = logging.getLogger(__name__)
@@ -105,19 +103,16 @@ async def _extract_and_save_insight(session: AsyncSession, conv: ConversationMod
             )
 
         # 3-tier model resolution: DB override -> INSIGHT_WORKER_MODEL env -> DEFAULT_LLM_MODEL
-        override = await get_tool_model(session, "insight_worker")
-        if override:
-            provider_id, model_name, _ = override
-            api_key = CredentialManager.get_api_key(provider_id)
-            if not api_key:
-                return
-            adapted = ProviderAdapter.adapt(model_name, api_key)
-        else:
-            provider = ProviderAdapter.get_provider(INSIGHT_WORKER_MODEL)
-            api_key = CredentialManager.get_api_key(provider)
-            if not api_key:
-                return
-            adapted = ProviderAdapter.adapt(INSIGHT_WORKER_MODEL, api_key)
+        from app.infrastructure.repositories.tool_model_repository import resolve_tool_model
+        provider_id, model_name, fallbacks = await resolve_tool_model(session, "insight_worker")
+
+        api_key = CredentialManager.get_api_key(provider_id)
+        if not api_key:
+            return
+        adapted = ProviderAdapter.adapt(model_name, api_key)
+
+        from app.infrastructure.llm.litellm_gateway import LiteLLMGateway
+        gateway = LiteLLMGateway()
 
         response = await litellm.acompletion(
             model=adapted["model"],
@@ -125,9 +120,12 @@ async def _extract_and_save_insight(session: AsyncSession, conv: ConversationMod
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": chat_text}
             ],
-            api_key=adapted["api_key"],
+            api_key=adapted.get("api_key", api_key),
             response_format={"type": "json_object"},
-            **adapted["kwargs"]
+            fallbacks=gateway.build_fallback_params(fallbacks),
+            num_retries=0,
+            timeout=45,
+            **adapted.get("kwargs", {})
         )
 
         raw_content = response.choices[0].message.content
