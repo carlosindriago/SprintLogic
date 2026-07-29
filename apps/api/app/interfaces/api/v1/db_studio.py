@@ -185,6 +185,7 @@ async def get_project_database_schema(
         schema_updated_at=datetime.utcnow()
     )
     await repo.save(project)
+    await session.commit()
 
     schema.is_outdated = False
     return schema
@@ -223,6 +224,7 @@ async def rescan_project_database_schema(
         schema_updated_at=datetime.utcnow()
     )
     await repo.save(project)
+    await session.commit()
 
     schema.is_outdated = False
     return schema
