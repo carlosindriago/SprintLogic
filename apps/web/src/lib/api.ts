@@ -701,26 +701,26 @@ export interface MigrationPlanResponse {
 }
 
 export async function fetchDrafts(projectId: string): Promise<SchemaDraft[]> {
-  const res = await api.get(`/projects/${projectId}/database/drafts`);
-  return (res as any).data;
+  const res = await api.get<SchemaDraft[]>(`/projects/${projectId}/database/drafts`);
+  return res;
 }
 
 export async function createDraft(projectId: string, name: string): Promise<SchemaDraft> {
-  const res = await api.post(`/projects/${projectId}/database/drafts`, { name });
-  return (res as any).data;
+  const res = await api.post<SchemaDraft>(`/projects/${projectId}/database/drafts`, { name });
+  return res;
 }
 
 export async function updateDraft(projectId: string, draftId: string, schema: SchemaIR): Promise<{ status: string, message: string }> {
-  const res = await api.put(`/projects/${projectId}/database/drafts/${draftId}`, schema);
-  return (res as any).data;
+  const res = await api.put<{ status: string, message: string }>(`/projects/${projectId}/database/drafts/${draftId}`, schema);
+  return res;
 }
 
 export async function deleteDraft(projectId: string, draftId: string): Promise<{ status: string, message: string }> {
-  const res = await api.delete(`/projects/${projectId}/database/drafts/${draftId}`);
-  return (res as any).data;
+  const res = await api.delete<{ status: string, message: string }>(`/projects/${projectId}/database/drafts/${draftId}`);
+  return res;
 }
 
 export async function generateMigrationPlan(projectId: string, draftId: string): Promise<MigrationPlanResponse> {
-  const res = await api.post(`/projects/${projectId}/database/drafts/${draftId}/generate-plan`);
-  return (res as any).data;
+  const res = await api.post<MigrationPlanResponse>(`/projects/${projectId}/database/drafts/${draftId}/generate-plan`);
+  return res;
 }

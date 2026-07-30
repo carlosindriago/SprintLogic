@@ -1,7 +1,7 @@
 import React, { memo } from 'react';
 import { Handle, Position, NodeProps } from '@xyflow/react';
 import { ColumnIR } from '@/lib/api';
-import { Database, Key, Link2, Plus } from 'lucide-react';
+import { Database, Key, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 export interface EditableTableNodeData {
@@ -22,7 +22,7 @@ export const EditableTableNode = memo(({ id, data }: NodeProps) => {
     }
   };
 
-  const handleColumnChange = (idx: number, field: keyof ColumnIR, value: string) => {
+  const handleColumnChange = (idx: number, field: keyof ColumnIR, value: string | boolean) => {
     if (!onTableUpdate) return;
     const newCols = [...columns];
     newCols[idx] = { ...newCols[idx], [field]: value };
@@ -71,11 +71,11 @@ export const EditableTableNode = memo(({ id, data }: NodeProps) => {
           <div key={`${col.name}-${idx}`} className="flex items-center justify-between rounded px-1 py-1 hover:bg-zinc-800/60 text-xs group">
             <div className="flex items-center gap-1.5 flex-grow min-w-0">
               {col.is_pk ? (
-                <span title="Primary Key" className="inline-flex shrink-0 cursor-pointer" onClick={() => handleColumnChange(idx, 'is_pk', (!col.is_pk) as any)}>
+                <span title="Primary Key" className="inline-flex shrink-0 cursor-pointer" onClick={() => handleColumnChange(idx, 'is_pk', (!col.is_pk))}>
                   <Key className="h-3.5 w-3.5 text-amber-400" />
                 </span>
               ) : (
-                <span title="Make Primary Key" className="inline-flex shrink-0 opacity-0 group-hover:opacity-50 cursor-pointer hover:!opacity-100" onClick={() => handleColumnChange(idx, 'is_pk', true as any)}>
+                <span title="Make Primary Key" className="inline-flex shrink-0 opacity-0 group-hover:opacity-50 cursor-pointer hover:!opacity-100" onClick={() => handleColumnChange(idx, 'is_pk', true)}>
                   <Key className="h-3.5 w-3.5 text-zinc-400" />
                 </span>
               )}

@@ -120,6 +120,7 @@ export default function DatabaseStudioTab() {
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadDrafts();
   }, []);
 
@@ -155,7 +156,7 @@ export default function DatabaseStudioTab() {
 
 
   // onTableUpdate callback
-  const onTableUpdate = useCallback((nodeId: string, newLabel: string, newColumns: any[]) => {
+  const onTableUpdate = useCallback((nodeId: string, newLabel: string, newColumns: ColumnIR[]) => {
     setHasUnsavedChanges(true);
     setNodes((nds) => 
       nds.map((n) => {
@@ -190,7 +191,7 @@ export default function DatabaseStudioTab() {
       };
     });
   }, [setNodes, setSchema]);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
 
   const handleAddTable = useCallback(() => {
     setHasUnsavedChanges(true);
@@ -221,7 +222,7 @@ export default function DatabaseStudioTab() {
       };
     });
   }, [setNodes, setSchema, onTableUpdate]);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
 
   // Debounce Preview & Auto-Save Draft
   useEffect(() => {
@@ -328,7 +329,7 @@ export default function DatabaseStudioTab() {
     try {
       const blob = new Blob([text], { type: 'text/markdown' });
       if ('showSaveFilePicker' in window) {
-        // @ts-ignore
+        // @ts-expect-error - TS doesn't know about showSaveFilePicker yet in all environments
         const handle = await window.showSaveFilePicker({
           suggestedName: `logic-audit-${projectId || 'project'}.md`,
           types: [{
@@ -441,12 +442,12 @@ export default function DatabaseStudioTab() {
         console.error('Failed to load database schema:', err);
         setHasError(true);
         setErrorMessage((err as Error)?.message || 'Error de conexión o timeout al inspeccionar el esquema.');
-        toast.error((err as any)?.message || 'Error al cargar el esquema de la base de datos');
+        toast.error((err as Error)?.message || 'Error al cargar el esquema de la base de datos');
       } finally {
         setLoading(false);
       }
     },
-    [projectId, extractionMode, customDbUrl, setNodes, setEdges, configuredModels.default_model]
+    [projectId, extractionMode, customDbUrl, setNodes, setEdges, configuredModels.default_model, onTableUpdate]
   );
 
   const handleRescan = useCallback(async () => {
@@ -518,14 +519,15 @@ export default function DatabaseStudioTab() {
       console.error('Failed to rescan database schema:', err);
       setHasError(true);
       setErrorMessage((err as Error)?.message || 'Error de conexión o timeout al re-escanear el esquema.');
-      toast.error((err as any)?.message || 'Error al re-escanear el esquema de la base de datos');
+      toast.error((err as Error)?.message || 'Error al re-escanear el esquema de la base de datos');
     } finally {
       setLoading(false);
     }
-  }, [projectId, extractionMode, customDbUrl, setNodes, setEdges, configuredModels.default_model]);
+  }, [projectId, extractionMode, customDbUrl, setNodes, setEdges, configuredModels.default_model, onTableUpdate]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadSchema();
   }, []);
 
