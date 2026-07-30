@@ -109,8 +109,8 @@ export default function TicketMentorDrawer({ ticketId, projectId, filePath, onCl
             <p className="text-xs text-zinc-500 truncate w-48">{filePath.split('/').pop()}</p>
           </div>
         </div>
-        <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8 text-zinc-400 hover:text-white">
-          <X className="w-4 h-4" />
+        <Button variant="ghost" size="icon" onClick={onClose} aria-label="Cerrar" className="h-8 w-8 text-zinc-400 hover:text-white">
+          <X aria-hidden="true" className="w-4 h-4" />
         </Button>
       </div>
 
