@@ -336,8 +336,9 @@ function PresetCard({ preset, configuredModelId, backendProviderData, onModelCon
                 type="button"
                 onClick={() => setVisible(!visible)}
                 className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+                aria-label={visible ? "Ocultar clave" : "Mostrar clave"}
               >
-                {visible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                {visible ? <EyeOff className="w-3.5 h-3.5" aria-hidden="true" /> : <Eye className="w-3.5 h-3.5" aria-hidden="true" />}
               </button>
             </div>
             {isConfigured && !keyValue && !visible && (
