@@ -4,8 +4,6 @@ import {
   Background,
   Controls,
   MiniMap,
-  useNodesState,
-  useEdgesState,
   Node,
   Edge,
 } from '@xyflow/react';
@@ -15,6 +13,7 @@ import { useTabsStore } from '@/store/tabsStore';
 import { usePlanningStore } from '@/store/planningStore';
 import { useProjectStore } from '@/store/projectStore';
 import { useSettingsStore } from '@/store/settingsStore';
+import { useDatabaseStudioStore } from '@/store/databaseStudioStore';
 import {
   fetchProjectSchema,
   rescanProjectSchema,
@@ -81,33 +80,30 @@ export default function DatabaseStudioTab() {
   // Extract a human-readable model name
   const aiModel = configuredModels['default'] || configuredModels['chat'] || Object.values(configuredModels)[0] || 'IA Avanzada';
 
-  const [schema, setSchema] = useState<SchemaIR | null>(null);
-  const [loading, setLoading] = useState<boolean>(false);
-  const [loadingStatus, setLoadingStatus] = useState<string>('Intentando conectar a base de datos viva (Nivel 1)...');
-  const [hasError, setHasError] = useState<boolean>(false);
-  const [errorMessage, setErrorMessage] = useState<string>('');
-
-  const [auditLoading, setAuditLoading] = useState<boolean>(false);
-  const [auditResult, setAuditResult] = useState<DBAuditResponse | null>(null);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
-  const [extractionMode, setExtractionMode] = useState<'auto' | 'live' | 'static'>('auto');
-  const [customDbUrl, setCustomDbUrl] = useState<string>('');
-
-  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
-
-  const [livePreviewSql, setLivePreviewSql] = useState<string>('');
-  const [showLivePreview, setShowLivePreview] = useState<boolean>(false);
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
-  const [isApplying, setIsApplying] = useState<boolean>(false);
-
-  // Drafts state
-  const [drafts, setDrafts] = useState<SchemaDraft[]>([]);
-  const [currentDraftId, setCurrentDraftId] = useState<string | null>(null);
-  const [isDrafting, setIsDrafting] = useState<boolean>(false);
-  const [migrationPlan, setMigrationPlan] = useState<string | null>(null);
-  const [isGeneratingPlan, setIsGeneratingPlan] = useState<boolean>(false);
+  const {
+    schema, setSchema,
+    loading, setLoading,
+    loadingStatus, setLoadingStatus,
+    hasError, setHasError,
+    errorMessage, setErrorMessage,
+    auditLoading, setAuditLoading,
+    auditResult, setAuditResult,
+    extractionMode, setExtractionMode,
+    customDbUrl, setCustomDbUrl,
+    livePreviewSql, setLivePreviewSql,
+    showLivePreview, setShowLivePreview,
+    hasUnsavedChanges, setHasUnsavedChanges,
+    isApplying, setIsApplying,
+    drafts, setDrafts,
+    currentDraftId, setCurrentDraftId,
+    isDrafting, setIsDrafting,
+    migrationPlan, setMigrationPlan,
+    isGeneratingPlan, setIsGeneratingPlan,
+    nodes, setNodes, onNodesChange,
+    edges, setEdges, onEdgesChange
+  } = useDatabaseStudioStore();
 
   const loadDrafts = useCallback(async () => {
     if (!projectId) return;
@@ -120,9 +116,10 @@ export default function DatabaseStudioTab() {
   }, [projectId]);
 
   useEffect(() => {
+    if (!drafts.length) {
+      void loadDrafts();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void loadDrafts();
   }, []);
 
   const handleCreateDraft = async () => {
@@ -132,7 +129,7 @@ export default function DatabaseStudioTab() {
     
     try {
       const newDraft = await createDraft(projectId, name);
-      setDrafts((prev) => [newDraft, ...prev]);
+      setDrafts([newDraft, ...drafts]);
       setCurrentDraftId(newDraft.id);
       toast.success("Borrador creado exitosamente.");
     } catch (err) {
@@ -175,11 +172,9 @@ export default function DatabaseStudioTab() {
       })
     );
     
-    setSchema((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        tables: prev.tables.map(t => {
+    setSchema({
+        ...schema!,
+        tables: schema!.tables.map(t => {
           if (t.name === nodeId) {
             return {
               ...t,
@@ -189,9 +184,8 @@ export default function DatabaseStudioTab() {
           }
           return t;
         })
-      };
-    });
-  }, [setNodes, setSchema]);
+      });
+  }, [nodes, schema, setNodes, setSchema]);
    
 
   const handleAddTable = useCallback(() => {
@@ -211,18 +205,16 @@ export default function DatabaseStudioTab() {
     };
     
     setNodes((nds) => [...nds, newNode]);
-    setSchema((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        tables: [...prev.tables, {
-          name: newTableName,
-          columns: newNode.data.columns,
-          indexes: []
-        }]
-      };
+    if (!schema) return;
+    setSchema({
+      ...schema,
+      tables: [...schema.tables, {
+        name: newTableName,
+        columns: newNode.data.columns,
+        indexes: []
+      }]
     });
-  }, [setNodes, setSchema, onTableUpdate]);
+  }, [schema, setNodes, setSchema, onTableUpdate]);
    
 
   // Debounce Preview & Auto-Save Draft
@@ -541,7 +533,7 @@ export default function DatabaseStudioTab() {
       toast.success('Auditoría de Arquitectura de DB completada');
     } catch (err) {
       console.error('Audit failed:', err);
-      toast.error('Error al ejecutar la auditoría con IA');
+      toast.error((err as Error)?.message || 'Error al ejecutar la auditoría con IA');
     } finally {
       setAuditLoading(false);
     }
@@ -1002,7 +994,7 @@ export default function DatabaseStudioTab() {
 
                         {alert.migration_suggestion && (
                           <div className="mt-2 rounded bg-zinc-950 border border-zinc-800 p-2 font-mono text-cyan-300 relative group overflow-hidden">
-                            <div className="pr-6 overflow-x-auto text-sm whitespace-pre-wrap">
+                            <div className="pr-6 overflow-x-auto text-sm whitespace-pre-wrap break-all">
                               {alert.migration_suggestion}
                             </div>
                             <Button
