@@ -812,6 +812,7 @@ export default function DatabaseStudioTab() {
                 onEdgesChange={onEdgesChange}
                 nodeTypes={nodeTypes}
                 fitView
+                proOptions={{ hideAttribution: true }}
                 attributionPosition="bottom-left"
               >
                 <Background color="#27272a" gap={20} size={1} />
