@@ -31,6 +31,7 @@ import {
   generateMigrationPlan,
   SchemaDraft,
   SchemaIR,
+  ColumnIR,
   DBAuditResponse,
   DBAuditAlert,
 } from '@/lib/api';
