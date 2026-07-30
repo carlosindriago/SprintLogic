@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useCallback } from 'react';
 import { Beaker, FileCode, CheckCircle, XCircle, Play, Send, Loader2, GraduationCap, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { useProjectStore } from '@/store/projectStore';
 import { useTabsStore } from '@/store/tabsStore';
 import { usePlanningStore } from '@/store/planningStore';
 import { useTestStudioStore } from '@/store/testStudioStore';
-import { fetchTestDiscovery, generateTests, auditTests, getFileContent, TestDiscoveryResult, TestDiscoveryItem } from '@/lib/api';
+import { fetchTestDiscovery, generateTests, auditTests, getFileContent } from '@/lib/api';
 import ReactMarkdown from 'react-markdown';
 
 export default function TestStudioTab() {
@@ -21,13 +21,7 @@ export default function TestStudioTab() {
     setIsGenerating, setActiveMode, setIsAuditing, setAuditReport, setExistingTestContent
   } = useTestStudioStore();
 
-  useEffect(() => {
-    if (currentProjectId && !discovery) {
-      loadDiscovery();
-    }
-  }, [currentProjectId]);
-
-  const loadDiscovery = async () => {
+  const loadDiscovery = useCallback(async () => {
     if (!currentProjectId) return;
     setLoadingDiscovery(true);
     try {
@@ -42,7 +36,13 @@ export default function TestStudioTab() {
     } finally {
       setLoadingDiscovery(false);
     }
-  };
+  }, [currentProjectId, setLoadingDiscovery, setDiscovery, setSelectedFile]);
+
+  useEffect(() => {
+    if (currentProjectId && !discovery) {
+      loadDiscovery();
+    }
+  }, [currentProjectId, discovery, loadDiscovery]);
 
   const handleGenerate = async () => {
     if (!currentProjectId || !selectedFile) return;

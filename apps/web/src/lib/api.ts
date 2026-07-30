@@ -617,7 +617,7 @@ export const sendPlanningMessage = async (
   return { text: accumulatedText, toolCalls: finalToolCalls };
 };
 
-export async function fetchLiveDatabaseSchema(projectId: string): Promise<any> {
+export async function fetchLiveDatabaseSchema(projectId: string): Promise<unknown> {
   const res = await fetch(`${API_BASE_URL}/projects/${projectId}/db/live`);
   if (!res.ok) {
     throw new Error('Failed to fetch live database schema');
