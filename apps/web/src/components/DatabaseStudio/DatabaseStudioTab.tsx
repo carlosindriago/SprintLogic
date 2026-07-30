@@ -11,6 +11,8 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
+import { useTabsStore } from '@/store/tabsStore';
+import { usePlanningStore } from '@/store/planningStore';
 import { useProjectStore } from '@/store/projectStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import {
@@ -19,11 +21,20 @@ import {
   exportProjectSchemaSQL,
   exportProjectSchemaMarkdown,
   auditProjectSchema,
+  fetchLatestProjectAudit,
+  previewProjectDatabase,
+  applyProjectDatabase,
+  fetchDrafts,
+  createDraft,
+  updateDraft,
+  deleteDraft,
+  generateMigrationPlan,
+  SchemaDraft,
   SchemaIR,
   DBAuditResponse,
   DBAuditAlert,
 } from '@/lib/api';
-import { TableNode } from './TableNode';
+import { EditableTableNode } from './EditableTableNode';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -36,6 +47,10 @@ import {
 } from '@/components/ui/dropdown-menu';
 import {
   Database,
+  Plus,
+  Code,
+  Save,
+  GitBranch,
   Brain,
   RefreshCw,
   AlertTriangle,
@@ -49,18 +64,19 @@ import {
   ChevronDown,
   Download,
   FileText,
-  Image as ImageIcon,
+  History,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 const nodeTypes = {
-  tableNode: TableNode,
+  tableNode: EditableTableNode,
 };
 
 export default function DatabaseStudioTab() {
   const { projectId } = useProjectStore();
   const { configuredModels } = useSettingsStore();
-  
+  const addTab = useTabsStore((state) => state.addTab);
+
   // Extract a human-readable model name
   const aiModel = configuredModels['default'] || configuredModels['chat'] || Object.values(configuredModels)[0] || 'IA Avanzada';
 
@@ -79,6 +95,178 @@ export default function DatabaseStudioTab() {
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+
+  const [livePreviewSql, setLivePreviewSql] = useState<string>('');
+  const [showLivePreview, setShowLivePreview] = useState<boolean>(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
+  const [isApplying, setIsApplying] = useState<boolean>(false);
+
+  // Drafts state
+  const [drafts, setDrafts] = useState<SchemaDraft[]>([]);
+  const [currentDraftId, setCurrentDraftId] = useState<string | null>(null);
+  const [isDrafting, setIsDrafting] = useState<boolean>(false);
+  const [migrationPlan, setMigrationPlan] = useState<string | null>(null);
+  const [isGeneratingPlan, setIsGeneratingPlan] = useState<boolean>(false);
+
+  const loadDrafts = useCallback(async () => {
+    if (!projectId) return;
+    try {
+      const data = await fetchDrafts(projectId);
+      setDrafts(data);
+    } catch (e) {
+      console.error("Failed to load drafts", e);
+    }
+  }, [projectId]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    void loadDrafts();
+  }, []);
+
+  const handleCreateDraft = async () => {
+    if (!projectId) return;
+    const name = prompt("Nombre para el nuevo borrador de la base de datos:");
+    if (!name) return;
+    
+    try {
+      const newDraft = await createDraft(projectId, name);
+      setDrafts((prev) => [newDraft, ...prev]);
+      setCurrentDraftId(newDraft.id);
+      toast.success("Borrador creado exitosamente.");
+    } catch (err) {
+      toast.error("Error al crear el borrador.");
+    }
+  };
+
+  const handleGeneratePlan = async () => {
+    if (!projectId || !currentDraftId) return;
+    setIsGeneratingPlan(true);
+    setMigrationPlan(null);
+    try {
+      const res = await generateMigrationPlan(projectId, currentDraftId);
+      setMigrationPlan(res.plan);
+      toast.success("Plan de migración generado exitosamente.");
+    } catch (err) {
+      toast.error("Error al generar el plan de migración.");
+    } finally {
+      setIsGeneratingPlan(false);
+    }
+  };
+
+
+  // onTableUpdate callback
+  const onTableUpdate = useCallback((nodeId: string, newLabel: string, newColumns: any[]) => {
+    setHasUnsavedChanges(true);
+    setNodes((nds) => 
+      nds.map((n) => {
+        if (n.id === nodeId) {
+          return {
+            ...n,
+            data: {
+              ...n.data,
+              label: newLabel,
+              columns: newColumns
+            }
+          };
+        }
+        return n;
+      })
+    );
+    
+    setSchema((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        tables: prev.tables.map(t => {
+          if (t.name === nodeId) {
+            return {
+              ...t,
+              name: newLabel,
+              columns: newColumns
+            };
+          }
+          return t;
+        })
+      };
+    });
+  }, [setNodes, setSchema]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+
+  const handleAddTable = useCallback(() => {
+    setHasUnsavedChanges(true);
+    const newTableName = `new_table_${Math.floor(Math.random() * 1000)}`;
+    const newNode = {
+      id: newTableName,
+      type: 'tableNode',
+      position: { x: Math.random() * 200, y: Math.random() * 200 },
+      data: {
+        label: newTableName,
+        columns: [
+          { name: 'id', type: 'integer', is_pk: true, is_fk: false, is_nullable: false }
+        ],
+        onTableUpdate
+      }
+    };
+    
+    setNodes((nds) => [...nds, newNode]);
+    setSchema((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        tables: [...prev.tables, {
+          name: newTableName,
+          columns: newNode.data.columns,
+          indexes: []
+        }]
+      };
+    });
+  }, [setNodes, setSchema, onTableUpdate]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+
+  // Debounce Preview & Auto-Save Draft
+  useEffect(() => {
+    if (!schema) return;
+    const timer = setTimeout(async () => {
+      // 1. Live Preview
+      if (showLivePreview) {
+        try {
+          const res = await previewProjectDatabase(projectId!, schema);
+          setLivePreviewSql(res.sql);
+        } catch (err) {
+          console.error("Failed to generate live preview", err);
+        }
+      }
+      
+      // 2. Auto-save if in draft
+      if (currentDraftId && hasUnsavedChanges) {
+        setIsDrafting(true);
+        try {
+          await updateDraft(projectId!, currentDraftId, schema);
+          setHasUnsavedChanges(false);
+        } catch (err) {
+          console.error("Failed to auto-save draft", err);
+        } finally {
+          setIsDrafting(false);
+        }
+      }
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [schema, showLivePreview, projectId, currentDraftId, hasUnsavedChanges]);
+
+  const handleApplyChanges = async () => {
+    if (!schema) return;
+    setIsApplying(true);
+    try {
+      const res = await applyProjectDatabase(projectId!, schema);
+      toast.success(res.message || "Success");
+      setHasUnsavedChanges(false);
+    } catch (err) {
+      toast.error("Error al sincronizar con código");
+    } finally {
+      setIsApplying(false);
+    }
+  };
+
 
   const handleExport = async (type: 'sql' | 'markdown') => {
     try {
@@ -121,6 +309,57 @@ export default function DatabaseStudioTab() {
     }
   };
 
+  const getAuditReportText = () => {
+    if (!auditResult) return '';
+    return `# Reporte de Auditoría (LogicAudit)\n\n**Score:** ${auditResult.score}\n\n**Resumen:**\n${auditResult.summary}\n\n**Recomendaciones:**\n${auditResult.recommendations.map(r => '- ' + r).join('\n')}`;
+  };
+
+  const handleCopyAudit = () => {
+    const text = getAuditReportText();
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    toast.success('Reporte copiado al portapapeles');
+  };
+
+  const handleExportAudit = async () => {
+    const text = getAuditReportText();
+    if (!text) return;
+    
+    try {
+      const blob = new Blob([text], { type: 'text/markdown' });
+      if ('showSaveFilePicker' in window) {
+        // @ts-ignore
+        const handle = await window.showSaveFilePicker({
+          suggestedName: `logic-audit-${projectId || 'project'}.md`,
+          types: [{
+            description: 'Markdown File',
+            accept: { 'text/markdown': ['.md'] },
+          }],
+        });
+        const writable = await handle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        toast.success('Reporte guardado exitosamente');
+      } else {
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = downloadUrl;
+        a.download = `logic-audit-${projectId || 'project'}.md`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(downloadUrl);
+        document.body.removeChild(a);
+        toast.success('Reporte exportado exitosamente');
+      }
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') {
+        console.error(err);
+        toast.error('Error al guardar el reporte');
+      }
+    }
+  };
+
   const loadSchema = useCallback(
     async (overrideMode?: 'auto' | 'live' | 'static', overrideUrl?: string) => {
       if (!projectId) return;
@@ -146,6 +385,14 @@ export default function DatabaseStudioTab() {
         clearTimeout(timer2);
         setSchema(data);
 
+        // Fetch latest audit silently
+        try {
+          const res = await fetchLatestProjectAudit(projectId);
+          if (res) setAuditResult(res);
+        } catch (e) {
+          // No history found or error, just ignore
+        }
+
         const newNodes: Node[] = [];
         const newEdges: Edge[] = [];
         const tableNames = new Set(data.tables.map((t) => t.name));
@@ -163,6 +410,7 @@ export default function DatabaseStudioTab() {
               label: table.name,
               columns: table.columns,
               indexes: table.indexes,
+              onTableUpdate,
             },
           });
 
@@ -187,13 +435,13 @@ export default function DatabaseStudioTab() {
         if (data.tables.length > 0) {
           toast.success(`Esquema cargado: ${data.tables.length} tablas (${data.orm_type})`);
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         clearTimeout(timer1);
         clearTimeout(timer2);
         console.error('Failed to load database schema:', err);
         setHasError(true);
-        setErrorMessage(err?.message || 'Error de conexión o timeout al inspeccionar el esquema.');
-        toast.error(err?.message || 'Error al cargar el esquema de la base de datos');
+        setErrorMessage((err as Error)?.message || 'Error de conexión o timeout al inspeccionar el esquema.');
+        toast.error((err as any)?.message || 'Error al cargar el esquema de la base de datos');
       } finally {
         setLoading(false);
       }
@@ -239,6 +487,7 @@ export default function DatabaseStudioTab() {
             label: table.name,
             columns: table.columns,
             indexes: table.indexes,
+            onTableUpdate,
           },
         });
 
@@ -263,21 +512,22 @@ export default function DatabaseStudioTab() {
       if (data.tables.length > 0) {
         toast.success(`Esquema actualizado: ${data.tables.length} tablas (${data.orm_type})`);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       clearTimeout(timer1);
       clearTimeout(timer2);
       console.error('Failed to rescan database schema:', err);
       setHasError(true);
-      setErrorMessage(err?.message || 'Error de conexión o timeout al re-escanear el esquema.');
-      toast.error(err?.message || 'Error al re-escanear el esquema de la base de datos');
+      setErrorMessage((err as Error)?.message || 'Error de conexión o timeout al re-escanear el esquema.');
+      toast.error((err as any)?.message || 'Error al re-escanear el esquema de la base de datos');
     } finally {
       setLoading(false);
     }
   }, [projectId, extractionMode, customDbUrl, setNodes, setEdges, configuredModels.default_model]);
 
   useEffect(() => {
-    loadSchema();
-  }, [loadSchema]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    void loadSchema();
+  }, []);
 
   const handleRunAudit = async () => {
     if (!projectId) return;
@@ -321,53 +571,54 @@ export default function DatabaseStudioTab() {
   return (
     <div className="flex h-full w-full bg-[#0d0d0d] text-zinc-100 overflow-hidden">
       {/* LEFT: ReactFlow ERD Canvas (70%) */}
-      <div className="relative flex-1 flex flex-col border-r border-zinc-800/80">
+      <div className="flex-grow h-full relative flex flex-col border-r border-zinc-800/80">
         {/* Header toolbar */}
         <div className="flex h-12 items-center justify-between border-b border-zinc-800 bg-[#0a0a0a] px-4">
-          <div className="flex items-center gap-2">
-            <Database className="h-5 w-5 text-cyan-400" />
-            <h1 className="font-semibold text-sm text-zinc-100">Database Studio</h1>
-            <Badge variant="outline" className="ml-2 border-zinc-700 bg-zinc-800 text-zinc-300 text-[11px]">
-              {schema?.tables.length || 0} Tablas
-            </Badge>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <Database className="h-5 w-5 text-cyan-400" />
+              <h1 className="font-semibold text-sm text-zinc-100">Database Studio</h1>
+            </div>
 
-            {schema?.detected_framework && (
-              <Badge
-                variant="outline"
-                className={`text-[10px] font-semibold uppercase tracking-wider ${
-                  schema.detected_framework === 'laravel'
-                    ? 'border-red-500/40 bg-red-500/10 text-red-400'
-                    : schema.detected_framework === 'django'
-                    ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'
-                    : schema.detected_framework === 'prisma'
-                    ? 'border-indigo-500/40 bg-indigo-500/10 text-indigo-400'
-                    : schema.detected_framework === 'flutter'
-                    ? 'border-blue-500/30 bg-blue-500/10 text-blue-400'
-                    : 'border-cyan-500/40 bg-cyan-500/10 text-cyan-400'
-                }`}
-              >
-                {schema.detected_framework === 'flutter' ? 'Flutter (Dart)' : schema.detected_framework}
-              </Badge>
-            )}
+            <div className="h-4 w-px bg-zinc-700 mx-1"></div>
 
-            {schema?.extraction_level && (
-              <Badge
-                variant="outline"
-                className={`text-[10px] ${
-                  schema.extraction_level === 'live'
-                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
-                    : schema.extraction_level === 'orm'
-                    ? 'border-cyan-500/30 bg-cyan-500/10 text-cyan-300'
-                    : 'border-amber-500/30 bg-amber-500/10 text-amber-400'
-                }`}
-              >
-                {schema.extraction_level === 'live'
-                  ? 'Live DB'
-                  : schema.extraction_level === 'orm'
-                  ? 'Esquema inferido de código fuente (IA)'
-                  : 'Static SQL'}
-              </Badge>
-            )}
+            <div className="flex items-center gap-1.5 bg-zinc-900/50 border border-zinc-800 rounded-md px-2 py-1">
+              <span className="text-[11px] text-zinc-400 font-medium">{schema?.tables.length || 0} Tablas</span>
+              
+              {schema?.detected_framework && (
+                <>
+                  <span className="text-[10px] text-zinc-600 px-1">•</span>
+                  <span
+                    className={`text-[10px] font-semibold uppercase tracking-wider ${
+                      schema.detected_framework === 'laravel' ? 'text-red-400' :
+                      schema.detected_framework === 'django' ? 'text-emerald-400' :
+                      schema.detected_framework === 'prisma' ? 'text-indigo-400' :
+                      schema.detected_framework === 'flutter' ? 'text-blue-400' : 'text-cyan-400'
+                    }`}
+                  >
+                    {schema.detected_framework === 'flutter' ? 'Flutter' : schema.detected_framework}
+                  </span>
+                </>
+              )}
+              
+              {schema?.extraction_level && (
+                <>
+                  <span className="text-[10px] text-zinc-600 px-1">•</span>
+                  <span
+                    className={`text-[10px] ${
+                      schema.extraction_level === 'live' ? 'text-emerald-400' :
+                      schema.extraction_level === 'orm' ? 'text-cyan-300' : 'text-amber-400'
+                    }`}
+                    title={
+                      schema.extraction_level === 'live' ? 'Conectado a Live DB' :
+                      schema.extraction_level === 'orm' ? 'Esquema inferido por IA' : 'SQL Estático'
+                    }
+                  >
+                    {schema.extraction_level.toUpperCase()}
+                  </span>
+                </>
+              )}
+            </div>
           </div>
 
           <div className="flex items-center gap-2">
@@ -430,15 +681,6 @@ export default function DatabaseStudioTab() {
             >
               <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
               Refrescar
-            </Button>
-            <Button
-              size="sm"
-              onClick={handleRunAudit}
-              disabled={auditLoading || !schema?.tables.length}
-              className="h-8 gap-1.5 bg-gradient-to-r from-cyan-600 to-blue-600 text-xs text-white hover:from-cyan-500 hover:to-blue-500 shadow-md shadow-cyan-500/20 border-none"
-            >
-              <Brain className={`h-3.5 w-3.5 ${auditLoading ? 'animate-bounce' : ''}`} />
-              {auditLoading ? 'Analizando...' : 'Auditar Arquitectura'}
             </Button>
           </div>
         </div>
@@ -554,7 +796,13 @@ export default function DatabaseStudioTab() {
                   </Button>
                 </div>
               )}
-              <ReactFlow
+              <Button 
+                  onClick={handleAddTable}
+                  className="absolute bottom-6 right-6 z-10 rounded-full shadow-lg bg-cyan-600 hover:bg-cyan-500 text-white"
+                >
+                  <Plus className="mr-2 h-4 w-4" /> Nueva Tabla
+                </Button>
+                <ReactFlow
                 nodes={nodes}
                 edges={edges}
                 onNodesChange={onNodesChange}
@@ -564,46 +812,145 @@ export default function DatabaseStudioTab() {
                 attributionPosition="bottom-left"
               >
                 <Background color="#27272a" gap={20} size={1} />
-                <Controls className="!border-zinc-700 !bg-zinc-900 !text-zinc-300" />
+                <Controls className="[&>button]:!bg-zinc-900 [&>button]:!border-zinc-800 [&>button]:!text-zinc-300 hover:[&>button]:!bg-zinc-800 [&_svg]:!fill-zinc-300" />
                 <MiniMap
                   nodeColor="#06b6d4"
                   maskColor="rgba(0, 0, 0, 0.75)"
                   className="!border-zinc-700 !bg-zinc-950"
                 />
               </ReactFlow>
+
+                {showLivePreview && (
+                  <div className="absolute bottom-0 left-0 right-0 h-1/3 bg-zinc-950/95 border-t border-zinc-800 backdrop-blur-xl z-20 flex flex-col shadow-2xl transform transition-transform">
+                    <div className="flex items-center justify-between px-4 py-2 border-b border-zinc-800 bg-zinc-900/50">
+                      <div className="flex items-center gap-2">
+                        <Code className="h-4 w-4 text-cyan-400" />
+                        <span className="text-sm font-semibold text-zinc-200">Vista Previa de Código (Live)</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <Badge variant="outline" className="text-cyan-400 border-cyan-400/30 bg-cyan-400/10">SQL DDL</Badge>
+                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setShowLivePreview(false)}>
+                          <ChevronDown className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="flex-grow p-4 overflow-auto">
+                      <pre className="text-xs text-zinc-300 font-mono">
+                        {livePreviewSql || 'Generando código...'}
+                      </pre>
+                    </div>
+                  </div>
+                )}
+
             </>
           )}
         </div>
       </div>
 
       {/* RIGHT: AI Audit Panel (30%) */}
-      <div className="w-[380px] flex flex-col border-l border-zinc-800 bg-[#0a0a0a]">
-        <div className="flex h-12 items-center justify-between border-b border-zinc-800 px-4">
+      <div className="w-1/3 min-w-[350px] max-w-md h-full flex flex-col border-l border-zinc-800/80 bg-[#0a0a0a] overflow-hidden">
+        
+        {/* Header Principal */}
+        <div className="flex items-center justify-between px-5 py-3 border-b border-zinc-800/50">
           <div className="flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-cyan-400" />
-            <h2 className="font-semibold text-sm text-zinc-100">AI DB Architect Audit</h2>
+            <h2 className="font-semibold text-[13px] tracking-wide text-zinc-100 uppercase">
+              {currentDraftId && migrationPlan ? "Plan de Migración" : "LogicAudit"}
+            </h2>
           </div>
-          <div className="flex items-center gap-2">
-            {auditResult && (
-              <>
-                <Badge variant="outline" className={getScoreBadgeColor(auditResult.score)}>
-                  Score {auditResult.score}/100
-                </Badge>
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  className="h-6 w-6 text-zinc-400 hover:text-cyan-400"
-                  onClick={() => handleExport('markdown')}
-                  title="Descargar Reporte (.md)"
-                >
-                  <Download className="h-3.5 w-3.5" />
-                </Button>
-              </>
+          <div>
+            {!currentDraftId && (
+              <Button
+                size="sm"
+                onClick={handleRunAudit}
+                disabled={auditLoading || !schema?.tables.length}
+                className="h-7 px-3 gap-1.5 bg-gradient-to-r from-cyan-600 to-blue-600 text-[11px] font-medium text-white hover:from-cyan-500 hover:to-blue-500 shadow-sm shadow-cyan-900/20 border-none transition-all"
+              >
+                <Sparkles className={`h-3 w-3 ${auditLoading ? 'animate-pulse' : ''}`} />
+                {auditLoading ? 'Analizando...' : 'Auditar'}
+              </Button>
+            )}
+            {currentDraftId && !migrationPlan && (
+              <Button
+                size="sm"
+                onClick={handleGeneratePlan}
+                disabled={isGeneratingPlan || !schema?.tables.length}
+                className="h-7 px-3 gap-1.5 bg-gradient-to-r from-cyan-600 to-blue-600 text-[11px] font-medium text-white hover:from-cyan-500 hover:to-blue-500 shadow-sm shadow-cyan-900/20 border-none transition-all"
+              >
+                <Brain className={`h-3 w-3 ${isGeneratingPlan ? 'animate-pulse' : ''}`} />
+                {isGeneratingPlan ? 'Generando...' : 'Plan de Migración'}
+              </Button>
             )}
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar text-xs">
+        {/* Sub-Header Metadatos */}
+        <div className="flex items-center justify-between px-5 py-2 bg-[#0f0f11] border-b border-zinc-800/80">
+          <div className="flex items-center gap-3">
+            {(!currentDraftId || !migrationPlan) && auditResult && (
+              <>
+                <Badge variant="outline" className={`h-5 text-[10px] px-1.5 border-none font-medium ${
+                  auditResult.score >= 80 ? 'bg-emerald-500/10 text-emerald-400' :
+                  auditResult.score >= 50 ? 'bg-amber-500/10 text-amber-400' :
+                  'bg-red-500/10 text-red-400'
+                }`}>
+                  Score {auditResult.score}/100
+                </Badge>
+                {auditResult.created_at && (
+                  <span className="text-[10px] text-zinc-500 hidden xl:inline-block">
+                    {new Date(auditResult.created_at).toLocaleDateString()} {new Date(auditResult.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                  </span>
+                )}
+              </>
+            )}
+
+            {currentDraftId && isDrafting && (
+              <div className="flex items-center gap-1.5 text-[10px] text-cyan-500 font-medium">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
+                </span>
+                Guardando...
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center gap-1">
+            {(!currentDraftId || !migrationPlan) && auditResult && (
+              <>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800"
+                  onClick={handleCopyAudit}
+                  title="Copiar Reporte al Portapapeles"
+                >
+                  <Copy className="h-3 w-3" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800"
+                  onClick={handleExportAudit}
+                  title="Guardar Reporte Como... (.md)"
+                >
+                  <Download className="h-3 w-3" />
+                </Button>
+              </>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800"
+              onClick={() => addTab({ id: 'ai-history', title: 'Historial IA', type: 'ai-history' })}
+              title="Abrir Historial IA"
+            >
+              <History className="h-3 w-3" />
+            </Button>
+          </div>
+        </div>
+
+<div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar text-xs">
           {!auditResult ? (
             <div className="flex h-full flex-col items-center justify-center text-center text-zinc-500 p-4">
               <Brain className="mb-2 h-10 w-10 text-zinc-700" />
@@ -630,7 +977,7 @@ export default function DatabaseStudioTab() {
                     Alertas y Riesgos ({auditResult.alerts.length})
                   </h3>
                   {auditResult.alerts.map((alert: DBAuditAlert, idx: number) => (
-                    <Card key={idx} className="bg-zinc-900/90 border-zinc-800 text-zinc-200">
+                    <Card key={idx} className="bg-zinc-900/90 border-zinc-800 text-zinc-200 break-words whitespace-normal min-w-0">
                       <CardContent className="p-3 space-y-2">
                         <div className="flex items-start gap-2">
                           {getSeverityIcon(alert.severity)}
@@ -650,8 +997,8 @@ export default function DatabaseStudioTab() {
                         </div>
 
                         {alert.migration_suggestion && (
-                          <div className="mt-2 rounded bg-zinc-950 border border-zinc-800 p-2 font-mono text-[10px] text-cyan-300 relative group">
-                            <div className="pr-6 overflow-x-auto whitespace-pre-wrap">
+                          <div className="mt-2 rounded bg-zinc-950 border border-zinc-800 p-2 font-mono text-cyan-300 relative group overflow-hidden">
+                            <div className="pr-6 overflow-x-auto text-sm whitespace-pre-wrap">
                               {alert.migration_suggestion}
                             </div>
                             <Button
@@ -692,6 +1039,39 @@ export default function DatabaseStudioTab() {
                   </Card>
                 </div>
               )}
+
+              {/* Planning Studio Handoff */}
+              {(!currentDraftId || !migrationPlan) && auditResult && (
+                <div className="pt-4 pb-2 mt-2 border-t border-zinc-800/50">
+                  <Button
+                    onClick={() => {
+                      if (projectId && auditResult) {
+                        const initialPrompt = `Por favor analiza esta auditoría de base de datos y ayúdame a crear un plan estructurado o WBS:
+
+**Score:** ${auditResult.score}
+
+**Resumen:** ${auditResult.summary}
+
+**Recomendaciones:**
+${auditResult.recommendations.map(r => '- ' + r).join('\n')}`;
+                        usePlanningStore.getState().setProjectState(projectId, { 
+                          messages: [{ role: 'user', content: initialPrompt }] 
+                        });
+                        useTabsStore.getState().addTab({
+                          id: 'planning-studio',
+                          title: 'Planning Studio',
+                          type: 'planning-studio',
+                          data: { projectId }
+                        });
+                      }
+                    }}
+                    className="w-full h-9 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 flex items-center justify-center gap-2 text-[11px] font-medium"
+                  >
+                    🚀 Llevar al Planning Studio
+                  </Button>
+                </div>
+              )}
+
             </>
           )}
         </div>

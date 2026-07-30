@@ -647,6 +647,7 @@ export interface DBAuditResponse {
   score: number;
   alerts: DBAuditAlert[];
   recommendations: string[];
+  created_at?: string;
 }
 
 export const fetchProjectSchema = (projectId: string, mode = 'auto', dbUrl?: string) => {
@@ -674,3 +675,52 @@ export const auditProjectSchema = (projectId: string, payload?: SchemaIR, mode =
   if (dbUrl) query.append('db_url', dbUrl);
   return api.post<DBAuditResponse>(`/projects/${projectId}/database/audit?${query.toString()}`, payload);
 };
+
+export const fetchLatestProjectAudit = (projectId: string) => {
+  return api.get<DBAuditResponse>(`/projects/${projectId}/database/audit/latest`);
+};
+
+export const previewProjectDatabase = (projectId: string, schema: SchemaIR) => {
+  return api.post<{ sql: string; orm: string }>(`/projects/${projectId}/database/preview`, schema);
+};
+
+export const applyProjectDatabase = (projectId: string, schema: SchemaIR) => {
+  return api.post<{ status: string; message: string }>(`/projects/${projectId}/database/apply`, schema);
+};
+
+export interface SchemaDraft {
+  id: string;
+  project_id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MigrationPlanResponse {
+  plan: string;
+}
+
+export async function fetchDrafts(projectId: string): Promise<SchemaDraft[]> {
+  const res = await api.get(`/projects/${projectId}/database/drafts`);
+  return (res as any).data;
+}
+
+export async function createDraft(projectId: string, name: string): Promise<SchemaDraft> {
+  const res = await api.post(`/projects/${projectId}/database/drafts`, { name });
+  return (res as any).data;
+}
+
+export async function updateDraft(projectId: string, draftId: string, schema: SchemaIR): Promise<{ status: string, message: string }> {
+  const res = await api.put(`/projects/${projectId}/database/drafts/${draftId}`, schema);
+  return (res as any).data;
+}
+
+export async function deleteDraft(projectId: string, draftId: string): Promise<{ status: string, message: string }> {
+  const res = await api.delete(`/projects/${projectId}/database/drafts/${draftId}`);
+  return (res as any).data;
+}
+
+export async function generateMigrationPlan(projectId: string, draftId: string): Promise<MigrationPlanResponse> {
+  const res = await api.post(`/projects/${projectId}/database/drafts/${draftId}/generate-plan`);
+  return (res as any).data;
+}
