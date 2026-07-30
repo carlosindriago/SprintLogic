@@ -396,25 +396,25 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     });
   }, []);
 
-  const handleZoomIn = () => {
+  const handleZoomIn = useCallback(() => {
     if (fgRef.current) {
       fgRef.current.zoom(fgRef.current.zoom() * 1.5, 400);
     }
-  };
+  }, []);
 
-  const handleZoomOut = () => {
+  const handleZoomOut = useCallback(() => {
     if (fgRef.current) {
       fgRef.current.zoom(fgRef.current.zoom() / 1.5, 400);
     }
-  };
+  }, []);
 
-  const handleFitView = () => {
+  const handleFitView = useCallback(() => {
     if (fgRef.current) {
       fgRef.current.zoomToFit(400, 50);
     }
-  };
+  }, []);
 
-  const togglePhysics = () => {
+  const togglePhysics = useCallback(() => {
     setIsPhysicsActive(prev => {
       const next = !prev;
       const graph = fgRef.current;
@@ -427,7 +427,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
       }
       return next;
     });
-  };
+  }, []);
 
   useLayoutEffect(() => {
     if (containerRef.current) {
@@ -1063,6 +1063,76 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     });
   };
 
+
+  const handleNodeClick = useCallback((node: NodeObject) => {
+    const n = node as ForceNode;
+
+    if (n.label === "Module") {
+      // Initialize physics state for smooth transition without freezing
+      setGraphData((prevGraph) => {
+        prevGraph.nodes.forEach((nItem: ForceNode) => {
+          if (nItem.x !== undefined) nItem.x = nItem.x;
+          if (nItem.y !== undefined) nItem.y = nItem.y;
+        });
+        return { ...prevGraph };
+      });
+      setExpandedFolders((prev) => new Set([...prev, n.file_path || ""]));
+
+      setTimeout(() => {
+        if (fgRef.current) {
+          fgRef.current.zoomToFit(800, 100);
+          fgRef.current.d3ReheatSimulation();
+        }
+      }, 100);
+    } else if (onNodeClick) {
+      onNodeClick({
+        id: (n.id as string) || "",
+        label: (n.label as GraphNodeLabel) || "File",
+        name: (n.name as string) || "",
+        file_path: (n.file_path as string) || "",
+        size: n.size,
+        metadata: n.metadata
+      });
+    }
+  }, [onNodeClick]);
+
+
+  const handleNodeDragEnd = useCallback((node: NodeObject) => {
+    const n = node as ForceNode;
+    n.fx = n.x;
+    n.fy = n.y;
+  }, []);
+
+
+  const handleBackgroundClick = useCallback(() => {
+    setFocusNode(null);
+  }, []);
+
+
+  const handleNodeRightClick = useCallback((node: NodeObject, event: MouseEvent) => {
+    setContextMenu({
+      visible: true,
+      x: event.clientX,
+      y: event.clientY,
+      node: node as ForceNode
+    });
+  }, []);
+
+
+  const handleNodeHover = useCallback((node: NodeObject | null) => {
+    setHoverNode(node ? (node.id as string) : null);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const canvas = (fgRef.current as any)?.canvasControls?.getCanvasElement?.() || document.querySelector('canvas');
+    if (canvas) {
+      canvas.style.cursor = node ? ((node as ForceNode).label === "Module" ? 'pointer' : 'grab') : 'default';
+    }
+  }, []);
+
+
+  const handleNodeDrag = useCallback(() => {
+    // Allows manual dragging and pinning
+  }, []);
+
   return (
     <div className="flex-1 w-full flex flex-col relative min-h-0" style={{ backgroundColor: graphTheme.background }}>
       {/* Controls Overlay */}
@@ -1439,62 +1509,12 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
               ctx.arc(node.x || 0, node.y || 0, hitRadius, 0, 2 * Math.PI);
               ctx.fill();
             }}
-            onNodeClick={(node: NodeObject) => {
-              const n = node as ForceNode;
-              
-              if (n.label === "Module") {
-                // Initialize physics state for smooth transition without freezing
-                setGraphData((prevGraph) => {
-                  prevGraph.nodes.forEach((nItem: ForceNode) => {
-                    if (nItem.x !== undefined) nItem.x = nItem.x;
-                    if (nItem.y !== undefined) nItem.y = nItem.y;
-                  });
-                  return { ...prevGraph };
-                });
-                setExpandedFolders((prev) => new Set([...prev, n.file_path || ""]));
-                
-                setTimeout(() => {
-                  if (fgRef.current) {
-                    fgRef.current.zoomToFit(800, 100);
-                    fgRef.current.d3ReheatSimulation();
-                  }
-                }, 100);
-              } else if (onNodeClick) {
-                onNodeClick({
-                  id: (n.id as string) || "",
-                  label: (n.label as GraphNodeLabel) || "File",
-                  name: (n.name as string) || "",
-                  file_path: (n.file_path as string) || "",
-                  size: n.size,
-                  metadata: n.metadata
-                });
-              }
-            }}
-            onNodeDragEnd={(node: NodeObject) => {
-              const n = node as ForceNode;
-              n.fx = n.x;
-              n.fy = n.y;
-            }}
-            onNodeDrag={() => {
-              // Allows manual dragging and pinning
-            }}
-            onBackgroundClick={() => setFocusNode(null)}
-            onNodeRightClick={(node: NodeObject, event: MouseEvent) => {
-              setContextMenu({
-                visible: true,
-                x: event.clientX,
-                y: event.clientY,
-                node: node as ForceNode
-              });
-            }}
-            onNodeHover={(node: NodeObject | null) => {
-              setHoverNode(node ? (node.id as string) : null);
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              const canvas = (fgRef.current as any)?.canvasControls?.getCanvasElement?.() || document.querySelector('canvas');
-              if (canvas) {
-                canvas.style.cursor = node ? ((node as ForceNode).label === "Module" ? 'pointer' : 'grab') : 'default';
-              }
-            }}
+            onNodeClick={handleNodeClick}
+            onNodeDragEnd={handleNodeDragEnd}
+            onNodeDrag={handleNodeDrag}
+            onBackgroundClick={handleBackgroundClick}
+            onNodeRightClick={handleNodeRightClick}
+            onNodeHover={handleNodeHover}
             enableZoomInteraction={true}
             enablePanInteraction={true}
             onEngineStop={() => {
