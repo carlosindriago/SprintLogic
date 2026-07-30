@@ -48,18 +48,7 @@ export default function DocumentStudioTab() {
 
   const { fontSize, theme, lineHeight, setFontSize, setTheme, setLineHeight } = useDocStudioStore();
 
-  useEffect(() => {
-    if (currentProjectId) {
-      loadDiscovery();
-      loadBookmarks();
-    }
-  }, [currentProjectId]);
-
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [chatHistory]);
-
-  const loadDiscovery = async () => {
+  const loadDiscovery = useCallback(async () => {
     if (!currentProjectId) return;
     setLoadingDiscovery(true);
     try {
@@ -73,9 +62,9 @@ export default function DocumentStudioTab() {
     } finally {
       setLoadingDiscovery(false);
     }
-  };
+  }, [currentProjectId]);
 
-  const loadBookmarks = async () => {
+  const loadBookmarks = useCallback(async () => {
     if (!currentProjectId) return;
     try {
       const b = await getDocBookmarks(currentProjectId);
@@ -83,7 +72,14 @@ export default function DocumentStudioTab() {
     } catch (err) {
       console.error('Failed to load bookmarks', err);
     }
-  };
+  }, [currentProjectId]);
+
+  useEffect(() => {
+    if (currentProjectId) {
+      loadDiscovery();
+      loadBookmarks();
+    }
+  }, [currentProjectId, loadDiscovery, loadBookmarks]);
 
   const openReader = async (file: { file_path: string }) => {
     if (!currentProjectId) return;
@@ -115,7 +111,7 @@ export default function DocumentStudioTab() {
     }
   };
 
-  const handleSelection = () => {
+  const handleSelection = useCallback(() => {
     if (isEditMode || mode !== 'reader') return;
     const sel = window.getSelection();
     if (sel && sel.toString().trim().length > 0) {
@@ -129,12 +125,12 @@ export default function DocumentStudioTab() {
     } else {
       setSelection(null);
     }
-  };
+  }, [isEditMode, mode]);
 
   useEffect(() => {
     document.addEventListener('mouseup', handleSelection);
     return () => document.removeEventListener('mouseup', handleSelection);
-  }, [isEditMode, mode]);
+  }, [handleSelection]);
 
   const handleSaveBookmark = async () => {
     if (!currentProjectId || !selectedMdFile || !selection) return;
@@ -170,7 +166,7 @@ export default function DocumentStudioTab() {
       const res = await auditDoc(currentProjectId, selectedMdFile.file_path);
       setAuditReport(res.report);
       toast.success('Auditoría completada', { id: loadingToast });
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to audit doc:', err);
       toast.error(err.message || 'Error al auditar el documento', { id: loadingToast });
     } finally {
@@ -467,7 +463,7 @@ export default function DocumentStudioTab() {
                     <FileCode className="h-8 w-8 text-blue-400/50" />
                   </div>
                   <p className="text-sm max-w-sm text-center leading-relaxed">
-                    Este archivo no contiene firmas de documentación estándar. Haz clic en "Generar Documentación IA" para crear los comentarios.
+                    Este archivo no contiene firmas de documentación estándar. Haz clic en &quot;Generar Documentación IA&quot; para crear los comentarios.
                   </p>
                 </div>
               )}
@@ -605,16 +601,16 @@ export default function DocumentStudioTab() {
                   </div>
                   <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
                     {bookmarks.filter(b => b.file_path === selectedMdFile?.file_path).length === 0 ? (
-                      <p className="text-xs text-current opacity-50 text-center mt-8">No tienes marcadores en este archivo. Selecciona texto y haz clic en "Guardar Marcador".</p>
+                      <p className="text-xs text-current opacity-50 text-center mt-8">No tienes marcadores en este archivo. Selecciona texto y haz clic en &quot;Guardar Marcador&quot;.</p>
                     ) : (
                       bookmarks.filter(b => b.file_path === selectedMdFile?.file_path).map((b, i) => (
                         <div key={i} className="bg-black/5 dark:bg-zinc-900 border border-black/10 dark:border-zinc-800 rounded-lg p-3 cursor-pointer hover:bg-black/10 dark:hover:bg-zinc-800 transition-colors" onClick={() => {
                            // Try to scroll to text (rough estimation)
-                           (window as any).find(b.selected_text.substring(0, 50));
+                           (window as unknown as { find: (text: string) => void }).find(b.selected_text.substring(0, 50));
                         }}>
                           <div className="flex items-start gap-2">
                             <Bookmark className="h-3.5 w-3.5 shrink-0 opacity-50 mt-0.5" />
-                            <p className="text-xs leading-relaxed italic opacity-80 line-clamp-4">"{b.selected_text}"</p>
+                            <p className="text-xs leading-relaxed italic opacity-80 line-clamp-4">&quot;{b.selected_text}&quot;</p>
                           </div>
                         </div>
                       ))

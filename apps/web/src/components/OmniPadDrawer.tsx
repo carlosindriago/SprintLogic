@@ -17,7 +17,14 @@ export const OmniPadDrawer: React.FC = () => {
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [scope, setScope] = useState<"local" | "global">("local");
   const [mode, setMode] = useState<"write" | "history">("write");
-  const [history, setHistory] = useState<any[]>([]);
+interface Note {
+  id?: number;
+  content: string;
+  created_at?: string;
+  project_id?: string | null;
+}
+
+  const [history, setHistory] = useState<Note[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -47,7 +54,7 @@ export const OmniPadDrawer: React.FC = () => {
           if (!res.ok) throw new Error("Error al cargar historial");
           const data = await res.json();
           setHistory(data);
-        } catch (err) {
+        } catch {
           toast.error("No se pudo cargar el historial");
         } finally {
           setIsLoadingHistory(false);
@@ -100,8 +107,8 @@ export const OmniPadDrawer: React.FC = () => {
           if (data.text) {
              setNoteContent((prev) => (prev ? prev + " " + data.text : data.text));
           }
-        } catch (error: any) {
-          toast.error(error.message || "Fallo en el motor de transcripción");
+        } catch (error) {
+          toast.error((error as Error).message || "Fallo en el motor de transcripción");
         } finally {
           setIsTranscribing(false);
         }
@@ -110,7 +117,7 @@ export const OmniPadDrawer: React.FC = () => {
       mediaRecorderRef.current = mediaRecorder;
       mediaRecorder.start();
       setIsListening(true);
-    } catch (err) {
+    } catch {
       toast.error("Permiso denegado o micrófono no encontrado.");
     }
   };
@@ -132,7 +139,7 @@ export const OmniPadDrawer: React.FC = () => {
       if (!res.ok) throw new Error("No se pudo guardar la nota");
       toast.success("Nota guardada en Omni-Pad");
       setNoteContent("");
-    } catch (err) {
+    } catch {
       toast.error("Error al guardar la nota");
     }
   };

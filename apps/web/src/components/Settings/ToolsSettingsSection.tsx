@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Wrench, Loader2 } from "lucide-react";
 import {

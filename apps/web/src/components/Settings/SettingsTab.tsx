@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect } from "react";
 import { Bot, FileCode2, GitBranch, ScanSearch, Palette, Settings, Wrench, Plug } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSettingsStore } from "@/store/settingsStore";
