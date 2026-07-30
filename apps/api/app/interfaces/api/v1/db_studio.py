@@ -65,7 +65,7 @@ async def resolve_schema(
                 logger.info("Live DB extraction failed: %s", e)
                 if mode == "live":
                     raise HTTPException(
-                        status_code=400, detail=f"Could not connect to live DB: {e}"
+                        status_code=400, detail="Could not connect to live DB"
                     )
 
     # 2. Level 2: ORM Parser (LLM)
