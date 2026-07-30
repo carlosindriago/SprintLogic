@@ -22,6 +22,9 @@ def _to_domain(model: ProjectModel) -> Project:
         name=model.name,
         last_opened=model.last_opened,
         created_at=model.created_at,
+        cached_schema=model.cached_schema,
+        schema_hash=model.schema_hash,
+        schema_updated_at=model.schema_updated_at,
     )
 
 
@@ -32,14 +35,28 @@ class SQLAlchemyProjectRepository(ProjectRepository):
     # ── Write operations ────────────────────────────────────────────────────
 
     async def save(self, project: Project) -> Project:
-        db_model = ProjectModel(
-            id=project.id,
-            path=project.path,
-            name=project.name,
-            last_opened=project.last_opened,
-            created_at=project.created_at,
-        )
-        self.session.add(db_model)
+        model = await self.session.get(ProjectModel, project.id)
+        if model:
+            # Update
+            model.name = project.name
+            model.path = project.path
+            model.last_opened = project.last_opened
+            model.cached_schema = project.cached_schema
+            model.schema_hash = project.schema_hash
+            model.schema_updated_at = project.schema_updated_at
+        else:
+            # Create
+            model = ProjectModel(
+                id=project.id,
+                path=project.path,
+                name=project.name,
+                last_opened=project.last_opened,
+                created_at=project.created_at,
+                cached_schema=project.cached_schema,
+                schema_hash=project.schema_hash,
+                schema_updated_at=project.schema_updated_at,
+            )
+            self.session.add(model)
         await self.session.flush()
         return project
 

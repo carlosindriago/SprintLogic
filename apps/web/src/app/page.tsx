@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Settings, FolderOpen, ChevronRight, Edit2, Trash2, PlusCircle, ChevronsUpDown, FilePlus, RefreshCw, RotateCcw, ScanSearch, Layout, Network, GitBranch, BarChart3, FolderGit2, HelpCircle, Bot, Play } from "lucide-react";
+import { Settings, FolderOpen, ChevronRight, Edit2, Trash2, PlusCircle, ChevronsUpDown, FilePlus, RefreshCw, RotateCcw, ScanSearch, Layout, Network, GitBranch, BarChart3, FolderGit2, HelpCircle, Bot, Play, Database } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { scanProject, getProjects, updateProject, deleteProject, rescanProject, analyzeProject, renameFile, duplicateFile, deleteFile, initSidecarPort } from "@/lib/api";
@@ -38,7 +38,7 @@ import LLMSettingsPanel from "@/components/LLMSettingsPanel";
 import SettingsTab from "@/components/Settings/SettingsTab";
 import PlanningStudioTab from "@/components/PlanningStudioTab";
 import FileTree from "@/components/FileTree";
-import { useTabsStore } from '@/store/tabsStore';
+import { useTabsStore, TabType } from '@/store/tabsStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useProjectStore } from '@/store/projectStore';
 import { useBackgroundJobsStore } from '@/store/backgroundJobsStore';
@@ -96,6 +96,7 @@ const ReportHistoryPanel = dynamic(
 );
 
 const GraphScene = dynamic(() => import("@/components/GraphScene"), { ssr: false });
+const DatabaseStudioTab = dynamic(() => import("@/components/DatabaseStudio/DatabaseStudioTab"), { ssr: false });
 
 export default function Home() {
   const [path, setPath] = useState("");
@@ -424,7 +425,7 @@ export default function Home() {
     });
   };
 
-  const launchTool = (tabId: string, title: string, type: 'insights' | 'kanban' | 'graph' | 'git-graph' | 'audit' | 'ai-history') => {
+  const launchTool = (tabId: string, title: string, type: TabType) => {
     addTab({ id: tabId, title, type });
   };
 
@@ -457,6 +458,8 @@ export default function Home() {
         );
       case 'planning-studio':
         return <PlanningStudioTab key={activeTab.id} />;
+      case 'database-studio':
+        return <DatabaseStudioTab key={activeTab.id} />;
       case 'settings':
         return <SettingsTab data={activeTab.data} key={activeTab.id} />;
       case 'graph':
@@ -518,7 +521,7 @@ export default function Home() {
               </div>
 
               {/* Activity Bar — global tool launchers */}
-              <div className="flex items-center gap-1 px-1 py-1.5 bg-zinc-800/50 rounded-lg">
+              <div className="flex flex-wrap items-center gap-1 p-1 bg-zinc-800/50 rounded-lg">
                 <Button
                   variant="ghost"
                   size="icon"
@@ -583,11 +586,21 @@ export default function Home() {
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-700"
-                  onClick={() => addTab({ id: 'planning-studio', title: 'Planning Studio', type: 'planning-studio' })}
+                  onClick={() => launchTool('planning-studio', 'Planning Studio', 'planning-studio')}
                   title="Planning Studio"
                   aria-label="Planning Studio"
                 >
                   <Play className="w-4 h-4" aria-hidden="true" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-700"
+                  onClick={() => launchTool('database-studio', 'Database Studio', 'database-studio')}
+                  title="Database Studio"
+                  aria-label="Database Studio"
+                >
+                  <Database className="w-4 h-4" aria-hidden="true" />
                 </Button>
               </div>
 

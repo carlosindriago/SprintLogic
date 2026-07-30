@@ -22,6 +22,37 @@ class LiteLLMGateway:
         api_key = self.cred_manager.get_api_key(provider)
         return ProviderAdapter.adapt(self.model_name, api_key)
 
+    def build_fallback_params(self, fallbacks: list[str] | None) -> list[dict] | None:
+        if not fallbacks:
+            return None
+        fallback_params = []
+        from app.infrastructure.ai.provider_adapter import ProviderAdapter
+        for fb_model in fallbacks:
+            fb_provider = ProviderAdapter.get_provider(fb_model)
+            fb_api_key = self.cred_manager.get_api_key(fb_provider)
+            if fb_api_key:
+                fb_adapted = ProviderAdapter.adapt(fb_model, fb_api_key)
+                fallback_params.append({
+                    "model": fb_adapted["model"],
+                    "api_key": fb_adapted.get("api_key")
+                })
+        return fallback_params if fallback_params else None
+
+    async def generate_completion(self, prompt: str, lang_code: str = "en", fallbacks: list[str] | None = None) -> str:
+        prompt += self._build_language_clause(lang_code)
+        adapted = self._get_adapted_params()
+
+        response = await acompletion(
+            model=adapted["model"],
+            messages=[{"role": "user", "content": prompt}],
+            api_key=adapted.get("api_key"),
+            fallbacks=self.build_fallback_params(fallbacks),
+            num_retries=0,
+            timeout=45,
+            **adapted.get("kwargs", {}),
+        )
+        return response.choices[0].message.content or ""
+
 
     def _build_language_clause(self, lang_code: str) -> str:
         if lang_code == "es":

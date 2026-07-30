@@ -34,7 +34,7 @@ async def process_planning_message(req: Request, request: PlanningRequest):
     from app.infrastructure.db.database import get_sessionmaker
 
     async with get_sessionmaker()() as session:
-        ps_provider, ps_model = await resolve_tool_model(session, "planning_studio")
+        ps_provider, ps_model, _ = await resolve_tool_model(session, "planning_studio")
         model = tool_model_label(ps_provider, ps_model)
 
     from app.infrastructure.ai.provider_adapter import ProviderAdapter

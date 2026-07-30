@@ -70,6 +70,43 @@ Code:
 """
 CODE_COACH_VARS = ["code_snippet"]
 
+ORM_SCHEMA_EXTRACTOR_ID = "orm_schema_extractor"
+ORM_SCHEMA_EXTRACTOR_CONTENT = """Eres un parser de bases de datos y arquitecto de software experto.
+Analiza el siguiente código fuente del framework {framework} (migraciones, modelos, esquema) y extrae la estructura completa de la base de datos.
+
+Código Fuente del Proyecto:
+{source_code}
+
+INSTRUCCIONES DE EXTRACCIÓN:
+1. Mapea todas las tablas, columnas, tipos de datos, claves primarias (is_pk=true), claves foráneas (is_fk=true y target_table) e índices.
+2. Identifica relaciones entre tablas.
+3. Devuelve EXCLUSIVAMENTE un objeto JSON válido que cumpla estrictamente con esta estructura (sin bloques markdown ```json ni texto extra):
+
+{{
+  "tables": [
+    {{
+      "name": "nombre_tabla",
+      "columns": [
+        {{
+          "name": "nombre_columna",
+          "type": "VARCHAR/BIGINT/INT/TIMESTAMP/BOOLEAN/TEXT",
+          "is_pk": true,
+          "is_fk": false,
+          "is_nullable": false,
+          "target_table": null
+        }}
+      ],
+      "indexes": [
+        "CREATE INDEX idx_name ON table (col)"
+      ]
+    }}
+  ],
+  "orm_type": "{framework}"
+}}
+"""
+ORM_SCHEMA_EXTRACTOR_VARS = ["framework", "source_code"]
+
+
 async def initialize_prompts(session: AsyncSession):
     prompts_to_init: list[dict[str, Any]] = [
         {
@@ -137,6 +174,18 @@ async def initialize_prompts(session: AsyncSession):
             "description": "Contextual mentor prompt for anti-patterns",
             "content": CONTEXTUAL_MENTOR_CONTENT,
             "required_variables": CONTEXTUAL_MENTOR_VARS
+        },
+        {
+            "id": DB_ARCHITECT_AUDITOR_ID,
+            "description": "Database Studio AI DB Architect Auditor",
+            "content": DB_ARCHITECT_AUDITOR_CONTENT,
+            "required_variables": DB_ARCHITECT_AUDITOR_VARS
+        },
+        {
+            "id": ORM_SCHEMA_EXTRACTOR_ID,
+            "description": "Database Studio ORM Schema Extractor",
+            "content": ORM_SCHEMA_EXTRACTOR_CONTENT,
+            "required_variables": ORM_SCHEMA_EXTRACTOR_VARS
         }
     ]
 
@@ -227,6 +276,10 @@ async def restore_prompt(session: AsyncSession, prompt_id: str) -> PromptRegistr
         golden_content = AUTO_FIX_CONTENT
     elif prompt_id == CONTEXTUAL_MENTOR_ID:
         golden_content = CONTEXTUAL_MENTOR_CONTENT
+    elif prompt_id == DB_ARCHITECT_AUDITOR_ID:
+        golden_content = DB_ARCHITECT_AUDITOR_CONTENT
+    elif prompt_id == ORM_SCHEMA_EXTRACTOR_ID:
+        golden_content = ORM_SCHEMA_EXTRACTOR_CONTENT
     else:
         raise ValueError(f"No golden content available for {prompt_id}")
 
@@ -304,7 +357,7 @@ Si recibes native_errors, prioriza explicar y resolver estos errores de compilac
 
 Estructura EXACTA requerida:
 [
-  { "line": 12, "severity": "hint" | "warning" | "error", "title": "Título corto", "message": "Consejo breve", "explanation": "El campo explanation DEBE ser extenso, profundo y altamente pedagógico. No te limites a decir qué está mal. Explica el \\"Por qué\\", los riesgos reales (ej. memoria, seguridad, mantenibilidad) y por qué la solución propuesta (snippet_after) es el estándar de un Senior Engineer. Habla como un mentor experto y paciente.", "snippet_before": "Líneas exactas del código original del usuario", "snippet_after": "Versión corregida y nivel Senior", "suggested_code": "null" }
+  { "line": 12, "severity": "hint" | "warning" | "error", "title": "Título corto", "message": "Consejo breve", "explanation": "El campo explanation DEBE ser extenso, profundo y altamente pedagógico. No te limites a decir qué está mal. Explica el \"Por qué\", los riesgos reales (ej. memoria, seguridad, mantenibilidad) y por qué la solución propuesta (snippet_after) es el estándar de un Senior Engineer. Habla como un mentor experto y paciente.", "snippet_before": "Líneas exactas del código original del usuario", "snippet_after": "Versión corregida y nivel Senior", "suggested_code": "null" }
 ]
 
 EJEMPLO DE SALIDA ESPERADA:
@@ -312,3 +365,39 @@ EJEMPLO DE SALIDA ESPERADA:
 
 Usa SIEMPRE variables reales del archivo, NUNCA código genérico (foo/bar). No incluyas markdown, explicaciones previas ni texto fuera del arreglo JSON. CRÍTICO: TIENES PROHIBIDO PENSAR EN VOZ ALTA. NO expliques tu razonamiento fuera del JSON."""
 CONTEXTUAL_MENTOR_VARS: list[str] = []
+
+DB_ARCHITECT_AUDITOR_ID = "db_architect_auditor"
+DB_ARCHITECT_AUDITOR_CONTENT = """Eres un Arquitecto de Base de Datos Senior (Database Architect Auditor). Tu objetivo es analizar el esquema de base de datos provisto en formato JSON (SchemaIR) y generar un reporte de auditoría completo y profundo.
+
+Esquema JSON (SchemaIR):
+{schema_json}
+
+INSTRUCCIONES DE AUDITORÍA:
+1. Analiza las tablas, columnas, tipos de datos, claves primarias (PK), claves foráneas (FK) e índices.
+2. Identifica riesgos clave:
+   - Claves foráneas (FK) sin índice correspondiente (riesgo de locks/slow joins).
+   - Tipos de datos riesgosos (ej. FLOAT/REAL para dinero, VARCHAR sin límite, falta de campos timestamp).
+   - Riesgos N+1 en relaciones o falta de claves primarias.
+   - Consideraciones de seguridad y multitenancy (ej. falta de tenant_id u org_id en tablas principales).
+3. Devuelve EXCLUSIVAMENTE un objeto JSON válido con la siguiente estructura exacta (sin markdown extra alrededor):
+
+{{
+  "summary": "Resumen ejecutivo del estado de la base de datos",
+  "score": 85,
+  "alerts": [
+    {{
+      "severity": "critical" | "warning" | "info",
+      "title": "Título corto de la alerta",
+      "table": "nombre_tabla",
+      "description": "Explicación detallada del problema y su impacto",
+      "migration_suggestion": "ALTER TABLE ... / CREATE INDEX ..."
+    }}
+  ],
+  "recommendations": [
+    "Sugerencia accionable 1",
+    "Sugerencia accionable 2"
+  ]
+}}
+"""
+DB_ARCHITECT_AUDITOR_VARS = ["schema_json"]
+

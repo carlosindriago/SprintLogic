@@ -61,11 +61,12 @@ export default function ToolsSettingsSection() {
   const handleOverride = async (toolName: string, providerId: string, modelId: string) => {
     setSaving(toolName);
     try {
-      await updateToolModel(toolName, providerId, modelId);
+      await updateToolModel(toolName, providerId, modelId, toolName === "__default__" ? globalDefault?.fallback_models || null : undefined);
       if (toolName === "__default__") {
         setGlobalDefault({
           provider: providerId,
           model: modelId,
+          fallback_models: globalDefault?.fallback_models || null,
           is_overridden: true,
         });
         // Refresh all tools since their effective model might change

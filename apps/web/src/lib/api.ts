@@ -309,6 +309,7 @@ export interface ToolModelEntry {
   description: string;
   provider_id: string | null;
   model_name: string | null;
+  fallback_models: string[] | null;
   is_overridden: boolean;
   default_provider: string;
   default_model: string;
@@ -319,6 +320,7 @@ export interface ToolModelEntry {
 export interface GlobalDefaultEntry {
   provider: string;
   model: string;
+  fallback_models: string[] | null;
   is_overridden: boolean;
 }
 
@@ -328,10 +330,10 @@ export interface ToolModelResponse {
 }
 
 export const fetchToolModels = () => api.get<ToolModelResponse>('/settings/tool-models');
-export const updateToolModel = (toolName: string, providerId: string, modelName: string) =>
-  api.put<{ tool_name: string; provider_id: string; model_name: string }>(
+export const updateToolModel = (toolName: string, providerId: string, modelName: string, fallbackModels: string[] | null = null) =>
+  api.put<{ tool_name: string; provider_id: string; model_name: string; fallback_models: string[] | null }>(
     `/settings/tool-models/${toolName}`,
-    { provider_id: providerId, model_name: modelName }
+    { provider_id: providerId, model_name: modelName, fallback_models: fallbackModels }
   );
 export const deleteToolModel = (toolName: string) =>
   api.delete<{ status: string; tool_name: string }>(`/settings/tool-models/${toolName}`);
@@ -606,4 +608,119 @@ export async function applyPatch(projectId: string, filePath: string, originalCo
   });
   if (!res.ok) throw new Error("Failed to apply patch");
   return res.json();
+}
+
+// --- Database Studio ---
+export interface ColumnIR {
+  name: string;
+  type: string;
+  is_pk: boolean;
+  is_fk: boolean;
+  is_nullable: boolean;
+  target_table?: string | null;
+}
+
+export interface TableIR {
+  name: string;
+  columns: ColumnIR[];
+  indexes: string[];
+}
+
+export interface SchemaIR {
+  tables: TableIR[];
+  orm_type: string;
+  extraction_level?: 'live' | 'orm' | 'static' | 'none';
+  detected_framework?: string | null;
+  is_outdated?: boolean;
+}
+
+export interface DBAuditAlert {
+  severity: 'critical' | 'warning' | 'info';
+  title: string;
+  table: string;
+  description: string;
+  migration_suggestion?: string | null;
+}
+
+export interface DBAuditResponse {
+  summary: string;
+  score: number;
+  alerts: DBAuditAlert[];
+  recommendations: string[];
+  created_at?: string;
+}
+
+export const fetchProjectSchema = (projectId: string, mode = 'auto', dbUrl?: string) => {
+  const query = new URLSearchParams({ mode });
+  if (dbUrl) query.append('db_url', dbUrl);
+  return api.get<SchemaIR>(`/projects/${projectId}/database/schema?${query.toString()}`);
+};
+
+export const rescanProjectSchema = (projectId: string, mode = 'auto', dbUrl?: string) => {
+  const query = new URLSearchParams({ mode });
+  if (dbUrl) query.append('db_url', dbUrl);
+  return api.post<SchemaIR>(`/projects/${projectId}/database/schema/rescan?${query.toString()}`);
+};
+
+export const exportProjectSchemaSQL = (projectId: string) => {
+  return `${API_BASE_URL}/projects/${projectId}/database/export/sql`;
+};
+
+export const exportProjectSchemaMarkdown = (projectId: string) => {
+  return `${API_BASE_URL}/projects/${projectId}/database/export/markdown`;
+};
+
+export const auditProjectSchema = (projectId: string, payload?: SchemaIR, mode = 'auto', dbUrl?: string) => {
+  const query = new URLSearchParams({ mode });
+  if (dbUrl) query.append('db_url', dbUrl);
+  return api.post<DBAuditResponse>(`/projects/${projectId}/database/audit?${query.toString()}`, payload);
+};
+
+export const fetchLatestProjectAudit = (projectId: string) => {
+  return api.get<DBAuditResponse>(`/projects/${projectId}/database/audit/latest`);
+};
+
+export const previewProjectDatabase = (projectId: string, schema: SchemaIR) => {
+  return api.post<{ sql: string; orm: string }>(`/projects/${projectId}/database/preview`, schema);
+};
+
+export const applyProjectDatabase = (projectId: string, schema: SchemaIR) => {
+  return api.post<{ status: string; message: string }>(`/projects/${projectId}/database/apply`, schema);
+};
+
+export interface SchemaDraft {
+  id: string;
+  project_id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MigrationPlanResponse {
+  plan: string;
+}
+
+export async function fetchDrafts(projectId: string): Promise<SchemaDraft[]> {
+  const res = await api.get<SchemaDraft[]>(`/projects/${projectId}/database/drafts`);
+  return res;
+}
+
+export async function createDraft(projectId: string, name: string): Promise<SchemaDraft> {
+  const res = await api.post<SchemaDraft>(`/projects/${projectId}/database/drafts`, { name });
+  return res;
+}
+
+export async function updateDraft(projectId: string, draftId: string, schema: SchemaIR): Promise<{ status: string, message: string }> {
+  const res = await api.put<{ status: string, message: string }>(`/projects/${projectId}/database/drafts/${draftId}`, schema);
+  return res;
+}
+
+export async function deleteDraft(projectId: string, draftId: string): Promise<{ status: string, message: string }> {
+  const res = await api.delete<{ status: string, message: string }>(`/projects/${projectId}/database/drafts/${draftId}`);
+  return res;
+}
+
+export async function generateMigrationPlan(projectId: string, draftId: string): Promise<MigrationPlanResponse> {
+  const res = await api.post<MigrationPlanResponse>(`/projects/${projectId}/database/drafts/${draftId}/generate-plan`);
+  return res;
 }

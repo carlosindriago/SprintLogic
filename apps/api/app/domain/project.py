@@ -12,6 +12,9 @@ class Project:
     id: UUID = field(default_factory=uuid4)
     last_opened: datetime | None = field(default=None)
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    cached_schema: dict | None = field(default=None)
+    schema_hash: str | None = field(default=None)
+    schema_updated_at: datetime | None = field(default=None)
 
     def __post_init__(self) -> None:
         if not self.name or not self.name.strip():

@@ -17,6 +17,7 @@ class AnalysisReportResponse(BaseModel):
     """
     id: UUID = Field(..., description="Unique identifier for the report")
     project_id: UUID = Field(..., description="The project this report belongs to")
+    type: str = Field("code_analysis", description="Type of report: db_audit, code_analysis, architecture")
     content: str = Field(..., description="The markdown content of the AI report")
     ai_model_version: str = Field(..., description="The AI model that generated this report")
     structural_metrics: dict | None = Field(None, description="Deterministic graph metrics computed via NetworkX")

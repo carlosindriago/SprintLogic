@@ -1,4 +1,3 @@
-import re
 
 path = 'apps/web/src/components/GraphScene.tsx'
 with open(path, 'r') as f:
