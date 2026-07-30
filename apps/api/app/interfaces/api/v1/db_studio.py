@@ -1,5 +1,6 @@
 import json
 import logging
+from datetime import UTC
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -115,6 +116,7 @@ class DBAuditResponse(BaseModel):
     score: int = 100
     alerts: list[DBAuditAlert] = Field(default_factory=list)
     recommendations: list[str] = Field(default_factory=list)
+    created_at: str | None = None
 
 
 def format_db_audit_markdown(audit: DBAuditResponse) -> str:
@@ -381,21 +383,346 @@ async def audit_project_database_schema(
     # Persist report in AnalysisReportModel with type="db_audit"
     try:
         import uuid
+        from datetime import datetime
 
         from app.infrastructure.db.models import AnalysisReportModel
 
         report_md = format_db_audit_markdown(audit_res)
+        now = datetime.now(UTC)
+        audit_res.created_at = now.isoformat()
+
         new_report = AnalysisReportModel(
             id=uuid.uuid4(),
             project_id=project_uuid,
             type="db_audit",
             content=report_md,
             ai_model_version=resolved_label,
-            structural_metrics={"score": audit_res.score, "alerts_count": len(audit_res.alerts)}
+            structural_metrics={
+                "score": audit_res.score,
+                "alerts_count": len(audit_res.alerts),
+                "raw_audit": audit_res.model_dump()
+            },
+            created_at=now
         )
         session.add(new_report)
         await session.commit()
     except Exception as persist_err:
-        logger.error("Failed to persist DB audit report: %s", persist_err, exc_info=True)
+        logger.warning("Failed to persist database audit report: %s", persist_err)
 
     return audit_res
+
+@router.get("/projects/{project_id}/database/audit/latest", response_model=DBAuditResponse)
+async def get_latest_database_audit(
+    project_id: str,
+    session: AsyncSession = Depends(get_db_session)
+):
+    try:
+        project_uuid = UUID(project_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+
+    from sqlalchemy import select
+
+    from app.infrastructure.db.models import AnalysisReportModel
+
+    stmt = (
+        select(AnalysisReportModel)
+        .where(AnalysisReportModel.project_id == project_uuid)
+        .where(AnalysisReportModel.type == "db_audit")
+        .order_by(AnalysisReportModel.created_at.desc())
+        .limit(1)
+    )
+    result = await session.execute(stmt)
+    report = result.scalar_one_or_none()
+
+    if not report or not report.structural_metrics or "raw_audit" not in report.structural_metrics:
+        raise HTTPException(status_code=404, detail="No audit history found")
+
+    audit_data = report.structural_metrics["raw_audit"]
+    # Ensure created_at is stringified
+    if report.created_at:
+        audit_data["created_at"] = report.created_at.isoformat()
+    return DBAuditResponse.model_validate(audit_data)
+
+
+@router.post("/projects/{project_id}/database/preview")
+async def preview_project_database_schema(
+    project_id: str,
+    schema: SchemaIR
+):
+    try:
+        UUID(project_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+
+    from app.infrastructure.db_inspector.schema_exporter import export_to_sql
+
+    sql_content = export_to_sql(schema)
+    return {
+        "sql": sql_content,
+        "orm": "-- ORM generation not yet implemented --\n"
+    }
+
+
+@router.post("/projects/{project_id}/database/apply")
+async def apply_project_database_schema(
+    project_id: str,
+    schema: SchemaIR
+):
+    try:
+        UUID(project_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+
+    # Simulando escritura en disco
+    logger.info("🚀 Aplicando esquema al disco (Simulado) para proyecto %s. %d tablas detectadas.", project_id, len(schema.tables))
+    return {"status": "success", "message": "Esquema sincronizado exitosamente (simulado)"}
+
+
+
+
+from pydantic import BaseModel
+
+
+class SchemaDraftCreate(BaseModel):
+    name: str
+
+class SchemaDraftResponse(BaseModel):
+    id: str
+    project_id: str
+    name: str
+    created_at: str
+    updated_at: str
+
+@router.get("/projects/{project_id}/database/drafts", response_model=list[SchemaDraftResponse])
+async def list_schema_drafts(
+    project_id: str,
+    session: AsyncSession = Depends(get_db_session)
+):
+    try:
+        project_uuid = UUID(project_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+
+    from sqlalchemy import select
+
+    from app.infrastructure.db.models import SchemaDraftModel
+
+    stmt = (
+        select(SchemaDraftModel)
+        .where(SchemaDraftModel.project_id == project_uuid)
+        .order_by(SchemaDraftModel.created_at.desc())
+    )
+    result = await session.execute(stmt)
+    drafts = result.scalars().all()
+
+    return [
+        SchemaDraftResponse(
+            id=str(d.id),
+            project_id=str(d.project_id),
+            name=d.name,
+            created_at=d.created_at.isoformat(),
+            updated_at=d.updated_at.isoformat()
+        ) for d in drafts
+    ]
+
+@router.post("/projects/{project_id}/database/drafts", response_model=SchemaDraftResponse)
+async def create_schema_draft(
+    project_id: str,
+    payload: SchemaDraftCreate,
+    session: AsyncSession = Depends(get_db_session)
+):
+    try:
+        project_uuid = UUID(project_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+
+    repo = SQLAlchemyProjectRepository(session)
+    project = await repo.get_project(project_uuid)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    import uuid
+    from datetime import datetime
+
+    from app.infrastructure.db.models import SchemaDraftModel
+
+    now = datetime.now(UTC)
+    new_draft = SchemaDraftModel(
+        id=uuid.uuid4(),
+        project_id=project_uuid,
+        name=payload.name,
+        schema_data=project.cached_schema,
+        created_at=now,
+        updated_at=now
+    )
+    session.add(new_draft)
+    await session.commit()
+
+    return SchemaDraftResponse(
+        id=str(new_draft.id),
+        project_id=str(new_draft.project_id),
+        name=new_draft.name,
+        created_at=new_draft.created_at.isoformat(),
+        updated_at=new_draft.updated_at.isoformat()
+    )
+
+@router.put("/projects/{project_id}/database/drafts/{draft_id}")
+async def update_schema_draft(
+    project_id: str,
+    draft_id: str,
+    schema: SchemaIR,
+    session: AsyncSession = Depends(get_db_session)
+):
+    try:
+        project_uuid = UUID(project_id)
+        draft_uuid = UUID(draft_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid ID format")
+
+    from datetime import datetime
+
+    from sqlalchemy import select
+
+    from app.infrastructure.db.models import SchemaDraftModel
+
+    stmt = select(SchemaDraftModel).where(SchemaDraftModel.id == draft_uuid, SchemaDraftModel.project_id == project_uuid)
+    result = await session.execute(stmt)
+    draft = result.scalar_one_or_none()
+
+    if not draft:
+        raise HTTPException(status_code=404, detail="Draft not found")
+
+    draft.schema_data = schema.model_dump()
+    draft.updated_at = datetime.now(UTC)
+    await session.commit()
+
+    return {"status": "success", "message": "Draft updated"}
+
+@router.delete("/projects/{project_id}/database/drafts/{draft_id}")
+async def delete_schema_draft(
+    project_id: str,
+    draft_id: str,
+    session: AsyncSession = Depends(get_db_session)
+):
+    try:
+        project_uuid = UUID(project_id)
+        draft_uuid = UUID(draft_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid ID format")
+
+    from sqlalchemy import select
+
+    from app.infrastructure.db.models import SchemaDraftModel
+
+    stmt = select(SchemaDraftModel).where(SchemaDraftModel.id == draft_uuid, SchemaDraftModel.project_id == project_uuid)
+    result = await session.execute(stmt)
+    draft = result.scalar_one_or_none()
+
+    if not draft:
+        raise HTTPException(status_code=404, detail="Draft not found")
+
+    await session.delete(draft)
+    await session.commit()
+
+    return {"status": "success", "message": "Draft deleted"}
+
+def lightweight_schema_diff(main_schema: dict, draft_schema: dict) -> str:
+    main_tables = {t['name']: t for t in main_schema.get('tables', [])}
+    draft_tables = {t['name']: t for t in draft_schema.get('tables', [])}
+
+    added_tables = []
+    removed_tables = []
+    modified_tables = []
+
+    for tname, tdata in draft_tables.items():
+        if tname not in main_tables:
+            added_tables.append(tname)
+        else:
+            main_cols = {c['name']: c for c in main_tables[tname].get('columns', [])}
+            draft_cols = {c['name']: c for c in tdata.get('columns', [])}
+
+            added_cols = [c for c in draft_cols if c not in main_cols]
+            removed_cols = [c for c in main_cols if c not in draft_cols]
+
+            modifications = []
+            if added_cols:
+                modifications.append(f"added columns: {added_cols}")
+            if removed_cols:
+                modifications.append(f"removed columns: {removed_cols}")
+
+            if modifications:
+                modified_tables.append(f"{tname} ({'; '.join(modifications)})")
+
+    for tname in main_tables:
+        if tname not in draft_tables:
+            removed_tables.append(tname)
+
+    lines = []
+    if added_tables:
+        lines.append(f"Tablas creadas: {', '.join(added_tables)}")
+    if removed_tables:
+        lines.append(f"Tablas eliminadas: {', '.join(removed_tables)}")
+    if modified_tables:
+        lines.append(f"Tablas modificadas: {', '.join(modified_tables)}")
+
+    return "\n".join(lines) if lines else "No hay cambios estructurales."
+
+@router.post("/projects/{project_id}/database/drafts/{draft_id}/generate-plan")
+async def generate_migration_plan(
+    project_id: str,
+    draft_id: str,
+    session: AsyncSession = Depends(get_db_session)
+):
+    try:
+        project_uuid = UUID(project_id)
+        draft_uuid = UUID(draft_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid ID format")
+
+    repo = SQLAlchemyProjectRepository(session)
+    project = await repo.get_project(project_uuid)
+    if not project or not project.cached_schema:
+        raise HTTPException(status_code=400, detail="Project schema not found")
+
+    from sqlalchemy import select
+
+    from app.infrastructure.db.models import SchemaDraftModel
+
+    stmt = select(SchemaDraftModel).where(SchemaDraftModel.id == draft_uuid, SchemaDraftModel.project_id == project_uuid)
+    result = await session.execute(stmt)
+    draft = result.scalar_one_or_none()
+
+    if not draft or not draft.schema_data:
+        raise HTTPException(status_code=404, detail="Draft not found")
+
+    diff_string = lightweight_schema_diff(project.cached_schema, draft.schema_data)
+    orm_type = project.cached_schema.get('detected_framework', 'SQL')
+
+    prompt = f"""
+Eres el COACH IA experto en arquitecturas de bases de datos y migraciones ({orm_type}).
+Se te proporcionará un Diff ligero con los cambios que el desarrollador quiere hacer en su base de datos.
+Debes crear un PLAN DE MIGRACIÓN paso a paso (Markdown).
+
+CAMBIOS DETECTADOS:
+{diff_string}
+
+INSTRUCCIONES:
+1. Explica los comandos exactos para generar la migración en {orm_type}.
+2. Muestra el código de la migración (up/down).
+3. Muestra el código del modelo/entidad actualizado.
+"""
+    try:
+        provider, model_id, fallbacks = await resolve_tool_model(session, "database_studio")
+        resolved_label = tool_model_label(provider, model_id)
+        gateway = LiteLLMGateway(model_name=resolved_label)
+    except Exception:
+        gateway = LiteLLMGateway()
+
+    try:
+        raw_response = await gateway.generate_completion(prompt, fallbacks=fallbacks if 'fallbacks' in locals() else None)
+    except Exception as e:
+        logger.error("LLM completion failed for migration plan: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to run AI migration plan")
+
+    return {"plan": raw_response}
