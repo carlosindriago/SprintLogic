@@ -8,6 +8,8 @@ import { getFileContent } from '@/lib/api';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
 import { useDocStudioStore } from '@/store/docStudioStore';
+import { useUnsavedStore } from '@/store/unsavedStore';
+import ZenCodeLens from './ZenCodeLens';
 
 export default function DocumentStudioTab() {
   const currentProjectId = useProjectStore((state) => state.projectId);
@@ -15,9 +17,12 @@ export default function DocumentStudioTab() {
   const setProjectState = usePlanningStore((state) => state.setProjectState);
   const projectStates = usePlanningStore((state) => state.projectStates);
 
-  const [mode, setMode] = useState<'chat' | 'autodoc' | 'reader'>('chat');
+  const [mode, setMode] = useState<'chat' | 'autodoc' | 'reader' | 'zen'>('chat');
   const [discovery, setDiscovery] = useState<DocDiscoveryResult | null>(null);
   const [loadingDiscovery, setLoadingDiscovery] = useState(false);
+  
+  const activeZenFilePath = useDocStudioStore(s => s.activeZenFilePath);
+  const [zenCodeContent, setZenCodeContent] = useState('');
   
   // Auto-Doc State
   const [selectedFile, setSelectedFile] = useState<{ file_path: string; is_documented: boolean } | null>(null);
@@ -47,6 +52,20 @@ export default function DocumentStudioTab() {
   const [auditReport, setAuditReport] = useState<string | null>(null);
 
   const { fontSize, theme, lineHeight, setFontSize, setTheme, setLineHeight } = useDocStudioStore();
+
+  useEffect(() => {
+    if (activeZenFilePath) {
+      queueMicrotask(() => setMode('zen'));
+      const draft = useUnsavedStore.getState().getContent(activeZenFilePath);
+      if (draft) {
+        queueMicrotask(() => setZenCodeContent(draft));
+      } else if (currentProjectId) {
+        getFileContent(currentProjectId, activeZenFilePath)
+          .then(res => setZenCodeContent(res.content))
+          .catch(console.error);
+      }
+    }
+  }, [activeZenFilePath, currentProjectId]);
 
   const loadDiscovery = useCallback(async () => {
     if (!currentProjectId) return;
@@ -471,10 +490,11 @@ export default function DocumentStudioTab() {
             </div>
           </div>
         ) : (
-          <div className="flex flex-col h-full">
-            {/* Zen Toolbar */}
-            <div className="h-14 border-b border-zinc-800/50 flex items-center justify-between px-6 bg-[#0F0F0F] shrink-0">
-              <div className="flex items-center gap-4">
+          <div className="flex-1 flex flex-col min-w-0">
+            {/* Header Toolbar */}
+            {mode !== 'zen' && (
+              <div className={`h-14 border-b border-black/10 dark:border-zinc-800/50 flex items-center justify-between px-6 shrink-0 transition-colors duration-300 ${isEditMode ? 'bg-[#0A0A0A]' : themeClasses[theme]}`}>
+                <div className="flex items-center gap-4">
                 <div className="flex items-center bg-zinc-900 rounded-lg p-1">
                   <button onClick={() => setIsEditMode(false)} className={`px-3 py-1.5 rounded-md text-xs font-medium flex items-center gap-2 transition-colors ${!isEditMode ? 'bg-zinc-800 text-zinc-200' : 'text-zinc-500 hover:text-zinc-300'}`}>
                     <Eye className="h-3.5 w-3.5" /> Lectura
@@ -532,12 +552,19 @@ export default function DocumentStudioTab() {
                 </button>
               </div>
             </div>
+            )}
 
             {/* Editor / Reader Area */}
-            <div className={`flex-1 flex overflow-hidden transition-colors duration-300 ${isEditMode ? 'bg-[#0A0A0A]' : themeClasses[theme]}`}>
-              <div className="flex-1 overflow-y-auto px-8 py-12 flex justify-center">
-                <div className={`w-full relative ${auditReport ? 'max-w-2xl' : 'max-w-4xl'}`}>
-                  {isEditMode ? (
+            <div className={`flex-1 flex overflow-hidden transition-colors duration-300 ${isEditMode ? 'bg-[#0A0A0A]' : mode === 'zen' ? 'bg-transparent' : themeClasses[theme]}`}>
+              <div className={`flex-1 overflow-y-auto ${mode === 'zen' ? 'p-0' : 'px-8 py-12'} flex justify-center`}>
+                <div className={`w-full relative ${auditReport ? 'max-w-2xl' : mode === 'zen' ? 'max-w-none h-full' : 'max-w-4xl'}`}>
+                  {mode === 'zen' ? (
+                    <ZenCodeLens
+                      filePath={activeZenFilePath || ''}
+                      codeContent={zenCodeContent}
+                      language={activeZenFilePath?.endsWith('.ts') || activeZenFilePath?.endsWith('.tsx') ? 'typescript' : activeZenFilePath?.endsWith('.py') ? 'python' : 'javascript'}
+                    />
+                  ) : isEditMode ? (
                     <textarea
                       value={editContent}
                       onChange={(e) => setEditContent(e.target.value)}
@@ -609,9 +636,31 @@ export default function DocumentStudioTab() {
                            // Try to scroll to text (rough estimation)
                            (window as unknown as { find: (text: string) => void }).find(b.selected_text.substring(0, 50));
                         }}>
-                          <div className="flex items-start gap-2">
-                            <Bookmark className="h-3.5 w-3.5 shrink-0 opacity-50 mt-0.5" />
-                            <p className="text-xs leading-relaxed italic opacity-80 line-clamp-4">&quot;{b.selected_text}&quot;</p>
+                          <div className="flex flex-col gap-2">
+                            <div className="flex items-start gap-2">
+                              <Bookmark className="h-3.5 w-3.5 shrink-0 opacity-50 mt-0.5" />
+                              <p className="text-xs leading-relaxed italic opacity-80 line-clamp-4">&quot;{b.selected_text}&quot;</p>
+                            </div>
+                            <div className="flex justify-end mt-1">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (currentProjectId) {
+                                    const currentMessages = projectStates[currentProjectId]?.messages || [];
+                                    setProjectState(currentProjectId, {
+                                      messages: [
+                                        ...currentMessages,
+                                        { role: 'user', content: `Revisa este marcador en ${b.file_path}:\\n\\n\`\`\`\\n${b.selected_text}\\n\`\`\`\\n\\n¿Podemos integrarlo en nuestro plan?` }
+                                      ]
+                                    });
+                                  }
+                                  setActiveTab('planning');
+                                }}
+                                className="bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-500/20 px-2 py-1 rounded text-[10px] font-semibold transition-all flex items-center gap-1"
+                              >
+                                🚀 Llevar al Planning Studio
+                              </button>
+                            </div>
                           </div>
                         </div>
                       ))

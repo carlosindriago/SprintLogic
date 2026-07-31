@@ -103,7 +103,7 @@ const DocumentStudioTab = dynamic(() => import("@/components/DocumentStudioTab")
 export default function Home() {
   const [path, setPath] = useState("");
   const [projects, setProjects] = useState<Project[]>([]);
-  const { projectId, setProjectId } = useProjectStore();
+  const { projectId, setProjectId, setProjectPath } = useProjectStore();
   const [loading, setLoading] = useState(false);
   const [apiReady, setApiReady] = useState(false);
     const [helpOpen, setHelpOpen] = useState(false);
@@ -154,6 +154,13 @@ export default function Home() {
   }, [projectId, switchProject]);
 
   useEffect(() => {
+    if (projectId && projects.length > 0) {
+      const proj = projects.find(p => p.id === projectId);
+      if (proj) setProjectPath(proj.path);
+    }
+  }, [projectId, projects, setProjectPath]);
+
+  useEffect(() => {
     const handleToggleHelp = () => setHelpOpen((prev) => !prev);
     window.addEventListener("toggle-help", handleToggleHelp);
     return () => window.removeEventListener("toggle-help", handleToggleHelp);
@@ -202,11 +209,10 @@ export default function Home() {
     };
   }, [fetchProjects]);
 
-  const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
+  const { isChatOpen: rightSidebarOpen, toggleChat: toggleRightSidebar } = useChatStore();
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
 
   const toggleLeftSidebar = () => setLeftSidebarOpen(prev => !prev);
-  const toggleRightSidebar = () => setRightSidebarOpen(prev => !prev);
 
   const handleScan = async () => {
     if (!path) return;

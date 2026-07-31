@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.db.database import get_db_session
-from app.infrastructure.db.models import DocBookmarkModel
+from app.infrastructure.db.models import UniversalBookmarkModel
 from app.infrastructure.db.project_repository import SQLAlchemyProjectRepository
 from app.infrastructure.doc_inspector.doc_scanner import scan_markdown_docs, scan_undocumented_code
 from app.infrastructure.llm.litellm_gateway import LiteLLMGateway
@@ -40,6 +40,8 @@ class CreateBookmarkRequest(BaseModel):
     file_path: str
     selected_text: str
     note: str | None = None
+    start_line: int | None = None
+    end_line: int | None = None
 
 @router.get("/tree")
 async def discover_docs(
@@ -346,7 +348,7 @@ async def get_bookmarks(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid project_id format")
 
-    stmt = select(DocBookmarkModel).where(DocBookmarkModel.project_id == pid).order_by(DocBookmarkModel.created_at.desc())
+    stmt = select(UniversalBookmarkModel).where(UniversalBookmarkModel.project_id == pid, UniversalBookmarkModel.item_type == "document").order_by(UniversalBookmarkModel.created_at.desc())
     result = await session.execute(stmt)
     bookmarks = result.scalars().all()
 
@@ -356,6 +358,8 @@ async def get_bookmarks(
             "file_path": b.file_path,
             "selected_text": b.selected_text,
             "note": b.note,
+            "start_line": b.start_line,
+            "end_line": b.end_line,
             "created_at": b.created_at.isoformat()
         } for b in bookmarks
     ]
@@ -371,12 +375,15 @@ async def create_bookmark(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid project_id format")
 
-    new_bookmark = DocBookmarkModel(
+    new_bookmark = UniversalBookmarkModel(
         id=uuid.uuid4(),
         project_id=pid,
         file_path=request.file_path,
         selected_text=request.selected_text,
-        note=request.note
+        note=request.note,
+        item_type="document",
+        start_line=request.start_line,
+        end_line=request.end_line
     )
 
     session.add(new_bookmark)

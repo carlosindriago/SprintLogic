@@ -9,9 +9,11 @@ interface DocStudioState {
   fontSize: FontSize;
   theme: ZenTheme;
   lineHeight: LineHeight;
+  activeZenFilePath: string | null;
   setFontSize: (size: FontSize) => void;
   setTheme: (theme: ZenTheme) => void;
   setLineHeight: (height: LineHeight) => void;
+  setActiveZenFilePath: (path: string | null) => void;
 }
 
 export const useDocStudioStore = create<DocStudioState>()(
@@ -20,9 +22,11 @@ export const useDocStudioStore = create<DocStudioState>()(
       fontSize: 'base',
       theme: 'dark',
       lineHeight: 'relaxed',
+      activeZenFilePath: null,
       setFontSize: (size) => set({ fontSize: size }),
       setTheme: (theme) => set({ theme }),
       setLineHeight: (height) => set({ lineHeight: height }),
+      setActiveZenFilePath: (path) => set({ activeZenFilePath: path }),
     }),
     {
       name: 'doc-studio-storage',

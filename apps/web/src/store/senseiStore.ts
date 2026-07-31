@@ -7,8 +7,10 @@ import { create } from 'zustand';
 export interface SenseiEditorContext {
   /** Absolute path of the active file. */
   filePath: string;
-  /** 1-indexed line number of the cursor. */
+  /** 1-indexed line number of the cursor or start of selection. */
   cursorLine: number;
+  /** 1-indexed line number of the end of selection (optional). */
+  endLine?: number;
   /**
    * The most semantically relevant code block:
    *   1. Current text selection (preferred).

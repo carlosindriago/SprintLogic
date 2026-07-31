@@ -954,6 +954,52 @@ async def get_project_files(
     return tree
 
 
+@router.get("/projects/{project_id}/files/ast-folds")
+async def get_ast_folds(
+    project_id: str,
+    file_path: str,
+    session: AsyncSession = Depends(get_db_session),
+):
+    try:
+        project_uuid = UUID(project_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+
+    import json
+
+    from sqlalchemy import select
+
+    from app.domain.graph_models import NodeLabel
+    from app.infrastructure.db.models import GraphNodeModel
+
+    stmt = select(GraphNodeModel).where(
+        GraphNodeModel.project_id == project_uuid,
+        GraphNodeModel.file_path == file_path,
+        GraphNodeModel.label.in_([NodeLabel.FUNCTION, NodeLabel.CLASS])
+    )
+    result = await session.execute(stmt)
+    nodes = result.scalars().all()
+
+    folds = []
+    for node in nodes:
+        if node.meta_data:
+            try:
+                meta = json.loads(node.meta_data)
+                start = meta.get("start_line")
+                end = meta.get("end_line")
+                if start and end:
+                    folds.append({
+                        "start_line": start,
+                        "end_line": end,
+                        "type": str(node.label)
+                    })
+            except json.JSONDecodeError:
+                pass
+
+    return {"folds": folds}
+
+
+
 @router.get("/projects/{project_id}/file/content")
 async def get_project_file_content(
     project_id: str, path: str, session: AsyncSession = Depends(get_db_session)

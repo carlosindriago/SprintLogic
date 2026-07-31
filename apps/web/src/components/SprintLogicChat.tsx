@@ -34,6 +34,69 @@ function asValidModel(model: string): string | null {
   return trimmed;
 }
 
+const MessageContent = ({ content }: { content: string }) => {
+  const thinkRegex = /<think>([\s\S]*?)(?:<\/think>|$)/i;
+  const match = content.match(thinkRegex);
+  
+  if (match) {
+    const thinkContent = match[1].trim();
+    const mainContent = content.replace(match[0], '').trim();
+    
+    return (
+      <div className="flex flex-col gap-2">
+        <details className="group border border-zinc-700/50 rounded-md bg-zinc-900/30 overflow-hidden">
+          <summary className="cursor-pointer text-[10px] font-semibold text-zinc-400 px-3 py-1.5 hover:bg-zinc-800/50 transition-colors flex items-center gap-1.5 list-none select-none">
+            <span className="text-zinc-500 group-open:rotate-90 transition-transform">▶</span>
+            🧠 Proceso de razonamiento (Click para expandir)
+          </summary>
+          <div className="px-3 py-2 text-[10.5px] text-zinc-500 border-t border-zinc-800/50 bg-zinc-900/50 whitespace-pre-wrap font-mono leading-relaxed">
+            {thinkContent}
+          </div>
+        </details>
+        {mainContent && (
+          <ReactMarkdown
+            components={{
+              a: MarkdownLink,
+              code: ({ children }) => (
+                <code className="bg-zinc-900 px-1 py-0.5 rounded text-[11px] text-blue-300 font-mono">
+                  {children}
+                </code>
+              ),
+              pre: ({ children }) => (
+                <pre className="bg-zinc-900 p-2 rounded text-[11px] text-zinc-300 overflow-x-auto my-1">
+                  {children}
+                </pre>
+              ),
+            }}
+          >
+            {mainContent}
+          </ReactMarkdown>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <ReactMarkdown
+      components={{
+        a: MarkdownLink,
+        code: ({ children }) => (
+          <code className="bg-zinc-900 px-1 py-0.5 rounded text-[11px] text-blue-300 font-mono">
+            {children}
+          </code>
+        ),
+        pre: ({ children }) => (
+          <pre className="bg-zinc-900 p-2 rounded text-[11px] text-zinc-300 overflow-x-auto my-1">
+            {children}
+          </pre>
+        ),
+      }}
+    >
+      {content}
+    </ReactMarkdown>
+  );
+};
+
 export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLogicChatProps) {
   const defaultModel = useLLMConfigStore((s) => s.defaultModel);
   const setDefaultModel = useLLMConfigStore((s) => s.setDefaultModel);
@@ -549,7 +612,7 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
         </span>
         {isSenseiMode && anchoredContext && (
           <span className="text-[10px] text-amber-500/70 truncate max-w-[120px]" title={anchoredContext.filePath}>
-            {anchoredContext.filePath.split('/').pop()} :{anchoredContext.cursorLine}
+            📌 {anchoredContext.filePath.split('/').pop()} (Líneas {anchoredContext.cursorLine}{anchoredContext.endLine && anchoredContext.endLine !== anchoredContext.cursorLine ? `-${anchoredContext.endLine}` : ''})
           </span>
         )}
         <div className="flex-1" />
@@ -635,7 +698,7 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-500/5 border border-amber-500/20 text-[10px] text-amber-400/80">
             <GraduationCap className="w-3 h-3 shrink-0" aria-hidden="true" />
             <span className="truncate">
-              Anclado en <strong className="text-amber-400">{anchoredContext.filePath.split('/').pop()}</strong> — línea {anchoredContext.cursorLine}
+              📌 Anclado en <strong className="text-amber-400">{anchoredContext.filePath.split('/').pop()}</strong> (Líneas {anchoredContext.cursorLine}{anchoredContext.endLine && anchoredContext.endLine !== anchoredContext.cursorLine ? `-${anchoredContext.endLine}` : ''})
             </span>
           </div>
         )}
@@ -666,23 +729,7 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
               </div>
             )}
             {m.role === 'assistant' ? (
-              <ReactMarkdown
-                components={{
-                  a: MarkdownLink,
-                  code: ({ children }) => (
-                    <code className="bg-zinc-900 px-1 py-0.5 rounded text-[11px] text-blue-300 font-mono">
-                      {children}
-                    </code>
-                  ),
-                  pre: ({ children }) => (
-                    <pre className="bg-zinc-900 p-2 rounded text-[11px] text-zinc-300 overflow-x-auto my-1">
-                      {children}
-                    </pre>
-                  ),
-                }}
-              >
-                {m.content}
-              </ReactMarkdown>
+              <MessageContent content={m.content} />
             ) : (
               <div className="whitespace-pre-wrap">{m.content}</div>
             )}
