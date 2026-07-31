@@ -8,7 +8,7 @@ import { useTabsStore } from '@/store/tabsStore';
 import { useDocStudioStore } from '@/store/docStudioStore';
 import { useSenseiStore } from '@/store/senseiStore';
 import { useChatStore } from '@/store/chatStore';
-import { Pencil, WrapText, Maximize, Type, Rocket, Bookmark, ChevronDown, Plus, Bot } from 'lucide-react';
+import { Pencil, WrapText, Maximize, Rocket, Bookmark, ChevronDown, Plus, Bot } from 'lucide-react';
 import { API_BASE_URL } from '@/lib/api';
 
 const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false });
@@ -18,6 +18,12 @@ interface ASTFold {
   start_line: number;
   end_line: number;
   type: string;
+}
+
+interface Bookmark {
+  file_path: string;
+  start_line: number;
+  note?: string;
 }
 
 interface ZenCodeLensProps {
@@ -33,7 +39,7 @@ export default function ZenCodeLens({ filePath, codeContent, language = 'javascr
   const decorationsCollection = useRef<editor.IEditorDecorationsCollection | null>(null);
 
   const [folds, setFolds] = useState<ASTFold[]>([]);
-  const [bookmarks, setBookmarks] = useState<any[]>([]);
+  const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   
   const [wordWrap, setWordWrap] = useState<'on' | 'off'>('on');
   const [theme, setTheme] = useState<'vs-dark' | 'vs-light' | 'hc-black'>('vs-dark');
@@ -43,13 +49,13 @@ export default function ZenCodeLens({ filePath, codeContent, language = 'javascr
     line: number;
     top: number;
     left: number;
-    existing?: any;
+    existing?: Bookmark;
   } | null>(null);
   const [newNote, setNewNote] = useState('');
 
   const projectId = useProjectStore((state) => state.projectId);
 
-  const bookmarksRef = useRef<any[]>([]);
+  const bookmarksRef = useRef<Bookmark[]>([]);
   useEffect(() => { bookmarksRef.current = bookmarks; }, [bookmarks]);
 
   useEffect(() => {
@@ -72,7 +78,7 @@ export default function ZenCodeLens({ filePath, codeContent, language = 'javascr
         const res = await fetch(`${API_BASE_URL}/projects/${projectId}/docs/bookmarks`);
         if (res.ok) {
           const data = await res.json();
-          const fileBookmarks = data.filter((b: any) => b.file_path === filePath && b.start_line);
+          const fileBookmarks = data.filter((b: Bookmark) => b.file_path === filePath && b.start_line);
           setBookmarks(fileBookmarks);
         }
       } catch (err) {
@@ -86,6 +92,7 @@ export default function ZenCodeLens({ filePath, codeContent, language = 'javascr
 
   const applyFolds = (currentEditor: editor.IStandaloneCodeEditor, currentMonaco: unknown) => {
     if (!currentEditor || !currentMonaco) return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const monacoAny = currentMonaco as any;
     const selections = folds.map(f => new monacoAny.Selection(f.start_line, 1, f.end_line, 1));
     if (selections.length > 0) {
@@ -100,6 +107,7 @@ export default function ZenCodeLens({ filePath, codeContent, language = 'javascr
 
   useEffect(() => {
     if (editorRef.current && monacoRef.current && bookmarks.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const monacoAny = monacoRef.current as any;
       const decs = bookmarks.map(b => ({
         range: new monacoAny.Range(b.start_line, 1, b.start_line, 1),
@@ -187,6 +195,7 @@ export default function ZenCodeLens({ filePath, codeContent, language = 'javascr
 
       editor.onMouseDown((e) => {
       const target = e.target;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const monacoAny = monaco as any;
       if (target.type === monacoAny.editor.MouseTargetType.GUTTER_GLYPH_MARGIN) {
         const line = target.position?.lineNumber;
@@ -225,6 +234,7 @@ export default function ZenCodeLens({ filePath, codeContent, language = 'javascr
     // No se necesita antes de mount para las acciones, pero definiremos los temas acá
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleBeforeMount = (monaco: any) => {
     monaco.editor.defineTheme('dracula', {
       base: 'vs-dark',
@@ -354,7 +364,7 @@ export default function ZenCodeLens({ filePath, codeContent, language = 'javascr
   const toggleFullscreen = () => {
     if (containerRef.current) {
       if (!document.fullscreenElement) {
-        containerRef.current.requestFullscreen().catch(err => {
+        containerRef.current.requestFullscreen().catch(_err => {
           toast.error('Error al intentar abrir pantalla completa');
         });
       } else {
@@ -381,12 +391,12 @@ export default function ZenCodeLens({ filePath, codeContent, language = 'javascr
       
       const res2 = await fetch(`${API_BASE_URL}/projects/${projectId}/docs/bookmarks`);
       const data2 = await res2.json();
-      const fileBookmarks = data2.filter((b: any) => b.file_path === filePath && b.start_line);
+      const fileBookmarks = data2.filter((b: Bookmark) => b.file_path === filePath && b.start_line);
       setBookmarks(fileBookmarks);
       
       setPopover(null);
       toast.success('Nota guardada');
-    } catch (err) {
+    } catch (_err) {
       toast.error('Error al guardar nota');
     }
   };
@@ -421,7 +431,7 @@ export default function ZenCodeLens({ filePath, codeContent, language = 'javascr
           <div className="relative flex items-center">
             <select
               value={theme}
-              onChange={(e) => setTheme(e.target.value as any)}
+              onChange={(e) => setTheme(e.target.value as "vs-dark" | "vs-light" | "hc-black")}
               className="appearance-none bg-zinc-800 text-zinc-300 text-xs px-3 py-1.5 rounded-md pr-8 outline-none border border-zinc-700 hover:bg-zinc-700 focus:border-blue-500 transition-colors"
             >
               <option value="vs-dark">VS Dark</option>
