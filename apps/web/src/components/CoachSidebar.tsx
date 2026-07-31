@@ -148,8 +148,9 @@ export function CoachSidebar({
             }}
             disabled={isScanningTech}
             title="Re-escanear tecnologías"
+            aria-label="Re-escanear tecnologías"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isScanningTech ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${isScanningTech ? 'animate-spin' : ''}`} aria-hidden="true" />
           </Button>
         </div>
         
@@ -251,8 +252,9 @@ export function CoachSidebar({
                 disabled={isAnalyzingCode}
                 className="w-6 h-6 text-zinc-500 hover:text-white"
                 title="Recargar análisis (Health & Overview)"
+                aria-label="Recargar análisis (Health & Overview)"
               >
-                <RefreshCw className={`w-4 h-4 ${isAnalyzingCode ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`w-4 h-4 ${isAnalyzingCode ? 'animate-spin' : ''}`} aria-hidden="true" />
               </Button>
             )}
             {overview && !overview.is_degraded && !isAnalyzingCode && (
@@ -262,8 +264,9 @@ export function CoachSidebar({
               className="w-6 h-6 text-zinc-400 hover:text-white"
               onClick={handleCopyOverview}
               title="Copiar análisis al portapapeles"
+              aria-label="Copiar análisis al portapapeles"
             >
-              {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+              {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" aria-hidden="true" /> : <Copy className="w-3.5 h-3.5" aria-hidden="true" />}
             </Button>
             )}
           </div>
