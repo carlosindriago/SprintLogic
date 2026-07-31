@@ -115,6 +115,7 @@ interface GraphSceneProps {
 
 
 const extCache = new WeakMap<object, string>();
+const modCache = new WeakMap<object, string | null>();
 
 export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) {
   const [graphData, setGraphData] = useState<GraphData>({ nodes: [], links: [] });
@@ -537,9 +538,6 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
         
         // 1. Calculate the dynamic centroid for each Module
         nodes.forEach(d => {
-          if (d._modCache === undefined) {
-             d._modCache = (d.folder && d.folder !== "/") ? d.folder.split('/').filter(Boolean).slice(0, 2).join('/') : null;
-          }
           const mod = d._modCache;
           if (!mod) return;
           
@@ -635,7 +633,27 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     if (!graphData || !graphData.nodes) return { nodes: [], links: [] };
 
     // Deep-ish clone for d3-force to allow mutation of .x, .y, .vx, .vy without readonly errors
-    let nodes = graphData.nodes.map((n: GraphNode) => ({ ...n }));
+    let nodes = graphData.nodes.map((n: GraphNode) => {
+      const clone = { ...n } as ForceNode;
+
+      if (clone.label === "File") {
+        let ext = extCache.get(n);
+        if (ext === undefined) {
+          ext = clone.name?.split(".").pop()?.toLowerCase() || "";
+          extCache.set(n, ext);
+        }
+        clone._extCache = ext;
+      }
+
+      let mod = modCache.get(n);
+      if (mod === undefined) {
+        mod = (clone.folder && clone.folder !== "/") ? clone.folder.split('/').filter(Boolean).slice(0, 2).join('/') : null;
+        modCache.set(n, mod);
+      }
+      clone._modCache = mod;
+
+      return clone;
+    });
     let links = graphData.links.map((l: GraphEdge) => ({ ...l }));
 
     // Filter by node types — compare TitleCase label against the TitleCase activeTypes set
@@ -675,9 +693,6 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     
     displayGraphData.nodes.forEach((n: ForceNode) => {
       if (cutoffTimeRef.current && getSafeTime(n) > cutoffTimeRef.current) return;
-      if (n._modCache === undefined) {
-         n._modCache = (n.folder && n.folder !== "/") ? n.folder.split('/').filter(Boolean).slice(0, 2).join('/') : null;
-      }
       const mod = n._modCache;
       if (!mod) return;
       
@@ -758,8 +773,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     let glowColor = "rgba(148, 163, 184, 0.4)";
 
     if (label === "File") {
-      let ext = n._extCache;
-      if (ext === undefined) { ext = name.split(".").pop()?.toLowerCase() || ""; n._extCache = ext; }
+      const ext = n._extCache || "";
       color = extColorHash(ext);
       glowColor = bloomGlow(color, 0.45);
       radius = Math.max(3.5, degreeRadius * 0.9);
@@ -833,8 +847,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     // ── File icons (devicon — drawn over bloom) ──────────────────────────────
     let isIconDrawn = false;
     if (label === "File") {
-      let ext = n._extCache;
-      if (ext === undefined) { ext = name.split(".").pop()?.toLowerCase() || ""; n._extCache = ext; }
+      const ext = n._extCache || "";
       const img = iconImages.current[ext];
       if (img && img.complete && img.naturalWidth !== 0) {
         ctx.save();
