@@ -79,7 +79,7 @@ export default function TicketMentorDrawer({ ticketId, projectId, filePath, onCl
                   return newMsgs;
                 });
               }
-            } catch (_e) {
+            } catch {
               // ignore parse errors for incomplete chunks
             }
           }

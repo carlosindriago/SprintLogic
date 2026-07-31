@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { BookOpen, FileCode, CheckCircle, XCircle, Play, Send, Loader2, MessageSquare, Code, Edit3, Eye, Type, Sun, Moon, Coffee, Bookmark, AlignLeft, X } from 'lucide-react';
 import { useProjectStore } from '@/store/projectStore';
 import { useTabsStore } from '@/store/tabsStore';
@@ -75,10 +75,11 @@ export default function DocumentStudioTab() {
   }, [currentProjectId]);
 
   useEffect(() => {
-    if (currentProjectId) {
+    if (!currentProjectId) return;
+    Promise.resolve().then(() => {
       loadDiscovery();
       loadBookmarks();
-    }
+    });
   }, [currentProjectId, loadDiscovery, loadBookmarks]);
 
   const openReader = async (file: { file_path: string }) => {
