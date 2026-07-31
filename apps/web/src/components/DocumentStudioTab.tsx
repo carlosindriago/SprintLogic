@@ -169,7 +169,7 @@ export default function DocumentStudioTab() {
       toast.success('Auditoría completada', { id: loadingToast });
     } catch (err) {
       console.error('Failed to audit doc:', err);
-      toast.error(err.message || 'Error al auditar el documento', { id: loadingToast });
+      toast.error((err as Error).message || 'Error al auditar el documento', { id: loadingToast });
     } finally {
       setIsAuditing(false);
     }
