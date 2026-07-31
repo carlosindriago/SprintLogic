@@ -8,6 +8,7 @@ import { draftStore } from '@/lib/draftStore';
 import { useQuery } from '@tanstack/react-query';
 import { cn, hashString } from '@/lib/utils';
 import { useTabsStore } from '@/store/tabsStore';
+import { useDocStudioStore } from '@/store/docStudioStore';
 import { useMarkersStore } from '@/store/markersStore';
 import { useUnsavedStore } from '@/store/unsavedStore';
 import { useFocusStore } from '@/store/focusStore';
@@ -17,7 +18,7 @@ import { useFimStore } from '@/store/fimStore';
 import { useTddStore } from '@/store/tddStore';
 import { useSenseiStore } from '@/store/senseiStore';
 import type { GraphNode } from '@/types';
-import { Code2, ChevronRight, Pencil, Eye, MousePointer2, GraduationCap, Save, SaveAll, Sparkles, Loader2 } from 'lucide-react';
+import { Code2, ChevronRight, Pencil, Eye, MousePointer2, GraduationCap, Save, SaveAll, Sparkles, Loader2, Focus } from 'lucide-react';
 import FimHintBar from './FimHintBar';
 import ContextHUD, { type VimTutorMode } from './ContextHUD';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
@@ -1102,6 +1103,13 @@ export default function EditorTab({
     editorRef.current?.getAction('actions.find')?.run();
   }, []);
 
+  const handleZenMode = useCallback(() => {
+    if (!node.file_path) return;
+    useDocStudioStore.getState().setActiveZenFilePath(node.file_path);
+    useTabsStore.getState().addTab({ id: 'document-studio', title: 'Document Studio', type: 'document-studio' });
+    useTabsStore.getState().setActiveTab('document-studio');
+  }, [node.file_path]);
+
   const filePath = node?.file_path ?? '';
   const isUntitled = !node.file_path;
   const fileName = node.file_path
@@ -1464,6 +1472,15 @@ export default function EditorTab({
         {onMentor && (
           <>
         <div className="w-px h-5 bg-zinc-700/50 mx-1" />
+
+        <button
+          className={TOOLBAR_BUTTON}
+          onClick={handleZenMode}
+          title="Modo Zen (Lectura y Marcadores Semánticos)"
+          aria-label="Abrir Modo Zen"
+        >
+          <Focus className="w-3.5 h-3.5" />
+        </button>
 
         <CoachToggleButton isCoachEnabled={isCoachEnabled} onToggle={() => setIsCoachEnabled(!isCoachEnabled)} />
             <button

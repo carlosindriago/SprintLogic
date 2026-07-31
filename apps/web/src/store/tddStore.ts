@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { API_BASE_URL } from '@/lib/api';
 
 interface TddState {
   locks: Record<string, 'locked' | 'unlocked'>;
@@ -12,7 +13,7 @@ export const useTddStore = create<TddState>((set) => ({
   locks: {},
   fetchTddLocks: async (taskId) => {
     try {
-      const response = await fetch(`/api/v1/tdd/locks?task_id=${taskId}`);
+      const response = await fetch(`${API_BASE_URL}/tdd/locks?task_id=${taskId}`);
       if (response.ok) {
         const data = await response.json();
         set({ locks: data.locks });

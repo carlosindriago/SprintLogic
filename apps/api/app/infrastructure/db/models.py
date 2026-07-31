@@ -328,8 +328,8 @@ class ToolModelMappingModel(Base):
     fallback_models: Mapped[list | dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 
-class DocBookmarkModel(Base):
-    __tablename__ = "doc_bookmarks"
+class UniversalBookmarkModel(Base):
+    __tablename__ = "universal_bookmarks"
 
     id: Mapped[UUID] = mapped_column(primary_key=True)
     project_id: Mapped[UUID] = mapped_column(
@@ -338,4 +338,7 @@ class DocBookmarkModel(Base):
     file_path: Mapped[str] = mapped_column(String(1024), nullable=False)
     selected_text: Mapped[str] = mapped_column(Text, nullable=False)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    start_line: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    end_line: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    item_type: Mapped[str] = mapped_column(String(50), nullable=False, default="document")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)

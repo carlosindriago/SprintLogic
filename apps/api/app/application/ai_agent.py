@@ -396,6 +396,52 @@ class AIAgent:
                     },
                 },
             },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_file_bookmarks",
+                    "description": "Consulta las notas y marcadores (bookmarks) guardados para un archivo específico.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "file_path": {
+                                "type": "string",
+                                "description": "Ruta relativa del archivo a consultar",
+                            }
+                        },
+                        "required": ["file_path"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_node_dependencies",
+                    "description": "Consulta el radio de impacto o dependencias en el AST para un nodo/archivo.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "node_name": {
+                                "type": "string",
+                                "description": "Nombre del nodo o ruta del archivo, ej. 'src/AuthService.ts'",
+                            }
+                        },
+                        "required": ["node_name"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_project_context_summary",
+                    "description": "Retorna información general resumida del proyecto actual.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {},
+                        "required": [],
+                    },
+                },
+            },
         ]
 
         self._project_root: str | None = None
@@ -413,7 +459,64 @@ class AIAgent:
         # Use a fresh short-lived session for tool calls to avoid
         # holding the DB connection during LLM network I/O.
         async with get_sessionmaker()() as session:
-            if name == "mem_save":
+            if name == "get_file_bookmarks":
+                file_path = args.get("file_path", "")
+                if not self.project_id or not file_path:
+                    return "Error: project_id and file_path are required."
+                from app.infrastructure.db.models import UniversalBookmarkModel
+                bookmark_stmt = select(UniversalBookmarkModel).where(
+                    UniversalBookmarkModel.project_id == self.project_id,
+                    UniversalBookmarkModel.file_path == file_path
+                )
+                bookmark_result = await session.execute(bookmark_stmt)
+                bookmarks = bookmark_result.scalars().all()
+                if not bookmarks:
+                    return "No bookmarks found for this file."
+                return json.dumps([
+                    {
+                        "note": b.note,
+                        "selected_text": b.selected_text,
+                        "start_line": b.start_line,
+                        "end_line": b.end_line
+                    } for b in bookmarks
+                ])
+
+            elif name == "get_node_dependencies":
+                node_name = args.get("node_name", "")
+                if not self.project_id or not node_name:
+                    return "Error: project_id and node_name are required."
+                from app.infrastructure.repositories.graph_repository import (
+                    SQLAlchemyGraphRepository,
+                )
+                repo = SQLAlchemyGraphRepository(session)
+                try:
+                    edges = await repo.get_blast_radius(self.project_id, f"file:{node_name}", max_depth=2)
+                    if not edges:
+                        return "No dependencies found."
+                    return json.dumps([
+                        {
+                            "source": e["source_file_path"],
+                            "target": e["target_id"],
+                            "type": e["edge_type"]
+                        } for e in edges
+                    ])
+                except Exception as e:
+                    return f"Error retrieving dependencies: {str(e)}"
+
+            elif name == "get_project_context_summary":
+                if not self.project_id:
+                    return "Error: project_id is required."
+                root = await self._get_project_root()
+                if not root:
+                    return "Error: No project context available."
+                try:
+                    from app.infrastructure.ai.project_scanner import get_project_awareness_xml
+                    awareness_xml = await get_project_awareness_xml(root)
+                    return awareness_xml if awareness_xml else "Project has no tracked dependencies."
+                except Exception as e:
+                    return f"Error building project summary: {str(e)}"
+
+            elif name == "mem_save":
                 memory = AIMemoryModel(
                     project_id=self.project_id,
                     memory_type=args.get("memory_type", "unknown"),
@@ -429,8 +532,8 @@ class AIAgent:
                 stmt = select(AIMemoryModel).where(AIMemoryModel.content.icontains(query))
                 if self.project_id:
                     stmt = stmt.where(AIMemoryModel.project_id == self.project_id)
-                result = await session.execute(stmt)
-                memories = result.scalars().all()
+                mem_result = await session.execute(stmt)
+                memories = mem_result.scalars().all()
                 if not memories:
                     return "No memories found."
                 return json.dumps(
@@ -449,8 +552,8 @@ class AIAgent:
                     snippet_stmt = snippet_stmt.where(
                         ContextSnippetModel.project_id == self.project_id
                     )
-                result = await session.execute(snippet_stmt)
-                snippets = result.scalars().all()
+                snippet_result = await session.execute(snippet_stmt)
+                snippets = snippet_result.scalars().all()
                 if not snippets:
                     return "No context found."
                 return json.dumps(
