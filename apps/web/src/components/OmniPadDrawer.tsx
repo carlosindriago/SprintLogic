@@ -254,7 +254,7 @@ interface Note {
                   className="bg-zinc-800/30 border border-zinc-800 rounded p-3 cursor-pointer hover:bg-zinc-800/60 transition-colors"
                 >
                   <div className="text-xs text-zinc-500 mb-2">
-                    {new Date(note.created_at).toLocaleString()}
+                    {note.created_at ? new Date(note.created_at).toLocaleString() : 'Fecha desconocida'}
                   </div>
                   <div className="text-sm text-zinc-300 line-clamp-3">
                     {note.content}
