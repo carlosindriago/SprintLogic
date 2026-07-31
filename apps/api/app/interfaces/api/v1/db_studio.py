@@ -350,6 +350,8 @@ async def audit_project_database_schema(
 
     try:
         raw_response = await gateway.generate_completion(formatted_prompt, fallbacks=fallbacks)
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("LLM completion failed for database audit: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to run AI database audit")

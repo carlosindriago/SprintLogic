@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { WBSHierarchicalResponse, WorkPackage, WBSSubtask } from "../lib/api";
+import { WBSHierarchicalResponse } from "../lib/api";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";

@@ -5,9 +5,10 @@ import { useTabsStore } from '@/store/tabsStore';
 import { useMarkersStore } from '@/store/markersStore';
 import { useUnsavedStore } from '@/store/unsavedStore';
 import { draftStore } from '@/lib/draftStore';
-import { X, BarChart3, Layout, Network, GitBranch, FilePlus, FolderGit2, Save, Trash2, AlertTriangle, Bot } from 'lucide-react';
+import { X, BarChart3, Layout, Network, GitBranch, FilePlus, FolderGit2, Save, Trash2, AlertTriangle, Bot, NotebookPen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import FileIcon from './FileIcon';
+import { useOmniPadStore } from '@/store/omniPadStore';
 
 const TAB_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   dashboard: BarChart3,
@@ -315,12 +316,22 @@ export default function TabBar({ onToggleAi, aiOpen, onNewFile, projectId }: Tab
           <button
             onClick={onNewFile}
             aria-label="Nuevo archivo"
-            className="flex items-center gap-1.5 px-2.5 py-2 text-xs font-medium transition-colors text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800"
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800"
             title="Nuevo Archivo (Ctrl+N)"
           >
             <FilePlus className="w-3.5 h-3.5" aria-hidden="true" />
+            <span>Nuevo</span>
           </button>
         )}
+        <button
+          onClick={() => useOmniPadStore.getState().toggle()}
+          aria-label="Alternar Omni-Pad"
+          className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors border-l border-zinc-800/50 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800"
+          title="Omni-Pad"
+        >
+          <NotebookPen className="w-3.5 h-3.5" aria-hidden="true" />
+          <span>Notas</span>
+        </button>
         {onToggleAi && (
           <button
             onClick={onToggleAi}

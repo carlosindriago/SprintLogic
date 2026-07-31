@@ -555,9 +555,9 @@ function StatusColumn({
             <span className="text-[11px]">Vacío</span>
           </div>
         ) : (
-          items.map((item) => (
+          items.map((item, index) => (
             <DashboardFileRow
-              key={item.file_path}
+              key={`${item.file_path}-${index}`}
               item={item}
               onClick={onItemClick}
               statusBadge={statusBadge}

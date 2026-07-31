@@ -35,6 +35,8 @@ dependencies = [
   "watchfiles>=0.21.0",
   "jinja2>=3.1.0",
   "sqlglot>=25.0.0",
+  "python-multipart>=0.0.12",
+  "openai>=1.0.0",
 ]
 
 [build-system]

@@ -5,7 +5,6 @@ import { GraduationCap, Send, Loader2, X } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { API_BASE_URL } from '@/lib/api';
 import { cn } from '@/lib/utils';
-import { useLLMConfigStore } from '@/store/llmConfigStore';
 import { Button } from '@/components/ui/button';
 
 interface Message {
@@ -26,7 +25,6 @@ export default function TicketMentorDrawer({ ticketId, projectId, filePath, onCl
   const [loading, setLoading] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const context7ApiKey = useLLMConfigStore((s) => s.context7ApiKey);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
@@ -81,7 +79,7 @@ export default function TicketMentorDrawer({ ticketId, projectId, filePath, onCl
                   return newMsgs;
                 });
               }
-            } catch (e) {
+            } catch {
               // ignore parse errors for incomplete chunks
             }
           }

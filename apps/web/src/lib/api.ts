@@ -13,6 +13,23 @@ import {
   BlastRadiusResponse,
 } from '../types';
 
+export interface TestDiscoveryItem {
+  file_path: string;
+  has_test: boolean;
+  test_file_path: string | null;
+}
+
+export interface TestDiscoveryResult {
+  status: string;
+  framework: string;
+  items: TestDiscoveryItem[];
+}
+
+export interface TestGenerationResponse {
+  status: string;
+  generated_test: string;
+}
+
 import { useSettingsStore } from '../store/settingsStore';
 
 export interface ModelResult {
@@ -599,6 +616,142 @@ export const sendPlanningMessage = async (
 
   return { text: accumulatedText, toolCalls: finalToolCalls };
 };
+
+export async function fetchLiveDatabaseSchema(projectId: string): Promise<unknown> {
+  const res = await fetch(`${API_BASE_URL}/projects/${projectId}/db/live`);
+  if (!res.ok) {
+    throw new Error('Failed to fetch live database schema');
+  }
+  return res.json();
+}
+
+export async function fetchTestDiscovery(projectId: string): Promise<TestDiscoveryResult> {
+  const res = await fetch(`${API_BASE_URL}/projects/${projectId}/tests/discovery`);
+  if (!res.ok) {
+    throw new Error('Failed to fetch test discovery');
+  }
+  return res.json();
+}
+
+export async function generateTests(projectId: string, filePath: string): Promise<TestGenerationResponse> {
+  const res = await fetch(`${API_BASE_URL}/projects/${projectId}/tests/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ file_path: filePath }),
+  });
+  if (!res.ok) {
+    throw new Error('Failed to generate tests');
+  }
+  return res.json();
+}
+
+export interface TestAuditResponse {
+  status: string;
+  audit_report: string;
+}
+
+export async function auditTests(projectId: string, filePath: string, testFilePath?: string | null): Promise<TestAuditResponse> {
+  const res = await fetch(`${API_BASE_URL}/projects/${projectId}/tests/audit`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ file_path: filePath, test_file_path: testFilePath || null }),
+  });
+  if (!res.ok) {
+    throw new Error('Failed to audit tests');
+  }
+  return res.json();
+}
+
+export interface DocDiscoveryResult {
+  markdown_files: { file_path: string }[];
+  undocumented_code: { file_path: string; is_documented: boolean }[];
+}
+
+export interface DocChatResponse {
+  reply: string;
+  context_truncated: boolean;
+}
+
+export interface DocBookmark {
+  id: string;
+  file_path: string;
+  selected_text: string;
+  note: string | null;
+  created_at: string;
+}
+
+export interface AutoDocResponse {
+  documented_code: string;
+}
+
+export async function fetchDocDiscovery(projectId: string): Promise<DocDiscoveryResult> {
+  const res = await fetch(`${API_BASE_URL}/projects/${projectId}/docs/tree`);
+  if (!res.ok) {
+    throw new Error('Failed to fetch doc discovery');
+  }
+  return res.json();
+}
+
+export async function chatWithDocs(projectId: string, query: string): Promise<DocChatResponse> {
+  const res = await fetch(`${API_BASE_URL}/projects/${projectId}/docs/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query }),
+  });
+  if (!res.ok) {
+    throw new Error('Failed to chat with docs');
+  }
+  return res.json();
+}
+
+export async function generateDocblock(projectId: string, filePath: string): Promise<AutoDocResponse> {
+  const res = await fetch(`${API_BASE_URL}/projects/${projectId}/docs/generate-docblock`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ file_path: filePath }),
+  });
+  if (!res.ok) throw new Error('Failed to generate docblock');
+  return res.json();
+}
+
+export async function saveDocFile(projectId: string, filePath: string, content: string): Promise<{ status: string; file_path: string }> {
+  const res = await fetch(`${API_BASE_URL}/projects/${projectId}/docs/file`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ file_path: filePath, content }),
+  });
+  if (!res.ok) throw new Error('Failed to save file');
+  return res.json();
+}
+
+export async function getDocBookmarks(projectId: string): Promise<DocBookmark[]> {
+  const res = await fetch(`${API_BASE_URL}/projects/${projectId}/docs/bookmarks`);
+  if (!res.ok) throw new Error('Failed to fetch bookmarks');
+  return res.json();
+}
+
+export async function auditDoc(projectId: string, filePath: string): Promise<{ report: string }> {
+  const res = await fetch(`${API_BASE_URL}/projects/${projectId}/docs/audit`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ file_path: filePath }),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Error HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function createDocBookmark(projectId: string, filePath: string, selectedText: string, note?: string): Promise<DocBookmark> {
+  const res = await fetch(`${API_BASE_URL}/projects/${projectId}/docs/bookmarks`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ file_path: filePath, selected_text: selectedText, note }),
+  });
+  if (!res.ok) throw new Error('Failed to create bookmark');
+  return res.json();
+}
 
 export async function applyPatch(projectId: string, filePath: string, originalContent: string, newContent: string) {
   const res = await fetch(`${API_BASE_URL}/projects/${projectId}/apply_patch`, {

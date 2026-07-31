@@ -7,10 +7,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.interfaces.api.v1.ai import router as ai_router
 from app.interfaces.api.v1.chat import router as chat_router
 from app.interfaces.api.v1.db_studio import router as db_studio_router
+from app.interfaces.api.v1.doc_studio import router as doc_studio_router
 from app.interfaces.api.v1.editor import router as editor_router
 from app.interfaces.api.v1.git import router as git_router
 from app.interfaces.api.v1.kanban import router as kanban_router
 from app.interfaces.api.v1.lsp import router as lsp_router
+from app.interfaces.api.v1.omni_pad import router as omni_pad_router
 from app.interfaces.api.v1.planning_studio import router as planning_studio_router
 from app.interfaces.api.v1.projects import router as projects_router
 from app.interfaces.api.v1.prompts import router as prompts_router
@@ -18,6 +20,7 @@ from app.interfaces.api.v1.providers import router as providers_router
 from app.interfaces.api.v1.settings import router as settings_router
 from app.interfaces.api.v1.sync import router as sync_router
 from app.interfaces.api.v1.telemetry import router as telemetry_router
+from app.interfaces.api.v1.test_studio import router as test_studio_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -147,6 +150,9 @@ app.include_router(sync_router, prefix="/api/v1/sync")
 app.include_router(prompts_router, prefix="/api/v1")
 app.include_router(planning_studio_router, prefix="/api/v1/planning-studio")
 app.include_router(db_studio_router, prefix="/api/v1")
+app.include_router(test_studio_router, prefix="/api/v1")
+app.include_router(doc_studio_router, prefix="/api/v1")
+app.include_router(omni_pad_router, prefix="/api/v1")
 
 
 from pathlib import Path

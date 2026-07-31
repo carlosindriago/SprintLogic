@@ -98,6 +98,18 @@ class AIMemoryModel(Base):
         DateTime(timezone=True), default=datetime.utcnow, index=True
     )
 
+class OmniNoteModel(Base):
+    __tablename__ = "omni_notes"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    project_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=datetime.utcnow
+    )
+
 
 class ContextSnippetModel(Base):
     __tablename__ = "context_snippets"
@@ -314,4 +326,16 @@ class ToolModelMappingModel(Base):
     provider_id: Mapped[str] = mapped_column(String(255), nullable=False)
     model_name: Mapped[str] = mapped_column(String(255), nullable=False)
     fallback_models: Mapped[list | dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+class DocBookmarkModel(Base):
+    __tablename__ = "doc_bookmarks"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    project_id: Mapped[UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    file_path: Mapped[str] = mapped_column(String(1024), nullable=False)
+    selected_text: Mapped[str] = mapped_column(Text, nullable=False)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)

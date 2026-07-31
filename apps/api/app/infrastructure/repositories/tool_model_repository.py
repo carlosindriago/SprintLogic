@@ -77,6 +77,14 @@ KNOWN_TOOLS: dict[str, ToolDef] = {
         "display_name": "Database Studio",
         "description": "Asistente de arquitectura de base de datos — analiza esquemas ERD y audita problemas",
     },
+    "test_studio": {
+        "display_name": "Test Studio",
+        "description": "Asistente de testing — descubre y genera pruebas, audita el código en base a casos límite",
+    },
+    "document_studio": {
+        "display_name": "Document Studio",
+        "description": "Asistente de documentación — genera READMEs, guías y documentos de diseño a partir del código",
+    },
 }
 
 
@@ -146,13 +154,23 @@ async def resolve_tool_model(
     that mutates overrides.
     """
     override = await get_tool_model(session, tool_name)
+    default_override = await resolve_default_model(session)
+
     if override is not None:
-        return override
-    return await resolve_default_model(session)
+        provider_id, model_name, fallbacks = override
+        if not fallbacks:
+            # Inherit fallbacks from default if the override doesn't specify any
+            _, _, default_fallbacks = default_override
+            fallbacks = default_fallbacks
+        return provider_id, model_name, fallbacks
+
+    return default_override
 
 
 def tool_model_label(provider_id: str, model_name: str) -> str:
     """Return the canonical <provider>/<model> string used for logging/audit."""
+    if model_name.startswith(f"{provider_id}/"):
+        return model_name
     return f"{provider_id}/{model_name}"
 
 

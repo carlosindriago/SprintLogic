@@ -42,16 +42,27 @@ class LiteLLMGateway:
         prompt += self._build_language_clause(lang_code)
         adapted = self._get_adapted_params()
 
-        response = await acompletion(
-            model=adapted["model"],
-            messages=[{"role": "user", "content": prompt}],
-            api_key=adapted.get("api_key"),
-            fallbacks=self.build_fallback_params(fallbacks),
-            num_retries=0,
-            timeout=45,
-            **adapted.get("kwargs", {}),
-        )
-        return response.choices[0].message.content or ""
+        try:
+            response = await acompletion(
+                model=adapted["model"],
+                messages=[{"role": "user", "content": prompt}],
+                api_key=adapted.get("api_key"),
+                fallbacks=self.build_fallback_params(fallbacks),
+                num_retries=2,
+                timeout=120,
+                **adapted.get("kwargs", {}),
+            )
+            return response.choices[0].message.content or ""
+        except Exception as e:
+            # Propagate specific exceptions to the router so it can return 429/401 instead of 500
+            error_msg = str(e)
+            if "RateLimitError" in error_msg or "rate_limit_exceeded" in error_msg.lower():
+                from fastapi import HTTPException
+                raise HTTPException(status_code=429, detail="LLM Provider Rate Limit Exceeded. Please wait a moment and try again or switch the model.")
+            elif "AuthenticationError" in error_msg:
+                from fastapi import HTTPException
+                raise HTTPException(status_code=401, detail="LLM Authentication failed. Check your API key or if the model is supported.")
+            raise
 
 
     def _build_language_clause(self, lang_code: str) -> str:
