@@ -75,15 +75,24 @@ async def generate_tests(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    full_path = Path(project.path) / request.file_path
+    try:
+        project_root = Path(project.path).resolve()
+        full_path = (project_root / request.file_path).resolve()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid path resolution")
+
+    if not full_path.is_relative_to(project_root):
+        raise HTTPException(status_code=403, detail="Invalid file path (Path Traversal attempt)")
+
     if not full_path.exists() or not full_path.is_file():
-        raise HTTPException(status_code=404, detail=f"Source file {request.file_path} not found")
+        raise HTTPException(status_code=404, detail="Source file not found")
 
     try:
         with open(full_path, encoding="utf-8") as f:
             source_code = f.read()
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to read file: {str(e)}")
+        logger.error(f"Error reading file {request.file_path}: {e}")
+        raise HTTPException(status_code=500, detail="Could not read source file")
 
     framework = detect_framework(project.path) or "Generic"
 
@@ -138,19 +147,35 @@ async def audit_tests(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    full_path = Path(project.path) / request.file_path
+    try:
+        project_root = Path(project.path).resolve()
+        full_path = (project_root / request.file_path).resolve()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid path resolution")
+
+    if not full_path.is_relative_to(project_root):
+        raise HTTPException(status_code=403, detail="Invalid file path (Path Traversal attempt)")
+
     if not full_path.exists() or not full_path.is_file():
-        raise HTTPException(status_code=404, detail=f"Source file {request.file_path} not found")
+        raise HTTPException(status_code=404, detail="Source file not found")
 
     try:
         with open(full_path, encoding="utf-8") as f:
             source_code = f.read()
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to read file: {str(e)}")
+        logger.error(f"Error reading file {request.file_path}: {e}")
+        raise HTTPException(status_code=500, detail="Could not read source file")
 
     current_tests = "No existing tests found."
     if request.test_file_path:
-        test_full_path = Path(project.path) / request.test_file_path
+        try:
+            test_full_path = (project_root / request.test_file_path).resolve()
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid path resolution")
+
+        if not test_full_path.is_relative_to(project_root):
+            raise HTTPException(status_code=403, detail="Invalid test file path (Path Traversal attempt)")
+
         if test_full_path.exists() and test_full_path.is_file():
             try:
                 with open(test_full_path, encoding="utf-8") as f:
