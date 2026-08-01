@@ -29,12 +29,14 @@ interface ForceNode extends GraphNode {
   fy?: number;
   fz?: number;
   _modCache?: string | null;
+  _lowerName?: string;
   _extCache?: string;
 }
 
 interface ForceLink extends GraphEdge {
   source: string | ForceNode;
   target: string | ForceNode;
+  _idPair?: string;
 }
 
 // Dynamically import react-force-graph to avoid SSR issues
@@ -651,10 +653,17 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
         modCache.set(n, mod);
       }
       clone._modCache = mod;
+      clone._lowerName = clone.name ? clone.name.toLowerCase() : "";
 
       return clone;
     });
-    let links = graphData.links.map((l: GraphEdge) => ({ ...l }));
+    let links = graphData.links.map((l: GraphEdge) => {
+      const clone = { ...l } as ForceLink;
+      const sourceId = typeof clone.source === 'object' ? clone.source.id : clone.source;
+      const targetId = typeof clone.target === 'object' ? clone.target.id : clone.target;
+      clone._idPair = `${sourceId}-${targetId}`;
+      return clone;
+    });
 
     // Filter by node types — compare TitleCase label against the TitleCase activeTypes set
     nodes = nodes.filter((n: GraphNode) => {
@@ -754,7 +763,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     globalScaleRef.current = globalScale;
 
     if (!activeTypes.has(label)) return;
-    if (lowerSearchQuery && !name.toLowerCase().includes(lowerSearchQuery)) return;
+    if (lowerSearchQuery && !(n._lowerName || "").includes(lowerSearchQuery)) return;
 
     const progress = animProgressRef.current;
     const bTime = getSafeTime(n);
@@ -994,7 +1003,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
 
     const faded = isFaded(sourceId) && isFaded(targetId);
 
-    const isGlowing = glowingLinks.has(`${sourceId}-${targetId}`);
+    const isGlowing = glowingLinks.has(l._idPair || "");
     if (isGlowing && !faded) {
       return graphTheme.edgeGlow;
     }
@@ -1026,7 +1035,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     const targetId = typeof l.target === 'object' ? l.target.id : l.target;
     const faded = isFaded(sourceId) && isFaded(targetId);
 
-    if (glowingLinks.has(`${sourceId}-${targetId}`) && !faded) {
+    if (glowingLinks.has(l._idPair || "") && !faded) {
       return 2.5;
     }
 
@@ -1053,8 +1062,8 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     if (targetLabel && !activeTypes.has(targetLabel)) return false;
 
     if (lowerSearchQuery) {
-      const sourceName = (typeof sourceNode === 'object' ? sourceNode.name : '').toLowerCase();
-      const targetName = (typeof targetNode === 'object' ? targetNode.name : '').toLowerCase();
+      const sourceName = (typeof sourceNode === 'object' ? (sourceNode as ForceNode)._lowerName || '' : '');
+      const targetName = (typeof targetNode === 'object' ? (targetNode as ForceNode)._lowerName || '' : '');
       if (!sourceName.includes(lowerSearchQuery) && !targetName.includes(lowerSearchQuery)) return false;
     }
 
