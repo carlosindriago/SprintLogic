@@ -418,12 +418,14 @@ export default function ZenCodeLens({ filePath, codeContent, language = 'javascr
           {/* Typograhy controls */}
           <div className="flex items-center bg-zinc-800 rounded-md overflow-hidden">
             <button 
+              aria-label="Disminuir tamaño de fuente"
               onClick={() => setFontSize(f => Math.max(10, f - 1))}
-              className="px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-700 font-semibold border-r border-zinc-700"
+              className="px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-700 font-semibold border-r border-zinc-700 focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-blue-500"
             >A-</button>
             <button 
+              aria-label="Aumentar tamaño de fuente"
               onClick={() => setFontSize(f => Math.min(30, f + 1))}
-              className="px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-700 font-semibold"
+              className="px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-700 font-semibold focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-blue-500"
             >A+</button>
           </div>
 
@@ -448,37 +450,39 @@ export default function ZenCodeLens({ filePath, codeContent, language = 'javascr
           {/* Word Wrap Toggle */}
           <button
             onClick={() => setWordWrap(w => w === 'on' ? 'off' : 'on')}
-            className={`p-1.5 rounded-md transition-colors ${wordWrap === 'on' ? 'bg-blue-600/20 text-blue-400' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-300'}`}
+            className={`p-1.5 rounded-md transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-blue-500 ${wordWrap === 'on' ? 'bg-blue-600/20 text-blue-400' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-300'}`}
             title="Ajuste de Línea"
+            aria-label="Ajuste de Línea"
           >
-            <WrapText className="w-4 h-4" />
+            <WrapText className="w-4 h-4" aria-hidden="true" />
           </button>
 
           {/* Fullscreen Toggle */}
           <button
             onClick={toggleFullscreen}
-            className="p-1.5 bg-zinc-800 text-zinc-400 rounded-md hover:bg-zinc-700 hover:text-zinc-300 transition-colors"
+            className="p-1.5 bg-zinc-800 text-zinc-400 rounded-md hover:bg-zinc-700 hover:text-zinc-300 transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-blue-500"
             title="Pantalla Completa"
+            aria-label="Pantalla Completa"
           >
-            <Maximize className="w-4 h-4" />
+            <Maximize className="w-4 h-4" aria-hidden="true" />
           </button>
         </div>
 
         <div className="flex items-center gap-2 ml-auto">
           <button
             onClick={handleAskAI}
-            className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white px-3 py-1.5 rounded-md text-xs font-semibold shadow-lg shadow-purple-500/20 transition-all"
+            className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white px-3 py-1.5 rounded-md text-xs font-semibold shadow-lg shadow-purple-500/20 transition-all focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-purple-500"
           >
-            <Bot className="w-3.5 h-3.5" />
+            <Bot className="w-3.5 h-3.5" aria-hidden="true" />
             Preguntar a AI
           </button>
         </div>
 
         <button
           onClick={handleBackToEditor}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-md text-xs font-semibold transition-all ml-2"
+          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-md text-xs font-semibold transition-all ml-2 focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-blue-500"
         >
-          <Pencil className="w-3.5 h-3.5" />
+          <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
           Volver al Editor
         </button>
       </div>
