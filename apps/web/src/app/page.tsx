@@ -45,7 +45,7 @@ import { useBackgroundJobsStore } from '@/store/backgroundJobsStore';
 import { useChatStore } from '@/store/chatStore';
 import TabBar from '@/components/TabBar';
 import { useThemeStore, AccentColor, UiScale } from '@/store/themeStore';
-import GitStatusWidget from '@/components/GitStatusWidget';
+
 import GitGraphTab from '@/components/GitGraphTab';
 import InsightDashboard from '@/components/InsightDashboard';
 
@@ -568,19 +568,9 @@ export default function Home() {
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-700"
-                  onClick={() => launchTool('git-graph', 'Control Git', 'git-graph')}
-                  title="Control Git"
-                  aria-label="Control Git"
-                >
-                  <GitBranch className="w-4 h-4" aria-hidden="true" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-700"
-                  onClick={() => launchTool('audit', 'Auditoría IA', 'audit')}
-                  title="Auditoría IA"
-                  aria-label="Auditoría IA"
+                  onClick={() => launchTool('git-graph', 'Git Studio', 'git-graph')}
+                  title="Git Studio"
+                  aria-label="Git Studio"
                 >
                   <FolderGit2 className="w-4 h-4" aria-hidden="true" />
                 </Button>
@@ -816,10 +806,7 @@ export default function Home() {
                 </DialogContent>
               </Dialog>
 
-              {/* 2. Widget de Git Status */}
-              {projectId && <GitStatusWidget projectId={projectId} key={projectId} />}
-
-              {/* 3. Explorador de Archivos */}
+              {/* Explorador de Archivos */}
               <Card className="bg-zinc-800 border-zinc-700/50 text-zinc-200 mt-2 flex-1 flex flex-col min-h-0">
                 <CardHeader className="p-3 pb-2 shrink-0 border-b border-zinc-700/50/50">
                   <div className="flex items-center justify-between">

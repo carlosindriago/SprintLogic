@@ -1,11 +1,51 @@
 "use client";
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTelemetryStore, initializeTelemetry } from '../store/telemetryStore';
+import { GitBranch, GitCommit, Check, Upload, Download, Plus } from 'lucide-react';
+import { useTabsStore } from '@/store/tabsStore';
+import { useProjectStore } from '@/store/projectStore';
+import { useGitStore } from '@/store/gitStore';
+import { GitStatus } from '@/types';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuGroup,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export const StatusBar: React.FC = () => {
   // Referencia directa al DOM para inyectar texto saltándonos el Virtual DOM (Transient Update)
   const timeRef = useRef<HTMLDivElement>(null);
+  
+  const { projectId } = useProjectStore();
+  const { currentBranch, modified, untracked, isLoading: gitLoading, error: gitError, fetchStatus } = useGitStore();
+  const { addTab } = useTabsStore();
+
+  useEffect(() => {
+    if (!projectId) return;
+
+    fetchStatus(projectId);
+
+    const onFocus = () => {
+      fetchStatus(projectId);
+    };
+    window.addEventListener('focus', onFocus);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [projectId, fetchStatus]);
+
+  const openGitGraph = () => {
+    addTab({ id: 'git-graph', title: 'Control Git', type: 'git-graph' });
+  };
+
+  const changesCount = modified + untracked;
+  const hasChanges = changesCount > 0;
+
   
   // Suscripción transitoria (Transient Update) para evitar re-renders masivos
   useEffect(() => {
@@ -86,6 +126,56 @@ export const StatusBar: React.FC = () => {
           SprintLogic IDE
         </span>
         
+        {/* Git Status Popover */}
+        {projectId && !gitLoading && !gitError ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', background: 'transparent', border: 'none', color: '#a1a1aa', outline: 'none' }} className="hover:text-zinc-200 transition-colors">
+              <GitBranch className="w-3.5 h-3.5" />
+              <span>{currentBranch}</span>
+              {hasChanges && (
+                <span style={{ display: 'flex', alignItems: 'center', color: '#f59e0b', fontWeight: '500' }}>
+                  *<span style={{ marginLeft: '2px', fontSize: '10px' }}>({changesCount})</span>
+                </span>
+              )}
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" side="top" className="w-56 bg-zinc-900 border-zinc-800 text-zinc-200 mb-2 shadow-xl shadow-black/50">
+              <DropdownMenuGroup>
+                <DropdownMenuLabel className="text-xs text-zinc-400 font-normal">Acciones de Git</DropdownMenuLabel>
+                <DropdownMenuSeparator className="bg-zinc-800" />
+                
+                <DropdownMenuItem className="text-xs cursor-pointer focus:bg-zinc-800 focus:text-white" onClick={openGitGraph}>
+                  <GitCommit className="w-4 h-4 mr-2 text-zinc-400" />
+                  Abrir Sala de Control
+                </DropdownMenuItem>
+                
+                <DropdownMenuSeparator className="bg-zinc-800" />
+                <DropdownMenuItem className="text-xs cursor-pointer focus:bg-zinc-800 focus:text-white disabled:opacity-50" disabled>
+                  <Check className="w-4 h-4 mr-2 text-zinc-400" />
+                  Commit (Próximamente)
+                </DropdownMenuItem>
+                <DropdownMenuItem className="text-xs cursor-pointer focus:bg-zinc-800 focus:text-white disabled:opacity-50" disabled>
+                  <Upload className="w-4 h-4 mr-2 text-zinc-400" />
+                  Push
+                </DropdownMenuItem>
+                <DropdownMenuItem className="text-xs cursor-pointer focus:bg-zinc-800 focus:text-white disabled:opacity-50" disabled>
+                  <Download className="w-4 h-4 mr-2 text-zinc-400" />
+                  Pull
+                </DropdownMenuItem>
+                <DropdownMenuSeparator className="bg-zinc-800" />
+                <DropdownMenuItem className="text-xs cursor-pointer focus:bg-zinc-800 focus:text-white disabled:opacity-50" disabled>
+                  <Plus className="w-4 h-4 mr-2 text-zinc-400" />
+                  Crear Rama
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : projectId && gitLoading ? (
+          <span style={{ display: 'flex', alignItems: 'center', gap: '6px', opacity: 0.5 }}>
+            <GitBranch className="w-3.5 h-3.5" />
+            <span>Cargando...</span>
+          </span>
+        ) : null}
+
         {/* Controles rápidos para probar la telemetría */}
         <div style={{ display: 'flex', gap: '4px' }}>
           <button onClick={() => setPhase('THINKING')} style={btnStyle} title="Fase de Pensamiento/Lectura">🧠</button>

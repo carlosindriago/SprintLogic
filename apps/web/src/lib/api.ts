@@ -242,6 +242,7 @@ export interface GitDashboardKPIs {
   untracked: number;
   ignored: number;
   modified: number;
+  tracked?: number;
 }
 
 export interface GitDashboardLists {
@@ -266,8 +267,8 @@ export interface GitDashboard {
 }
 
 export interface FileLocalDiff {
-  original_content: string;
-  modified_content: string;
+  original: string;
+  modified: string;
 }
 
 export const getGitDashboard = (projectId: string) => api.get<GitDashboard>(`/projects/${projectId}/git/dashboard`);
