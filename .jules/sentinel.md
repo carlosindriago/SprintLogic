@@ -8,3 +8,4 @@ Ensure that internal server details, including exception strings (str(e)), are n
 - Sentinel replaced  exception leakage with generic security errors in the  kanban endpoint to prevent local server paths being leaked.
 - Sentinel replaced str(e) exception leakage with generic security errors in the apply_ticket_patch kanban endpoint to prevent local server paths being leaked.
 - Security Coding Standards: Do not allow hardcoded secrets (e.g., API keys, credentials) anywhere in the codebase; they must be managed securely via environment variables (e.g., process.env).
+Always validate user-provided file paths in the backend using `pathlib.Path.resolve()` and `is_relative_to()` to ensure they remain within the intended root directory, preventing Path Traversal (CWE-22) vulnerabilities.
