@@ -4,3 +4,6 @@ Performance Coding Standards (Frontend): Avoid creating new array or string allo
 When caching data in components dealing with both React state and D3 (e.g., GraphScene), do not replace a module-level `WeakMap` with a standard `Map`, as this causes memory leaks when nodes are destroyed. Maintain `WeakMap` for caching immutable React state objects to prevent `react-hooks/immutability` errors, and strictly use direct property mutation only on cloned D3 nodes inside high-frequency rendering loops.
 When executing frontend code changes using Python scripts, always remember to strictly adhere to the Zero-Trust File Operations rule by ensuring all ephemeral Python scripts (like `fix_callbacks.py`) are deleted using `rm -f` before staging changes via `git add`.
 Avoid inline string parsing and array filter mappings in hot rendering loops, especially with D3's force simulations. Instead, pre-compute caching properties on D3 cloned node objects so V8 skips WeakMap lookups.
+## TypeScript/Performance Safety
+
+When caching optional string properties (like `_lowerName?: string`) on D3 objects to avoid allocations during rendering loops, ensure safe fallback handling (e.g., `(n._lowerName || '').includes(...)`) to prevent TypeErrors when the name is empty or undefined.
