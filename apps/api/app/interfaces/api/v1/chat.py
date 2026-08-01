@@ -1,6 +1,7 @@
 import json
 import logging
 from collections.abc import AsyncGenerator
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -479,7 +480,6 @@ async def ticket_mentor(
     request: TicketMentorRequest,
     session: AsyncSession = Depends(get_db_session)
 ):
-    import os
     import uuid
     try:
         proj_uuid = uuid.UUID(request.project_id)
@@ -498,15 +498,19 @@ async def ticket_mentor(
 
     file_content = ""
     try:
-        with open(target_path, encoding="utf-8") as f:
+        project_root = Path(project.path).resolve()
+        target_path_obj = Path(target_path)
+        full_path = (target_path_obj if target_path_obj.is_absolute() else project_root / target_path_obj).resolve()
+
+        if not full_path.is_relative_to(project_root):
+            raise HTTPException(status_code=403, detail="Invalid file path (Path Traversal attempt)")
+
+        with open(full_path, encoding="utf-8") as f:
             file_content = f.read()
+    except HTTPException:
+        raise
     except Exception:
-        abs_path = os.path.join(project.path, target_path)
-        try:
-            with open(abs_path, encoding="utf-8") as f:
-                file_content = f.read()
-        except Exception:
-            file_content = f"Error reading file {target_path}"
+        file_content = f"Error reading file {target_path}"
 
     from app.infrastructure.repositories.graph_repository import SQLAlchemyGraphRepository
     graph_repo = SQLAlchemyGraphRepository(session)
@@ -575,7 +579,6 @@ async def auto_fix(
     request: AutoFixRequest,
     session: AsyncSession = Depends(get_db_session)
 ):
-    import os
     import uuid
     try:
         proj_uuid = uuid.UUID(request.project_id)
@@ -594,15 +597,19 @@ async def auto_fix(
 
     file_content = ""
     try:
-        with open(target_path, encoding="utf-8") as f:
+        project_root = Path(project.path).resolve()
+        target_path_obj = Path(target_path)
+        full_path = (target_path_obj if target_path_obj.is_absolute() else project_root / target_path_obj).resolve()
+
+        if not full_path.is_relative_to(project_root):
+            raise HTTPException(status_code=403, detail="Invalid file path (Path Traversal attempt)")
+
+        with open(full_path, encoding="utf-8") as f:
             file_content = f.read()
+    except HTTPException:
+        raise
     except Exception:
-        abs_path = os.path.join(project.path, target_path)
-        try:
-            with open(abs_path, encoding="utf-8") as f:
-                file_content = f.read()
-        except Exception:
-            raise HTTPException(status_code=404, detail="Target file not found")
+        raise HTTPException(status_code=404, detail="Target file not found")
 
     # BD source of truth: auto_fix tool override (or global default).
     af_provider, af_model, _ = await resolve_tool_model(session, "auto_fix")
