@@ -17,13 +17,14 @@ from app.infrastructure.repositories.tool_model_repository import (
     resolve_tool_model,
     tool_model_label,
 )
+from app.infrastructure.vcs.github_adapter import GitHubAdapter
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 git_gateway = LocalGitGateway()
 llm_gateway = LiteLLMGateway()
-
+vcs_adapter = GitHubAdapter()
 
 class GitActionRequest(BaseModel):
     action: str
@@ -251,6 +252,28 @@ async def get_commit_diff(
 # -----------------------------------------------------------------------------
 # Advanced Git Client Endpoints
 # -----------------------------------------------------------------------------
+
+@router.get("/{project_id}/git/pull-requests")
+async def get_pull_requests(project_id: str, session: AsyncSession = Depends(get_db_session)):
+    try:
+        project = await SQLAlchemyProjectRepository(session).get_project(UUID(project_id))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID")
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    try:
+        prs = await vcs_adapter.get_pull_requests(project.path)
+
+        enhanced_prs = []
+        for pr in prs:
+            ci_status = await vcs_adapter.get_ci_status(project.path, str(pr["number"]))
+            enhanced_prs.append({**pr, "ci_status": ci_status})
+
+        return {"pull_requests": enhanced_prs}
+    except Exception as e:
+        logger.error("VCS operation failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred")
 
 
 @router.get("/{project_id}/git/branches")

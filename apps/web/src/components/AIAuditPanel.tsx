@@ -272,8 +272,8 @@ export default function AIAuditPanel({ projectId }: AIAuditPanelProps) {
             </div>
           ) : diffData ? (
             <DiffViewer
-              original={diffData.original_content}
-              modified={diffData.modified_content}
+              original={diffData.original}
+              modified={diffData.modified}
               language={detectLanguage(selectedFile.file_path)}
             />
           ) : (
