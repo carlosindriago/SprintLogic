@@ -29,6 +29,7 @@ export const ScanProgressBar: React.FC<ScanProgressBarProps> = ({ projectId }) =
   const scanJob = activeScans[projectId];
 
   const localAbortControllerRef = useRef<AbortController | null>(null);
+  const completedRef = useRef(false);
 
   // ── Main SSE connection ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -94,6 +95,7 @@ export const ScanProgressBar: React.FC<ScanProgressBarProps> = ({ projectId }) =
             }
 
             if (data.type === 'completed') {
+              completedRef.current = true;
               eventSource.close();
               setPhase('completed');
               setCurrentPercentage(100);
@@ -131,6 +133,7 @@ export const ScanProgressBar: React.FC<ScanProgressBarProps> = ({ projectId }) =
         eventSource.onerror = () => {
           clearTimeout(timeoutId);
           eventSource.close();
+          if (completedRef.current) return;
           toast.error('Connection error during scan');
           setScanStatus(projectId, 'failed');
           setTimeout(() => clearScan(projectId), 3000);
