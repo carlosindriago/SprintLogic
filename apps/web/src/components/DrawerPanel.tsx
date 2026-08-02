@@ -3,6 +3,7 @@ import { useLayoutStore } from '@/store/layoutStore';
 import { useProjectStore } from '@/store/projectStore';
 import FileTree from '@/components/FileTree';
 import ProjectInsightsPanel from '@/components/ProjectInsightsPanel';
+import MiniGitPanel from '@/components/MiniGitPanel';
 import { Button } from '@/components/ui/button';
 import { FilePlus, RefreshCw, RotateCcw, ScanSearch } from 'lucide-react';
 
@@ -92,9 +93,7 @@ export default function DrawerPanel(props: DrawerPanelProps) {
           {activeSidebarPanel === 'search' && (
             <div className="p-4 text-zinc-500 text-sm">Búsqueda próximamente...</div>
           )}
-          {activeSidebarPanel === 'git' && (
-            <div className="p-4 text-zinc-500 text-sm">Git panel próximamente...</div>
-          )}
+          {activeSidebarPanel === 'git' && <MiniGitPanel />}
         </div>
       </div>
 
