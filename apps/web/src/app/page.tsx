@@ -48,7 +48,7 @@ import { useThemeStore, AccentColor, UiScale } from '@/store/themeStore';
 
 import ActivityBar from '@/components/ActivityBar';
 import DrawerPanel from '@/components/DrawerPanel';
-import StudioLaunchers from '@/components/StudioLaunchers';
+import { StatusBar } from '@/components/StatusBar';
 import { useLayoutStore } from '@/store/layoutStore';
 
 
@@ -525,10 +525,10 @@ export default function Home() {
   };
 
   return (
-    <div className="h-[100dvh] w-full flex bg-[#0d0d0d] text-zinc-200 overflow-hidden relative">
-      
-      <ActivityBar />
-      <DrawerPanel 
+    <div className="h-[100dvh] w-full flex flex-col bg-[#0d0d0d] text-zinc-200 overflow-hidden relative">
+      <div className="flex-1 flex overflow-hidden">
+        <ActivityBar />
+        <DrawerPanel 
         onFileSelect={handleFileTreeSelect}
         onNewFile={handleNewFile}
         fileTreeRefreshKey={fileTreeRefreshKey}
@@ -550,19 +550,6 @@ export default function Home() {
       />
       {/* MAIN CONTENT */}
       <div className="flex-1 min-w-0 flex flex-col relative bg-[#151515] overflow-hidden">
-        <StudioLaunchers
-          projects={projects}
-          projectId={projectId}
-          setProjectId={setProjectId}
-          onEditProject={(p) => {
-            setProjectToEdit(p);
-            setEditProjectName(p.name);
-            setEditProjectPath(p.path);
-            setEditProjectOpen(true);
-          }}
-          onDeleteProject={(p) => handleDeleteProject(p)}
-          onAddProject={() => setAddProjectOpen(true)}
-        />
           {projectId === null ? (
             <div className="flex-1 relative min-w-0 overflow-hidden">
               <div className="flex flex-col items-center justify-center h-full bg-[#151515] text-center px-4">
@@ -625,8 +612,19 @@ export default function Home() {
           </div>
         </div>
       </div>
-
-
+      </div>
+      
+      <StatusBar
+        projects={projects}
+        onEditProject={(p) => {
+          setProjectToEdit(p);
+          setEditProjectName(p.name);
+          setEditProjectPath(p.path);
+          setEditProjectOpen(true);
+        }}
+        onDeleteProject={(p) => handleDeleteProject(p)}
+        onAddProject={() => setAddProjectOpen(true)}
+      />
 
         <Dialog open={renameDialogOpen} onOpenChange={setRenameDialogOpen}>
           <DialogContent className="bg-zinc-900 border-zinc-700 text-zinc-200 sm:max-w-sm">

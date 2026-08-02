@@ -6,7 +6,6 @@ import { QueryProvider } from "@/components/QueryProvider";
 import { Toaster } from "sonner";
 import Script from "next/script";
 import { GlobalActivityOverlay } from "@/components/GlobalActivityOverlay";
-import { StatusBar } from "@/components/StatusBar";
 import { OmniPadDrawer } from "@/components/OmniPadDrawer";
 
 const geistSans = Geist({
@@ -59,7 +58,6 @@ export default function RootLayout({
           </ThemeProvider>
         </QueryProvider>
         <GlobalActivityOverlay />
-        <StatusBar />
         <OmniPadDrawer />
         <Toaster theme="dark" position="bottom-right" />
       </body>
