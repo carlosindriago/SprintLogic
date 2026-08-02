@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Settings, FolderOpen, ChevronRight, Edit2, Trash2, PlusCircle, ChevronsUpDown, FilePlus, RefreshCw, RotateCcw, ScanSearch, Layout, Network, GitBranch, BarChart3, FolderGit2, HelpCircle, Bot, Play, Database, Beaker, BookOpen } from "lucide-react";
+import { Settings, ChevronRight, Edit2, Trash2, PlusCircle, FilePlus, RefreshCw, RotateCcw, ScanSearch, Layout, Network, GitBranch, BarChart3, HelpCircle, } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { scanProject, getProjects, updateProject, deleteProject, rescanProject, analyzeProject, renameFile, duplicateFile, deleteFile, initSidecarPort } from "@/lib/api";
@@ -37,7 +37,7 @@ import KanbanBoard from "@/components/KanbanBoard";
 import LLMSettingsPanel from "@/components/LLMSettingsPanel";
 import SettingsTab from "@/components/Settings/SettingsTab";
 import PlanningStudioTab from "@/components/PlanningStudioTab";
-import FileTree from "@/components/FileTree";
+
 import { useTabsStore, TabType } from '@/store/tabsStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useProjectStore } from '@/store/projectStore';
@@ -46,11 +46,17 @@ import { useChatStore } from '@/store/chatStore';
 import TabBar from '@/components/TabBar';
 import { useThemeStore, AccentColor, UiScale } from '@/store/themeStore';
 
+import ActivityBar from '@/components/ActivityBar';
+import DrawerPanel from '@/components/DrawerPanel';
+import { StatusBar } from '@/components/StatusBar';
+import { useLayoutStore } from '@/store/layoutStore';
+
+
 import GitGraphTab from '@/components/GitGraphTab';
 import InsightDashboard from '@/components/InsightDashboard';
 
 import NewFileDialog from "@/components/NewFileDialog";
-import ProjectInsightsPanel from "@/components/ProjectInsightsPanel";
+
 import AnalysisReportDialog from "@/components/AnalysisReportDialog";
 import OmniSearchModal from "@/components/OmniSearchModal";
 import CodeMentorPanel from "@/components/CodeMentorPanel";
@@ -210,9 +216,16 @@ export default function Home() {
   }, [fetchProjects]);
 
   const { isChatOpen: rightSidebarOpen, toggleChat: toggleRightSidebar } = useChatStore();
-  const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
-
-  const toggleLeftSidebar = () => setLeftSidebarOpen(prev => !prev);
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
+        e.preventDefault();
+        useLayoutStore.getState().toggleDrawer();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
   const handleScan = async () => {
     if (!path) return;
@@ -512,416 +525,29 @@ export default function Home() {
   };
 
   return (
-    <div className="h-[100dvh] w-full flex bg-[#0d0d0d] text-zinc-200 overflow-hidden relative">
-      {/* LEFT SIDEBAR — fixed width, css transitioned */}
-      <div 
-        className={`flex-shrink-0 flex flex-col transition-all duration-300 ease-in-out border-zinc-800/50 bg-[#0a0a0a] overflow-hidden ${leftSidebarOpen ? 'w-[280px] border-r' : 'w-0 border-r-0'}`}
-      >
-        <div className="w-[280px] flex-1 flex flex-col min-h-0 overflow-hidden">
-          <div className="flex-1 overflow-y-auto custom-scrollbar">
-            <div className="p-4 flex flex-col gap-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-zinc-100 truncate">SprintLogic IDE</h2>
-                <div className="flex items-center gap-1">
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-zinc-400 hover:text-white" onClick={toggleLeftSidebar} title="Ocultar barra lateral">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
-                  </Button>
-                </div>
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-zinc-400 hover:text-white" onClick={() => addTab({ id: 'settings', title: '⚙️ Configuración', type: 'settings' })} title="Configuración">
-                  <Settings className="w-4 h-4" />
-                </Button>
-              </div>
-
-              {/* Activity Bar — global tool launchers */}
-              <div className="flex flex-wrap items-center gap-1 p-1 bg-zinc-800/50 rounded-lg">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-700"
-                  onClick={() => launchTool('insights', 'Insights', 'insights')}
-                  title="Insights"
-                  aria-label="Insights"
-                >
-                  <BarChart3 className="w-4 h-4" aria-hidden="true" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-700"
-                  onClick={() => launchTool('graph', 'Análisis Gráfico', 'graph')}
-                  title="Análisis Gráfico"
-                  aria-label="Análisis Gráfico"
-                >
-                  <Network className="w-4 h-4" aria-hidden="true" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-700"
-                  onClick={() => launchTool('kanban', 'Kanban', 'kanban')}
-                  title="Kanban"
-                  aria-label="Kanban"
-                >
-                  <Layout className="w-4 h-4" aria-hidden="true" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-700"
-                  onClick={() => launchTool('git-graph', 'Git Studio', 'git-graph')}
-                  title="Git Studio"
-                  aria-label="Git Studio"
-                >
-                  <FolderGit2 className="w-4 h-4" aria-hidden="true" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-700"
-                  onClick={() => launchTool('ai-history', 'Historial IA', 'ai-history')}
-                  title="Historial IA"
-                  aria-label="Historial IA"
-                >
-                  <Bot className="w-4 h-4" aria-hidden="true" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-700"
-                  onClick={() => launchTool('planning-studio', 'Planning Studio', 'planning-studio')}
-                  title="Planning Studio"
-                  aria-label="Planning Studio"
-                >
-                  <Play className="w-4 h-4" aria-hidden="true" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-700"
-                  onClick={() => launchTool('database-studio', 'Database Studio', 'database-studio')}
-                  title="Database Studio"
-                  aria-label="Database Studio"
-                >
-                  <Database className="w-4 h-4" aria-hidden="true" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-700"
-                  onClick={() => launchTool('test-studio', 'Test Studio', 'test-studio')}
-                  title="Test Studio"
-                  aria-label="Test Studio"
-                >
-                  <Beaker className="w-4 h-4" aria-hidden="true" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-700"
-                  onClick={() => launchTool('document-studio', 'Document Studio', 'document-studio')}
-                  title="Document Studio"
-                  aria-label="Document Studio"
-                >
-                  <BookOpen className="w-4 h-4" aria-hidden="true" />
-                </Button>
-              </div>
-
-              {/* 1. Selector de Proyectos (Mejorado) */}
-              <div className="flex w-full items-center gap-2">
-                <DropdownMenu>
-                  <DropdownMenuTrigger className={cn(buttonVariants({ variant: "outline" }), "flex-1 justify-between bg-zinc-800 border-zinc-700/50 text-zinc-200 hover:bg-zinc-700 hover:text-white truncate")}>
-                    <span className="truncate">
-                      {projects.find(p => p.id === projectId)?.name || "Selecciona un proyecto..."}
-                    </span>
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent className="w-[248px] bg-zinc-800 border-zinc-700/50 text-zinc-200">
-                    <DropdownMenuGroup>
-                      <DropdownMenuLabel>Tus Proyectos</DropdownMenuLabel>
-                      {projects.map((p) => (
-                        <DropdownMenuItem 
-                          key={p.id} 
-                          onClick={() => setProjectId(p.id)}
-                          className={`cursor-pointer justify-between ${projectId === p.id ? 'bg-blue-500/10 text-blue-400' : ''}`}
-                        >
-                          <span className="truncate pr-2">{p.name}</span>
-                          <div className="flex items-center gap-1 shrink-0">
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-6 w-6 text-zinc-400 hover:text-blue-400"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setProjectToEdit(p);
-                                setEditProjectName(p.name);
-                                setEditProjectPath(p.path);
-                                setEditProjectOpen(true);
-                              }}
-                            >
-                              <Edit2 className="h-3 w-3" />
-                            </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-6 w-6 text-zinc-400 hover:text-red-400"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteProject(p);
-                              }}
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        </DropdownMenuItem>
-                      ))}
-                    </DropdownMenuGroup>
-                    <DropdownMenuSeparator className="bg-zinc-700/50" />
-                    <DropdownMenuItem onClick={() => setAddProjectOpen(true)} className="cursor-pointer focus:bg-zinc-700">
-                      <PlusCircle className="mr-2 h-4 w-4 text-zinc-400" />
-                      <span>Añadir Proyecto</span>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-
-              <Dialog open={addProjectOpen} onOpenChange={setAddProjectOpen}>
-                <DialogContent className="sm:max-w-[425px] bg-zinc-900 text-zinc-200 border-zinc-800/50">
-                  <DialogHeader>
-                    <DialogTitle>Añadir Proyecto Local</DialogTitle>
-                    <DialogDescription className="text-zinc-400">
-                      Ingresa la ruta absoluta del repositorio Git local que deseas analizar.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="flex flex-col gap-4 py-4">
-                    <div className="flex w-full items-center space-x-2">
-                      <input
-                        type="text"
-                        value={path}
-                        onChange={(e) => setPath(e.target.value)}
-                        placeholder="/ruta/al/proyecto"
-                        className="flex-1 min-w-0 bg-zinc-800 border border-zinc-700/50 rounded p-2 text-sm text-zinc-200 focus:outline-none focus:border-blue-500"
-                      />
-                      <Button onClick={async () => {
-                        try {
-                          const { open } = await import("@tauri-apps/plugin-dialog");
-                          const selected = await open({
-                            directory: true,
-                            multiple: false,
-                          });
-                          if (selected && typeof selected === "string") {
-                            setPath(selected);
-                          }
-                        } catch (err) {
-                          console.error("Failed to open dialog:", err);
-                        }
-                      }} variant="outline" className="px-3 bg-zinc-800 border-zinc-700/50 hover:bg-zinc-700 whitespace-nowrap">
-                        Examinar...
-                      </Button>
-                    </div>
-                    <Button onClick={handleScan} disabled={loading || !path} className="w-full bg-blue-600 hover:bg-blue-500 shadow-lg shadow-blue-500/20 text-white border-none">
-                      {loading ? "Cargando..." : "Registrar y Analizar"}
-                    </Button>
-                  </div>
-                </DialogContent>
-              </Dialog>
-
-              <Dialog open={editProjectOpen} onOpenChange={setEditProjectOpen}>
-                <DialogContent className="sm:max-w-[425px] bg-zinc-900 text-zinc-200 border-zinc-800/50">
-                  <DialogHeader>
-                    <DialogTitle>Editar Proyecto</DialogTitle>
-                    <DialogDescription className="text-zinc-400">
-                      Modifica el nombre o la ruta del proyecto.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="flex flex-col gap-4 py-4">
-                    <div className="flex flex-col space-y-2">
-                      <Label htmlFor="editName" className="text-xs text-zinc-400">Nombre del Proyecto</Label>
-                      <Input
-                        id="editName"
-                        type="text"
-                        value={editProjectName}
-                        onChange={(e) => setEditProjectName(e.target.value)}
-                        className="bg-zinc-800 border-zinc-700/50 focus-visible:ring-blue-500 text-zinc-200"
-                      />
-                    </div>
-                    <div className="flex flex-col space-y-2">
-                      <Label htmlFor="editPath" className="text-xs text-zinc-400">Ruta (Path)</Label>
-                      <div className="flex w-full items-center space-x-2">
-                        <Input
-                          id="editPath"
-                          type="text"
-                          value={editProjectPath}
-                          onChange={(e) => setEditProjectPath(e.target.value)}
-                          className="flex-1 bg-zinc-800 border-zinc-700/50 focus-visible:ring-blue-500 text-zinc-200"
-                        />
-                        <Button onClick={async () => {
-                          try {
-                            const { open } = await import("@tauri-apps/plugin-dialog");
-                            const selected = await open({
-                              directory: true,
-                              multiple: false,
-                            });
-                            if (selected && typeof selected === "string") {
-                              setEditProjectPath(selected);
-                            }
-                          } catch (err) {
-                            console.error("Failed to open dialog:", err);
-                          }
-                        }} variant="outline" className="px-3 bg-zinc-800 border-zinc-700/50 hover:bg-zinc-700 text-zinc-300">
-                          ...
-                        </Button>
-                      </div>
-                    </div>
-                    <Button onClick={handleEditProject} disabled={!editProjectName || !editProjectPath} className="w-full bg-blue-600 hover:bg-blue-500 shadow-lg shadow-blue-500/20 text-white border-none mt-2">
-                      Guardar Cambios
-                    </Button>
-                  </div>
-                </DialogContent>
-              </Dialog>
-
-              <Dialog open={!!deleteConfirm} onOpenChange={(open) => !open && setDeleteConfirm(null)}>
-                <DialogContent className="sm:max-w-[400px] bg-zinc-900 text-zinc-200 border-zinc-800/50">
-                  <DialogHeader>
-                    <DialogTitle>Eliminar proyecto</DialogTitle>
-                    <DialogDescription className="text-zinc-400">
-                      ¿Estás seguro de que deseas eliminar el proyecto &quot;{deleteConfirm?.name}&quot;?
-                      Solo se eliminará de la lista, los archivos en disco no se borrarán.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <DialogFooter className="gap-2">
-                    <Button
-                      variant="outline"
-                      onClick={() => setDeleteConfirm(null)}
-                      className="bg-zinc-800 border-zinc-700/50 hover:bg-zinc-700 text-zinc-300"
-                    >
-                      Cancelar
-                    </Button>
-                    <Button
-                      onClick={() => deleteConfirm && confirmDeleteProject(deleteConfirm)}
-                      className="bg-red-600 hover:bg-red-500 text-white"
-                    >
-                      Eliminar
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-
-              {/* Explorador de Archivos */}
-              <Card className="bg-zinc-800 border-zinc-700/50 text-zinc-200 mt-2 flex-1 flex flex-col min-h-0">
-                <CardHeader className="p-3 pb-2 shrink-0 border-b border-zinc-700/50/50">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">Explorador</CardTitle>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6 text-zinc-400 hover:text-white hover:bg-zinc-700"
-                        onClick={() => handleNewFile()}
-                        title="Nuevo Archivo"
-                      >
-                        <FilePlus className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6 text-zinc-400 hover:text-white hover:bg-zinc-700"
-                        onClick={() => setFileTreeRefreshKey(k => k + 1)}
-                        title="Refrescar Explorador"
-                      >
-                        <RefreshCw className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6 text-zinc-400 hover:text-white hover:bg-zinc-700"
-                        onClick={async () => {
-                          if (!projectId) return;
-                          try {
-                            await rescanProject(projectId);
-                            toast.success("Re-escaneo iniciado. El grafo se actualizará en unos segundos.");
-                          } catch {
-                            toast.error("Error al re-escanear");
-                          }
-                        }}
-                        title="Re-escanear Proyecto"
-                      >
-                        <RotateCcw className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6 text-zinc-400 hover:text-white hover:bg-zinc-700"
-                        onClick={handleAnalyzeProject}
-                        title="Analizar Proyecto"
-                      >
-                        <ScanSearch className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="p-0 text-xs text-zinc-400 flex-1 overflow-hidden">
-                  {projectId ? (
-                    <div className="h-full overflow-y-auto">
-                      {apiReady ? (
-                        <FileTree
-                          projectId={projectId}
-                          key={`${projectId}-${fileTreeRefreshKey}`}
-                          onFileSelect={handleFileTreeSelect}
-                          onNewFile={handleNewFile}
-                          refreshKey={fileTreeRefreshKey}
-                          onNavigateToMarker={handleNavigateToMarker}
-                          onFileRename={handleFileRename}
-                          onFileDuplicate={handleFileDuplicate}
-                          onFileDelete={handleFileDelete}
-                        />
-                      ) : (
-                        <div className="p-4 text-xs text-zinc-500">Conectando con el servidor...</div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="p-4 text-center">Selecciona un proyecto...</div>
-                  )}
-                </CardContent>
-              </Card>
-
-              <ProjectInsightsPanel />
-            </div>
-          </div>
-          <div className="p-4 border-t border-zinc-800/50 bg-[#0a0a0a] flex items-center justify-between">
-              <Button
-                variant="ghost"
-                className="justify-start text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 flex-1"
-                onClick={() => addTab({ id: 'settings', title: '⚙️ Configuración', type: 'settings' })}
-              >
-                <Settings className="mr-2 h-4 w-4" />
-                Configuración
-              </Button>
-              <Button
-                variant="ghost"
-                className="w-10 h-10 p-0 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 ml-2"
-                onClick={() => setHelpOpen(true)}
-                title="Mostrar Hoja de Trucos (Ctrl + /)"
-              >
-                <HelpCircle className="h-4 w-4" />
-              </Button>
-            </div>
-        </div>
-      </div>
-
-      {/* Toggle button visible only when left sidebar is collapsed */}
-        {!leftSidebarOpen && (
-          <div className="absolute left-2 top-4 z-50">
-            <Button 
-              variant="default" 
-              className="h-8 w-8 p-0 bg-zinc-800 hover:bg-zinc-700 text-white flex items-center justify-center border border-zinc-700/50 rounded"
-              onClick={toggleLeftSidebar}
-              title="Mostrar Proyectos"
-            >
-              <FolderOpen className="h-4 w-4" />
-            </Button>
-          </div>
-        )}
-
+    <div className="h-[100dvh] w-full flex flex-col bg-[#0d0d0d] text-zinc-200 overflow-hidden relative">
+      <div className="flex-1 flex overflow-hidden">
+        <ActivityBar />
+        <DrawerPanel 
+        onFileSelect={handleFileTreeSelect}
+        onNewFile={handleNewFile}
+        fileTreeRefreshKey={fileTreeRefreshKey}
+        onRefreshFileTree={() => setFileTreeRefreshKey(k => k + 1)}
+        onRescanProject={async () => {
+          if (!projectId) return;
+          try {
+            await rescanProject(projectId);
+            toast.success("Re-escaneo iniciado. El grafo se actualizará en unos segundos.");
+          } catch {
+            toast.error("Error al re-escanear");
+          }
+        }}
+        onAnalyzeProject={handleAnalyzeProject}
+        onNavigateToMarker={handleNavigateToMarker}
+        onFileRename={handleFileRename}
+        onFileDuplicate={handleFileDuplicate}
+        onFileDelete={handleFileDelete}
+      />
       {/* MAIN CONTENT */}
       <div className="flex-1 min-w-0 flex flex-col relative bg-[#151515] overflow-hidden">
           {projectId === null ? (
@@ -986,8 +612,19 @@ export default function Home() {
           </div>
         </div>
       </div>
-
-
+      </div>
+      
+      <StatusBar
+        projects={projects}
+        onEditProject={(p) => {
+          setProjectToEdit(p);
+          setEditProjectName(p.name);
+          setEditProjectPath(p.path);
+          setEditProjectOpen(true);
+        }}
+        onDeleteProject={(p) => handleDeleteProject(p)}
+        onAddProject={() => setAddProjectOpen(true)}
+      />
 
         <Dialog open={renameDialogOpen} onOpenChange={setRenameDialogOpen}>
           <DialogContent className="bg-zinc-900 border-zinc-700 text-zinc-200 sm:max-w-sm">
@@ -1079,6 +716,126 @@ export default function Home() {
         )}
         <HelpModal isOpen={helpOpen} onClose={() => setHelpOpen(false)} />
         <CheatSheetModal isOpen={cheatSheetOpen} onClose={() => setCheatSheetOpen(false)} />
+    
+        <Dialog open={addProjectOpen} onOpenChange={setAddProjectOpen}>
+                <DialogContent className="sm:max-w-[425px] bg-zinc-900 text-zinc-200 border-zinc-800/50">
+                  <DialogHeader>
+                    <DialogTitle>Añadir Proyecto Local</DialogTitle>
+                    <DialogDescription className="text-zinc-400">
+                      Ingresa la ruta absoluta del repositorio Git local que deseas analizar.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="flex flex-col gap-4 py-4">
+                    <div className="flex w-full items-center space-x-2">
+                      <input
+                        type="text"
+                        value={path}
+                        onChange={(e) => setPath(e.target.value)}
+                        placeholder="/ruta/al/proyecto"
+                        className="flex-1 min-w-0 bg-zinc-800 border border-zinc-700/50 rounded p-2 text-sm text-zinc-200 focus:outline-none focus:border-blue-500"
+                      />
+                      <Button onClick={async () => {
+                        try {
+                          const { open } = await import("@tauri-apps/plugin-dialog");
+                          const selected = await open({
+                            directory: true,
+                            multiple: false,
+                          });
+                          if (selected && typeof selected === "string") {
+                            setPath(selected);
+                          }
+                        } catch (err) {
+                          console.error("Failed to open dialog:", err);
+                        }
+                      }} variant="outline" className="px-3 bg-zinc-800 border-zinc-700/50 hover:bg-zinc-700 whitespace-nowrap">
+                        Examinar...
+                      </Button>
+                    </div>
+                    <Button onClick={handleScan} disabled={loading || !path} className="w-full bg-blue-600 hover:bg-blue-500 shadow-lg shadow-blue-500/20 text-white border-none">
+                      {loading ? "Cargando..." : "Registrar y Analizar"}
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+        <Dialog open={editProjectOpen} onOpenChange={setEditProjectOpen}>
+                <DialogContent className="sm:max-w-[425px] bg-zinc-900 text-zinc-200 border-zinc-800/50">
+                  <DialogHeader>
+                    <DialogTitle>Editar Proyecto</DialogTitle>
+                    <DialogDescription className="text-zinc-400">
+                      Modifica el nombre o la ruta del proyecto.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="flex flex-col gap-4 py-4">
+                    <div className="flex flex-col space-y-2">
+                      <Label htmlFor="editName" className="text-xs text-zinc-400">Nombre del Proyecto</Label>
+                      <Input
+                        id="editName"
+                        type="text"
+                        value={editProjectName}
+                        onChange={(e) => setEditProjectName(e.target.value)}
+                        className="bg-zinc-800 border-zinc-700/50 focus-visible:ring-blue-500 text-zinc-200"
+                      />
+                    </div>
+                    <div className="flex flex-col space-y-2">
+                      <Label htmlFor="editPath" className="text-xs text-zinc-400">Ruta (Path)</Label>
+                      <div className="flex w-full items-center space-x-2">
+                        <Input
+                          id="editPath"
+                          type="text"
+                          value={editProjectPath}
+                          onChange={(e) => setEditProjectPath(e.target.value)}
+                          className="flex-1 bg-zinc-800 border-zinc-700/50 focus-visible:ring-blue-500 text-zinc-200"
+                        />
+                        <Button onClick={async () => {
+                          try {
+                            const { open } = await import("@tauri-apps/plugin-dialog");
+                            const selected = await open({
+                              directory: true,
+                              multiple: false,
+                            });
+                            if (selected && typeof selected === "string") {
+                              setEditProjectPath(selected);
+                            }
+                          } catch (err) {
+                            console.error("Failed to open dialog:", err);
+                          }
+                        }} variant="outline" className="px-3 bg-zinc-800 border-zinc-700/50 hover:bg-zinc-700 text-zinc-300">
+                          ...
+                        </Button>
+                      </div>
+                    </div>
+                    <Button onClick={handleEditProject} disabled={!editProjectName || !editProjectPath} className="w-full bg-blue-600 hover:bg-blue-500 shadow-lg shadow-blue-500/20 text-white border-none mt-2">
+                      Guardar Cambios
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+        <Dialog open={!!deleteConfirm} onOpenChange={(open) => !open && setDeleteConfirm(null)}>
+                <DialogContent className="sm:max-w-[400px] bg-zinc-900 text-zinc-200 border-zinc-800/50">
+                  <DialogHeader>
+                    <DialogTitle>Eliminar proyecto</DialogTitle>
+                    <DialogDescription className="text-zinc-400">
+                      ¿Estás seguro de que deseas eliminar el proyecto &quot;{deleteConfirm?.name}&quot;?
+                      Solo se eliminará de la lista, los archivos en disco no se borrarán.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <DialogFooter className="gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => setDeleteConfirm(null)}
+                      className="bg-zinc-800 border-zinc-700/50 hover:bg-zinc-700 text-zinc-300"
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      onClick={() => deleteConfirm && confirmDeleteProject(deleteConfirm)}
+                      className="bg-red-600 hover:bg-red-500 text-white"
+                    >
+                      Eliminar
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
     </div>
   );
 }

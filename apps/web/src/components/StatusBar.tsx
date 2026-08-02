@@ -2,11 +2,11 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useTelemetryStore, initializeTelemetry } from '../store/telemetryStore';
-import { GitBranch, GitCommit, Check, Upload, Download, Plus } from 'lucide-react';
+import { GitBranch, GitCommit, Check, Upload, Download, Plus, ChevronsUpDown, Edit2, Trash2, PlusCircle, FolderOpen } from 'lucide-react';
 import { useTabsStore } from '@/store/tabsStore';
 import { useProjectStore } from '@/store/projectStore';
 import { useGitStore } from '@/store/gitStore';
-import { GitStatus } from '@/types';
+import { GitStatus, Project } from '@/types';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,11 +17,18 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-export const StatusBar: React.FC = () => {
+interface StatusBarProps {
+  projects?: Project[];
+  onEditProject?: (p: Project) => void;
+  onDeleteProject?: (p: Project) => void;
+  onAddProject?: () => void;
+}
+
+export const StatusBar: React.FC<StatusBarProps> = ({ projects = [], onEditProject, onDeleteProject, onAddProject }) => {
   // Referencia directa al DOM para inyectar texto saltándonos el Virtual DOM (Transient Update)
   const timeRef = useRef<HTMLDivElement>(null);
   
-  const { projectId } = useProjectStore();
+  const { projectId, setProjectId } = useProjectStore();
   const { currentBranch, modified, untracked, isLoading: gitLoading, error: gitError, fetchStatus } = useGitStore();
   const { addTab } = useTabsStore();
 
@@ -184,18 +191,52 @@ export const StatusBar: React.FC = () => {
         </div>
       </div>
       
-      {/* El Contenedor del Reloj Cuántico (Actualizado imperativamente a 1 FPS) */}
-      <div 
-        ref={timeRef} 
-        title="Tiempo de Flujo Acumulado (Pensando | Codificando | Testeando)"
-        style={{ 
-          fontWeight: '600', 
-          color: '#38bdf8', // Tailwind sky-400
-          letterSpacing: '0.5px' 
-        }}
-      >
-        {/* El texto inicial será sobreescrito casi de inmediato por el useEffect */}
-        🧠 PENSANDO  |  🧠 00:00  |  🔴 00:00  |  🟢 00:00
+      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        <DropdownMenu>
+          <DropdownMenuTrigger style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', background: 'transparent', border: 'none', color: '#a1a1aa', outline: 'none' }} className="hover:text-zinc-200 transition-colors">
+            <FolderOpen className="w-3.5 h-3.5" />
+            <span>{projectId ? (projects.find(p => p.id === projectId)?.name || 'Desconocido').slice(0, 20) : 'Sin proyecto'}</span>
+            <ChevronsUpDown className="w-3.5 h-3.5 opacity-50" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" side="top" className="w-56 bg-zinc-900 border-zinc-800 text-zinc-200 mb-2 shadow-xl shadow-black/50">
+            <DropdownMenuGroup>
+              <DropdownMenuLabel className="text-xs text-zinc-400 font-normal">Proyectos Locales</DropdownMenuLabel>
+              <DropdownMenuSeparator className="bg-zinc-800" />
+              {projects.map((p) => (
+                <DropdownMenuItem key={p.id} className="text-xs flex items-center justify-between group cursor-pointer focus:bg-zinc-800 focus:text-white" onSelect={() => setProjectId(p.id)}>
+                  <span className="truncate">{p.name}</span>
+                  <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1">
+                    <button className="p-1 hover:bg-zinc-700 rounded text-zinc-400 hover:text-white transition-colors" onClick={(e) => { e.stopPropagation(); onEditProject?.(p); }}>
+                      <Edit2 className="w-3 h-3" />
+                    </button>
+                    <button className="p-1 hover:bg-red-900/50 rounded text-zinc-400 hover:text-red-400 transition-colors" onClick={(e) => { e.stopPropagation(); onDeleteProject?.(p); }}>
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                </DropdownMenuItem>
+              ))}
+              <DropdownMenuSeparator className="bg-zinc-800" />
+              <DropdownMenuItem className="text-xs cursor-pointer focus:bg-zinc-800 focus:text-white" onSelect={() => onAddProject?.()}>
+                <PlusCircle className="w-4 h-4 mr-2 text-zinc-400" />
+                Añadir Proyecto
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        {/* El Contenedor del Reloj Cuántico (Actualizado imperativamente a 1 FPS) */}
+        <div 
+          ref={timeRef} 
+          title="Tiempo de Flujo Acumulado (Pensando | Codificando | Testeando)"
+          style={{ 
+            fontWeight: '600', 
+            color: '#38bdf8', // Tailwind sky-400
+            letterSpacing: '0.5px' 
+          }}
+        >
+          {/* El texto inicial será sobreescrito casi de inmediato por el useEffect */}
+          🧠 PENSANDO  |  🧠 00:00  |  🔴 00:00  |  🟢 00:00
+        </div>
       </div>
     </div>
   );
