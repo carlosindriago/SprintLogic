@@ -17,13 +17,14 @@ interface GitState {
   isLoading: boolean;
   error: string | null;
   selectedFile: string | null;
+  lastDashboardFetch: number | null;
   setSelectedFile: (file: string | null) => void;
   fetchStatus: (projectId: string) => Promise<void>;
   fetchDashboard: (projectId: string) => Promise<void>;
   fetchCommits: (projectId: string) => Promise<void>;
 }
 
-export const useGitStore = create<GitState>((set) => ({
+export const useGitStore = create<GitState>()((set, get) => ({
   currentBranch: 'unknown',
   ahead: 0,
   behind: 0,
@@ -38,6 +39,7 @@ export const useGitStore = create<GitState>((set) => ({
   isLoading: false,
   error: null,
   selectedFile: null,
+  lastDashboardFetch: null,
   setSelectedFile: (file: string | null) => set({ selectedFile: file }),
 
   fetchStatus: async (projectId: string) => {
@@ -56,6 +58,10 @@ export const useGitStore = create<GitState>((set) => ({
   },
 
   fetchDashboard: async (projectId: string) => {
+    const { lastDashboardFetch } = get();
+    if (lastDashboardFetch !== null && Date.now() - lastDashboardFetch < 30_000) {
+      return;
+    }
     set({ isLoading: true, error: null });
     try {
       const data = await getGitDashboard(projectId);
@@ -71,6 +77,7 @@ export const useGitStore = create<GitState>((set) => ({
         tracked: data.kpis?.tracked || 0,
         ignored: data.kpis?.ignored || 0,
         isLoading: false,
+        lastDashboardFetch: Date.now(),
       });
     } catch (error: unknown) {
       set({ error: (error as Error).message || 'Error fetching Git dashboard', isLoading: false });
