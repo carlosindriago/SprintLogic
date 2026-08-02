@@ -8,10 +8,12 @@ interface LayoutState {
   isDrawerOpen: boolean;
   drawerWidth: number;
   isDragging: boolean;
+  omniSearchOpen: boolean;
   setActiveSidebarPanel: (panel: SidebarPanel) => void;
   setDrawerWidth: (width: number) => void;
   setIsDragging: (v: boolean) => void;
   toggleDrawer: () => void;
+  setOmniSearchOpen: (open: boolean) => void;
 }
 
 export const useLayoutStore = create<LayoutState>()(
@@ -21,6 +23,7 @@ export const useLayoutStore = create<LayoutState>()(
       isDrawerOpen: true,
       drawerWidth: 240,
       isDragging: false,
+      omniSearchOpen: false,
       setActiveSidebarPanel: (panel) =>
         set({
           activeSidebarPanel: panel,
@@ -33,7 +36,16 @@ export const useLayoutStore = create<LayoutState>()(
         set({ drawerWidth: Math.max(160, Math.min(480, width)) }),
       setIsDragging: (v) => set({ isDragging: v }),
       toggleDrawer: () => set((s) => ({ isDrawerOpen: !s.isDrawerOpen })),
+      setOmniSearchOpen: (open) => set({ omniSearchOpen: open }),
     }),
-    { name: 'sprintlogic-layout' }
+    {
+      name: 'sprintlogic-layout',
+      partialize: (state) => ({
+        activeSidebarPanel: state.activeSidebarPanel,
+        isDrawerOpen: state.isDrawerOpen,
+        drawerWidth: state.drawerWidth,
+        isDragging: state.isDragging,
+      }),
+    }
   )
 );

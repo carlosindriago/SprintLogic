@@ -128,7 +128,7 @@ export default function Home() {
   const [newFileInitialContent, setNewFileInitialContent] = useState('');
   const [fileTreeRefreshKey, setFileTreeRefreshKey] = useState(0);
   const [analysisDialogOpen, setAnalysisDialogOpen] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
+  const { omniSearchOpen, setOmniSearchOpen } = useLayoutStore();
   const [mentorOpen, setMentorOpen] = useState(false);
   const [mentorFile, setMentorFile] = useState('');
   const [mentorContent, setMentorContent] = useState('');
@@ -150,7 +150,7 @@ export default function Home() {
     }
   }, []);
 
-  useDoubleShift(() => setSearchOpen(true));
+  useDoubleShift(() => setOmniSearchOpen(true));
   useGlobalShortcuts();
 
   useEffect(() => {
@@ -701,7 +701,7 @@ export default function Home() {
           />
         )}
         <AnalysisReportDialog open={analysisDialogOpen} onOpenChange={setAnalysisDialogOpen} />
-        <OmniSearchModal open={searchOpen} onClose={() => setSearchOpen(false)} onSelect={handleSearchSelect} />
+        <OmniSearchModal open={omniSearchOpen} onClose={() => setOmniSearchOpen(false)} onSelect={handleSearchSelect} />
         {mentorOpen && (
           <CodeMentorPanel
             open={mentorOpen}
