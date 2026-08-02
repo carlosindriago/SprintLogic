@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Settings, ChevronRight, Edit2, Trash2, PlusCircle, FilePlus, RefreshCw, RotateCcw, ScanSearch, Layout, Network, GitBranch, BarChart3, HelpCircle, } from "lucide-react";
+import { Settings, ChevronRight, Edit2, Trash2, PlusCircle, FilePlus, RefreshCw, RotateCcw, ScanSearch, Layout, Network, GitBranch, BarChart3, HelpCircle, FolderOpen } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { scanProject, getProjects, updateProject, deleteProject, rescanProject, analyzeProject, renameFile, duplicateFile, deleteFile, initSidecarPort } from "@/lib/api";
@@ -560,25 +560,18 @@ export default function Home() {
                 <p className="text-zinc-400 max-w-md mb-8 leading-relaxed">
                   Para comenzar, carga un proyecto local ingresando la ruta absoluta del repositorio.
                 </p>
+                <Button
+                  onClick={() => setAddProjectOpen(true)}
+                  className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2.5 text-sm font-medium shadow-lg shadow-blue-500/20"
+                >
+                  <FolderOpen className="w-4 h-4 mr-2" />
+                  Cargar Proyecto
+                </Button>
               </div>
             </div>
           ) : (
             <>
-              <TabBar
-                onToggleAi={toggleRightSidebar}
-                aiOpen={rightSidebarOpen}
-                onNewFile={handleNewUntitled}
-                projectId={projectId ?? undefined}
-                projects={projects}
-                onAddProject={() => setAddProjectOpen(true)}
-                onEditProject={(p) => {
-                  setProjectToEdit(p);
-                  setEditProjectName(p.name);
-                  setEditProjectPath(p.path);
-                  setEditProjectOpen(true);
-                }}
-                onDeleteProject={(p) => handleDeleteProject(p)}
-              />
+              <TabBar onToggleAi={toggleRightSidebar} aiOpen={rightSidebarOpen} onNewFile={handleNewUntitled} projectId={projectId ?? undefined} />
               <div className="flex-1 relative overflow-hidden bg-[#151515] flex flex-col" key={activeTabId}>
                 {apiReady ? (
                   renderActiveTabContent()
@@ -628,7 +621,17 @@ export default function Home() {
       </div>
       </div>
       
-      <StatusBar />
+      <StatusBar
+        projects={projects}
+        onEditProject={(p) => {
+          setProjectToEdit(p);
+          setEditProjectName(p.name);
+          setEditProjectPath(p.path);
+          setEditProjectOpen(true);
+        }}
+        onDeleteProject={(p) => handleDeleteProject(p)}
+        onAddProject={() => setAddProjectOpen(true)}
+      />
 
         <Dialog open={renameDialogOpen} onOpenChange={setRenameDialogOpen}>
           <DialogContent className="bg-zinc-900 border-zinc-700 text-zinc-200 sm:max-w-sm">

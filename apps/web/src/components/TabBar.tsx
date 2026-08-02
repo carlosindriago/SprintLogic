@@ -5,21 +5,10 @@ import { useTabsStore } from '@/store/tabsStore';
 import { useMarkersStore } from '@/store/markersStore';
 import { useUnsavedStore } from '@/store/unsavedStore';
 import { draftStore } from '@/lib/draftStore';
-import { useProjectStore } from '@/store/projectStore';
-import { X, BarChart3, Layout, Network, GitBranch, FilePlus, FolderGit2, Save, Trash2, AlertTriangle, Bot, NotebookPen, FolderOpen, ChevronsUpDown, Edit2, PlusCircle } from 'lucide-react';
+import { X, BarChart3, Layout, Network, GitBranch, FilePlus, FolderGit2, Save, Trash2, AlertTriangle, Bot, NotebookPen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import FileIcon from './FileIcon';
 import { useOmniPadStore } from '@/store/omniPadStore';
-import { Project } from '@/types';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuGroup,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 
 const TAB_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   dashboard: BarChart3,
@@ -36,10 +25,6 @@ interface TabBarProps {
   aiOpen?: boolean;
   onNewFile?: () => void;
   projectId?: string;
-  projects?: Project[];
-  onAddProject?: () => void;
-  onEditProject?: (p: Project) => void;
-  onDeleteProject?: (p: Project) => void;
 }
 
 interface CloseConfirmState {
@@ -188,9 +173,8 @@ function CloseConfirmModal({
   );
 }
 
-export default function TabBar({ onToggleAi, aiOpen, onNewFile, projectId, projects = [], onAddProject, onEditProject, onDeleteProject }: TabBarProps) {
+export default function TabBar({ onToggleAi, aiOpen, onNewFile, projectId }: TabBarProps) {
   const { tabs, activeTabId, setActiveTab, removeTab, dirtyFiles } = useTabsStore();
-  const { setProjectId } = useProjectStore();
   const markersFiles = useMarkersStore((s) => s.files);
   const [closeConfirm, setCloseConfirm] = useState<CloseConfirmState | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -328,39 +312,6 @@ export default function TabBar({ onToggleAi, aiOpen, onNewFile, projectId, proje
           </div>
         )})}
         <div className="ml-auto flex items-center shrink-0">
-        <DropdownMenu>
-          <DropdownMenuTrigger className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors outline-none border-l border-zinc-800/50" title="Proyectos">
-            <FolderOpen className="w-3.5 h-3.5" />
-            <span className="max-w-[120px] truncate">
-              {projectId ? (projects.find(p => p.id === projectId)?.name || 'Desconocido') : 'Sin proyecto'}
-            </span>
-            <ChevronsUpDown className="w-3 h-3 opacity-50" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-64 bg-zinc-900 border border-zinc-700 text-zinc-200 shadow-xl shadow-black/50 z-50">
-            <DropdownMenuGroup>
-              <DropdownMenuLabel className="text-xs text-zinc-400 font-normal px-3 pt-2">Proyectos Locales</DropdownMenuLabel>
-              <DropdownMenuSeparator className="bg-zinc-700" />
-              {projects.map((p) => (
-                <DropdownMenuItem key={p.id} className="text-sm flex items-center justify-between group cursor-pointer focus:bg-zinc-700 focus:text-white py-2 px-3" onSelect={() => setProjectId(p.id)}>
-                  <span className="truncate text-zinc-200">{p.name}</span>
-                  <div className="flex items-center gap-0.5 ml-2 shrink-0">
-                    <button className="p-1 hover:bg-zinc-600 rounded text-zinc-500 hover:text-zinc-200 transition-colors" onClick={(e) => { e.stopPropagation(); onEditProject?.(p); }}>
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </button>
-                    <button className="p-1 hover:bg-red-900/50 rounded text-zinc-500 hover:text-red-400 transition-colors" onClick={(e) => { e.stopPropagation(); onDeleteProject?.(p); }}>
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </DropdownMenuItem>
-              ))}
-              <DropdownMenuSeparator className="bg-zinc-700" />
-              <DropdownMenuItem className="text-sm cursor-pointer focus:bg-zinc-700 focus:text-white py-2" onClick={(e) => { e.preventDefault(); onAddProject?.(); }}>
-                <PlusCircle className="w-4 h-4 mr-2 text-blue-400" />
-                Añadir Proyecto
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
         {onNewFile && (
           <button
             onClick={onNewFile}
