@@ -564,7 +564,21 @@ export default function Home() {
             </div>
           ) : (
             <>
-              <TabBar onToggleAi={toggleRightSidebar} aiOpen={rightSidebarOpen} onNewFile={handleNewUntitled} projectId={projectId ?? undefined} />
+              <TabBar
+                onToggleAi={toggleRightSidebar}
+                aiOpen={rightSidebarOpen}
+                onNewFile={handleNewUntitled}
+                projectId={projectId ?? undefined}
+                projects={projects}
+                onAddProject={() => setAddProjectOpen(true)}
+                onEditProject={(p) => {
+                  setProjectToEdit(p);
+                  setEditProjectName(p.name);
+                  setEditProjectPath(p.path);
+                  setEditProjectOpen(true);
+                }}
+                onDeleteProject={(p) => handleDeleteProject(p)}
+              />
               <div className="flex-1 relative overflow-hidden bg-[#151515] flex flex-col" key={activeTabId}>
                 {apiReady ? (
                   renderActiveTabContent()
@@ -614,17 +628,7 @@ export default function Home() {
       </div>
       </div>
       
-      <StatusBar
-        projects={projects}
-        onEditProject={(p) => {
-          setProjectToEdit(p);
-          setEditProjectName(p.name);
-          setEditProjectPath(p.path);
-          setEditProjectOpen(true);
-        }}
-        onDeleteProject={(p) => handleDeleteProject(p)}
-        onAddProject={() => setAddProjectOpen(true)}
-      />
+      <StatusBar />
 
         <Dialog open={renameDialogOpen} onOpenChange={setRenameDialogOpen}>
           <DialogContent className="bg-zinc-900 border-zinc-700 text-zinc-200 sm:max-w-sm">
