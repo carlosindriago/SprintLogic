@@ -320,7 +320,7 @@ async def save_doc_file(
         target_path = (project_root / request.file_path).resolve()
 
         # Security: Prevent path traversal
-        if not str(target_path).startswith(str(project_root)):
+        if not target_path.is_relative_to(project_root):
             raise HTTPException(status_code=403, detail="Invalid file path (Path Traversal attempt)")
 
     except Exception:
