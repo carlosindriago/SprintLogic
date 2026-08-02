@@ -20,78 +20,82 @@ export default function ActivityBar() {
       <div className="flex flex-col gap-1 pt-2">
         <button
           onClick={() => setActiveSidebarPanel('explorer')}
+          aria-label="Explorer"
           title="Explorer"
           className={cn(
-            "w-10 h-10 rounded-lg mx-auto flex items-center justify-center transition-colors",
+            "w-10 h-10 rounded-lg mx-auto flex items-center justify-center transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-blue-500",
             isActive('explorer') ? "bg-zinc-700/60 text-white" : "text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/50"
           )}
         >
-          <Folder className="w-5 h-5" />
+          <Folder className="w-5 h-5" aria-hidden="true" />
         </button>
         <button
           onClick={() => {
             if (isDrawerOpen) toggleDrawer();
             setOmniSearchOpen(true);
           }}
+          aria-label="Search"
           title="Search"
           className={cn(
-            "w-10 h-10 rounded-lg mx-auto flex items-center justify-center transition-colors",
+            "w-10 h-10 rounded-lg mx-auto flex items-center justify-center transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-blue-500",
             omniSearchOpen ? "bg-zinc-700/60 text-white" : "text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/50"
           )}
         >
-          <Search className="w-5 h-5" />
+          <Search className="w-5 h-5" aria-hidden="true" />
         </button>
         <button
           onClick={() => setActiveSidebarPanel('git')}
+          aria-label="Git"
           title="Git"
           className={cn(
-            "w-10 h-10 rounded-lg mx-auto flex items-center justify-center transition-colors",
+            "w-10 h-10 rounded-lg mx-auto flex items-center justify-center transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-blue-500",
             isActive('git') ? "bg-zinc-700/60 text-white" : "text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/50"
           )}
         >
-          <GitBranch className="w-5 h-5" />
+          <GitBranch className="w-5 h-5" aria-hidden="true" />
         </button>
       </div>
 
       <div className="w-6 mx-auto border-t border-zinc-800 my-2" />
 
       <div className="flex flex-col gap-1 overflow-y-auto">
-        <button onClick={() => launchStudio('insights', 'Insights', 'insights')} title="Insights" className="w-10 h-10 rounded-lg mx-auto flex items-center justify-center transition-colors text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800/50">
-          <BarChart3 className="w-5 h-5" />
+        <button onClick={() => launchStudio('insights', 'Insights', 'insights')} aria-label="Insights" title="Insights" className="w-10 h-10 rounded-lg mx-auto flex items-center justify-center transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-blue-500 text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800/50">
+          <BarChart3 className="w-5 h-5" aria-hidden="true" />
         </button>
-        <button onClick={() => launchStudio('graph', 'Análisis Gráfico', 'graph')} title="Análisis Gráfico" className="w-10 h-10 rounded-lg mx-auto flex items-center justify-center transition-colors text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800/50">
-          <Network className="w-5 h-5" />
+        <button onClick={() => launchStudio('graph', 'Análisis Gráfico', 'graph')} aria-label="Análisis Gráfico" title="Análisis Gráfico" className="w-10 h-10 rounded-lg mx-auto flex items-center justify-center transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-blue-500 text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800/50">
+          <Network className="w-5 h-5" aria-hidden="true" />
         </button>
-        <button onClick={() => launchStudio('kanban', 'Kanban', 'kanban')} title="Kanban" className="w-10 h-10 rounded-lg mx-auto flex items-center justify-center transition-colors text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800/50">
-          <Layout className="w-5 h-5" />
+        <button onClick={() => launchStudio('kanban', 'Kanban', 'kanban')} aria-label="Kanban" title="Kanban" className="w-10 h-10 rounded-lg mx-auto flex items-center justify-center transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-blue-500 text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800/50">
+          <Layout className="w-5 h-5" aria-hidden="true" />
         </button>
-        <button onClick={() => launchStudio('git-graph', 'Git Studio', 'git-graph')} title="Git Studio" className="w-10 h-10 rounded-lg mx-auto flex items-center justify-center transition-colors text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800/50">
-          <FolderGit2 className="w-5 h-5" />
+        <button onClick={() => launchStudio('git-graph', 'Git Studio', 'git-graph')} aria-label="Git Studio" title="Git Studio" className="w-10 h-10 rounded-lg mx-auto flex items-center justify-center transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-blue-500 text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800/50">
+          <FolderGit2 className="w-5 h-5" aria-hidden="true" />
         </button>
-        <button onClick={() => launchStudio('ai-history', 'Historial IA', 'ai-history')} title="Historial IA" className="w-10 h-10 rounded-lg mx-auto flex items-center justify-center transition-colors text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800/50">
-          <Bot className="w-5 h-5" />
+        <button onClick={() => launchStudio('ai-history', 'Historial IA', 'ai-history')} aria-label="Historial IA" title="Historial IA" className="w-10 h-10 rounded-lg mx-auto flex items-center justify-center transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-blue-500 text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800/50">
+          <Bot className="w-5 h-5" aria-hidden="true" />
         </button>
-        <button onClick={() => launchStudio('planning-studio', 'Planning Studio', 'planning-studio')} title="Planning Studio" className="w-10 h-10 rounded-lg mx-auto flex items-center justify-center transition-colors text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800/50">
-          <Play className="w-5 h-5" />
+        <button onClick={() => launchStudio('planning-studio', 'Planning Studio', 'planning-studio')} aria-label="Planning Studio" title="Planning Studio" className="w-10 h-10 rounded-lg mx-auto flex items-center justify-center transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-blue-500 text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800/50">
+          <Play className="w-5 h-5" aria-hidden="true" />
         </button>
-        <button onClick={() => launchStudio('database-studio', 'Database Studio', 'database-studio')} title="Database Studio" className="w-10 h-10 rounded-lg mx-auto flex items-center justify-center transition-colors text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800/50">
-          <Database className="w-5 h-5" />
+        <button onClick={() => launchStudio('database-studio', 'Database Studio', 'database-studio')} aria-label="Database Studio" title="Database Studio" className="w-10 h-10 rounded-lg mx-auto flex items-center justify-center transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-blue-500 text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800/50">
+          <Database className="w-5 h-5" aria-hidden="true" />
         </button>
-        <button onClick={() => launchStudio('test-studio', 'Test Studio', 'test-studio')} title="Test Studio" className="w-10 h-10 rounded-lg mx-auto flex items-center justify-center transition-colors text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800/50">
-          <Beaker className="w-5 h-5" />
+        <button onClick={() => launchStudio('test-studio', 'Test Studio', 'test-studio')} aria-label="Test Studio" title="Test Studio" className="w-10 h-10 rounded-lg mx-auto flex items-center justify-center transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-blue-500 text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800/50">
+          <Beaker className="w-5 h-5" aria-hidden="true" />
         </button>
-        <button onClick={() => launchStudio('document-studio', 'Document Studio', 'document-studio')} title="Document Studio" className="w-10 h-10 rounded-lg mx-auto flex items-center justify-center transition-colors text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800/50">
-          <BookOpen className="w-5 h-5" />
+        <button onClick={() => launchStudio('document-studio', 'Document Studio', 'document-studio')} aria-label="Document Studio" title="Document Studio" className="w-10 h-10 rounded-lg mx-auto flex items-center justify-center transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-blue-500 text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800/50">
+          <BookOpen className="w-5 h-5" aria-hidden="true" />
         </button>
       </div>
 
       <div className="mt-auto pb-2 flex flex-col gap-1">
         <button
           onClick={() => addTab({ id: 'settings', title: '⚙️ Configuración', type: 'settings' })}
+          aria-label="⚙️ Configuración"
           title="Settings"
-          className="w-10 h-10 rounded-lg mx-auto flex items-center justify-center text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/50 transition-colors"
+          className="w-10 h-10 rounded-lg mx-auto flex items-center justify-center text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/50 transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-blue-500"
         >
-          <Settings className="w-5 h-5" />
+          <Settings className="w-5 h-5" aria-hidden="true" />
         </button>
       </div>
     </div>
