@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Settings, ChevronRight, Edit2, Trash2, PlusCircle, FilePlus, RefreshCw, RotateCcw, ScanSearch, Layout, Network, GitBranch, BarChart3, HelpCircle, } from "lucide-react";
+import { Settings, ChevronRight, Edit2, Trash2, PlusCircle, FilePlus, RefreshCw, RotateCcw, ScanSearch, Layout, Network, GitBranch, BarChart3, HelpCircle, FolderOpen } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { scanProject, getProjects, updateProject, deleteProject, rescanProject, analyzeProject, renameFile, duplicateFile, deleteFile, initSidecarPort } from "@/lib/api";
@@ -128,7 +128,7 @@ export default function Home() {
   const [newFileInitialContent, setNewFileInitialContent] = useState('');
   const [fileTreeRefreshKey, setFileTreeRefreshKey] = useState(0);
   const [analysisDialogOpen, setAnalysisDialogOpen] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
+  const { omniSearchOpen, setOmniSearchOpen } = useLayoutStore();
   const [mentorOpen, setMentorOpen] = useState(false);
   const [mentorFile, setMentorFile] = useState('');
   const [mentorContent, setMentorContent] = useState('');
@@ -150,7 +150,7 @@ export default function Home() {
     }
   }, []);
 
-  useDoubleShift(() => setSearchOpen(true));
+  useDoubleShift(() => setOmniSearchOpen(true));
   useGlobalShortcuts();
 
   useEffect(() => {
@@ -560,6 +560,13 @@ export default function Home() {
                 <p className="text-zinc-400 max-w-md mb-8 leading-relaxed">
                   Para comenzar, carga un proyecto local ingresando la ruta absoluta del repositorio.
                 </p>
+                <Button
+                  onClick={() => setAddProjectOpen(true)}
+                  className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2.5 text-sm font-medium shadow-lg shadow-blue-500/20"
+                >
+                  <FolderOpen className="w-4 h-4 mr-2" />
+                  Cargar Proyecto
+                </Button>
               </div>
             </div>
           ) : (
@@ -701,7 +708,7 @@ export default function Home() {
           />
         )}
         <AnalysisReportDialog open={analysisDialogOpen} onOpenChange={setAnalysisDialogOpen} />
-        <OmniSearchModal open={searchOpen} onClose={() => setSearchOpen(false)} onSelect={handleSearchSelect} />
+        <OmniSearchModal open={omniSearchOpen} onClose={() => setOmniSearchOpen(false)} onSelect={handleSearchSelect} />
         {mentorOpen && (
           <CodeMentorPanel
             open={mentorOpen}

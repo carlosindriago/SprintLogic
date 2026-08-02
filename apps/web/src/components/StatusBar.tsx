@@ -132,6 +132,40 @@ export const StatusBar: React.FC<StatusBarProps> = ({ projects = [], onEditProje
           <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#10b981' }}></span>
           SprintLogic IDE
         </span>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', background: 'transparent', border: 'none', color: '#a1a1aa', outline: 'none' }} className="hover:text-zinc-200 transition-colors">
+            <FolderOpen className="w-3.5 h-3.5" />
+            <span className="max-w-[120px] truncate">
+              {projectId ? (projects.find(p => p.id === projectId)?.name || 'Desconocido') : 'Sin proyecto'}
+            </span>
+            <ChevronsUpDown className="w-3.5 h-3.5 opacity-50" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" side="top" className="w-64 bg-zinc-900 border border-zinc-700 text-zinc-200 mb-2 shadow-xl shadow-black/50 z-50">
+            <DropdownMenuGroup>
+              <DropdownMenuLabel className="text-xs text-zinc-400 font-normal px-3 pt-2">Proyectos Locales</DropdownMenuLabel>
+              <DropdownMenuSeparator className="bg-zinc-700" />
+              {projects.map((p) => (
+                <DropdownMenuItem key={p.id} className="text-sm flex items-center justify-between group cursor-pointer focus:bg-zinc-700 focus:text-white py-2 px-3" onSelect={() => setProjectId(p.id)}>
+                  <span className="truncate text-zinc-200">{p.name}</span>
+                  <div className="flex items-center gap-0.5 ml-2 shrink-0">
+                    <button className="p-1 hover:bg-zinc-600 rounded text-zinc-500 hover:text-zinc-200 transition-colors" onClick={(e) => { e.stopPropagation(); onEditProject?.(p); }}>
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                    <button className="p-1 hover:bg-red-900/50 rounded text-zinc-500 hover:text-red-400 transition-colors" onClick={(e) => { e.stopPropagation(); onDeleteProject?.(p); }}>
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </DropdownMenuItem>
+              ))}
+              <DropdownMenuSeparator className="bg-zinc-700" />
+              <DropdownMenuItem className="text-sm cursor-pointer focus:bg-zinc-700 focus:text-white py-2" onClick={(e) => { e.preventDefault(); onAddProject?.(); }}>
+                <PlusCircle className="w-4 h-4 mr-2 text-blue-400" />
+                Añadir Proyecto
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
         
         {/* Git Status Popover */}
         {projectId && !gitLoading && !gitError ? (
@@ -191,39 +225,6 @@ export const StatusBar: React.FC<StatusBarProps> = ({ projects = [], onEditProje
         </div>
       </div>
       
-      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-        <DropdownMenu>
-          <DropdownMenuTrigger style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', background: 'transparent', border: 'none', color: '#a1a1aa', outline: 'none' }} className="hover:text-zinc-200 transition-colors">
-            <FolderOpen className="w-3.5 h-3.5" />
-            <span>{projectId ? (projects.find(p => p.id === projectId)?.name || 'Desconocido').slice(0, 20) : 'Sin proyecto'}</span>
-            <ChevronsUpDown className="w-3.5 h-3.5 opacity-50" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" side="top" className="w-56 bg-zinc-900 border-zinc-800 text-zinc-200 mb-2 shadow-xl shadow-black/50">
-            <DropdownMenuGroup>
-              <DropdownMenuLabel className="text-xs text-zinc-400 font-normal">Proyectos Locales</DropdownMenuLabel>
-              <DropdownMenuSeparator className="bg-zinc-800" />
-              {projects.map((p) => (
-                <DropdownMenuItem key={p.id} className="text-xs flex items-center justify-between group cursor-pointer focus:bg-zinc-800 focus:text-white" onSelect={() => setProjectId(p.id)}>
-                  <span className="truncate">{p.name}</span>
-                  <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1">
-                    <button className="p-1 hover:bg-zinc-700 rounded text-zinc-400 hover:text-white transition-colors" onClick={(e) => { e.stopPropagation(); onEditProject?.(p); }}>
-                      <Edit2 className="w-3 h-3" />
-                    </button>
-                    <button className="p-1 hover:bg-red-900/50 rounded text-zinc-400 hover:text-red-400 transition-colors" onClick={(e) => { e.stopPropagation(); onDeleteProject?.(p); }}>
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  </div>
-                </DropdownMenuItem>
-              ))}
-              <DropdownMenuSeparator className="bg-zinc-800" />
-              <DropdownMenuItem className="text-xs cursor-pointer focus:bg-zinc-800 focus:text-white" onSelect={() => onAddProject?.()}>
-                <PlusCircle className="w-4 h-4 mr-2 text-zinc-400" />
-                Añadir Proyecto
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
-
         {/* El Contenedor del Reloj Cuántico (Actualizado imperativamente a 1 FPS) */}
         <div 
           ref={timeRef} 
@@ -237,7 +238,6 @@ export const StatusBar: React.FC<StatusBarProps> = ({ projects = [], onEditProje
           {/* El texto inicial será sobreescrito casi de inmediato por el useEffect */}
           🧠 PENSANDO  |  🧠 00:00  |  🔴 00:00  |  🟢 00:00
         </div>
-      </div>
     </div>
   );
 };

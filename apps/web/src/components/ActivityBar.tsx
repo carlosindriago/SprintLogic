@@ -5,7 +5,7 @@ import { Folder, Search, GitBranch, Settings, BarChart3, Network, Layout, Folder
 import { cn } from '@/lib/utils';
 
 export default function ActivityBar() {
-  const { activeSidebarPanel, isDrawerOpen, setActiveSidebarPanel, toggleDrawer } = useLayoutStore();
+  const { activeSidebarPanel, isDrawerOpen, setActiveSidebarPanel, toggleDrawer, setOmniSearchOpen, omniSearchOpen } = useLayoutStore();
   const addTab = useTabsStore((s) => s.addTab);
 
   const launchStudio = (id: string, title: string, type: import('@/store/tabsStore').TabType) => {
@@ -13,7 +13,7 @@ export default function ActivityBar() {
     if (isDrawerOpen) toggleDrawer();
   };
 
-  const isActive = (panel: 'explorer' | 'search' | 'git') => activeSidebarPanel === panel && isDrawerOpen;
+  const isActive = (panel: 'explorer' | 'git') => activeSidebarPanel === panel && isDrawerOpen;
 
   return (
     <div className="w-12 h-full flex flex-col bg-[#0d0d0d] border-r border-zinc-800 shrink-0">
@@ -29,11 +29,14 @@ export default function ActivityBar() {
           <Folder className="w-5 h-5" />
         </button>
         <button
-          onClick={() => setActiveSidebarPanel('search')}
+          onClick={() => {
+            if (isDrawerOpen) toggleDrawer();
+            setOmniSearchOpen(true);
+          }}
           title="Search"
           className={cn(
             "w-10 h-10 rounded-lg mx-auto flex items-center justify-center transition-colors",
-            isActive('search') ? "bg-zinc-700/60 text-white" : "text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/50"
+            omniSearchOpen ? "bg-zinc-700/60 text-white" : "text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/50"
           )}
         >
           <Search className="w-5 h-5" />
