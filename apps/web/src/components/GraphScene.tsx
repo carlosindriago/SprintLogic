@@ -31,6 +31,8 @@ interface ForceNode extends GraphNode {
   _modCache?: string | null;
   _lowerName?: string;
   _extCache?: string;
+  _colorCache?: string;
+  _glowColorCache?: string;
 }
 
 interface ForceLink extends GraphEdge {
@@ -645,6 +647,8 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
           extCache.set(n, ext);
         }
         clone._extCache = ext;
+        clone._colorCache = extColorHash(ext);
+        clone._glowColorCache = bloomGlow(clone._colorCache, 0.45);
       }
 
       let mod = modCache.get(n);
@@ -782,9 +786,8 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     let glowColor = "rgba(148, 163, 184, 0.4)";
 
     if (label === "File") {
-      const ext = n._extCache || "";
-      color = extColorHash(ext);
-      glowColor = bloomGlow(color, 0.45);
+      color = n._colorCache || graphTheme.unknown;
+      glowColor = n._glowColorCache || "rgba(148, 163, 184, 0.4)";
       radius = Math.max(3.5, degreeRadius * 0.9);
     } else if (label === "Class") {
       color = graphTheme.class;
@@ -800,7 +803,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
       radius = Math.max(5, degreeRadius);
     } else if (label === "Module") {
       color = "#6366f1"; // Indigo for Super-Nodes
-      glowColor = bloomGlow(color, 0.6);
+      glowColor = "#6366f1"; // bloomGlow returns the hex code if not HSL
       const children = (n as ForceNode).children_count || 1;
       radius = Math.max(12, 6 + Math.log2(children) * 3);
     }
