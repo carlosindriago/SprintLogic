@@ -178,8 +178,13 @@ interface Note {
     <div className="fixed inset-y-0 right-0 w-96 bg-zinc-900 border-l border-zinc-800 shadow-2xl z-50 flex flex-col transform transition-transform">
       <div className="p-4 border-b border-zinc-800 flex justify-between items-center bg-zinc-950">
         <h2 className="text-lg font-semibold text-zinc-100 font-mono">Omni-Pad</h2>
-        <button onClick={close} className="text-zinc-400 hover:text-white">
-          ✕
+        <button
+          onClick={close}
+          className="text-zinc-400 hover:text-white focus-visible:ring-2 focus-visible:outline-none rounded"
+          aria-label="Close"
+          title="Close"
+        >
+          <span aria-hidden="true">✕</span>
         </button>
       </div>
 
