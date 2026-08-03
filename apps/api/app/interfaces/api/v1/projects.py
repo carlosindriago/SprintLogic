@@ -4,7 +4,6 @@ import json
 import logging
 import os
 import re
-import shutil
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -49,6 +48,17 @@ from app.interfaces.api.v1.project_schemas import (
     UpdateProjectRequest as UpdateProjectRequestDTO,
 )
 from app.interfaces.api.v1.wbs_schemas import WBSHierarchicalResponse
+from app.utils.async_io import (
+    async_copy2,
+    async_exists,
+    async_is_file,
+    async_mkdir_parents,
+    async_read_bytes,
+    async_read_text,
+    async_remove,
+    async_rename,
+    async_write_text,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -543,15 +553,15 @@ async def analyze_project_graph(
         key_files_xml = "<archivos_clave_dominio>\n"
         for node in key_nodes:
             file_path = node["file_path"]
-            if not file_path or not os.path.exists(file_path):
+            if not file_path or not await asyncio.to_thread(os.path.exists, file_path):
                 continue
 
             try:
-                with open(file_path, encoding="utf-8") as f:
-                    lines = f.readlines()
-                    content = "".join(lines[:300]) # Límite estricto de 300 líneas
-                    if len(lines) > 300:
-                        content += "\n... [CÓDIGO TRUNCADO PARA PROTEGER CONTEXTO] ..."
+                content = await async_read_text(file_path)
+                lines = content.splitlines(keepends=True)
+                content = "".join(lines[:300]) # Límite estricto de 300 líneas
+                if len(lines) > 300:
+                    content += "\n... [CÓDIGO TRUNCADO PARA PROTEGER CONTEXTO] ..."
 
                 node_role = "Orquestador/Router (Alto Fan-Out)" if node == top_out_node else "Core/Dominio (Alto Fan-In)"
 
@@ -946,10 +956,10 @@ async def get_project_files(
                 node["children"] = []
         return node
 
-    if not os.path.exists(project.path):
+    if not await asyncio.to_thread(os.path.exists, project.path):
         raise HTTPException(status_code=404, detail="Project path not found on disk")
 
-    tree = build_tree(project.path)
+    tree = await asyncio.to_thread(build_tree, project.path)
     background_tasks.add_task(build_search_index, project.path)
     return tree
 
@@ -1022,14 +1032,13 @@ async def get_project_file_content(
     if not candidate.is_relative_to(project_root):
         raise HTTPException(status_code=403, detail="Path is outside project directory")
 
-    if not candidate.is_file():
+    if not await asyncio.to_thread(candidate.is_file):
         raise HTTPException(status_code=404, detail="File not found")
 
     import hashlib
 
     try:
-        with open(candidate, "rb") as f:
-            raw_content = f.read()
+        raw_content = await async_read_bytes(candidate)
         content = raw_content.decode("utf-8")
         file_hash = hashlib.sha256(raw_content).hexdigest()
         return {"content": content, "original_hash": file_hash}
@@ -1063,7 +1072,7 @@ async def update_project_file_content(
     if not candidate.is_relative_to(project_root):
         raise HTTPException(status_code=403, detail="Path is outside project directory")
 
-    if not candidate.is_file():
+    if not await asyncio.to_thread(candidate.is_file):
         raise HTTPException(status_code=404, detail="File not found")
 
     import hashlib
@@ -1071,19 +1080,16 @@ async def update_project_file_content(
     try:
         # Optimistic Concurrency Control (ETag logic)
         if payload.base_hash:
-            with open(candidate, "rb") as f:
-                current_raw = f.read()
+            current_raw = await async_read_bytes(candidate)
             current_hash = hashlib.sha256(current_raw).hexdigest()
             if current_hash != payload.base_hash:
                 raise HTTPException(
                     status_code=409, detail="File has been modified externally since last read"
                 )
 
-        with open(candidate, "w", encoding="utf-8") as f:
-            f.write(payload.content)
+        await async_write_text(candidate, payload.content)
 
-        with open(candidate, "rb") as f:
-            new_raw = f.read()
+        new_raw = await async_read_bytes(candidate)
         new_hash = hashlib.sha256(new_raw).hexdigest()
 
         return {"status": "success", "new_hash": new_hash}
@@ -1118,13 +1124,12 @@ async def create_project_file(
     if not candidate.is_relative_to(project_root):
         raise HTTPException(status_code=403, detail="Path is outside project directory")
 
-    if candidate.exists():
+    if await async_exists(candidate):
         raise HTTPException(status_code=409, detail="File already exists")
 
     try:
-        candidate.parent.mkdir(parents=True, exist_ok=True)
-        with open(candidate, "w", encoding="utf-8") as f:
-            f.write(payload.content)
+        await async_mkdir_parents(candidate)
+        await async_write_text(candidate, payload.content)
         return {"status": "created", "path": str(candidate.relative_to(project_root))}
     except Exception as e:
         logger.error("Failed to create file failed: %s", e, exc_info=True)
@@ -1159,7 +1164,7 @@ async def rename_project_file(
 
     candidate = _validate_and_resolve(project.path, request.path)
 
-    if not candidate.exists():
+    if not await async_exists(candidate):
         raise HTTPException(status_code=404, detail="File not found")
 
     if not re.match(r"^[^/\0]+$", request.new_name):
@@ -1171,11 +1176,11 @@ async def rename_project_file(
             status_code=403, detail="Renamed path would be outside project directory"
         )
 
-    if new_path.exists():
+    if await async_exists(new_path):
         raise HTTPException(status_code=409, detail="A file with that name already exists")
 
     try:
-        os.rename(str(candidate), str(new_path))
+        await async_rename(candidate, new_path)
         relative = str(new_path.relative_to(Path(project.path).resolve()))
         return {"status": "renamed", "path": relative}
     except Exception as e:
@@ -1201,7 +1206,7 @@ async def duplicate_project_file(
 
     candidate = _validate_and_resolve(project.path, request.path)
 
-    if not candidate.is_file():
+    if not await async_is_file(candidate):
         raise HTTPException(status_code=404, detail="File not found")
 
     stem = candidate.stem
@@ -1209,12 +1214,12 @@ async def duplicate_project_file(
     duplicate_path = candidate.parent / f"{stem}_copy{suffix}"
 
     counter = 1
-    while duplicate_path.exists():
+    while await async_exists(duplicate_path):
         duplicate_path = candidate.parent / f"{stem}_copy{counter}{suffix}"
         counter += 1
 
     try:
-        shutil.copy2(str(candidate), str(duplicate_path))
+        await async_copy2(candidate, duplicate_path)
         relative = str(duplicate_path.relative_to(Path(project.path).resolve()))
         return {"status": "duplicated", "path": relative}
     except Exception as e:
@@ -1240,11 +1245,11 @@ async def delete_project_file(
 
     candidate = _validate_and_resolve(project.path, path)
 
-    if not candidate.is_file():
+    if not await async_is_file(candidate):
         raise HTTPException(status_code=404, detail="File not found")
 
     try:
-        os.remove(str(candidate))
+        await async_remove(candidate)
         return {"status": "deleted", "path": path}
     except Exception as e:
         logger.error("Failed to delete file failed: %s", e, exc_info=True)
@@ -1264,6 +1269,69 @@ IGNORE_DIRS = {
     "coverage",
 }
 
+SOURCE_EXTENSIONS = {".ts", ".tsx", ".js", ".jsx", ".py", ".rs", ".go", ".java", ".php"}
+MAX_FILE_BYTES = 500_000
+
+
+def _count_tech_stack(project_root: Path) -> tuple[dict[str, int], int]:
+    """Count file extensions and total files. Blocking — run inside a thread."""
+    tech_stack: dict[str, int] = {}
+    total_files = 0
+
+    for dirpath, dirnames, filenames in os.walk(project_root):
+        dirnames[:] = [d for d in dirnames if d not in IGNORE_DIRS and not d.startswith(".")]
+        for filename in filenames:
+            ext = Path(filename).suffix.lower()
+            if ext:
+                tech_stack[ext] = tech_stack.get(ext, 0) + 1
+            total_files += 1
+    return tech_stack, total_files
+
+
+def _load_json_file(path: str) -> dict[str, Any]:
+    """Load a JSON file into a dict. Blocking — run inside a thread."""
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _dump_json_file(path: str, data: dict[str, Any]) -> None:
+    """Write a dict to a JSON file. Blocking — run inside a thread."""
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+
+
+def _collect_search_index_entries(
+    root: Path,
+) -> tuple[list[dict[str, str]], list[dict[str, Any]]]:
+    """Walk the project tree and extract symbols. Blocking — run inside a thread."""
+    from app.infrastructure.scanners.symbol_extractor import extract_symbols
+
+    inserts: list[dict[str, str]] = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in IGNORE_DIRS and not d.startswith(".")]
+        for filename in filenames:
+            file_path = str(Path(dirpath) / filename)
+            inserts.append({"type": "file", "name": filename, "path": file_path})
+
+    symbol_inserts: list[dict[str, Any]] = []
+    for entry in inserts:
+        fp = Path(entry["path"])
+        if not fp.exists() or fp.stat().st_size > MAX_FILE_BYTES:
+            continue
+        ext = fp.suffix.lower()
+        if ext not in SOURCE_EXTENSIONS:
+            continue
+        try:
+            content = fp.read_text(encoding="utf-8", errors="ignore")
+        except Exception:
+            continue
+        symbols = extract_symbols(str(fp), content)
+        for sym in symbols:
+            symbol_inserts.append(
+                {"type": "symbol", "name": sym["name"], "path": str(fp), "line": sym["line"]}
+            )
+    return inserts, symbol_inserts
+
 
 async def build_search_index(project_root: str, session: AsyncSession | None = None) -> int:
     """Rebuild the FTS5 search index for a project directory.
@@ -1271,8 +1339,6 @@ async def build_search_index(project_root: str, session: AsyncSession | None = N
     Can receive an existing session (from /analyze) or create its own
     (for background tasks). Returns total files indexed.
     """
-    from app.infrastructure.scanners.symbol_extractor import extract_symbols
-
     own_session = session is None
     if own_session:
         session = get_sessionmaker()()
@@ -1283,48 +1349,15 @@ async def build_search_index(project_root: str, session: AsyncSession | None = N
         root = Path(project_root).resolve()
         await session.execute(text("DELETE FROM search_index"))
 
-        inserts: list[dict[str, str]] = []
-        import os as _os
-
-        for dirpath, dirnames, filenames in _os.walk(root):
-            dirnames[:] = [d for d in dirnames if d not in IGNORE_DIRS and not d.startswith(".")]
-            for filename in filenames:
-                file_path = str(Path(dirpath) / filename)
-                inserts.append(
-                    {
-                        "type": "file",
-                        "name": filename,
-                        "path": file_path,
-                    }
-                )
+        inserts, symbol_inserts = await asyncio.to_thread(
+            _collect_search_index_entries, root
+        )
 
         if inserts:
             await session.execute(
                 text("INSERT INTO search_index (type, name, path) VALUES (:type, :name, :path)"),
                 inserts,
             )
-
-        from typing import Any
-
-        symbol_inserts: list[dict[str, Any]] = []
-        MAX_FILE_BYTES = 500_000
-
-        for entry in inserts:
-            fp = Path(entry["path"])
-            if not fp.exists() or fp.stat().st_size > MAX_FILE_BYTES:
-                continue
-            ext = fp.suffix.lower()
-            if ext not in {".ts", ".tsx", ".js", ".jsx", ".py", ".rs", ".go", ".java", ".php"}:
-                continue
-            try:
-                content = fp.read_text(encoding="utf-8", errors="ignore")
-            except Exception:
-                continue
-            symbols = extract_symbols(str(fp), content)
-            for sym in symbols:
-                symbol_inserts.append(
-                    {"type": "symbol", "name": sym["name"], "path": str(fp), "line": sym["line"]}
-                )
 
         if symbol_inserts:
             await session.execute(
@@ -1354,23 +1387,16 @@ async def analyze_project(project_id: str, session: AsyncSession = Depends(get_d
         raise HTTPException(status_code=404, detail="Project not found")
 
     project_root = Path(project.path).resolve()
-    if not project_root.exists():
+    if not await async_exists(project_root):
         raise HTTPException(status_code=404, detail="Project path not found on disk")
 
     # ── Rebuild FTS5 search index ──────────────────────────────────────
     await build_search_index(str(project_root), session)
 
     # ── Tech stack counting ────────────────────────────────────────────
-    tech_stack: dict[str, int] = {}
-    total_files = 0
-
-    for dirpath, dirnames, filenames in os.walk(project_root):
-        dirnames[:] = [d for d in dirnames if d not in IGNORE_DIRS and not d.startswith(".")]
-        for filename in filenames:
-            ext = Path(filename).suffix.lower()
-            if ext:
-                tech_stack[ext] = tech_stack.get(ext, 0) + 1
-            total_files += 1
+    tech_stack, total_files = await asyncio.to_thread(
+        _count_tech_stack, project_root
+    )
 
     # ── Run language scanners ──────────────────────────────────────────
     from app.infrastructure.scanners.python_scanner import PythonScanner
@@ -1379,7 +1405,7 @@ async def analyze_project(project_id: str, session: AsyncSession = Depends(get_d
 
     try:
         py_scanner = PythonScanner()
-        py_markers = py_scanner.scan(str(project_root))
+        py_markers = await asyncio.to_thread(py_scanner.scan, str(project_root))
         global_markers.update(py_markers)
     except Exception:
         pass  # scanner failures are non-fatal
@@ -1596,7 +1622,7 @@ async def apply_proposal(project_id: str, proposal_id: str):
 
     try:
         target = Path(proposal["absolute_path"])
-        current_content = target.read_text(encoding="utf-8", errors="ignore")
+        current_content = await async_read_text(target, errors="ignore")
         current_hash = hashlib.sha256(current_content.encode()).hexdigest()
         expected_hash = proposal.get("original_file_hash", "")
 
@@ -1610,7 +1636,7 @@ async def apply_proposal(project_id: str, proposal_id: str):
                 ),
             )
 
-        target.write_text(proposal["new_file_content"], encoding="utf-8")
+        await async_write_text(target, proposal["new_file_content"])
         del _proposals_store[proposal_id]
         return {
             "status": "applied",
@@ -1732,7 +1758,7 @@ async def get_project_tasks(project_id: str, session: AsyncSession = Depends(get
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    tasks = kanban_sync.read_tasks(project.path)
+    tasks = await asyncio.to_thread(kanban_sync.read_tasks, project.path)
     return {"tasks": tasks}
 
 
@@ -1754,7 +1780,7 @@ async def save_project_tasks(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    kanban_sync.write_tasks(project.path, request.tasks)
+    await asyncio.to_thread(kanban_sync.write_tasks, project.path, request.tasks)
     return {"status": "success"}
 
 
@@ -1787,7 +1813,7 @@ async def get_kanban_config(project_id: str, session: AsyncSession = Depends(get
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    config = kanban_sync.get_config(project.path)
+    config = await asyncio.to_thread(kanban_sync.get_config, project.path)
     return config
 
 
@@ -1807,7 +1833,7 @@ async def save_kanban_config(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    kanban_sync.save_config(project.path, request.dict())
+    await asyncio.to_thread(kanban_sync.save_config, project.path, request.dict())
 
     # Notify active sessions via SSE to reload configuration
     if project_id in project_event_queues:
@@ -1831,16 +1857,13 @@ async def get_project_sticky_notes(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    import json
-
     json_path = os.path.join(project.path, f"{project_id}.json")
 
     notes = []
-    if os.path.exists(json_path):
+    if await async_exists(json_path):
         try:
-            with open(json_path, encoding="utf-8") as f:
-                data = json.load(f)
-                notes = data.get("sticky_notes", [])
+            data = await asyncio.to_thread(_load_json_file, json_path)
+            notes = data.get("sticky_notes", [])
         except Exception:
             pass
 
@@ -1863,31 +1886,24 @@ async def update_project_sticky_notes(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    import json
-
     json_path = os.path.join(project.path, f"{project_id}.json")
 
     data = {}
-    if os.path.exists(json_path):
+    if await async_exists(json_path):
         try:
-            with open(json_path, encoding="utf-8") as f:
-                data = json.load(f)
+            data = await asyncio.to_thread(_load_json_file, json_path)
         except Exception:
             pass
 
     data["sticky_notes"] = [note.model_dump() for note in request.notes]
 
     try:
-        with open(json_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2)
+        await asyncio.to_thread(_dump_json_file, json_path, data)
     except Exception as e:
         logger.error("Failed to write sticky notes: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="An internal error occurred")
 
     return {"status": "success"}
-
-
-import asyncio
 
 
 async def run_workspace_tests(repo_path: str) -> bool:
@@ -1935,8 +1951,8 @@ async def sync_project_commits(project_id: str, session: AsyncSession = Depends(
             "updated_tasks": [],
         }
 
-    tasks = kanban_sync.read_tasks(project.path)
-    config = kanban_sync.get_config(project.path)
+    tasks = await asyncio.to_thread(kanban_sync.read_tasks, project.path)
+    config = await asyncio.to_thread(kanban_sync.get_config, project.path)
 
     # Identify target columns by rule
     done_col = next(
@@ -1983,7 +1999,7 @@ async def sync_project_commits(project_id: str, session: AsyncSession = Depends(
                         updated_tasks.append(task_id)
 
     if updated:
-        kanban_sync.write_tasks(project.path, tasks)
+        await asyncio.to_thread(kanban_sync.write_tasks, project.path, tasks)
         # Notify active clients via SSE
         if project_id in project_event_queues:
             for q in project_event_queues[project_id]:
