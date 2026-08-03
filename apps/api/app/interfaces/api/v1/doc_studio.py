@@ -388,3 +388,4 @@ async def create_bookmark(
         "note": new_bookmark.note,
         "created_at": new_bookmark.created_at.isoformat()
     }
+
