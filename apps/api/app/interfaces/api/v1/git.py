@@ -18,6 +18,7 @@ from app.infrastructure.repositories.tool_model_repository import (
     tool_model_label,
 )
 from app.infrastructure.vcs.github_adapter import GitHubAdapter
+from app.utils.security import resolve_project_path
 
 logger = logging.getLogger(__name__)
 
@@ -137,6 +138,10 @@ async def execute_git_action(
 
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+
+    if request.files:
+        for file_path in request.files:
+            resolve_project_path(project.path, file_path)
 
     result = await git_gateway.execute_action(
         project.path,
@@ -539,6 +544,8 @@ async def get_file_local_diff(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
+    resolve_project_path(project.path, file_path)
+
     result = await git_gateway.get_file_diff(project.path, file_path)
     if "error" in result:
         logger.error("Git get file diff error: %s", result["error"])
@@ -594,6 +601,8 @@ async def revert_file(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
+    resolve_project_path(project.path, request.file_path)
+
     result = await git_gateway.revert_file_changes(project.path, request.file_path)
 
     if result.get("status") == "error":
@@ -645,6 +654,8 @@ async def stage_file(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
+    resolve_project_path(project.path, request.file_path)
+
     try:
         result = await git_gateway.stage_file(project.path, request.file_path)
     except Exception as e:
@@ -667,6 +678,7 @@ async def unstage_file(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
+    resolve_project_path(project.path, request.file_path)
     try:
         result = await git_gateway.unstage_file(project.path, request.file_path)
     except Exception as e:

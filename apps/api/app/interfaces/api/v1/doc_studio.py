@@ -15,6 +15,7 @@ from app.infrastructure.db.project_repository import SQLAlchemyProjectRepository
 from app.infrastructure.doc_inspector.doc_scanner import scan_markdown_docs, scan_undocumented_code
 from app.infrastructure.llm.litellm_gateway import LiteLLMGateway
 from app.infrastructure.repositories import prompt_repository
+from app.utils.security import resolve_project_path
 
 logger = logging.getLogger(__name__)
 
@@ -156,7 +157,7 @@ async def generate_docblock(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    full_path = Path(project.path) / request.file_path
+    full_path = resolve_project_path(project.path, request.file_path)
 
     if not full_path.exists() or not full_path.is_file():
         raise HTTPException(status_code=404, detail="Source file not found")
@@ -207,7 +208,7 @@ async def audit_doc(
         raise HTTPException(status_code=404, detail="Project not found")
 
     project_root = Path(project.path)
-    full_path = project_root / request.file_path
+    full_path = resolve_project_path(project.path, request.file_path)
 
     if not full_path.exists() or not full_path.is_file():
         raise HTTPException(status_code=404, detail="Source file not found")
@@ -315,16 +316,7 @@ async def save_doc_file(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    try:
-        project_root = Path(project.path).resolve()
-        target_path = (project_root / request.file_path).resolve()
-
-        # Security: Prevent path traversal
-        if not target_path.is_relative_to(project_root):
-            raise HTTPException(status_code=403, detail="Invalid file path (Path Traversal attempt)")
-
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid path resolution")
+target_path = resolve_project_path(project.path, request.file_path)
 
     if not target_path.exists() or not target_path.is_file():
         raise HTTPException(status_code=404, detail="File not found")
