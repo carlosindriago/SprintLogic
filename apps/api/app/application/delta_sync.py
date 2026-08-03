@@ -1,7 +1,7 @@
 import hashlib
 
 import numpy as np  # type: ignore
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 
 from app.application.semantic_splitter import SemanticMarkdownSplitter
 from app.infrastructure.ai.vector_engine import VectorEngine
@@ -59,9 +59,10 @@ class DeltaSyncOrchestrator:
 
                 if old_ids:
                     # Borrar de la tabla virtual (catálogo mágico) usando IN
-                    ids_str = ",".join(map(str, old_ids))
                     await session.execute(
-                        text(f"DELETE FROM adr_vectors WHERE rowid IN ({ids_str})")
+                        text("DELETE FROM adr_vectors WHERE rowid IN :ids").bindparams(
+                            bindparam("ids", value=old_ids, expanding=True)
+                        )
                     )
                     # Borrar de la tabla de metadatos (estantería normal)
                     await session.execute(

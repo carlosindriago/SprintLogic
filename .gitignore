@@ -21,6 +21,10 @@ __pycache__/
 venv/
 env/
 
+# Build artifacts (PyInstaller output and static Next.js bundle are runtime artifacts)
+apps/api/build/
+apps/api/static/
+
 # Local databases (SQLite is a runtime artifact, never a source-of-truth commit)
 *.db
 *.db-journal
