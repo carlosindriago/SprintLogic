@@ -375,7 +375,7 @@ async def analyze_project_graph(
     project_id: str,
     request: AnalyzeGraphRequest,
     session: AsyncSession = Depends(get_db_session),
-    _rate_limit: None = Depends(require_rate_limit(10, 60, "graph_analyze")),
+    _rate_limit: None = Depends(require_rate_limit(limit=10, window_seconds=60, scope="graph_analyze")),
 ):
     try:
         project_uuid = UUID(project_id)

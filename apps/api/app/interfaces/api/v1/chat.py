@@ -171,7 +171,7 @@ async def chat_with_ai(
     request: ChatRequest,
     background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_db_session),
-    _rate_limit: None = Depends(require_rate_limit(15, 60, "chat")),
+    _rate_limit: None = Depends(require_rate_limit(limit=15, window_seconds=60, scope="chat")),
 ):
     """Handles chat messages with the AI and manages tool calls."""
     # BD source of truth: resolve tool override (chat / chat_sensei) or global
@@ -366,7 +366,7 @@ async def mentor_sensei(
     request: MentorRequest,
     background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_db_session),
-    _rate_limit: None = Depends(require_rate_limit(15, 60, "chat")),
+    _rate_limit: None = Depends(require_rate_limit(limit=15, window_seconds=60, scope="chat")),
 ):
     # BD source of truth: chat_sensei tool override (or global default).
     sensei_provider, sensei_model, _ = await resolve_tool_model(session, "chat_sensei")
@@ -486,7 +486,7 @@ class AutoFixRequest(BaseModel):
 async def ticket_mentor(
     request: TicketMentorRequest,
     session: AsyncSession = Depends(get_db_session),
-    _rate_limit: None = Depends(require_rate_limit(15, 60, "chat")),
+    _rate_limit: None = Depends(require_rate_limit(limit=15, window_seconds=60, scope="chat")),
 ):
     import uuid
     try:
@@ -586,7 +586,7 @@ async def ticket_mentor(
 async def auto_fix(
     request: AutoFixRequest,
     session: AsyncSession = Depends(get_db_session),
-    _rate_limit: None = Depends(require_rate_limit(15, 60, "chat")),
+    _rate_limit: None = Depends(require_rate_limit(limit=15, window_seconds=60, scope="chat")),
 ):
     import uuid
     try:

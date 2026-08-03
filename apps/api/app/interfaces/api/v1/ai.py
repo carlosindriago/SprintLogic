@@ -388,7 +388,7 @@ async def health_overview(
 async def contextual_mentorship(
     request: CodeCoachRequest,
     session: AsyncSession = Depends(get_db_session),
-    _rate_limit: None = Depends(require_rate_limit(15, 60, scope="ai")),
+    _rate_limit: None = Depends(require_rate_limit(limit=15, window_seconds=60, scope="ai")),
 ):
     """Analizador de código que detecta antipatrones (Mentoría Contextual)."""
     try:

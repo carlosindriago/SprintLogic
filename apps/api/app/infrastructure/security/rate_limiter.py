@@ -77,7 +77,7 @@ def require_rate_limit(
     limit: int = DEFAULT_LIMIT,
     window_seconds: int = DEFAULT_WINDOW_SECONDS,
     scope: str = "global",
-) -> Callable:
+) -> Callable[[Request], None]:
     """Build a FastAPI dependency enforcing N requests per window per client IP."""
 
     def dependency(request: Request) -> None:
