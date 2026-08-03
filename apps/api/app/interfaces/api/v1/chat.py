@@ -21,6 +21,7 @@ from app.infrastructure.repositories.tool_model_repository import (
     tool_model_label,
 )
 from app.infrastructure.security.credential_manager import CredentialManager
+from app.infrastructure.security.rate_limiter import require_rate_limit
 
 router = APIRouter()
 
@@ -166,7 +167,12 @@ async def _generate_conversation_title(conversation_id: int, first_message: str)
 
 
 @router.post("/")
-async def chat_with_ai(request: ChatRequest, background_tasks: BackgroundTasks, session: AsyncSession = Depends(get_db_session)):
+async def chat_with_ai(
+    request: ChatRequest,
+    background_tasks: BackgroundTasks,
+    session: AsyncSession = Depends(get_db_session),
+    _rate_limit: None = Depends(require_rate_limit(15, 60, "chat")),
+):
     """Handles chat messages with the AI and manages tool calls."""
     # BD source of truth: resolve tool override (chat / chat_sensei) or global
     # default. The request.body no longer dictates the model — settings do.
@@ -360,6 +366,7 @@ async def mentor_sensei(
     request: MentorRequest,
     background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_db_session),
+    _rate_limit: None = Depends(require_rate_limit(15, 60, "chat")),
 ):
     # BD source of truth: chat_sensei tool override (or global default).
     sensei_provider, sensei_model, _ = await resolve_tool_model(session, "chat_sensei")
@@ -478,7 +485,8 @@ class AutoFixRequest(BaseModel):
 @router.post("/ticket-mentor")
 async def ticket_mentor(
     request: TicketMentorRequest,
-    session: AsyncSession = Depends(get_db_session)
+    session: AsyncSession = Depends(get_db_session),
+    _rate_limit: None = Depends(require_rate_limit(15, 60, "chat")),
 ):
     import uuid
     try:
@@ -577,7 +585,8 @@ async def ticket_mentor(
 @router.post("/auto-fix")
 async def auto_fix(
     request: AutoFixRequest,
-    session: AsyncSession = Depends(get_db_session)
+    session: AsyncSession = Depends(get_db_session),
+    _rate_limit: None = Depends(require_rate_limit(15, 60, "chat")),
 ):
     import uuid
     try:

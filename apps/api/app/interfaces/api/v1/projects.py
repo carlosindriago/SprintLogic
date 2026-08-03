@@ -37,6 +37,7 @@ from app.infrastructure.repositories.tool_model_repository import (
     resolve_tool_model,
     tool_model_label,
 )
+from app.infrastructure.security.rate_limiter import require_rate_limit
 from app.interfaces.api.v1.project_schemas import (
     ProjectDeletedResponse,
     ProjectListResponse,
@@ -370,7 +371,11 @@ from fastapi.responses import StreamingResponse
 
 @router.post("/projects/{project_id}/graph/analyze")
 async def analyze_project_graph(
-    req: Request, project_id: str, request: AnalyzeGraphRequest, session: AsyncSession = Depends(get_db_session)
+    req: Request,
+    project_id: str,
+    request: AnalyzeGraphRequest,
+    session: AsyncSession = Depends(get_db_session),
+    _rate_limit: None = Depends(require_rate_limit(10, 60, "graph_analyze")),
 ):
     try:
         project_uuid = UUID(project_id)
