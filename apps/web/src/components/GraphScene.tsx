@@ -536,9 +536,16 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     // Magnetic Injection: Dynamic Solar System grouping by folder
     function forceCluster() {
       let nodes: ForceNode[];
+      const centroids = new Map<string, { x: number; y: number; count: number }>();
       
       function force(alpha: number) {
-        const centroids = new Map<string, { x: number; y: number; count: number }>();
+        // Clear counts instead of allocating a new map to prevent GC pauses
+        for (const v of centroids.values()) {
+          v.x = 0;
+          v.y = 0;
+          v.count = 0;
+        }
+
         
         // 1. Calculate the dynamic centroid for each Module
         nodes.forEach(d => {
@@ -562,7 +569,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
           if (!mod) return;
           const centroid = centroids.get(mod);
           
-          if (centroid && d.vx !== undefined && d.vy !== undefined && d.x !== undefined && d.y !== undefined) {
+          if (centroid && centroid.count > 0 && d.vx !== undefined && d.vy !== undefined && d.x !== undefined && d.y !== undefined) {
             const cx = centroid.x / centroid.count;
             const cy = centroid.y / centroid.count;
             
@@ -699,10 +706,18 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     return displayGraphData.nodes.find(n => n.id === activeId) as ForceNode | undefined;
   }, [focusNode, hoverNode, displayGraphData]);
 
+  const bgCentroidsRef = useRef<Map<string, { x: number; y: number; count: number }>>(new Map());
+
   const paintBackground = useCallback((ctx: CanvasRenderingContext2D, globalScale: number) => {
     if (!displayGraphData || !displayGraphData.nodes || displayGraphData.nodes.length === 0) return;
 
-    const centroids = new Map<string, { x: number; y: number; count: number }>();
+    const centroids = bgCentroidsRef.current;
+    // Clear counts instead of allocating a new map
+    for (const v of centroids.values()) {
+      v.x = 0;
+      v.y = 0;
+      v.count = 0;
+    }
     
     displayGraphData.nodes.forEach((n: ForceNode) => {
       if (cutoffTimeRef.current && getSafeTime(n) > cutoffTimeRef.current) return;
@@ -721,6 +736,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
 
     ctx.save();
     for (const [mod, centroid] of centroids.entries()) {
+      if (centroid.count === 0) continue;
       const cx = centroid.x / centroid.count;
       const cy = centroid.y / centroid.count;
       const orbitRadius = Math.max(60, Math.sqrt(centroid.count) * 20);
