@@ -706,7 +706,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     return displayGraphData.nodes.find(n => n.id === activeId) as ForceNode | undefined;
   }, [focusNode, hoverNode, displayGraphData]);
 
-  const bgCentroidsRef = useRef<Map<string, { x: number; y: number; count: number }>>(new Map());
+  const bgCentroidsRef = useRef<Map<string, { x: number; y: number; count: number; upperMod: string }>>(new Map());
 
   const paintBackground = useCallback((ctx: CanvasRenderingContext2D, globalScale: number) => {
     if (!displayGraphData || !displayGraphData.nodes || displayGraphData.nodes.length === 0) return;
@@ -726,7 +726,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
       
       const c = centroids.get(mod);
       if (!c) {
-         centroids.set(mod, { x: n.x || 0, y: n.y || 0, count: 1 });
+         centroids.set(mod, { x: n.x || 0, y: n.y || 0, count: 1, upperMod: mod.toUpperCase() });
       } else {
          c.x += n.x || 0;
          c.y += n.y || 0;
@@ -760,7 +760,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
       ctx.textBaseline = 'middle';
       ctx.globalAlpha = 0.6;
       ctx.fillStyle = '#94a3b8';
-      ctx.fillText(mod.toUpperCase(), cx, cy - orbitRadius - (10 / globalScale));
+      ctx.fillText(centroid.upperMod, cx, cy - orbitRadius - (10 / globalScale));
     }
     ctx.restore();
   }, [displayGraphData]);
