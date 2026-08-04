@@ -21,9 +21,9 @@ class SemanticMarkdownSplitter:
             import tree_sitter_markdown as tsm  # type: ignore
             self.parser = tree_sitter.Parser()
             self.parser.language = tree_sitter.Language(tsm.language())
-        except Exception:
+        except (ImportError, AttributeError, ValueError, Exception) as err:
             # Fallback for older tree-sitter-markdown versions if needed
-            logger.debug("Unhandled exception", exc_info=True)
+            logger.warning("Failed to load tree_sitter_markdown parser: %s", err, exc_info=True)
             self.parser = None
 
     def split(self, content: bytes, file_name: str) -> list[str]:
