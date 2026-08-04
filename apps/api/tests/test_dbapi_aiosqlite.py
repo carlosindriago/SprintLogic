@@ -1,11 +1,11 @@
 import asyncio
 
 import pytest
-import sqlite_vec  # type: ignore
-from sqlalchemy import event, text
-from sqlalchemy.ext.asyncio import create_async_engine
 
 pytest.importorskip("sqlite_vec")
+import sqlite_vec  # type: ignore  # noqa: E402
+from sqlalchemy import event, text
+from sqlalchemy.ext.asyncio import create_async_engine
 
 DATABASE_URL = "sqlite+aiosqlite:///app.db"
 engine = create_async_engine(DATABASE_URL, connect_args={"check_same_thread": False})
