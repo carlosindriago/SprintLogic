@@ -1,5 +1,11 @@
 import asyncio
 
+import pytest
+
+# Fase 4 todo: this module is a debug/exploration script (no test_* functions,
+# has top-level asyncio.run() that breaks pytest collection). Skip until purged.
+pytest.skip("test_dbapi.py is a stray exploration script — broken, no test_* functions", allow_module_level=True)
+
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import create_async_engine
 
