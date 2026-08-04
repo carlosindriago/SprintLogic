@@ -1,3 +1,7 @@
+import logging
+
+logger = logging.getLogger(__name__)
+
 import json
 import os
 import re
@@ -29,7 +33,7 @@ class KanbanSyncService:
                 with open(config_path, encoding="utf-8") as f:
                     return json.load(f)
             except Exception:
-                pass
+                logger.warning("Unhandled exception", exc_info=True)
 
         # Default configuration matching the custom test column flow
         return {

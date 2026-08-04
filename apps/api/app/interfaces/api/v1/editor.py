@@ -1,3 +1,7 @@
+import logging
+
+logger = logging.getLogger(__name__)
+
 import ast
 
 from fastapi import APIRouter
@@ -75,8 +79,8 @@ async def audit_code(request: AuditRequest):
                 end_column=r.end_column
             ) for r in results
         ]
-    except Exception as e:
-        print(f"Error auditing code: {e}")
+    except Exception:
+        logger.warning("Unhandled exception", exc_info=True)
         return []
 
 class GenerateDocRequest(BaseModel):
@@ -110,7 +114,7 @@ Solo devuelve el bloque JSDoc, sin bloques de código markdown, sin texto adicio
                     if chunk.get("type") == "message_chunk":
                         response += chunk.get("text", "")
                 except Exception:
-                    pass
+                    logger.warning("Unhandled exception", exc_info=True)
         # Clean up markdown code blocks if the LLM adds them
         jsdoc = response.strip()
         if jsdoc.startswith("```"):
@@ -123,6 +127,6 @@ Solo devuelve el bloque JSDoc, sin bloques de código markdown, sin texto adicio
             jsdoc += "\n"
 
         return GenerateDocResponse(jsdoc=jsdoc)
-    except Exception as e:
-        print(f"Error generating docs: {e}")
+    except Exception:
+        logger.warning("Unhandled exception", exc_info=True)
         return GenerateDocResponse(jsdoc="/**\n * Falló la generación de documentación.\n */\n")

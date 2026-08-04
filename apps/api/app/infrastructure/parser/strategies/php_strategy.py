@@ -1,3 +1,7 @@
+import logging
+
+logger = logging.getLogger(__name__)
+
 import json
 from pathlib import Path
 from typing import Any
@@ -61,7 +65,7 @@ class PhpAnalyzerStrategy(LanguageAnalyzerStrategy):
                 for prefix, folder in psr4.items():
                     psr4_map[prefix] = folder
             except Exception:
-                pass
+                logger.debug("Unhandled exception", exc_info=True)
         return psr4_map
 
     def _resolve_fqn(self, class_name: str, file_alias_map: dict[str, str], current_namespace: str) -> str:

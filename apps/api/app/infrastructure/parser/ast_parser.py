@@ -1,3 +1,7 @@
+import logging
+
+logger = logging.getLogger(__name__)
+
 import json
 import os
 import sys
@@ -168,7 +172,7 @@ async def fetch_git_birth_dates(repo_path: str) -> dict[str, int]:
                 if file_path not in dates:
                     dates[file_path] = current_time
     except Exception:
-        pass
+        logger.debug("Unhandled exception", exc_info=True)
     return dates
 
 
@@ -436,7 +440,7 @@ class ASTParserService:
                         if imports:
                             file_imports[f"file:{file_path}"] = imports
                     except Exception:
-                        pass
+                        logger.debug("Unhandled exception", exc_info=True)
 
         # Resolve imports across files (Pasada 2 del compilador de dos pasadas)
         base_dir = Path(dir_path)

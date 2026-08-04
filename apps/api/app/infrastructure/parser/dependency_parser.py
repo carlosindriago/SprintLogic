@@ -1,3 +1,7 @@
+import logging
+
+logger = logging.getLogger(__name__)
+
 import json
 import tomllib
 from pathlib import Path
@@ -34,7 +38,7 @@ async def parse_dependencies(repo_id: int, repo_path: str, session: AsyncSession
                     ContextSnippetModel(project_id=repo_id, type="dependency", content=content)
                 )
         except Exception:
-            pass
+            logger.debug("Unhandled exception", exc_info=True)
 
     # Parse pyproject.toml
     for ptoml in base_path.rglob("pyproject.toml"):
@@ -65,7 +69,7 @@ async def parse_dependencies(repo_id: int, repo_path: str, session: AsyncSession
                     ContextSnippetModel(project_id=repo_id, type="dependency", content=content)
                 )
         except Exception:
-            pass
+            logger.debug("Unhandled exception", exc_info=True)
 
     if snippets:
         session.add_all(snippets)

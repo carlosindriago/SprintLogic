@@ -53,6 +53,7 @@ class FileWatcherService:
             except FileNotFoundError:
                 parsed_data[filepath] = {}  # Archivo borrado, purgará todo
             except Exception:
+                _logger.debug("Unhandled exception", exc_info=True)
                 continue  # Ignorar archivos no parseables
 
         # 2. EJECUCIÓN: Transacción relámpago
@@ -176,7 +177,7 @@ class FileWatcherService:
                                 del self._backend_writes[filepath]
                                 continue
                         except Exception:
-                            pass
+                            _logger.debug("Unhandled exception", exc_info=True)
 
                     # Productor: Empujar a la cola atómicamente
                     queue.put_nowait((change, filepath))

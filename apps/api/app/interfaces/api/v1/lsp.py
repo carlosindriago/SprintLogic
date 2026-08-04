@@ -150,7 +150,7 @@ async def python_lsp(websocket: WebSocket) -> None:
             try:
                 stdin.close()
             except Exception:
-                pass
+                logger.warning("Unhandled exception", exc_info=True)
 
     async def proc_to_ws() -> None:
         """Read framed LSP messages from the process stdout and send each
@@ -215,5 +215,5 @@ async def python_lsp(websocket: WebSocket) -> None:
         try:
             await websocket.close()
         except Exception:
-            pass
+            logger.warning("Unhandled exception", exc_info=True)
         logger.debug("LSP session ended (returncode=%s)", process.returncode)

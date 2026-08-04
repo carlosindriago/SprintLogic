@@ -66,6 +66,7 @@ async def list_providers(db: AsyncSession = Depends(get_db_session)):
         try:
             actual_key = keyring.get_password(p.keyring_service_id, "api_key")
         except Exception:
+            logger.warning("Unhandled exception", exc_info=True)
             actual_key = None
 
         if actual_key and len(actual_key) > 8:

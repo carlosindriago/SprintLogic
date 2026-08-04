@@ -253,6 +253,7 @@ async def get_project_graph(project_id: str, expanded_folders: str | None = None
             await repo.update_last_opened(project_uuid)
             await session.commit()
         except Exception as e:
+            logger.warning("Unhandled exception: %s", e, exc_info=True)
             if "database is locked" in str(e):
                 await session.rollback()
             else:
@@ -306,6 +307,7 @@ async def get_project_graph(project_id: str, expanded_folders: str | None = None
             rel_path = os.path.relpath(n.file_path, project_path)
             folder = os.path.dirname(rel_path) or "/"
         except Exception:
+            logger.warning("Unhandled exception", exc_info=True)
             folder = "/"
 
         node_dict = {
@@ -572,6 +574,7 @@ async def analyze_project_graph(
 
                 key_files_xml += f"""  <archivo rol="{node_role}" ruta="{file_path}">\n    <codigo_fuente>\n{content}\n    </codigo_fuente>\n  </archivo>\n"""
             except Exception:
+                logger.warning("Unhandled exception", exc_info=True)
                 pass # Silenciamos errores de lectura de archivos binarios/ilegibles
 
         key_files_xml += "</archivos_clave_dominio>"
@@ -1329,6 +1332,7 @@ def _collect_search_index_entries(
         try:
             content = fp.read_text(encoding="utf-8", errors="ignore")
         except Exception:
+            logger.warning("Unhandled exception", exc_info=True)
             continue
         symbols = extract_symbols(str(fp), content)
         for sym in symbols:
@@ -1413,6 +1417,7 @@ async def analyze_project(project_id: str, session: AsyncSession = Depends(get_d
         py_markers = await asyncio.to_thread(py_scanner.scan, str(project_root))
         global_markers.update(py_markers)
     except Exception:
+        logger.warning("Unhandled exception", exc_info=True)
         pass  # scanner failures are non-fatal
 
     return {
@@ -1453,6 +1458,7 @@ async def search_everywhere(
             ]
         }
     except Exception:
+        logger.warning("Unhandled exception", exc_info=True)
         return {"results": []}
 
 
@@ -1510,6 +1516,7 @@ async def search_project_memory(
             ]
         }
     except Exception:
+        logger.warning("Unhandled exception", exc_info=True)
         return {"results": []}
 
 
@@ -1707,7 +1714,7 @@ async def project_ws(websocket: WebSocket, project_id: str):
             try:
                 await websocket.send_json({"type": "file_changed", "paths": paths})
             except Exception:
-                pass
+                logger.warning("Unhandled exception", exc_info=True)
 
     async def debounce_loop():
         try:
@@ -1870,7 +1877,7 @@ async def get_project_sticky_notes(
             data = await asyncio.to_thread(_load_json_file, json_path)
             notes = data.get("sticky_notes", [])
         except Exception:
-            pass
+            logger.warning("Unhandled exception", exc_info=True)
 
     return {"notes": notes}
 
@@ -1898,7 +1905,7 @@ async def update_project_sticky_notes(
         try:
             data = await asyncio.to_thread(_load_json_file, json_path)
         except Exception:
-            pass
+            logger.warning("Unhandled exception", exc_info=True)
 
     data["sticky_notes"] = [note.model_dump() for note in request.notes]
 
@@ -1928,6 +1935,7 @@ async def run_workspace_tests(repo_path: str) -> bool:
         await proc.wait()
         return proc.returncode == 0
     except Exception:
+        logger.warning("Unhandled exception", exc_info=True)
         return True  # Fallback if command fails
 
 
@@ -1947,6 +1955,7 @@ async def sync_project_commits(project_id: str, session: AsyncSession = Depends(
     try:
         commits = await git_gateway.get_recent_commits(project.path, limit=20)
     except Exception:
+        logger.warning("Unhandled exception", exc_info=True)
         commits = []
 
     if not commits:
@@ -2276,7 +2285,7 @@ async def get_project_repo_insights(
             if t["status"] in tasks_by_state:
                 tasks_by_state[t["status"]] += 1
     except Exception:
-        pass
+        logger.warning("Unhandled exception", exc_info=True)
 
     from sqlalchemy import select
 
@@ -2304,13 +2313,13 @@ async def get_project_repo_insights(
         out_commits = await git_gateway._run_command(project.path, "rev-list", "--all", "--count")
         total_commits = int(out_commits)
     except Exception:
-        pass
+        logger.warning("Unhandled exception", exc_info=True)
 
     try:
         out_branches = await git_gateway._run_command(project.path, "branch")
         active_branches = len([b for b in out_branches.split("\n") if b.strip()])
     except Exception:
-        pass
+        logger.warning("Unhandled exception", exc_info=True)
 
     try:
         out_velocity = await git_gateway._run_command(
@@ -2318,12 +2327,12 @@ async def get_project_repo_insights(
         )
         velocity = int(out_velocity) if out_velocity.strip().isdigit() else 0
     except Exception:
-        pass
+        logger.warning("Unhandled exception", exc_info=True)
 
     try:
         recent_commits = await git_gateway.get_recent_commits(project.path, limit=5)
     except Exception:
-        pass
+        logger.warning("Unhandled exception", exc_info=True)
 
     return {
         "tasks_by_state": tasks_by_state,

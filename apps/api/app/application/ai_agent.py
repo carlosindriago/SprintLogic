@@ -17,6 +17,8 @@ from app.infrastructure.db.database import get_sessionmaker
 from app.infrastructure.db.models import AIMemoryModel, ContextSnippetModel, ProjectModel
 from app.infrastructure.security.credential_manager import CredentialManager
 
+logger = logging.getLogger(__name__)
+
 
 def _parse_dsml_tool_calls(buffer: str) -> list[dict[str, Any]]:
     """
@@ -501,6 +503,7 @@ class AIAgent:
                         } for e in edges
                     ])
                 except Exception as e:
+                    logger.warning("Unhandled exception: %s", e, exc_info=True)
                     return f"Error retrieving dependencies: {str(e)}"
 
             elif name == "get_project_context_summary":
@@ -514,6 +517,7 @@ class AIAgent:
                     awareness_xml = await get_project_awareness_xml(root)
                     return awareness_xml if awareness_xml else "Project has no tracked dependencies."
                 except Exception as e:
+                    logger.warning("Unhandled exception: %s", e, exc_info=True)
                     return f"Error building project summary: {str(e)}"
 
             elif name == "mem_save":
@@ -623,6 +627,7 @@ class AIAgent:
                 except FileNotFoundError:
                     return f"Error: File not found — {file_path}"
                 except Exception as e:
+                    logger.warning("Unhandled exception: %s", e, exc_info=True)
                     return f"Error reading file: {str(e)}"
 
             elif name == "context7_search":
@@ -737,6 +742,7 @@ class AIAgent:
                 except FileNotFoundError:
                     return f"Error: Archivo no encontrado — {file_path}"
                 except Exception as e:
+                    logger.warning("Unhandled exception: %s", e, exc_info=True)
                     return f"Error al leer el archivo: {str(e)}"
 
                 matches = _find_all_occurrences(content, old_code)
@@ -855,7 +861,7 @@ class AIAgent:
             if not awareness_xml:
                 awareness_xml = ""
         except Exception:
-            pass
+            logger.warning("Unhandled exception", exc_info=True)
 
         from app.infrastructure.ai.prompt_renderer import render_prompt
         from app.infrastructure.repositories.prompt_repository import get_prompt_async
@@ -910,6 +916,7 @@ class AIAgent:
                                         "solucion": insight_obj.solucion
                                     }
                     except Exception:
+                        logger.warning("Unhandled exception", exc_info=True)
                         insight = None
                     if insight:
                         base_prompt += (
@@ -920,6 +927,7 @@ class AIAgent:
                             f"</SENSEI_MEMORY>"
                         )
             except Exception as e:
+                logger.warning("Unhandled exception: %s", e, exc_info=True)
                 import logging
                 logging.getLogger(__name__).warning(f"Error fetching insight memory: {e}")
 

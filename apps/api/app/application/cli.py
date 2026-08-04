@@ -1,3 +1,7 @@
+import logging
+
+logger = logging.getLogger(__name__)
+
 import json
 import os
 import stat
@@ -24,6 +28,7 @@ def run_pre_commit():
         with open(state_file) as f:
             state = json.load(f)
     except Exception:
+        logger.warning("Unhandled exception", exc_info=True)
         sys.exit(0)
 
     active_task = state.get("active_task")

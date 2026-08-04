@@ -1,3 +1,7 @@
+import logging
+
+logger = logging.getLogger(__name__)
+
 import os
 from pathlib import Path
 from typing import Any
@@ -84,7 +88,7 @@ def scan_undocumented_code(project_path: str) -> list[dict[str, Any]]:
                                 "is_documented": False
                             })
                 except Exception:
-                    pass
+                    logger.debug("Unhandled exception", exc_info=True)
 
     results.sort(key=lambda x: x["file_path"])
     return results

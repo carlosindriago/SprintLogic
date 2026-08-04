@@ -54,6 +54,7 @@ class LiteLLMGateway:
             )
             return response.choices[0].message.content or ""
         except Exception as e:
+            logger.debug("Unhandled exception: %s", e, exc_info=True)
             # Propagate specific exceptions to the router so it can return 429/401 instead of 500
             error_msg = str(e)
             if "RateLimitError" in error_msg or "rate_limit_exceeded" in error_msg.lower():
