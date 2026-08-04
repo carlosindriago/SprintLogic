@@ -1,6 +1,13 @@
 import asyncio
 from pathlib import Path
 
+import pytest
+
+# Fase 4 todo: this is a debug/exploration script with async def test() at module
+# level — pytest collects it but has no plugin to run top-level async def. Skip
+# until purged or rewritten as proper test_ functions with pytest.mark.asyncio.
+pytest.skip("test_strats.py is a debug script — async def test() at module level, no pytest.mark.asyncio", allow_module_level=True)
+
 from app.infrastructure.parser.strategies.java_strategy import JavaAnalyzerStrategy
 from app.infrastructure.parser.strategies.php_strategy import PhpAnalyzerStrategy
 
