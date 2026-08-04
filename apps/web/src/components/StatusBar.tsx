@@ -149,11 +149,11 @@ export const StatusBar: React.FC<StatusBarProps> = ({ projects = [], onEditProje
                 <DropdownMenuItem key={p.id} className="text-sm flex items-center justify-between group cursor-pointer focus:bg-zinc-700 focus:text-white py-2 px-3" onSelect={() => setProjectId(p.id)}>
                   <span className="truncate text-zinc-200">{p.name}</span>
                   <div className="flex items-center gap-0.5 ml-2 shrink-0">
-                    <button className="p-1 hover:bg-zinc-600 rounded text-zinc-500 hover:text-zinc-200 transition-colors" onClick={(e) => { e.stopPropagation(); onEditProject?.(p); }}>
-                      <Edit2 className="w-3.5 h-3.5" />
+                    <button aria-label="Editar proyecto" title="Editar proyecto" className="p-1 hover:bg-zinc-600 rounded text-zinc-500 hover:text-zinc-200 transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-blue-500" onClick={(e) => { e.stopPropagation(); onEditProject?.(p); }}>
+                      <Edit2 className="w-3.5 h-3.5" aria-hidden="true" />
                     </button>
-                    <button className="p-1 hover:bg-red-900/50 rounded text-zinc-500 hover:text-red-400 transition-colors" onClick={(e) => { e.stopPropagation(); onDeleteProject?.(p); }}>
-                      <Trash2 className="w-3.5 h-3.5" />
+                    <button aria-label="Eliminar proyecto" title="Eliminar proyecto" className="p-1 hover:bg-red-900/50 rounded text-zinc-500 hover:text-red-400 transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-red-500" onClick={(e) => { e.stopPropagation(); onDeleteProject?.(p); }}>
+                      <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                     </button>
                   </div>
                 </DropdownMenuItem>
