@@ -15,6 +15,7 @@ from app.infrastructure.repositories.tool_model_repository import (
     tool_model_label,
 )
 from app.infrastructure.security.credential_manager import CredentialManager
+from app.infrastructure.security.rate_limiter import require_rate_limit
 from app.interfaces.api.v1.settings import (
     CURATED_MODELS,
     PROVIDER_LABELS,
@@ -246,7 +247,11 @@ async def tech_scan(request: TechScanRequest):
 
 
 @router.post("/health-overview", response_model=CodeCoachOverview)
-async def health_overview(request: CodeCoachRequest, session: AsyncSession = Depends(get_db_session)):
+async def health_overview(
+    request: CodeCoachRequest,
+    session: AsyncSession = Depends(get_db_session),
+    _rate_limit: None = Depends(require_rate_limit(limit=15, window_seconds=60, scope="ai")),
+):
     """Analizador de código que devuelve una vista general (Health & Overview)."""
     try:
         # BD source of truth: code_coach tool override (or global default). El
@@ -382,7 +387,8 @@ async def health_overview(request: CodeCoachRequest, session: AsyncSession = Dep
 @router.post("/contextual-mentorship", response_model=list[CodeCoachMarker])
 async def contextual_mentorship(
     request: CodeCoachRequest,
-    session: AsyncSession = Depends(get_db_session)
+    session: AsyncSession = Depends(get_db_session),
+    _rate_limit: None = Depends(require_rate_limit(limit=15, window_seconds=60, scope="ai")),
 ):
     """Analizador de código que detecta antipatrones (Mentoría Contextual)."""
     try:

@@ -1,6 +1,9 @@
 import asyncio
 
-import sqlite_vec  # type: ignore
+import pytest
+
+pytest.importorskip("sqlite_vec")
+import sqlite_vec  # type: ignore  # noqa: E402
 from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import create_async_engine
 
