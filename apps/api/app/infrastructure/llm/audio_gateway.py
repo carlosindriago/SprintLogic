@@ -1,8 +1,11 @@
+import logging
 import os
 import uuid
 
 import openai
 from fastapi import HTTPException
+
+logger = logging.getLogger(__name__)
 
 # Utilizamos el cliente asíncrono.
 _client = None
@@ -23,9 +26,10 @@ def get_openai_client() -> openai.AsyncOpenAI:
         _client = openai.AsyncOpenAI(api_key=api_key)
         return _client
     except Exception as e:
+        logger.error(f"Error initializing OpenAI client: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"OpenAI API Key no configurada o inválida: {str(e)}"
+            detail="OpenAI API Key no configurada o inválida."
         )
 
 async def transcribe_audio(file_bytes: bytes, filename: str) -> str:
@@ -48,7 +52,8 @@ async def transcribe_audio(file_bytes: bytes, filename: str) -> str:
             detail="OpenAI API Key no configurada o inválida."
         )
     except Exception as e:
+        logger.error(f"Error in transcription engine: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"Error en el motor de transcripción: {str(e)}"
+            detail="Error en el motor de transcripción."
         )
