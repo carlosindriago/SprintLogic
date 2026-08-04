@@ -31,6 +31,7 @@ export interface TestGenerationResponse {
 }
 
 import { useSettingsStore } from '../store/settingsStore';
+import type { ProjectInsights } from '../store/projectInsightsStore';
 
 export interface ModelResult {
   id: string;
@@ -55,7 +56,6 @@ export async function initSidecarPort() {
       const port = await invoke<number>("get_sidecar_port");
       if (port) {
         API_BASE_URL = `http://127.0.0.1:${port}/api/v1`;
-        console.log(`[Tauri] Sidecar port configured: ${port}`);
         
         // Wait for backend to be fully responsive before proceeding
         let backendReady = false;
@@ -74,8 +74,6 @@ export async function initSidecarPort() {
 
         if (!backendReady) {
           console.warn("[Tauri] Backend port is open, but API is not responding after 5 seconds.");
-        } else {
-          console.log("[Tauri] Backend is fully ready to accept requests.");
         }
 
         await invoke("show_main_window");
@@ -361,12 +359,17 @@ export const getGlobalFlowInsights = () => api.get<ProjectFlowInsights>('/insigh
 export const getProjectFlowInsights = (projectId: string) => api.get<ProjectFlowInsights>(`/projects/${projectId}/insights/flow`);
 export const getProjectRepoInsights = (projectId: string) => api.get<ProjectRepoInsights>(`/projects/${projectId}/insights/repo`);
 export const rescanProject = (projectId: string) => api.post<{ status: string; message: string }>(`/projects/${projectId}/rescan`);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const analyzeProject = (projectId: string) => api.post<any>(`/projects/${projectId}/analyze`);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const getProjectReports = (projectId: string) => api.get<{ reports: any[] }>(`/projects/${projectId}/reports`);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const getProjectReportsTrash = (projectId: string) => api.get<{ reports: any[] }>(`/projects/${projectId}/reports/trash`);
+export interface ProjectReport {
+  id: string;
+  type: string;
+  content: string;
+  created_at: string;
+  ai_model_version: string;
+}
+
+export const analyzeProject = (projectId: string) => api.post<ProjectInsights>(`/projects/${projectId}/analyze`);
+export const getProjectReports = (projectId: string) => api.get<{ reports: ProjectReport[] }>(`/projects/${projectId}/reports`);
+export const getProjectReportsTrash = (projectId: string) => api.get<{ reports: ProjectReport[] }>(`/projects/${projectId}/reports/trash`);
 export const getProjectReport = (projectId: string, reportId: string) => api.get<{ content: string; id: string; created_at: string; ai_model_version: string }>(`/projects/${projectId}/reports/${reportId}`);
 export const trashProjectReport = (projectId: string, reportId: string) => api.put<{ status: string; message: string }>(`/projects/${projectId}/reports/${reportId}/trash`);
 export const restoreProjectReport = (projectId: string, reportId: string) => api.put<{ status: string; message: string }>(`/projects/${projectId}/reports/${reportId}/restore`);

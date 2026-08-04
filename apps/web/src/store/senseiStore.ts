@@ -1,5 +1,31 @@
 import { create } from 'zustand';
 
+/** WebSocket payloads dispatched through the unified socket channel. */
+export interface ChatChunkEvent {
+  type: 'chat_chunk';
+  message_id: string;
+  text: string;
+  is_done: boolean;
+  conversation_id?: number;
+  error?: boolean;
+}
+
+export interface MarkerUpdateEvent {
+  type: 'marker_update';
+  markers: Array<{
+    severity?: number;
+    message: string;
+    line: number;
+    column?: number;
+  }>;
+}
+
+export interface SyncOutOfOrderEvent {
+  type: 'sync_out_of_order';
+}
+
+export type SocketEvent = ChatChunkEvent | MarkerUpdateEvent | SyncOutOfOrderEvent;
+
 /**
  * Represents the live editor state for a specific tab.
  * Kept up-to-date by each EditorTab instance as the user moves the cursor.
@@ -74,10 +100,8 @@ interface SenseiStore {
   /** Disconnects the global WebSocket */
   disconnectSocket: () => void;
   /** Used by EditorTab to subscribe to marker updates or sync errors */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  addSocketListener: (listener: (data: any) => void) => () => void;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  socketListeners: Array<(data: any) => void>;
+  addSocketListener: (listener: (data: SocketEvent) => void) => () => void;
+  socketListeners: Array<(data: SocketEvent) => void>;
 }
 
 export const useSenseiStore = create<SenseiStore>((set, get) => ({

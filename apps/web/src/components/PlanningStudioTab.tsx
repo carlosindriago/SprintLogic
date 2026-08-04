@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable react-hooks/set-state-in-effect */
 /* eslint-disable react-hooks/exhaustive-deps */
  
@@ -7,7 +6,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useTabsStore } from '../store/tabsStore';
 
-import { sendPlanningMessage, PlanningMessagePayload, createKanbanTicket } from '../lib/api';
+import { sendPlanningMessage, PlanningMessagePayload, createKanbanTicket, WBSHierarchicalResponse } from '../lib/api';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -35,7 +34,7 @@ export default function PlanningStudioTab() {
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
-  const [wbsData, setWbsData] = useState<any | null>(projectState?.wbsData || null);
+  const [wbsData, setWbsData] = useState<WBSHierarchicalResponse | null>(projectState?.wbsData || null);
 
   const handleExportToKanban = async () => {
     if (!wbsData || !activeProjectId) return;
@@ -61,7 +60,7 @@ export default function PlanningStudioTab() {
 
   useEffect(() => {
     if (activeProjectId) {
-      setProjectState(activeProjectId, { messages, wbsData });
+      setProjectState(activeProjectId, { messages, wbsData: wbsData || undefined });
     }
   }, [messages, wbsData, activeProjectId, setProjectState]);
   
@@ -124,7 +123,7 @@ export default function PlanningStudioTab() {
                 const data = JSON.parse(args);
                 setWbsData(data);
               } else {
-                setWbsData(args);
+                setWbsData(args as unknown as WBSHierarchicalResponse);
               }
             } catch (e) {
               // Ignore partial JSON parsing errors during streaming
@@ -149,18 +148,18 @@ export default function PlanningStudioTab() {
 
   const handleEstimateChange = (pkgId: string, subtaskId: string, newValue: number) => {
     if (!wbsData) return;
-    const newData = JSON.parse(JSON.stringify(wbsData));
-    const pkg = newData.work_packages.find((p: any) => p.id === pkgId);
+    const newData: WBSHierarchicalResponse = JSON.parse(JSON.stringify(wbsData));
+    const pkg = newData.work_packages.find((p) => p.id === pkgId);
     if (pkg) {
-      const task = pkg.subtasks.find((t: any) => t.id === subtaskId);
+      const task = pkg.subtasks.find((t) => t.id === subtaskId);
       if (task) {
         task.estimated_hours = newValue;
       }
     }
 
     let total = 0;
-    newData.work_packages.forEach((p: any) => {
-      p.subtasks.forEach((t: any) => {
+    newData.work_packages.forEach((p) => {
+      p.subtasks.forEach((t) => {
         total += Number(t.estimated_hours) || 0;
       });
     });
@@ -247,7 +246,7 @@ export default function PlanningStudioTab() {
             
             <ScrollArea className="flex-1 h-0 p-6">
               <div className="space-y-8 max-w-4xl mx-auto">
-                {wbsData.work_packages?.map((pkg: any) => (
+                {wbsData.work_packages?.map((pkg) => (
                   <div key={pkg.id} className="bg-[#151515] border border-[#27272a] rounded-lg p-4">
                     <div className="mb-4 border-b border-[#27272a] pb-2">
                       <h3 className="text-lg font-bold text-zinc-100 flex items-center gap-2">
@@ -257,7 +256,7 @@ export default function PlanningStudioTab() {
                     </div>
 
                     <div className="space-y-3 pl-4 border-l-2 border-[#27272a] ml-2">
-                      {pkg.subtasks?.map((task: any) => (
+                      {pkg.subtasks?.map((task) => (
                         <div key={task.id} className="flex justify-between items-start bg-[#1a1a1a] p-3 rounded border border-[#27272a]">
                           <div className="flex-1 mr-4">
                             <div className="font-semibold text-zinc-200">

@@ -6,7 +6,7 @@ import { getProjectGraph, rescanProject, ApiError } from "@/lib/api";
 import { API_BASE_URL } from "@/lib/api";
 import { forceRadial, forceCollide } from "d3-force";
 import { GraphData, GraphNode, GraphEdge, GraphNodeLabel } from "@/types";
-import { LinkObject, NodeObject } from "react-force-graph-2d";
+import { LinkObject, NodeObject, type ForceGraphMethods } from "react-force-graph-2d";
 import { graphTheme, extColorHash, bloomGlow, graphUI } from "@/lib/graph-theme";
 import { Search, RotateCcw, ZoomIn, ZoomOut, Maximize, Brain, Play, Pause, Zap, ZapOff, ScanSearch, FileCode, RefreshCw, X, FolderOpen, ChevronRight, File, Folder } from "lucide-react";
 import { useTabsStore } from "../store/tabsStore";
@@ -124,8 +124,7 @@ const modCache = new WeakMap<object, string | null>();
 export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) {
   const [graphData, setGraphData] = useState<GraphData>({ nodes: [], links: [] });
   const containerRef = useRef<HTMLDivElement>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const fgRef = useRef<any>(null);
+  const fgRef = useRef<ForceGraphMethods<NodeObject, LinkObject> | undefined>(undefined);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
 
   const [hoverNode, setHoverNode] = useState<string | null>(null);
@@ -524,14 +523,25 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
 
     initialFitDone.current = false;
 
+    const fg = fgRef.current;
+    if (!fg) return;
+
     // Base D3 forces
-    fgRef.current.d3Force('charge').strength(-350); // Increased repulsion for more space
-    fgRef.current.d3Force('link').distance(40);
+    const charge = fg.d3Force('charge');
+    if (charge && 'strength' in charge && typeof (charge as { strength?: unknown }).strength === 'function') {
+      (charge as unknown as { strength: (val: number) => void }).strength(-350);
+    }
+
+    const linkForce = fg.d3Force('link');
+    if (linkForce && 'distance' in linkForce && typeof (linkForce as { distance?: unknown }).distance === 'function') {
+      (linkForce as unknown as { distance: (val: number) => void }).distance(40);
+    }
     
     // Add collision force to prevent nodes from overlapping (especially large modules)
-    fgRef.current.d3Force('collide', forceCollide<ForceNode>().radius(node => {
-      return node.label === "Module" ? 22 : 10;
-    }).iterations(2));
+    fg.d3Force('collide', forceCollide<NodeObject>().radius((node: NodeObject) => {
+      const fn = node as ForceNode;
+      return fn.label === "Module" ? 22 : 10;
+    }).iterations(2) as unknown as Parameters<typeof fg.d3Force>[1]);
 
     // Magnetic Injection: Dynamic Solar System grouping by folder
     function forceCluster() {
@@ -593,12 +603,12 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
       return degree === 0 ? 0.05 : 0;
     });
 
-    fgRef.current.d3Force('cluster', forceCluster());
-    fgRef.current.d3Force('x', null); // Remove static X force
-    fgRef.current.d3Force('y', null); // Remove static Y force
-    fgRef.current.d3Force('radial', centerForce);
+    fg.d3Force('cluster', forceCluster() as unknown as Parameters<typeof fg.d3Force>[1]);
+    fg.d3Force('x', null); // Remove static X force
+    fg.d3Force('y', null); // Remove static Y force
+    fg.d3Force('radial', centerForce as unknown as Parameters<typeof fg.d3Force>[1]);
 
-    fgRef.current.d3ReheatSimulation();
+    fg.d3ReheatSimulation();
   }, [hasGraphData, dimensions.width]);
 
   useEffect(() => {
@@ -1162,8 +1172,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
 
   const handleNodeHover = useCallback((node: NodeObject | null) => {
     setHoverNode(node ? (node.id as string) : null);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const canvas = (fgRef.current as any)?.canvasControls?.getCanvasElement?.() || document.querySelector('canvas');
+    const canvas = (fgRef.current as unknown as { canvasControls?: { getCanvasElement?: () => HTMLCanvasElement | null } })?.canvasControls?.getCanvasElement?.() || document.querySelector('canvas');
     if (canvas) {
       canvas.style.cursor = node ? ((node as ForceNode).label === "Module" ? 'pointer' : 'grab') : 'default';
     }

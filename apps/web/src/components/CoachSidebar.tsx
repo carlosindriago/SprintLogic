@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable react/no-unescaped-entities */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { CodeCoachOverview, CodeCoachMarker, UndocumentedExport } from "@/lib/api";
@@ -7,8 +6,13 @@ import { SiTypescript, SiReact, SiPython, SiNextdotjs, SiFastapi, SiTailwindcss,
 import { VscCode } from 'react-icons/vsc';
 import { Button } from "@/components/ui/button";
 import { useState, useMemo, useEffect, useRef } from "react";
+import type { ComponentType } from "react";
 
-const IconMap: Record<string, any> = { SiTypescript, SiReact, SiPython, SiNextdotjs, SiFastapi, SiTailwindcss, SiNodedotjs, SiDocker, SiPostgresql, SiHtml5, SiCss, SiGnubash };
+interface TechScanData {
+  technologies: Array<{ name: string; icon: string }>;
+}
+
+const IconMap: Record<string, ComponentType> = { SiTypescript, SiReact, SiPython, SiNextdotjs, SiFastapi, SiTailwindcss, SiNodedotjs, SiDocker, SiPostgresql, SiHtml5, SiCss, SiGnubash };
 
 const SENSEI_QUOTES = [
   "El código se lee mucho más a menudo de lo que se escribe. Escribe para humanos.",
@@ -21,7 +25,7 @@ const SENSEI_QUOTES = [
 ];
 
 interface CoachSidebarProps {
-  techData?: any;
+  techData?: TechScanData | null;
   onRescan?: () => void;
   onRefreshHealth?: () => void;
   isScanningTech: boolean;
@@ -189,7 +193,7 @@ export function CoachSidebar({
           </p>
         ) : techData?.technologies && techData.technologies.length > 0 ? (
           <div className="flex flex-wrap gap-4 mt-2">
-            {techData.technologies.map((tech: any) => {
+            {techData.technologies.map((tech) => {
               const Icon = IconMap[tech.icon] || VscCode;
               return (
                 <a 
@@ -312,10 +316,10 @@ export function CoachSidebar({
                 </ul>
               </div>
             )}
-            {overview.is_degraded && (overview as any).error_detail && (
+            {overview.is_degraded && overview.error_detail && (
               <div className="mt-2 text-[10px] font-mono bg-black/50 p-2 rounded border border-rose-900/50 text-rose-400 break-all">
                 RAW ERROR:<br/>
-                {(overview as any).error_detail}
+                {overview.error_detail}
               </div>
             )}
           </div>

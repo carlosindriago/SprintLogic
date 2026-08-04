@@ -185,15 +185,6 @@ export default function TabBar({ onToggleAi, aiOpen, onNewFile, projectId }: Tab
     return null;
   };
 
-  useEffect(() => {
-    const tabPaths = tabs.map(getTabPath).filter(Boolean);
-    const matched = tabPaths.filter(p => p && markersFiles[p!]);
-    if (matched.length > 0) {
-      console.log('[tabbar] tabs with markers:', matched.map(p => `${p}: errors=${markersFiles[p!]?.errors} warnings=${markersFiles[p!]?.warnings}`));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tabs, markersFiles]);
-
   const handleCloseRequest = (e: React.MouseEvent, tab: (typeof tabs)[number]) => {
     e.stopPropagation();
     const isDirty = !!dirtyFiles[tab.id];
