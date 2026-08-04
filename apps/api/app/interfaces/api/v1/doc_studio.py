@@ -316,7 +316,7 @@ async def save_doc_file(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-target_path = resolve_project_path(project.path, request.file_path)
+    target_path = resolve_project_path(project.path, request.file_path)
 
     if not target_path.exists() or not target_path.is_file():
         raise HTTPException(status_code=404, detail="File not found")
