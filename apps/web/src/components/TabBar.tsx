@@ -187,9 +187,9 @@ function SortableTab({
   tab: TabData;
   activeTabId: string | null;
   dirtyFiles: Record<string, boolean>;
-  markersFiles: Record<string, unknown>;
+  markersFiles: Record<string, { errors: number; warnings: number }>;
   setActiveTab: (id: string) => void;
-  handleCloseRequest: (e: React.MouseEvent | { stopPropagation: () => void }, tab: TabData) => void;
+  handleCloseRequest: (e: React.MouseEvent, tab: TabData) => void;
   getTabPath: (tab: TabData) => string | null;
   tabs: TabData[];
   onNewFile?: () => void;
