@@ -9,7 +9,7 @@ import { useTabsStore } from "@/store/tabsStore";
 import DraftReviewer from "./DraftReviewer";
 import ProposalCard from "./ProposalCard";
 import ChatHistoryDrawer from "./ChatHistoryDrawer";
-import { API_BASE_URL } from "@/lib/api";
+import { API_BASE_URL, type CuratedProvider } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { MarkdownLink } from "./MarkdownLink";
 
@@ -195,16 +195,13 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
   useEffect(() => {
     fetch(`${API_BASE_URL}/ai/models`)
       .then(res => res.json())
-      .then(data => {
+      .then((data: CuratedProvider[]) => {
         setAvailableModels(data);
         // Hydrate active model if none is selected and there are configured models
         if (!activeModel && Array.isArray(data)) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const firstConfigured = data.find((g: any) => g.is_configured);
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          if (firstConfigured && firstConfigured.models && (firstConfigured as any).models.length > 0) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const defaultId = (firstConfigured as any).models[0].id;
+          const firstConfigured = data.find((g) => g.is_configured);
+          if (firstConfigured && firstConfigured.models.length > 0) {
+            const defaultId = firstConfigured.models[0].id;
             setDefaultModel(defaultId);
             setSessionModel(defaultId);
           }

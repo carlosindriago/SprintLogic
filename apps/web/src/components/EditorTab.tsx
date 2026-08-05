@@ -1,9 +1,8 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import Editor, { type OnMount, useMonaco } from '@monaco-editor/react';
-import type { editor as monacoEditor, Uri } from 'monaco-editor';
-import { getFileContent, saveFileContent, API_BASE_URL, fetchHealthOverview, fetchContextualMentorship, fetchTechScan, getGitStatus, auditCode, generateDocs, UndocumentedExport } from '@/lib/api';
+import type { editor as monacoEditor, languages, Uri } from 'monaco-editor';
+import { getFileContent, saveFileContent, API_BASE_URL, ApiError, fetchHealthOverview, fetchContextualMentorship, fetchTechScan, getGitStatus, auditCode, generateDocs, UndocumentedExport } from '@/lib/api';
 import { draftStore } from '@/lib/draftStore';
 import { useQuery } from '@tanstack/react-query';
 import { cn, hashString } from '@/lib/utils';
@@ -196,7 +195,7 @@ export default function EditorTab({
     
     const provider = monaco.languages.registerCodeActionProvider(language, {
       provideCodeActions: (model, range, context, token) => {
-        const actions: any[] = [];
+        const actions: languages.CodeAction[] = [];
         const currentLine = range.startLineNumber;
 
         allMentorshipAdvice.forEach(advice => {
@@ -244,7 +243,7 @@ export default function EditorTab({
     const language = '*';
     const provider = monaco.languages.registerCodeActionProvider(language, {
       provideCodeActions: (model, range, context, token) => {
-        const actions: any[] = [];
+        const actions: languages.CodeAction[] = [];
         const currentLine = range.startLineNumber;
 
         undocumentedExports.forEach(exp => {
@@ -294,7 +293,6 @@ export default function EditorTab({
     queryFn: () => {
       const content = editorRef.current?.getValue() || initialValue;
       const lang = (node.metadata?.language as string) || node.file_path?.split('.').pop() || 'typescript';
-      console.log('[Tech Scan] Firing with args:', { model: fimDefaultModel, fallback: fimFallbackModel, lang, contentLen: content?.length });
       return fetchTechScan(content, lang, fimDefaultModel, fimFallbackModel);
     },
     staleTime: Infinity,
@@ -394,8 +392,8 @@ export default function EditorTab({
       if (!healthResponse.is_degraded) {
         localStorage.setItem(`coach_health_${currentHash}`, JSON.stringify(healthResponse));
       }
-    } catch (error: any) {
-      if (error.name === 'AbortError') return;
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return;
       console.error('[Code Coach Health] Error:', error);
       const errorMessage = error instanceof Error ? error.message : String(error);
       setCoachOverview({
@@ -415,9 +413,9 @@ export default function EditorTab({
     }
   }, [fimDefaultModelRef, fimFallbackModelRef, node.file_path]);
 
-  const sanitizeMarkers = (mentorshipArray: any[]) => {
+  const sanitizeMarkers = (mentorshipArray: CodeCoachMarker[]) => {
   if (!Array.isArray(mentorshipArray)) return [];
-  const hasError = mentorshipArray.some((m: any) => {
+  const hasError = mentorshipArray.some((m) => {
     if (m.is_degraded) return true;
     const msg = String(m.message || '').toLowerCase();
     return msg.includes('fallo del proveedor ia') || 
@@ -427,7 +425,7 @@ export default function EditorTab({
            msg.includes('all model attempts failed');
   });
   if (hasError) return [];
-  return mentorshipArray.filter((m: any) => m.line && m.line > 0);
+  return mentorshipArray.filter((m) => m.line && m.line > 0);
 };
 
   const runCoachAnalysis = useCallback(async (model: monacoEditor.ITextModel, editor: monacoEditor.IStandaloneCodeEditor) => {
@@ -440,7 +438,7 @@ export default function EditorTab({
       try {
         const rawMentorship = JSON.parse(cachedMentorship);
         const parsedMentorship = sanitizeMarkers(rawMentorship);
-        const monacoMarkers = parsedMentorship.map((m: any) => ({
+        const monacoMarkers = parsedMentorship.map((m) => ({
           severity: m.severity === 'error' ? monacoRef.current!.MarkerSeverity.Error : 
                     m.severity === 'warning' ? monacoRef.current!.MarkerSeverity.Warning : 
                     monacoRef.current!.MarkerSeverity.Hint,
@@ -451,8 +449,8 @@ export default function EditorTab({
           endColumn: model.getLineMaxColumn(m.line),
           explanation: m.explanation
         }));
-        monacoRef.current!.editor.setModelMarkers(model, 'ai-coach', monacoMarkers as any);
-        setAvailableAdviceLines(parsedMentorship.map((m: any) => m.line));
+        monacoRef.current!.editor.setModelMarkers(model, 'ai-coach', monacoMarkers as monacoEditor.IMarkerData[]);
+        setAvailableAdviceLines(parsedMentorship.map((m) => m.line));
         setAllMentorshipAdvice(rawMentorship);
         
         // CRÍTICO: Sincronizar el estado de lectura (dirty state) para la celda de mentoría
@@ -486,7 +484,7 @@ export default function EditorTab({
       if (model.isDisposed()) return;
       const validMentorshipResponse = sanitizeMarkers(mentorshipResponse);
       localStorage.setItem(`coach_mentorship_${currentHash}`, JSON.stringify(mentorshipResponse));
-      const monacoMarkers = validMentorshipResponse.map((m: any) => ({
+      const monacoMarkers = validMentorshipResponse.map((m) => ({
         severity: m.severity === 'error' ? monacoRef.current!.MarkerSeverity.Error : 
                   m.severity === 'warning' ? monacoRef.current!.MarkerSeverity.Warning : 
                   monacoRef.current!.MarkerSeverity.Hint,
@@ -497,12 +495,12 @@ export default function EditorTab({
         endColumn: model.getLineMaxColumn(m.line),
         explanation: m.explanation
       }));
-      monacoRef.current!.editor.setModelMarkers(model, 'ai-coach', monacoMarkers as any);
-      setAvailableAdviceLines(validMentorshipResponse.map((m: any) => m.line));
+      monacoRef.current!.editor.setModelMarkers(model, 'ai-coach', monacoMarkers as monacoEditor.IMarkerData[]);
+      setAvailableAdviceLines(validMentorshipResponse.map((m) => m.line));
       setAllMentorshipAdvice(mentorshipResponse);
       
-    } catch (error: any) {
-      if (error.name === 'AbortError') return;
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return;
       console.error('[Code Coach Mentorship] Error:', error);
       setAvailableAdviceLines([]);
     } finally {
@@ -558,7 +556,7 @@ export default function EditorTab({
   useEffect(() => {
     const handler = () => forceSenseiAnalysis();
     window.addEventListener("trigger-sensei", handler);
-    return () => window.removeEventListener("trigger-sensei", handler as any);
+    return () => window.removeEventListener("trigger-sensei", handler as EventListener);
   }, [forceSenseiAnalysis]);
 
   // ── Sensei Store: push live editor context via Zustand (no CustomEvents) ─────────
@@ -751,7 +749,7 @@ export default function EditorTab({
   // initialValue moved to top of component
   // editorRef moved to top of component
   
-  const vimInstanceRef = useRef<any>(null);
+  const vimInstanceRef = useRef<{ dispose: () => void } | null>(null);
   const vimObserverRef = useRef<MutationObserver | null>(null);
   const vimPendingRef = useRef(false);
   const dirtyCheckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -868,13 +866,10 @@ export default function EditorTab({
     const editor = editorRef.current;
     if (!editor || !vimMode || vimInstanceRef.current || vimPendingRef.current) {
       if (!editor) console.warn('[MONACO BOOT] Vim init reactivo omitido: editorRef vacío');
-      else if (!vimMode) console.log('[MONACO BOOT] Vim init reactivo omitido: vimMode=false');
-      else if (vimInstanceRef.current) console.log('[MONACO BOOT] Vim init reactivo omitido: instancia previa existe');
       return;
     }
 
     vimPendingRef.current = true;
-    console.log('[MONACO BOOT] Intentando iniciar Vim (reactivo)...');
     import("monaco-vim").then(({ initVimMode, VimMode }) => {
       if (!vimPendingRef.current) {
         console.warn('[MONACO BOOT] Vim init cancelado: vimPendingRef desactivo');
@@ -909,14 +904,10 @@ export default function EditorTab({
         container.style.overflow = 'hidden';
         container.appendChild(statusNode);
         vimStatusRef.current = statusNode;
-        console.log('[MONACO BOOT] Statusbar DOM creado y anexado al editor');
 
         const vim = initVimMode(editor, statusNode);
         vimInstanceRef.current = vim;
-        console.log('[MONACO BOOT] Vim iniciado con éxito. Adaptador:', vim);
-
-        
-        (VimMode as any).Vim.defineEx('write', 'w', (args: { args?: string }) => {
+        (VimMode as unknown as { Vim: { defineEx: (shortcut: string, full: string, cb: (args: { args?: string }) => void) => void } }).Vim.defineEx('write', 'w', (args: { args?: string }) => {
           const filename = args?.args?.trim() || '';
           if (filename) {
             const dir = node.file_path ? node.file_path.substring(0, node.file_path.lastIndexOf('/')) : '';
@@ -926,8 +917,6 @@ export default function EditorTab({
             handleSaveRef.current();
           }
         });
-        console.log('[MONACO BOOT] Comando ex :w registrado');
-
         const modeLabels: Record<string, typeof editorModeRef.current> = {
           'NORMAL': 'locked',
           'VISUAL': 'visual',
@@ -949,7 +938,6 @@ export default function EditorTab({
         });
         observer.observe(statusNode, { characterData: true, subtree: true, childList: true });
         vimObserverRef.current = observer;
-        console.log('[MONACO BOOT] Observer de modo Vim instalado');
       } catch (error) {
         console.error('[MONACO BOOT FATAL ERROR] Vim init (reactivo) lanzó excepción:', error);
       }
@@ -1022,8 +1010,8 @@ export default function EditorTab({
           runHealthAnalysis(model);
         }
       }
-    } catch (error: any) {
-      if (error?.status === 409) {
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 409) {
         setIsConflictMode(true);
         if (aiAbortControllerRef.current) {
           aiAbortControllerRef.current.abort();
@@ -1034,7 +1022,7 @@ export default function EditorTab({
           duration: 10000 
         });
       } else {
-        toast.error("Error al guardar", { description: error?.message || "Ocurrió un error inesperado." });
+        toast.error("Error al guardar", { description: error instanceof Error ? error.message : "Ocurrió un error inesperado." });
       }
     } finally {
       setSaving(false);
@@ -1130,8 +1118,6 @@ export default function EditorTab({
   }), [isTddLocked]);
 
   const handleEditorDidMount: OnMount = useCallback((editor, monaco) => {
-    console.log('[MONACO BOOT] handleEditorDidMount disparado. vimMode=', vimMode, 'path=', node.file_path);
-    
     editorRef.current = editor;
     monacoRef.current = monaco;
     setIsEditorReady(true);
@@ -1174,9 +1160,6 @@ export default function EditorTab({
           severity: m.severity,
         }));
         const path = normalizeMonacoUri(uri);
-        if (markers.length > 0) {
-          console.log('[markers]', path, { total: markers.length });
-        }
         setMarkers(path, markers);
       };
 
@@ -1263,7 +1246,7 @@ export default function EditorTab({
         // Here we would apply the marker to Monaco gutter!
         // In this MVP, we map the CodeCoachMarker to Monaco's generic markers
         const markers = data.markers || [];
-        const monacoMarkers = markers.map((m: any) => ({
+        const monacoMarkers = markers.map((m) => ({
           severity: m.severity || 8, // monaco.MarkerSeverity.Warning
           message: m.message,
           startLineNumber: m.line,
@@ -1598,7 +1581,7 @@ export default function EditorTab({
                 }
               }}
  
-                techData={techData}
+                techData={techData as unknown as React.ComponentProps<typeof CoachSidebar>['techData']}
                 onRescan={() => handleRescan()}
                 isScanningTech={isScanningTech}
                 isTechError={isTechError}

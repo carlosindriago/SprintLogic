@@ -26,7 +26,7 @@ def get_openai_client() -> openai.AsyncOpenAI:
         _client = openai.AsyncOpenAI(api_key=api_key)
         return _client
     except Exception as e:
-        logger.error(f"Error initializing OpenAI client: {e}")
+        logger.error("Error initializing OpenAI client: %s", e, exc_info=True)
         raise HTTPException(
             status_code=500,
             detail="OpenAI API Key no configurada o inválida."
@@ -52,7 +52,7 @@ async def transcribe_audio(file_bytes: bytes, filename: str) -> str:
             detail="OpenAI API Key no configurada o inválida."
         )
     except Exception as e:
-        logger.error(f"Error in transcription engine: {e}")
+        logger.error("Error in transcription engine: %s", e, exc_info=True)
         raise HTTPException(
             status_code=500,
             detail="Error en el motor de transcripción."

@@ -79,6 +79,7 @@ async def generate_tests(
         project_root = Path(project.path).resolve()
         full_path = (project_root / request.file_path).resolve()
     except Exception:
+        logger.warning("Unhandled exception", exc_info=True)
         raise HTTPException(status_code=400, detail="Invalid path resolution")
 
     if not full_path.is_relative_to(project_root):
@@ -151,6 +152,7 @@ async def audit_tests(
         project_root = Path(project.path).resolve()
         full_path = (project_root / request.file_path).resolve()
     except Exception:
+        logger.warning("Unhandled exception", exc_info=True)
         raise HTTPException(status_code=400, detail="Invalid path resolution")
 
     if not full_path.is_relative_to(project_root):
@@ -171,6 +173,7 @@ async def audit_tests(
         try:
             test_full_path = (project_root / request.test_file_path).resolve()
         except Exception:
+            logger.warning("Unhandled exception", exc_info=True)
             raise HTTPException(status_code=400, detail="Invalid path resolution")
 
         if not test_full_path.is_relative_to(project_root):
@@ -181,6 +184,7 @@ async def audit_tests(
                 with open(test_full_path, encoding="utf-8") as f:
                     current_tests = f.read()
             except Exception:
+                logger.warning("Unhandled exception", exc_info=True)
                 current_tests = "Failed to read existing test file."
 
     prompt_record = await prompt_repository.get_prompt_async(session, prompt_repository.TEST_AUDIT_MENTOR_PROMPT_ID)

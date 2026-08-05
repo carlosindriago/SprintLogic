@@ -49,7 +49,7 @@ def kill_zombie_on_parent_death():
     try:
         sys.stdin.read()
     except Exception:
-        pass
+        logging.warning("Unhandled exception", exc_info=True)
     print("Parent process died (STDIN EOF). Initiating graceful shutdown...", file=sys.stderr)
     os.kill(os.getpid(), signal.SIGINT)
 
@@ -75,19 +75,19 @@ async def lifespan(app: FastAPI):
             await session.execute(text("ALTER TABLE analysis_reports ADD COLUMN type VARCHAR(50) DEFAULT 'code_analysis'"))
             await session.commit()
         except Exception:
-            pass
+            logging.warning("Unhandled exception", exc_info=True)
         try:
             await session.execute(text("ALTER TABLE tool_model_mappings ADD COLUMN fallback_models JSON"))
             await session.commit()
         except Exception:
-            pass
+            logging.warning("Unhandled exception", exc_info=True)
         try:
             await session.execute(text("ALTER TABLE projects ADD COLUMN cached_schema JSON"))
             await session.execute(text("ALTER TABLE projects ADD COLUMN schema_hash VARCHAR(255)"))
             await session.execute(text("ALTER TABLE projects ADD COLUMN schema_updated_at DATETIME"))
             await session.commit()
         except Exception:
-            pass
+            logging.warning("Unhandled exception", exc_info=True)
         await initialize_prompts(session)
 
 
@@ -104,6 +104,7 @@ async def lifespan(app: FastAPI):
         import asyncio
         app.state.insight_worker_task = asyncio.create_task(run_insight_worker_loop())
     except Exception as e:
+        logging.warning("Unhandled exception: %s", e, exc_info=True)
         import traceback
         traceback.print_exc(file=sys.stderr)
         raise e

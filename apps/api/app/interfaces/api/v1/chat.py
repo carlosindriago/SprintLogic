@@ -81,6 +81,7 @@ async def _fetch_context7_docs(api_key: str, query: str, tech_stack: dict) -> st
                         text = s.get("content", s.get("text", str(s)))
                         all_docs.append(text)
             except Exception:
+                logging.warning("Unhandled exception", exc_info=True)
                 continue
 
     return "\n---\n".join(all_docs[:6]) if all_docs else ""
@@ -163,7 +164,7 @@ async def _generate_conversation_title(conversation_id: int, first_message: str)
                 conv.title = title
                 await session.commit()
         except Exception:
-            pass
+            logging.warning("Unhandled exception", exc_info=True)
 
 
 @router.post("/")
@@ -193,8 +194,8 @@ async def chat_with_ai(
             await session.refresh(conv)
             conversation_id = conv.id
             is_new_conversation = True
-        except Exception as e:
-            print(f"Failed to create conversation: {e}")
+        except Exception:
+            logging.warning("Unhandled exception", exc_info=True)
 
     # Build the messages list, optionally prepending the Sensei system prompt
     messages_to_send = list(request.messages)
@@ -250,7 +251,7 @@ async def chat_with_ai(
                     if "text" in chunk_data:
                         full_response += chunk_data["text"]
                 except Exception:
-                    pass
+                    logging.warning("Unhandled exception", exc_info=True)
                 yield f"data: {chunk_str}\n\n"
 
             yield f"data: {json.dumps({'is_done': True, 'conversation_id': conversation_id})}\n\n"
@@ -291,6 +292,7 @@ async def get_conversations(project_id: str, session: AsyncSession = Depends(get
     try:
         project_uuid = uuid.UUID(project_id)
     except Exception:
+        logging.warning("Unhandled exception", exc_info=True)
         raise HTTPException(status_code=400, detail="Invalid project_id")
 
     result = await session.execute(
@@ -358,7 +360,7 @@ async def _save_memory(project_id: str, agent_name: str, context_type: str, cont
             )
             await session.commit()
         except Exception:
-            pass
+            logging.warning("Unhandled exception", exc_info=True)
 
 
 @router.post("/mentor", response_model=MentorResponse)
@@ -464,6 +466,7 @@ async def mentor_sensei(
                     summary + f" — Respuesta: {full_response[:200]}",
                 )
         except Exception:
+            logging.warning("Unhandled exception", exc_info=True)
             yield f"data: {json.dumps({'text': '', 'is_done': True, 'error': 'Stream error'})}\n\n"
 
     return StreamingResponse(generate(), media_type="text/event-stream")
@@ -518,6 +521,7 @@ async def ticket_mentor(
     except HTTPException:
         raise
     except Exception:
+        logging.warning("Unhandled exception", exc_info=True)
         file_content = f"Error reading file {target_path}"
 
     from app.infrastructure.repositories.graph_repository import SQLAlchemyGraphRepository
@@ -527,6 +531,7 @@ async def ticket_mentor(
         topology = [f"{row['source_file_path']} -> {row['target_id']} ({row['edge_type']})" for row in raw_items]
         topology_str = "\n".join(topology)
     except Exception as e:
+        logging.warning("Unhandled exception: %s", e, exc_info=True)
         topology_str = f"Error computing blast radius: {e}"
 
     # BD source of truth: ticket_mentor tool override (or global default).
@@ -577,6 +582,7 @@ async def ticket_mentor(
                 if hasattr(chunk, "usage") and chunk.usage:
                     yield f"data: {json.dumps({'text': '', 'is_done': True, 'usage': {}})}\n\n"
         except Exception:
+            logging.warning("Unhandled exception", exc_info=True)
             yield f"data: {json.dumps({'text': '', 'is_done': True, 'error': 'Stream error'})}\n\n"
 
     return StreamingResponse(generate(), media_type="text/event-stream")
@@ -618,6 +624,7 @@ async def auto_fix(
     except HTTPException:
         raise
     except Exception:
+        logging.warning("Unhandled exception", exc_info=True)
         raise HTTPException(status_code=404, detail="Target file not found")
 
     # BD source of truth: auto_fix tool override (or global default).

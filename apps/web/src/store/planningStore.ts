@@ -6,13 +6,14 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import type { WBSHierarchicalResponse } from '../lib/api';
 
 interface PlanningState {
   projectStates: Record<string, {
     messages: { role: string; content: string }[];
-    wbsData: unknown | null;
+    wbsData: WBSHierarchicalResponse | null;
   }>;
-  setProjectState: (projectId: string, state: { messages?: { role: string; content: string }[], wbsData?: unknown }) => void;
+  setProjectState: (projectId: string, state: { messages?: { role: string; content: string }[]; wbsData?: WBSHierarchicalResponse }) => void;
 }
 
 export const usePlanningStore = create<PlanningState>()(

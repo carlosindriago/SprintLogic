@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable react-hooks/preserve-manual-memoization */
 "use client";
@@ -7,6 +6,7 @@ import React, { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { getProjectReport, createKanbanTicket } from "../lib/api";
+import type { TicketType, TicketPriority } from "@/types";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MarkdownLink } from "./MarkdownLink";
@@ -21,6 +21,13 @@ interface AIReportViewerProps {
   projectId: string | null;
   reportId?: string;
   markdown?: string;
+}
+
+interface ExtractedIssue {
+  title: string;
+  type: string;
+  description: string;
+  priority: string;
 }
 
 export function AIReportViewer({ projectId, reportId, markdown: initialMarkdown }: AIReportViewerProps) {
@@ -120,7 +127,7 @@ export function AIReportViewer({ projectId, reportId, markdown: initialMarkdown 
     const issuesXml = match[1];
 
     const issueRegex = /<issue>([\s\S]*?)<\/issue>/g;
-    const extractedIssues = [];
+    const extractedIssues: ExtractedIssue[] = [];
     let issueMatch;
 
     while ((issueMatch = issueRegex.exec(issuesXml)) !== null) {
@@ -140,7 +147,7 @@ export function AIReportViewer({ projectId, reportId, markdown: initialMarkdown 
     return { cleanText: parsedText, issues: extractedIssues };
   }, [content]);
 
-  const handleCreateTicket = async (issue: any) => {
+  const handleCreateTicket = async (issue: ExtractedIssue) => {
     if (!projectId) {
       toast.error("No se encontró el ID del proyecto");
       return;
@@ -155,8 +162,8 @@ export function AIReportViewer({ projectId, reportId, markdown: initialMarkdown 
     try {
       await createKanbanTicket(projectId, {
         title: issue.title,
-        type: issue.type,
-        priority: issue.priority,
+        type: issue.type as TicketType,
+        priority: issue.priority as TicketPriority,
         description: issue.description,
         report_id: reportId,
         affected_nodes: affectedNodes,
@@ -164,10 +171,10 @@ export function AIReportViewer({ projectId, reportId, markdown: initialMarkdown 
       toast.success("Ticket registrado en el Kanban", {
         description: `"${issue.title}" ha sido enviado a la columna TODO.`,
       });
-    } catch (err: any) {
+    } catch (err) {
       console.error("Failed to create kanban ticket:", err);
       toast.error("Error al crear el ticket", {
-        description: err.message || "No se pudo conectar con el servidor.",
+        description: err instanceof Error ? err.message : "No se pudo conectar con el servidor.",
       });
     }
   };
@@ -192,9 +199,9 @@ export function AIReportViewer({ projectId, reportId, markdown: initialMarkdown 
       const res = await generateWBS(projectId, cleanText.substring(0, 5000));
       setWbsData(res);
       setWbsModalOpen(true);
-    } catch (err: any) {
+    } catch (err) {
       toast.error("Error al generar WBS", {
-        description: err.message || "Fallo la conexión con el servidor LLM",
+        description: err instanceof Error ? err.message : "Fallo la conexión con el servidor LLM",
       });
     } finally {
       setGeneratingWbs(false);
@@ -220,8 +227,8 @@ export function AIReportViewer({ projectId, reportId, markdown: initialMarkdown 
         }
       }
       toast.success(`Se crearon ${createdCount} tickets de WBS en el Kanban`);
-    } catch (err: any) {
-      toast.error("Error guardando tareas WBS", { description: err.message });
+    } catch (err) {
+      toast.error("Error guardando tareas WBS", { description: err instanceof Error ? err.message : String(err) });
     }
   };
 

@@ -1,3 +1,7 @@
+import logging
+
+logger = logging.getLogger(__name__)
+
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -41,6 +45,7 @@ async def build_agent_context(
             lines.append(f"{i}. [{label}] {content[:300]}")
         return "\n".join(lines)
     except Exception:
+        logger.debug("Unhandled exception", exc_info=True)
         return ""
 
 

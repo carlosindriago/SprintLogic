@@ -502,6 +502,7 @@ async def contextual_mentorship(
                     return markers
 
                 except Exception as e:
+                    _logger.warning("Unhandled exception: %s", e, exc_info=True)
                     if attempt < MAX_RETRIES:
                         if raw_content:
                             model_messages.append({"role": "assistant", "content": raw_content})

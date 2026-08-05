@@ -12,6 +12,7 @@ import { Pencil, WrapText, Maximize, Rocket, Bookmark, ChevronDown, Plus, Bot } 
 import { API_BASE_URL } from '@/lib/api';
 
 const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false });
+import type { Monaco } from '@monaco-editor/react';
 import type { editor } from 'monaco-editor';
 
 interface ASTFold {
@@ -35,7 +36,7 @@ interface ZenCodeLensProps {
 export default function ZenCodeLens({ filePath, codeContent, language = 'javascript' }: ZenCodeLensProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
-  const monacoRef = useRef<unknown>(null);
+  const monacoRef = useRef<Monaco>(null);
   const decorationsCollection = useRef<editor.IEditorDecorationsCollection | null>(null);
 
   const [folds, setFolds] = useState<ASTFold[]>([]);
@@ -90,11 +91,9 @@ export default function ZenCodeLens({ filePath, codeContent, language = 'javascr
     fetchBookmarks();
   }, [projectId, filePath]);
 
-  const applyFolds = (currentEditor: editor.IStandaloneCodeEditor, currentMonaco: unknown) => {
+  const applyFolds = (currentEditor: editor.IStandaloneCodeEditor, currentMonaco: Monaco) => {
     if (!currentEditor || !currentMonaco) return;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const monacoAny = currentMonaco as any;
-    const selections = folds.map(f => new monacoAny.Selection(f.start_line, 1, f.end_line, 1));
+    const selections = folds.map(f => new currentMonaco.Selection(f.start_line, 1, f.end_line, 1));
     if (selections.length > 0) {
       const originalSelection = currentEditor.getSelection();
       currentEditor.setSelections(selections);
@@ -107,10 +106,9 @@ export default function ZenCodeLens({ filePath, codeContent, language = 'javascr
 
   useEffect(() => {
     if (editorRef.current && monacoRef.current && bookmarks.length > 0) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const monacoAny = monacoRef.current as any;
+      const monaco = monacoRef.current;
       const decs = bookmarks.map(b => ({
-        range: new monacoAny.Range(b.start_line, 1, b.start_line, 1),
+        range: new monaco.Range(b.start_line, 1, b.start_line, 1),
         options: {
           isWholeLine: false,
           glyphMarginClassName: 'zen-bookmark-glyph',
@@ -132,7 +130,7 @@ export default function ZenCodeLens({ filePath, codeContent, language = 'javascr
     }
   }, [wordWrap, fontSize]);
 
-  const handleEditorDidMount = (editor: editor.IStandaloneCodeEditor, monaco: unknown) => {
+  const handleEditorDidMount = (editor: editor.IStandaloneCodeEditor, monaco: Monaco) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
 
@@ -195,9 +193,7 @@ export default function ZenCodeLens({ filePath, codeContent, language = 'javascr
 
       editor.onMouseDown((e) => {
       const target = e.target;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const monacoAny = monaco as any;
-      if (target.type === monacoAny.editor.MouseTargetType.GUTTER_GLYPH_MARGIN) {
+      if (target.type === monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN) {
         const line = target.position?.lineNumber;
         if (line && target.element) {
           const rect = target.element.getBoundingClientRect();
@@ -234,8 +230,7 @@ export default function ZenCodeLens({ filePath, codeContent, language = 'javascr
     // No se necesita antes de mount para las acciones, pero definiremos los temas acá
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleBeforeMount = (monaco: any) => {
+  const handleBeforeMount = (monaco: Monaco) => {
     monaco.editor.defineTheme('dracula', {
       base: 'vs-dark',
       inherit: true,

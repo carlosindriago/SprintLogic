@@ -248,7 +248,7 @@ async def audit_doc(
                 with open(m_path, encoding="utf-8") as manifest_file:
                     manifests_content += f"\\n--- {m} ---\\n{manifest_file.read()}\\n"
             except Exception:
-                pass
+                logger.warning("Unhandled exception", exc_info=True)
     if not manifests_content:
         manifests_content = "No manifests found."
 
@@ -268,7 +268,7 @@ async def audit_doc(
                 remaining = MAX_RAG_CHARS - len(rag_context)
                 rag_context += chunk[:remaining]
         except Exception:
-            pass
+            logger.warning("Unhandled exception", exc_info=True)
 
     from app.infrastructure.repositories.tool_model_repository import resolve_tool_model
     tool_provider, tool_model, fallbacks = await resolve_tool_model(session, "document_studio")

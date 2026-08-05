@@ -1,6 +1,6 @@
 "use client";
 
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { DndContext, closestCenter, DragEndEvent, DragOverlay, DragStartEvent } from "@dnd-kit/core";
 import { arrayMove, SortableContext, verticalListSortingStrategy, useSortable } from "@dnd-kit/sortable";
@@ -216,8 +216,8 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
     try {
       const data = await generateWBS(projectId, wbsRequirements, wbsModel);
       setWbsResponse(data);
-    } catch (e: any) {
-      setWbsError(e.message || "Fallo al generar el plan WBS.");
+    } catch (e) {
+      setWbsError(e instanceof Error ? e.message : "Fallo al generar el plan WBS.");
     } finally {
       setIsWbsGenerating(false);
     }
@@ -256,7 +256,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
       setShowWbsModal(false);
       setWbsRequirements("");
       setWbsResponse(null);
-    } catch (e: any) {
+    } catch {
       setWbsError("Fallo al importar las tareas en tasks.md");
     }
   };
@@ -698,7 +698,12 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
                     <select 
                       className="bg-[#111112] border border-[#3f3f46] rounded-md px-3 py-1.5 text-zinc-200 text-xs focus:outline-none"
                       value={newColRule}
-                      onChange={(e) => setNewColRule(e.target.value as any)}
+                      onChange={(e) => {
+                        const val = e.target.value as KanbanColumn['rule'];
+                        if (val === 'manual' || val === 'auto-on-test-fail' || val === 'auto-on-test-pass') {
+                          setNewColRule(val);
+                        }
+                      }}
                     >
                       <option value="manual">Manual (100% control)</option>
 

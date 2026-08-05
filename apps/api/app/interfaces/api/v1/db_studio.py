@@ -719,6 +719,7 @@ INSTRUCCIONES:
         resolved_label = tool_model_label(provider, model_id)
         gateway = LiteLLMGateway(model_name=resolved_label)
     except Exception:
+        logger.warning("Unhandled exception", exc_info=True)
         gateway = LiteLLMGateway()
 
     try:

@@ -1,3 +1,7 @@
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 import tree_sitter
 
@@ -17,9 +21,9 @@ class SemanticMarkdownSplitter:
             import tree_sitter_markdown as tsm  # type: ignore
             self.parser = tree_sitter.Parser()
             self.parser.language = tree_sitter.Language(tsm.language())
-        except Exception as e:
+        except (ImportError, AttributeError, ValueError, Exception) as err:
             # Fallback for older tree-sitter-markdown versions if needed
-            print(f"Warning: could not load tree_sitter_markdown: {e}")
+            logger.warning("Failed to load tree_sitter_markdown parser: %s", err, exc_info=True)
             self.parser = None
 
     def split(self, content: bytes, file_name: str) -> list[str]:

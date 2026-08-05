@@ -1,3 +1,7 @@
+import logging
+
+logger = logging.getLogger(__name__)
+
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, status
@@ -62,6 +66,7 @@ async def ingest_telemetry_ping(
         )
         await session.commit()
     except Exception:
+        logger.warning("Unhandled exception", exc_info=True)
         # Telemetry is non-critical — log and swallow so callers are never blocked
         await session.rollback()
         return {"status": "skipped"}

@@ -153,8 +153,8 @@ async def sync_endpoint(websocket: WebSocket, db: AsyncSession = Depends(get_db_
                             awareness_xml = await get_project_awareness_xml(proj.path)
                             if awareness_xml:
                                 injected_system += f"\n\n{awareness_xml}"
-                    except Exception as e:
-                        print(f"Failed to inject project awareness: {e}")
+                    except Exception:
+                        logging.warning("Unhandled exception", exc_info=True)
 
                 # Shadow AST Context Injection
                 cursor_line = data.get("cursor_line", 1)
@@ -257,6 +257,7 @@ async def stream_chat_response(
                 session.add(bot_msg)
                 await session.commit()
             except Exception:
+                logging.warning("Unhandled exception", exc_info=True)
                 # If the socket gets destroyed completely or the DB connection drops,
                 # we do a best-effort save.
                 pass

@@ -1,3 +1,7 @@
+import logging
+
+logger = logging.getLogger(__name__)
+
 import os
 from pathlib import Path
 
@@ -75,7 +79,7 @@ class TddGuardValidator:
                     idx = header_end + 1
 
         except Exception:
-            pass
+            logger.debug("Unhandled exception", exc_info=True)
 
         return files_in_memory
 

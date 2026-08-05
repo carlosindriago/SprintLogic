@@ -1,3 +1,7 @@
+import logging
+
+logger = logging.getLogger(__name__)
+
 import asyncio
 import json
 import os
@@ -87,7 +91,7 @@ def _scan_blocking(project_path: str) -> str:
                         if "typescript" in deps:
                             core_tech.add("TypeScript")
                 except Exception:
-                    pass
+                    logger.debug("Unhandled exception", exc_info=True)
             elif f == "angular.json":
                 core_tech.add("Angular")
             elif f == "pyproject.toml" or f == "requirements.txt":
@@ -103,7 +107,7 @@ def _scan_blocking(project_path: str) -> str:
                             if "sqlalchemy" in content:
                                 core_tech.add("SQLAlchemy")
                     except Exception:
-                        pass
+                        logger.debug("Unhandled exception", exc_info=True)
             elif f == "pom.xml" or f == "build.gradle":
                 core_tech.add("Java")
                 if "pom.xml" == f:
@@ -113,7 +117,7 @@ def _scan_blocking(project_path: str) -> str:
                             if "spring-boot" in content:
                                 core_tech.add("Spring Boot")
                     except Exception:
-                        pass
+                        logger.debug("Unhandled exception", exc_info=True)
             elif f == "tauri.conf.json":
                 core_tech.add("Tauri")
                 core_tech.add("Rust")
