@@ -20,7 +20,7 @@ interface GitState {
   lastDashboardFetch: number | null;
   setSelectedFile: (file: string | null) => void;
   fetchStatus: (projectId: string) => Promise<void>;
-  fetchDashboard: (projectId: string) => Promise<void>;
+  fetchDashboard: (projectId: string, force?: boolean) => Promise<void>;
   fetchCommits: (projectId: string) => Promise<void>;
 }
 
@@ -57,9 +57,9 @@ export const useGitStore = create<GitState>()((set, get) => ({
     }
   },
 
-  fetchDashboard: async (projectId: string) => {
+  fetchDashboard: async (projectId: string, force: boolean = false) => {
     const { lastDashboardFetch } = get();
-    if (lastDashboardFetch !== null && Date.now() - lastDashboardFetch < 30_000) {
+    if (!force && lastDashboardFetch !== null && Date.now() - lastDashboardFetch < 30_000) {
       return;
     }
     set({ isLoading: true, error: null });
