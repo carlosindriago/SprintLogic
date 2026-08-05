@@ -31,11 +31,10 @@ export default function ActivityBar() {
         </button>
         <button
           onClick={() => {
-            if (isDrawerOpen) toggleDrawer();
             setOmniSearchOpen(true);
           }}
           aria-label="Search"
-          title="Search"
+          title="Buscar (Omni Search - Double Shift / Ctrl+P)"
           className={cn(
             "w-10 h-10 rounded-lg mx-auto flex items-center justify-center transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-blue-500",
             omniSearchOpen ? "bg-zinc-700/60 text-white" : "text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/50"

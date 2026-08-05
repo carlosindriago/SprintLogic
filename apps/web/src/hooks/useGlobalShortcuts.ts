@@ -25,6 +25,18 @@ export function useGlobalShortcuts() {
         return;
       }
 
+      if (mod && (e.key === "k" || e.key === "K" || e.key === "p" || e.key === "P")) {
+        const tag = (e.target as HTMLElement).tagName;
+        if (EDITABLE_TAGS.has(tag)) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+        import("@/store/layoutStore").then(({ useLayoutStore }) => {
+          useLayoutStore.getState().setOmniSearchOpen(true);
+        });
+        return;
+      }
+
       if (mod && e.key === "1") {
         const tag = (e.target as HTMLElement).tagName;
         if (EDITABLE_TAGS.has(tag)) return;
