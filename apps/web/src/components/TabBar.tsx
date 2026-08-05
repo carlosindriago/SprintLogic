@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useTabsStore } from '@/store/tabsStore';
+import { useTabsStore, TabData } from '@/store/tabsStore';
 import { useMarkersStore } from '@/store/markersStore';
 import { useUnsavedStore } from '@/store/unsavedStore';
 import { draftStore } from '@/lib/draftStore';
@@ -184,14 +184,14 @@ function SortableTab({
   tabs, 
   onNewFile 
 }: {
-  tab: any;
+  tab: TabData;
   activeTabId: string | null;
   dirtyFiles: Record<string, boolean>;
-  markersFiles: any;
+  markersFiles: Record<string, unknown>;
   setActiveTab: (id: string) => void;
-  handleCloseRequest: (e: any, tab: any) => void;
-  getTabPath: (tab: any) => string | null;
-  tabs: any[];
+  handleCloseRequest: (e: React.MouseEvent | { stopPropagation: () => void }, tab: TabData) => void;
+  getTabPath: (tab: TabData) => string | null;
+  tabs: TabData[];
   onNewFile?: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: tab.id });
@@ -287,7 +287,7 @@ function SortableTab({
         <ContextMenuItem 
           disabled={isFixed || isPinned}
           className="focus:bg-zinc-800 focus:text-white cursor-pointer"
-          onSelect={() => handleCloseRequest({ stopPropagation: () => {} } as any, tab)}
+          onSelect={() => handleCloseRequest({ stopPropagation: () => {} } as unknown as React.MouseEvent, tab)}
         >
           Cerrar
         </ContextMenuItem>

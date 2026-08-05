@@ -6,7 +6,7 @@ import { GitBranch, GitCommit, Check, Upload, Download, Plus, ChevronsUpDown, Ed
 import { useTabsStore } from '@/store/tabsStore';
 import { useProjectStore } from '@/store/projectStore';
 import { useGitStore } from '@/store/gitStore';
-import { GitStatus, Project } from '@/types';
+import { Project } from '@/types';
 import {
   DropdownMenu,
   DropdownMenuContent,

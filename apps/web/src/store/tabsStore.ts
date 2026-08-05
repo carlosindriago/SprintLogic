@@ -199,9 +199,9 @@ export const useTabsStore = create<TabsState>()(
     }),
     {
       name: 'sprintlogic-tabs',
-      merge: (persistedState: any, currentState) => {
+      merge: (persistedState: unknown, currentState) => {
         // Safe merge to prevent corrupted localStorage from crashing the app
-        const merged = { ...currentState, ...persistedState };
+        const merged = { ...currentState, ...(persistedState as Partial<TabsState>) };
         if (!Array.isArray(merged.tabs) || merged.tabs.length === 0) {
           merged.tabs = [...DEFAULT_SESSION.tabs];
         }
