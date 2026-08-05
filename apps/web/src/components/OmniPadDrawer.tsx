@@ -191,7 +191,7 @@ interface Note {
       <div className="flex bg-zinc-950 px-2 py-1 gap-2 border-b border-zinc-800">
         <button
           onClick={() => setScope("local")}
-          className={`flex-1 text-xs font-semibold py-1 rounded transition-colors ${
+          className={`flex-1 text-xs font-semibold py-1 rounded transition-colors focus-visible:ring-2 focus-visible:outline-none ${
             scope === "local" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:bg-zinc-800/50"
           }`}
         >
@@ -199,7 +199,7 @@ interface Note {
         </button>
         <button
           onClick={() => setScope("global")}
-          className={`flex-1 text-xs font-semibold py-1 rounded transition-colors ${
+          className={`flex-1 text-xs font-semibold py-1 rounded transition-colors focus-visible:ring-2 focus-visible:outline-none ${
             scope === "global" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:bg-zinc-800/50"
           }`}
         >
@@ -210,7 +210,7 @@ interface Note {
       <div className="flex bg-zinc-950 px-4 py-2 gap-4 border-b border-zinc-800/50 justify-center">
         <button
           onClick={() => setMode("write")}
-          className={`text-sm font-semibold transition-colors ${
+          className={`text-sm font-semibold transition-colors focus-visible:ring-2 focus-visible:outline-none ${
             mode === "write" ? "text-blue-400 underline decoration-2 underline-offset-4" : "text-zinc-500 hover:text-zinc-300"
           }`}
         >
@@ -218,7 +218,7 @@ interface Note {
         </button>
         <button
           onClick={() => setMode("history")}
-          className={`text-sm font-semibold transition-colors ${
+          className={`text-sm font-semibold transition-colors focus-visible:ring-2 focus-visible:outline-none ${
             mode === "history" ? "text-blue-400 underline decoration-2 underline-offset-4" : "text-zinc-500 hover:text-zinc-300"
           }`}
         >
@@ -276,7 +276,7 @@ interface Note {
           <div className="flex gap-2">
             <button
               onClick={handleDictation}
-              className={`flex-1 py-2 rounded text-sm font-semibold flex items-center justify-center gap-2 transition-colors ${
+              className={`flex-1 py-2 rounded text-sm font-semibold flex items-center justify-center gap-2 transition-colors focus-visible:ring-2 focus-visible:outline-none ${
                 isListening ? "bg-red-600/20 text-red-500 hover:bg-red-600/30 border border-red-900" : "bg-zinc-800 text-white hover:bg-zinc-700"
               }`}
             >
@@ -286,7 +286,7 @@ interface Note {
             <button
               onClick={handleSave}
               disabled={!noteContent.trim()}
-              className="flex-1 bg-emerald-600/20 text-emerald-500 hover:bg-emerald-600/30 border border-emerald-900 rounded py-2 text-sm font-semibold disabled:opacity-50 transition-colors"
+              className="flex-1 bg-emerald-600/20 text-emerald-500 hover:bg-emerald-600/30 border border-emerald-900 rounded py-2 text-sm font-semibold disabled:opacity-50 transition-colors focus-visible:ring-2 focus-visible:outline-none"
             >
               Guardar Nota
             </button>
@@ -295,7 +295,7 @@ interface Note {
           {noteContent.trim() && (
             <button
               onClick={handleHandoff}
-              className="w-full bg-blue-600 hover:bg-blue-500 text-white rounded py-2 text-sm font-bold shadow-lg mt-2 flex items-center justify-center gap-2 transition-all"
+              className="w-full bg-blue-600 hover:bg-blue-500 text-white rounded py-2 text-sm font-bold shadow-lg mt-2 flex items-center justify-center gap-2 transition-all focus-visible:ring-2 focus-visible:outline-none"
             >
               🚀 Llevar al Planning Studio
             </button>
