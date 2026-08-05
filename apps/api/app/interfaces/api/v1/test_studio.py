@@ -1,5 +1,4 @@
 import logging
-from pathlib import Path
 from typing import Any
 from uuid import UUID
 
@@ -17,6 +16,7 @@ from app.infrastructure.repositories.tool_model_repository import (
     tool_model_label,
 )
 from app.infrastructure.test_inspector.test_scanner import scan_project_tests
+from app.utils.security import resolve_project_path
 
 logger = logging.getLogger(__name__)
 
@@ -76,14 +76,12 @@ async def generate_tests(
         raise HTTPException(status_code=404, detail="Project not found")
 
     try:
-        project_root = Path(project.path).resolve()
-        full_path = (project_root / request.file_path).resolve()
+        full_path = resolve_project_path(project.path, request.file_path)
+    except HTTPException:
+        raise
     except Exception:
         logger.warning("Unhandled exception", exc_info=True)
         raise HTTPException(status_code=400, detail="Invalid path resolution")
-
-    if not full_path.is_relative_to(project_root):
-        raise HTTPException(status_code=403, detail="Invalid file path (Path Traversal attempt)")
 
     if not full_path.exists() or not full_path.is_file():
         raise HTTPException(status_code=404, detail="Source file not found")
@@ -149,14 +147,12 @@ async def audit_tests(
         raise HTTPException(status_code=404, detail="Project not found")
 
     try:
-        project_root = Path(project.path).resolve()
-        full_path = (project_root / request.file_path).resolve()
+        full_path = resolve_project_path(project.path, request.file_path)
+    except HTTPException:
+        raise
     except Exception:
         logger.warning("Unhandled exception", exc_info=True)
         raise HTTPException(status_code=400, detail="Invalid path resolution")
-
-    if not full_path.is_relative_to(project_root):
-        raise HTTPException(status_code=403, detail="Invalid file path (Path Traversal attempt)")
 
     if not full_path.exists() or not full_path.is_file():
         raise HTTPException(status_code=404, detail="Source file not found")
@@ -171,13 +167,12 @@ async def audit_tests(
     current_tests = "No existing tests found."
     if request.test_file_path:
         try:
-            test_full_path = (project_root / request.test_file_path).resolve()
+            test_full_path = resolve_project_path(project.path, request.test_file_path)
+        except HTTPException:
+            raise
         except Exception:
             logger.warning("Unhandled exception", exc_info=True)
             raise HTTPException(status_code=400, detail="Invalid path resolution")
-
-        if not test_full_path.is_relative_to(project_root):
-            raise HTTPException(status_code=403, detail="Invalid test file path (Path Traversal attempt)")
 
         if test_full_path.exists() and test_full_path.is_file():
             try:
