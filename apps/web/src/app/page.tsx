@@ -156,6 +156,7 @@ export default function Home() {
   useGlobalShortcuts();
 
   useEffect(() => {
+    // eslint-disable-next-line react-compiler/react-compiler
     setIsMounted(true);
     if (projectId) {
       switchProject(projectId);
