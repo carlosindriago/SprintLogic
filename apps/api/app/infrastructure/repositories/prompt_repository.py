@@ -235,6 +235,24 @@ async def initialize_prompts(session: AsyncSession):
             "description": "Document Studio Audit Mentor",
             "content": DOC_AUDIT_PROMPT_CONTENT,
             "required_variables": DOC_AUDIT_PROMPT_VARS
+        },
+        {
+            "id": EXEC_MODE_SURGEON_ID,
+            "description": "Execution Room — Modo Cirujano",
+            "content": EXEC_MODE_SURGEON_CONTENT,
+            "required_variables": EXEC_MODE_SURGEON_VARS
+        },
+        {
+            "id": EXEC_MODE_PAIR_PROGRAMMING_ID,
+            "description": "Execution Room — Modo Socrático (Pair Programming)",
+            "content": EXEC_MODE_PAIR_PROGRAMMING_CONTENT,
+            "required_variables": EXEC_MODE_PAIR_PROGRAMMING_VARS
+        },
+        {
+            "id": EXEC_MODE_WHITEBOARD_ID,
+            "description": "Execution Room — Modo Pizarra",
+            "content": EXEC_MODE_WHITEBOARD_CONTENT,
+            "required_variables": EXEC_MODE_WHITEBOARD_VARS
         }
     ]
 
@@ -339,6 +357,12 @@ async def restore_prompt(session: AsyncSession, prompt_id: str) -> PromptRegistr
         golden_content = AUTO_DOC_PROMPT_CONTENT
     elif prompt_id == DOC_AUDIT_PROMPT_ID:
         golden_content = DOC_AUDIT_PROMPT_CONTENT
+    elif prompt_id == EXEC_MODE_SURGEON_ID:
+        golden_content = EXEC_MODE_SURGEON_CONTENT
+    elif prompt_id == EXEC_MODE_PAIR_PROGRAMMING_ID:
+        golden_content = EXEC_MODE_PAIR_PROGRAMMING_CONTENT
+    elif prompt_id == EXEC_MODE_WHITEBOARD_ID:
+        golden_content = EXEC_MODE_WHITEBOARD_CONTENT
     else:
         raise ValueError(f"No golden content available for {prompt_id}")
 
@@ -551,5 +575,18 @@ INSTRUCCIONES CRÍTICAS:
 """
 TEST_AUDIT_MENTOR_VARS = ["file_path", "source_code", "current_tests"]
 
+EXEC_MODE_SURGEON_ID = "exec_mode_surgeon"
+EXEC_MODE_SURGEON_CONTENT = """Eres un Ingeniero Cirujano de código. Tu único objetivo es entregar el parche exacto (diff) solicitado de forma quirúrgica, sin explicaciones ni rodeos."""
+EXEC_MODE_SURGEON_VARS: list[str] = []
+
+EXEC_MODE_PAIR_PROGRAMMING_ID = "exec_mode_pair_programming"
+EXEC_MODE_PAIR_PROGRAMMING_CONTENT = """Eres mi Pair Programmer. No me des la respuesta final de inmediato. Guíame con preguntas socráticas, ayúdame a pensar la lógica, pero escribe fragmentos de código para mostrar el camino."""
+EXEC_MODE_PAIR_PROGRAMMING_VARS: list[str] = []
+
+EXEC_MODE_WHITEBOARD_ID = "exec_mode_whiteboard"
+EXEC_MODE_WHITEBOARD_CONTENT = """Eres un Arquitecto Principal. Nuestra meta es planificar en una pizarra. No escribas código de producción. Devuelve diagramas de flujo (Mermaid), pseudocódigo y estructuras de alto nivel."""
+EXEC_MODE_WHITEBOARD_VARS: list[str] = []
+
 def init_doc_prompts():
     pass
+

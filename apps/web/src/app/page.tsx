@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Settings, ChevronRight, Edit2, Trash2, PlusCircle, FilePlus, RefreshCw, RotateCcw, ScanSearch, Layout, Network, GitBranch, BarChart3, HelpCircle, FolderOpen } from "lucide-react";
+import { Settings, ChevronRight, Edit2, Trash2, PlusCircle, FilePlus, RefreshCw, RotateCcw, ScanSearch, Layout, Network, GitBranch, BarChart3, HelpCircle, FolderOpen, Loader2 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { scanProject, getProjects, updateProject, deleteProject, rescanProject, analyzeProject, renameFile, duplicateFile, deleteFile, initSidecarPort } from "@/lib/api";
@@ -105,13 +105,15 @@ const GraphScene = dynamic(() => import("@/components/GraphScene"), { ssr: false
 const DatabaseStudioTab = dynamic(() => import("@/components/DatabaseStudio/DatabaseStudioTab"), { ssr: false });
 const TestStudioTab = dynamic(() => import("@/components/TestStudioTab"), { ssr: false });
 const DocumentStudioTab = dynamic(() => import("@/components/DocumentStudioTab"), { ssr: false });
+const ExecutionRoomTab = dynamic(() => import("@/components/ExecutionRoomTab"), { ssr: false });
 
 export default function Home() {
   const [path, setPath] = useState("");
   const [projects, setProjects] = useState<Project[]>([]);
-  const { projectId, setProjectId, setProjectPath } = useProjectStore();
+  const { projectId, setProjectId, setProjectPath, isSwitchingProject, setIsSwitchingProject } = useProjectStore();
   const [loading, setLoading] = useState(false);
   const [apiReady, setApiReady] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
     const [helpOpen, setHelpOpen] = useState(false);
   const [cheatSheetOpen, setCheatSheetOpen] = useState(false);
   const [addProjectOpen, setAddProjectOpen] = useState(false);
@@ -152,6 +154,11 @@ export default function Home() {
 
   useDoubleShift(() => setOmniSearchOpen(true));
   useGlobalShortcuts();
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setIsMounted(true);
+  }, []);
 
   useEffect(() => {
     if (projectId) {
@@ -466,7 +473,8 @@ export default function Home() {
   };
 
   const renderActiveTabContent = () => {
-    const activeTab = tabs.find(t => t.id === activeTabId);
+    const safeTabs = Array.isArray(tabs) ? tabs : [];
+    const activeTab = safeTabs.find(t => t.id === activeTabId);
     if (!activeTab) return null;
 
     switch (activeTab.type) {
@@ -519,10 +527,20 @@ export default function Home() {
       case 'ai-report':
         if (!projectId) return null;
         return <AIReportViewer projectId={projectId} reportId={activeTab.data?.reportId} markdown={activeTab.data?.markdown} />;
+      case 'execution-room':
+        return <ExecutionRoomTab data={activeTab.data} key={activeTab.id} />;
       default:
         return <div className="p-4">Tipo de pestaña desconocido.</div>;
     }
   };
+
+  if (!isMounted) {
+    return (
+      <div className="h-[100dvh] w-full flex flex-col bg-[#0d0d0d] text-zinc-200 overflow-hidden items-center justify-center">
+        <div className="w-8 h-8 border-4 border-zinc-800 border-t-blue-500 rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="h-[100dvh] w-full flex flex-col bg-[#0d0d0d] text-zinc-200 overflow-hidden relative">
@@ -550,7 +568,7 @@ export default function Home() {
       />
       {/* MAIN CONTENT */}
       <div className="flex-1 min-w-0 flex flex-col relative bg-[#151515] overflow-hidden">
-          {projectId === null ? (
+          {(!projectId || tabs.length === 0) ? (
             <div className="flex-1 relative min-w-0 overflow-hidden">
               <div className="flex flex-col items-center justify-center h-full bg-[#151515] text-center px-4">
                 <div className="w-16 h-16 bg-blue-500/10 text-blue-400 rounded-full flex items-center justify-center mb-6">
@@ -567,6 +585,63 @@ export default function Home() {
                   <FolderOpen className="w-4 h-4 mr-2" />
                   Cargar Proyecto
                 </Button>
+
+                {/* LISTA DE PROYECTOS */}
+                {projects.length > 0 && (
+                  <div className="mt-12 w-full max-w-2xl text-left animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <h4 className="text-xs font-semibold text-zinc-500 mb-4 uppercase tracking-wider">Proyectos Recientes</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {projects.map((p) => {
+                        const isActive = p.id === projectId;
+                        return (
+                          <div 
+                            key={p.id} 
+                            onClick={() => {
+                              if (isActive) {
+                                // Add dashboard tab if the user clicks the active project
+                                useTabsStore.getState().addTab({
+                                  id: 'dashboard',
+                                  type: 'dashboard',
+                                  title: 'Dashboard',
+                                  pinned: false
+                                });
+                                return;
+                              }
+                              setIsSwitchingProject(true);
+                              setTimeout(() => {
+                                setProjectId(p.id);
+                                setTimeout(() => setIsSwitchingProject(false), 300);
+                              }, 600);
+                            }}
+                            className={cn(
+                              "group p-4 border rounded-xl cursor-pointer transition-all duration-200 hover:shadow-md hover:shadow-black/20",
+                              isActive 
+                                ? "bg-blue-500/10 border-blue-500/50 hover:bg-blue-500/20 hover:border-blue-500/80" 
+                                : "bg-zinc-900/50 hover:bg-zinc-800 border-zinc-800/50 hover:border-zinc-700/80"
+                            )}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center min-w-0 pr-3">
+                                <div className="p-2 bg-blue-500/10 rounded-lg group-hover:bg-blue-500/20 transition-colors mr-3 shrink-0">
+                                  <FolderOpen className="w-5 h-5 text-blue-500/70 group-hover:text-blue-400 transition-colors" />
+                                </div>
+                                <div className="overflow-hidden">
+                                  <h5 className="text-zinc-200 font-medium truncate text-sm">{p.name}</h5>
+                                  <p className="text-xs text-zinc-500 truncate mt-0.5">{p.path}</p>
+                                </div>
+                              </div>
+                              {isActive && (
+                                <span className="shrink-0 text-[10px] uppercase font-bold tracking-wider text-blue-400 bg-blue-500/20 px-2.5 py-1 rounded-md">
+                                  Proyecto Actual
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           ) : (
@@ -722,7 +797,24 @@ export default function Home() {
           />
         )}
         <HelpModal isOpen={helpOpen} onClose={() => setHelpOpen(false)} />
-        <CheatSheetModal isOpen={cheatSheetOpen} onClose={() => setCheatSheetOpen(false)} />
+        <CheatSheetModal
+        isOpen={cheatSheetOpen}
+        onClose={() => setCheatSheetOpen(false)}
+      />
+
+      {/* Loading Modal */}
+      <Dialog open={isSwitchingProject} onOpenChange={() => {}}>
+        <DialogContent className="sm:max-w-md bg-[#111] border border-zinc-800/80 text-zinc-100 flex flex-col items-center justify-center py-12 [&>button]:hidden outline-none shadow-2xl shadow-black/80">
+          <div className="relative flex items-center justify-center mb-6">
+            <div className="absolute inset-0 bg-blue-500/20 blur-xl rounded-full" />
+            <div className="w-14 h-14 border-4 border-zinc-800 border-t-blue-500 rounded-full animate-spin shadow-[0_0_15px_rgba(59,130,246,0.5)]" />
+          </div>
+          <DialogTitle className="text-xl font-bold tracking-tight text-white mb-2">Cargando Proyecto</DialogTitle>
+          <DialogDescription className="text-zinc-400 text-center animate-pulse">
+            Sincronizando estado e inicializando componentes...
+          </DialogDescription>
+        </DialogContent>
+      </Dialog>
     
         <Dialog open={addProjectOpen} onOpenChange={setAddProjectOpen}>
                 <DialogContent className="sm:max-w-[425px] bg-zinc-900 text-zinc-200 border-zinc-800/50">

@@ -1,14 +1,18 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useTabsStore } from '@/store/tabsStore';
+import { useTabsStore, TabData } from '@/store/tabsStore';
 import { useMarkersStore } from '@/store/markersStore';
 import { useUnsavedStore } from '@/store/unsavedStore';
 import { draftStore } from '@/lib/draftStore';
-import { X, BarChart3, Layout, Network, GitBranch, FilePlus, FolderGit2, Save, Trash2, AlertTriangle, Bot, NotebookPen } from 'lucide-react';
+import { X, BarChart3, Layout, Network, GitBranch, FilePlus, FolderGit2, Save, Trash2, AlertTriangle, Bot, NotebookPen, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import FileIcon from './FileIcon';
 import { useOmniPadStore } from '@/store/omniPadStore';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, sortableKeyboardCoordinates, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger, ContextMenuSeparator } from '@/components/ui/context-menu';
 
 const TAB_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   dashboard: BarChart3,
@@ -18,6 +22,7 @@ const TAB_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   'git-graph': GitBranch,
   'prompt-studio': Bot,
   audit: FolderGit2,
+  'execution-room': Zap,
 };
 
 interface TabBarProps {
@@ -91,15 +96,12 @@ function CloseConfirmModal({
       aria-modal="true"
       aria-labelledby="close-modal-title"
     >
-      {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
         onClick={onCancel}
       />
 
-      {/* Panel */}
       <div className="relative z-10 w-full max-w-md mx-4 bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl shadow-black/50 overflow-hidden">
-        {/* Header */}
         <div className="flex items-start gap-3 px-5 pt-5 pb-4">
           <div className="shrink-0 w-9 h-9 rounded-lg bg-yellow-500/10 border border-yellow-500/20 flex items-center justify-center">
             <AlertTriangle className="w-4.5 h-4.5 text-yellow-400" />
@@ -117,10 +119,8 @@ function CloseConfirmModal({
           </div>
         </div>
 
-        {/* Divider */}
         <div className="border-t border-zinc-800" />
 
-        {/* Body */}
         {state.phase === 'discard-confirm' ? (
           <div className="px-5 py-4">
             <p className="text-xs text-zinc-400 mb-4">
@@ -173,11 +173,188 @@ function CloseConfirmModal({
   );
 }
 
+function SortableTab({ 
+  tab, 
+  activeTabId, 
+  dirtyFiles, 
+  markersFiles, 
+  setActiveTab, 
+  handleCloseRequest, 
+  getTabPath, 
+  tabs, 
+  onNewFile 
+}: {
+  tab: TabData;
+  activeTabId: string | null;
+  dirtyFiles: Record<string, boolean>;
+  markersFiles: Record<string, { errors: number; warnings: number }>;
+  setActiveTab: (id: string) => void;
+  handleCloseRequest: (e: React.MouseEvent, tab: TabData) => void;
+  getTabPath: (tab: TabData) => string | null;
+  tabs: TabData[];
+  onNewFile?: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: tab.id });
+  
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 10 : 1,
+  };
+
+  const IconComponent = TAB_ICONS[tab.type];
+  const isFixed = false;
+  const isPinned = !!tab.pinned;
+  const currentIndex = tabs.findIndex(t => t.id === tab.id);
+
+  const handleClose = (ids: string[]) => {
+    useTabsStore.getState().closeTabs(ids);
+  };
+
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger className="contents">
+        <div
+          ref={setNodeRef}
+          style={style}
+          {...attributes}
+          {...listeners}
+          role="tab"
+          aria-selected={activeTabId === tab.id}
+          tabIndex={0}
+          className={cn(
+            "group flex items-center gap-2 border-r border-zinc-800/50 text-sm cursor-pointer select-none transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-500 focus-visible:ring-inset",
+            isPinned ? "px-2.5 py-2 w-12 justify-center" : "px-4 py-2 min-w-32 max-w-48",
+            activeTabId === tab.id 
+              ? "bg-zinc-800 text-blue-400 border-t-2 border-t-blue-500" 
+              : "bg-zinc-900 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-300 border-t-2 border-t-transparent"
+          )}
+          onClick={() => setActiveTab(tab.id)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setActiveTab(tab.id);
+            }
+          }}
+          title={isPinned ? tab.title : undefined}
+        >
+          {IconComponent ? (
+            <IconComponent className="w-4 h-4 shrink-0" />
+          ) : (
+            <FileIcon fileName={tab.title} className="w-3.5 h-3.5 shrink-0" />
+          )}
+          
+          {!isPinned && (
+            <>
+              <span className="truncate flex-1" title={tab.title}>{tab.title}</span>
+              {dirtyFiles[tab.id] && (
+                <div className="w-2 h-2 rounded-full bg-blue-400 shrink-0" title="Unsaved changes" />
+              )}
+              <TabMarkerBadge path={getTabPath(tab)} markersFiles={markersFiles} />
+              
+              {!isFixed && (
+                <button
+                  type="button"
+                  aria-label={`Cerrar pestaña ${tab.title}`}
+                  className={cn(
+                    "rounded-sm hover:bg-zinc-700 p-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
+                    activeTabId === tab.id ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                  )}
+                  onPointerDown={(e) => e.stopPropagation()} // Prevent drag start when clicking close
+                  onClick={(e) => handleCloseRequest(e, tab)}
+                >
+                  <X className="w-3.5 h-3.5" aria-hidden="true" />
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      </ContextMenuTrigger>
+      
+      <ContextMenuContent className="w-48 bg-zinc-900 border-zinc-700 text-zinc-200">
+        <ContextMenuItem className="focus:bg-zinc-800 focus:text-white cursor-pointer" onSelect={() => useTabsStore.getState().togglePinTab(tab.id)}>
+          {isPinned ? "Desfijar pestaña" : "Fijar pestaña"}
+        </ContextMenuItem>
+        {onNewFile && (
+          <ContextMenuItem className="focus:bg-zinc-800 focus:text-white cursor-pointer" onSelect={() => onNewFile()}>
+            Nueva pestaña
+          </ContextMenuItem>
+        )}
+        
+        <ContextMenuSeparator className="bg-zinc-700" />
+        
+        <ContextMenuItem 
+          disabled={isFixed || isPinned}
+          className="focus:bg-zinc-800 focus:text-white cursor-pointer"
+          onSelect={() => handleCloseRequest({ stopPropagation: () => {} } as unknown as React.MouseEvent, tab)}
+        >
+          Cerrar
+        </ContextMenuItem>
+        <ContextMenuItem 
+          className="focus:bg-zinc-800 focus:text-white cursor-pointer"
+          onSelect={() => {
+            const others = tabs.filter(t => t.id !== tab.id).map(t => t.id);
+            handleClose(others);
+          }}
+        >
+          Cerrar las demás
+        </ContextMenuItem>
+        <ContextMenuItem 
+          disabled={currentIndex === 0}
+          className="focus:bg-zinc-800 focus:text-white cursor-pointer"
+          onSelect={() => {
+            const left = tabs.slice(0, currentIndex).map(t => t.id);
+            handleClose(left);
+          }}
+        >
+          Cerrar a la izquierda
+        </ContextMenuItem>
+        <ContextMenuItem 
+          disabled={currentIndex === tabs.length - 1}
+          className="focus:bg-zinc-800 focus:text-white cursor-pointer"
+          onSelect={() => {
+            const right = tabs.slice(currentIndex + 1).map(t => t.id);
+            handleClose(right);
+          }}
+        >
+          Cerrar a la derecha
+        </ContextMenuItem>
+        
+        <ContextMenuSeparator className="bg-zinc-700" />
+        <ContextMenuItem 
+          className="focus:bg-zinc-800 focus:text-white cursor-pointer text-red-400 focus:text-red-300"
+          onSelect={() => {
+            const all = tabs.map(t => t.id);
+            handleClose(all);
+          }}
+        >
+          Cerrar todo
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
+  );
+}
+
 export default function TabBar({ onToggleAi, aiOpen, onNewFile, projectId }: TabBarProps) {
   const { tabs, activeTabId, setActiveTab, removeTab, dirtyFiles } = useTabsStore();
   const markersFiles = useMarkersStore((s) => s.files);
   const [closeConfirm, setCloseConfirm] = useState<CloseConfirmState | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      const oldIndex = tabs.findIndex((t) => t.id === active.id);
+      const newIndex = tabs.findIndex((t) => t.id === over.id);
+      useTabsStore.getState().reorderTabs(oldIndex, newIndex);
+    }
+  };
 
   const getTabPath = (tab: (typeof tabs)[number]): string | null => {
     if (tab.type === 'editor') return tab.id;
@@ -186,7 +363,7 @@ export default function TabBar({ onToggleAi, aiOpen, onNewFile, projectId }: Tab
   };
 
   const handleCloseRequest = (e: React.MouseEvent, tab: (typeof tabs)[number]) => {
-    e.stopPropagation();
+    e?.stopPropagation?.();
     const isDirty = !!dirtyFiles[tab.id];
     if (!isDirty) {
       removeTab(tab.id);
@@ -214,27 +391,23 @@ export default function TabBar({ onToggleAi, aiOpen, onNewFile, projectId }: Tab
         window.addEventListener(doneEvent, onDone, { once: true });
         window.dispatchEvent(new CustomEvent(`save-request-${closeConfirm.tabId}`));
       });
-      // Clear the draft after save
       if (projectId && closeConfirm.filePath) {
         draftStore.clear(projectId, closeConfirm.filePath);
       }
       removeTab(closeConfirm.tabId);
       setCloseConfirm(null);
     } catch {
-      // Save failed — keep modal open
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleModalDiscardRequest = () => {
-    // Require double-confirmation before discarding
     setCloseConfirm(prev => prev ? { ...prev, phase: 'discard-confirm' } : null);
   };
 
   const handleModalDiscardConfirm = () => {
     if (!closeConfirm) return;
-    // Wipe drafts and close immediately
     if (projectId && closeConfirm.filePath) {
       draftStore.clear(projectId, closeConfirm.filePath);
     }
@@ -245,102 +418,68 @@ export default function TabBar({ onToggleAi, aiOpen, onNewFile, projectId }: Tab
 
   const handleModalCancel = () => setCloseConfirm(null);
 
+  const safeTabs = Array.isArray(tabs) ? tabs : [];
+
   return (
     <>
-      <div className="flex bg-zinc-900 border-b border-zinc-800/50 overflow-x-auto overflow-y-hidden shrink-0" role="tablist" aria-label="Tabs">
-        {tabs.map((tab) => {
-          const IconComponent = TAB_ICONS[tab.type];
-          const isFixed = tab.type === 'dashboard';
-          const isGlobalTool = IconComponent != null;
-
-          return (
-          <div
-            key={tab.id}
-            role="tab"
-            aria-selected={activeTabId === tab.id}
-            tabIndex={0}
-            className={cn(
-              "group flex items-center gap-2 border-r border-zinc-800/50 text-sm cursor-pointer select-none transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-500 focus-visible:ring-inset",
-              isGlobalTool ? "px-2.5 py-2" : "px-4 py-2 min-w-32 max-w-48",
-              activeTabId === tab.id 
-                ? "bg-zinc-800 text-blue-400 border-t-2 border-t-blue-500" 
-                : "bg-zinc-900 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-300 border-t-2 border-t-transparent"
-            )}
-            onClick={() => setActiveTab(tab.id)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                setActiveTab(tab.id);
-              }
-            }}
-            title={isGlobalTool ? tab.title : undefined}
-          >
-            {isGlobalTool && IconComponent ? (
-              <IconComponent className="w-4 h-4 shrink-0" />
-            ) : tab.type === 'editor' ? (
-              <FileIcon fileName={tab.title} className="w-3.5 h-3.5 shrink-0" />
-            ) : null}
-            
-            {!isGlobalTool && <span className="truncate flex-1" title={tab.title}>{tab.title}</span>}
-            {!isGlobalTool && dirtyFiles[tab.id] && (
-              <div className="w-2 h-2 rounded-full bg-blue-400 shrink-0" title="Unsaved changes" />
-            )}
-            {!isGlobalTool && <TabMarkerBadge path={getTabPath(tab)} markersFiles={markersFiles} />}
-            
-            {!isFixed && (
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <div className="flex bg-zinc-900 border-b border-zinc-800/50 overflow-x-auto overflow-y-hidden shrink-0" role="tablist" aria-label="Tabs">
+          <SortableContext items={safeTabs.map(t => t.id)} strategy={horizontalListSortingStrategy}>
+            {safeTabs.map((tab) => (
+              <SortableTab 
+                key={tab.id} 
+                tab={tab}
+                activeTabId={activeTabId}
+                dirtyFiles={dirtyFiles}
+                markersFiles={markersFiles}
+                setActiveTab={setActiveTab}
+                handleCloseRequest={handleCloseRequest}
+                getTabPath={getTabPath}
+                tabs={safeTabs}
+                onNewFile={onNewFile}
+              />
+            ))}
+          </SortableContext>
+          <div className="ml-auto flex items-center shrink-0">
+            {onNewFile && (
               <button
-                type="button"
-                aria-label={`Cerrar pestaña ${tab.title}`}
-                className={cn(
-                  "rounded-sm hover:bg-zinc-700 p-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
-                  activeTabId === tab.id ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-                )}
-                onClick={(e) => handleCloseRequest(e, tab)}
+                onClick={onNewFile}
+                aria-label="Nuevo archivo"
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800"
+                title="Nuevo Archivo (Ctrl+N)"
               >
-                <X className="w-3.5 h-3.5" aria-hidden="true" />
+                <FilePlus className="w-3.5 h-3.5" aria-hidden="true" />
+                <span>Nuevo</span>
+              </button>
+            )}
+            <button
+              onClick={() => useOmniPadStore.getState().toggle()}
+              aria-label="Alternar Omni-Pad"
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors border-l border-zinc-800/50 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800"
+              title="Omni-Pad"
+            >
+              <NotebookPen className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>Notas</span>
+            </button>
+            {onToggleAi && (
+              <button
+                onClick={onToggleAi}
+                aria-label="Alternar SprintLogic AI"
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors border-l border-zinc-800/50",
+                  aiOpen
+                    ? "bg-blue-600/20 text-blue-400"
+                    : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800"
+                )}
+                title="SprintLogic AI"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m3 21 1.9-5.7a8.5 8.5 0 1 1 3.8 3.8z"/></svg>
+                <span>AI</span>
               </button>
             )}
           </div>
-        )})}
-        <div className="ml-auto flex items-center shrink-0">
-        {onNewFile && (
-          <button
-            onClick={onNewFile}
-            aria-label="Nuevo archivo"
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800"
-            title="Nuevo Archivo (Ctrl+N)"
-          >
-            <FilePlus className="w-3.5 h-3.5" aria-hidden="true" />
-            <span>Nuevo</span>
-          </button>
-        )}
-        <button
-          onClick={() => useOmniPadStore.getState().toggle()}
-          aria-label="Alternar Omni-Pad"
-          className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors border-l border-zinc-800/50 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800"
-          title="Omni-Pad"
-        >
-          <NotebookPen className="w-3.5 h-3.5" aria-hidden="true" />
-          <span>Notas</span>
-        </button>
-        {onToggleAi && (
-          <button
-            onClick={onToggleAi}
-            aria-label="Alternar SprintLogic AI"
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors border-l border-zinc-800/50",
-              aiOpen
-                ? "bg-blue-600/20 text-blue-400"
-                : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800"
-            )}
-            title="SprintLogic AI"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m3 21 1.9-5.7a8.5 8.5 0 1 1 3.8 3.8z"/></svg>
-            <span>AI</span>
-          </button>
-        )}
         </div>
-      </div>
+      </DndContext>
 
       {closeConfirm && (
         <CloseConfirmModal

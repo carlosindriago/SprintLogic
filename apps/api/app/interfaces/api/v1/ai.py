@@ -256,13 +256,17 @@ async def health_overview(
     try:
         # BD source of truth: code_coach tool override (or global default). El
         # request.body ya NO dicta el modelo — settings sí.
-        cc_provider, cc_model, _ = await resolve_tool_model(session, "code_coach")
+        cc_provider, cc_model, cc_fallbacks = await resolve_tool_model(session, "code_coach")
         primary_model_id = tool_model_label(cc_provider, cc_model)
 
         models_to_try = [primary_model_id]
-        # El fallback sigue siendo optativo vía request, pero el primario lo
-        # dicta la BD. Caso de uso: querer un modelo más barato como respaldo.
-        if request.fallback_model and request.fallback_model != primary_model_id:
+        if cc_fallbacks:
+            for fb in cc_fallbacks:
+                if fb not in models_to_try:
+                    models_to_try.append(fb)
+
+        # Fallback legacy por request (opcional)
+        if request.fallback_model and request.fallback_model not in models_to_try:
             models_to_try.append(request.fallback_model)
 
         last_error = None
@@ -351,6 +355,11 @@ async def health_overview(
 
                     return overview
 
+                except TimeoutError:
+                    _logger.warning("Health Overview Timeout con modelo %s. Cambiando al siguiente fallback.", current_model)
+                    last_error = f"Timeout en {current_model}"
+                    break  # Salimos del bucle de intentos para saltar al siguiente modelo
+
                 except Exception as e:
                     if not raw_content:
                         _logger.warning("Health Overview API call failed with model %s: %s", current_model, e)
@@ -368,7 +377,15 @@ async def health_overview(
                         last_error = f"JSON Parse Error after retries: {str(e)}"
                         break
 
-        raise ValueError(f"All model attempts failed. Last error: {last_error}")
+        # Si todos los modelos fallan, devolvemos un mensaje elegante
+        return CodeCoachOverview(
+            structure="El proveedor de IA no responde o está saturado.",
+            critical_security="El análisis no se pudo completar porque todos los modelos de respaldo (fallbacks) fallaron o excedieron el tiempo límite.",
+            clean_code_score=0,
+            technical_debt_and_tips=["Verifica tu conexión a internet o cambia de proveedor en los ajustes de la IA.", "Es posible que el servicio esté experimentando un alto tráfico."],
+            is_degraded=True,
+            error_detail=f"Todos los intentos fallaron. Último error: {last_error}"
+        )
 
     except Exception as e:
         error_msg = repr(e)
@@ -393,11 +410,17 @@ async def contextual_mentorship(
     """Analizador de código que detecta antipatrones (Mentoría Contextual)."""
     try:
         # BD source of truth: contextual_mentor tool override (or global default).
-        cm_provider, cm_model, _ = await resolve_tool_model(session, "contextual_mentor")
+        cm_provider, cm_model, cm_fallbacks = await resolve_tool_model(session, "contextual_mentor")
         primary_model_id = tool_model_label(cm_provider, cm_model)
 
         models_to_try = [primary_model_id]
-        if request.fallback_model and request.fallback_model != primary_model_id:
+        if cm_fallbacks:
+            for fb in cm_fallbacks:
+                if fb not in models_to_try:
+                    models_to_try.append(fb)
+
+        # Fallback legacy por request (opcional)
+        if request.fallback_model and request.fallback_model not in models_to_try:
             models_to_try.append(request.fallback_model)
 
         last_error = None
@@ -501,6 +524,11 @@ async def contextual_mentorship(
 
                     return markers
 
+                except TimeoutError:
+                    _logger.warning("Contextual Mentorship Timeout con modelo %s. Cambiando al siguiente fallback.", current_model)
+                    last_error = f"Timeout en {current_model}"
+                    break  # Salir de los reintentos y probar el siguiente modelo en models_to_try
+
                 except Exception as e:
                     _logger.warning("Unhandled exception: %s", e, exc_info=True)
                     if attempt < MAX_RETRIES:
@@ -515,7 +543,16 @@ async def contextual_mentorship(
                         last_error = f"Error after retries: {str(e)}"
                         break
 
-        raise ValueError(f"All model attempts failed. Last error: {last_error}")
+        # Si todos los modelos fallan
+        return [CodeCoachMarker(
+            line=1,
+            severity="error",
+            title="Conexión Fallida",
+            message="El proveedor de IA no responde o está saturado.",
+            explanation=f"El análisis no se pudo completar porque todos los modelos de respaldo (fallbacks) fallaron o excedieron el tiempo límite. Verifica tu conexión a internet o cambia de proveedor en los ajustes de la IA. Último error: {last_error}",
+            suggested_code=None,
+            is_degraded=True
+        )]
 
     except Exception as e:
         error_msg = repr(e)
