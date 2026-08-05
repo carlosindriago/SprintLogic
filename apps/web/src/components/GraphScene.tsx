@@ -118,8 +118,11 @@ interface GraphSceneProps {
 }
 
 
+
 const extCache = new WeakMap<object, string>();
 const modCache = new WeakMap<object, string | null>();
+const lowerNameCache = new WeakMap<object, string>();
+const idPairCache = new WeakMap<object, string>();
 
 export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) {
   const [graphData, setGraphData] = useState<GraphData>({ nodes: [], links: [] });
@@ -623,9 +626,14 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
       const newGlowing = new Set<string>();
       graphData.links.forEach((link: GraphEdge) => {
         if (Math.random() < 0.1) {
-          const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
-          const targetId = typeof link.target === 'object' ? link.target.id : link.target;
-          newGlowing.add(`${sourceId}-${targetId}`);
+          let idPair = idPairCache.get(link);
+          if (idPair === undefined) {
+            const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+            const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+            idPair = `${sourceId}-${targetId}`;
+            idPairCache.set(link, idPair);
+          }
+          newGlowing.add(idPair);
         }
       });
       setGlowingLinks(newGlowing);
@@ -674,15 +682,25 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
         modCache.set(n, mod);
       }
       clone._modCache = mod;
-      clone._lowerName = clone.name ? clone.name.toLowerCase() : "";
+      let lowerName = lowerNameCache.get(n);
+      if (lowerName === undefined) {
+        lowerName = clone.name ? clone.name.toLowerCase() : "";
+        lowerNameCache.set(n, lowerName);
+      }
+      clone._lowerName = lowerName;
 
       return clone;
     });
     let links = graphData.links.map((l: GraphEdge) => {
       const clone = { ...l } as ForceLink;
-      const sourceId = typeof clone.source === 'object' ? clone.source.id : clone.source;
-      const targetId = typeof clone.target === 'object' ? clone.target.id : clone.target;
-      clone._idPair = `${sourceId}-${targetId}`;
+      let idPair = idPairCache.get(l);
+      if (idPair === undefined) {
+        const sourceId = typeof clone.source === 'object' ? clone.source.id : clone.source;
+        const targetId = typeof clone.target === 'object' ? clone.target.id : clone.target;
+        idPair = `${sourceId}-${targetId}`;
+        idPairCache.set(l, idPair);
+      }
+      clone._idPair = idPair;
       return clone;
     });
 
