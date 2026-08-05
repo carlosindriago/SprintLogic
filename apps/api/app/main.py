@@ -9,6 +9,7 @@ from app.interfaces.api.v1.chat import router as chat_router
 from app.interfaces.api.v1.db_studio import router as db_studio_router
 from app.interfaces.api.v1.doc_studio import router as doc_studio_router
 from app.interfaces.api.v1.editor import router as editor_router
+from app.interfaces.api.v1.execution import router as execution_router
 from app.interfaces.api.v1.git import router as git_router
 from app.interfaces.api.v1.kanban import router as kanban_router
 from app.interfaces.api.v1.lsp import router as lsp_router
@@ -75,19 +76,19 @@ async def lifespan(app: FastAPI):
             await session.execute(text("ALTER TABLE analysis_reports ADD COLUMN type VARCHAR(50) DEFAULT 'code_analysis'"))
             await session.commit()
         except Exception:
-            logging.warning("Unhandled exception", exc_info=True)
+            pass  # Column likely already exists
         try:
             await session.execute(text("ALTER TABLE tool_model_mappings ADD COLUMN fallback_models JSON"))
             await session.commit()
         except Exception:
-            logging.warning("Unhandled exception", exc_info=True)
+            pass  # Column likely already exists
         try:
             await session.execute(text("ALTER TABLE projects ADD COLUMN cached_schema JSON"))
             await session.execute(text("ALTER TABLE projects ADD COLUMN schema_hash VARCHAR(255)"))
             await session.execute(text("ALTER TABLE projects ADD COLUMN schema_updated_at DATETIME"))
             await session.commit()
         except Exception:
-            logging.warning("Unhandled exception", exc_info=True)
+            pass  # Columns likely already exist
         await initialize_prompts(session)
 
 
@@ -154,6 +155,7 @@ app.include_router(db_studio_router, prefix="/api/v1")
 app.include_router(test_studio_router, prefix="/api/v1")
 app.include_router(doc_studio_router, prefix="/api/v1")
 app.include_router(omni_pad_router, prefix="/api/v1")
+app.include_router(execution_router, prefix="/api/v1")
 
 
 from pathlib import Path

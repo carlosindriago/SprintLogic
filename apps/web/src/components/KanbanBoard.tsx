@@ -153,7 +153,12 @@ function SortableTask({
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  router.push(`/execution-room?ticketId=${task.id}`);
+                  useTabsStore.getState().addTab({
+                    id: `execution-${task.id}`,
+                    title: `Quirófano: ${task.id}`,
+                    type: 'execution-room',
+                    data: { ticketId: task.id },
+                  });
                 }}
                 className="w-full flex items-center justify-center gap-1.5 text-[10px] py-1.5 bg-yellow-950/40 text-yellow-500 hover:bg-yellow-900/60 rounded border border-yellow-900/50 transition-colors"
               >

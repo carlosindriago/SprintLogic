@@ -28,7 +28,8 @@ export const StatusBar: React.FC<StatusBarProps> = ({ projects = [], onEditProje
   // Referencia directa al DOM para inyectar texto saltándonos el Virtual DOM (Transient Update)
   const timeRef = useRef<HTMLDivElement>(null);
   
-  const { projectId, setProjectId } = useProjectStore();
+  const [projectMenuOpen, setProjectMenuOpen] = useState(false);
+  const { projectId, setProjectId, setIsSwitchingProject } = useProjectStore();
   const { currentBranch, modified, untracked, isLoading: gitLoading, error: gitError, fetchStatus } = useGitStore();
   const { addTab } = useTabsStore();
 
@@ -133,7 +134,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({ projects = [], onEditProje
           SprintLogic IDE
         </span>
 
-        <DropdownMenu>
+        <DropdownMenu open={projectMenuOpen} onOpenChange={setProjectMenuOpen}>
           <DropdownMenuTrigger style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', background: 'transparent', border: 'none', color: '#a1a1aa', outline: 'none' }} className="hover:text-zinc-200 transition-colors">
             <FolderOpen className="w-3.5 h-3.5" />
             <span className="max-w-[120px] truncate">
@@ -146,23 +147,43 @@ export const StatusBar: React.FC<StatusBarProps> = ({ projects = [], onEditProje
               <DropdownMenuLabel className="text-xs text-zinc-400 font-normal px-3 pt-2">Proyectos Locales</DropdownMenuLabel>
               <DropdownMenuSeparator className="bg-zinc-700" />
               {projects.map((p) => (
-                <DropdownMenuItem key={p.id} className="text-sm flex items-center justify-between group cursor-pointer focus:bg-zinc-700 focus:text-white py-2 px-3" onSelect={() => setProjectId(p.id)}>
+                <div key={p.id} className="text-sm flex items-center justify-between group cursor-pointer hover:bg-zinc-700 hover:text-white py-2 px-3 outline-none" onClick={() => {
+                  if (p.id === projectId) {
+                    setProjectMenuOpen(false);
+                    return;
+                  }
+                  
+                  // Forzar el cierre del menú de Radix antes de lanzar el modal
+                  setProjectMenuOpen(false);
+                  
+                  // Usar requestAnimationFrame asegura que React haya procesado el cierre del menú 
+                  // y liberado el scroll del body, impidiendo que el modal de carga se trabe.
+                  requestAnimationFrame(() => {
+                    setTimeout(() => {
+                      setIsSwitchingProject(true);
+                      setTimeout(() => {
+                        setProjectId(p.id);
+                        setTimeout(() => setIsSwitchingProject(false), 300);
+                      }, 600);
+                    }, 50);
+                  });
+                }}>
                   <span className="truncate text-zinc-200">{p.name}</span>
                   <div className="flex items-center gap-0.5 ml-2 shrink-0">
-                    <button aria-label="Editar proyecto" title="Editar proyecto" className="p-1 hover:bg-zinc-600 rounded text-zinc-500 hover:text-zinc-200 transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-blue-500" onClick={(e) => { e.stopPropagation(); onEditProject?.(p); }}>
+                    <button aria-label="Editar proyecto" title="Editar proyecto" className="p-1 hover:bg-zinc-600 rounded text-zinc-500 hover:text-zinc-200 transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-blue-500" onClick={(e) => { e.stopPropagation(); setProjectMenuOpen(false); onEditProject?.(p); }}>
                       <Edit2 className="w-3.5 h-3.5" aria-hidden="true" />
                     </button>
-                    <button aria-label="Eliminar proyecto" title="Eliminar proyecto" className="p-1 hover:bg-red-900/50 rounded text-zinc-500 hover:text-red-400 transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-red-500" onClick={(e) => { e.stopPropagation(); onDeleteProject?.(p); }}>
+                    <button aria-label="Eliminar proyecto" title="Eliminar proyecto" className="p-1 hover:bg-red-900/50 rounded text-zinc-500 hover:text-red-400 transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-red-500" onClick={(e) => { e.stopPropagation(); setProjectMenuOpen(false); onDeleteProject?.(p); }}>
                       <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                     </button>
                   </div>
-                </DropdownMenuItem>
+                </div>
               ))}
               <DropdownMenuSeparator className="bg-zinc-700" />
-              <DropdownMenuItem className="text-sm cursor-pointer focus:bg-zinc-700 focus:text-white py-2" onClick={(e) => { e.preventDefault(); onAddProject?.(); }}>
+              <div className="text-sm flex items-center cursor-pointer hover:bg-zinc-700 hover:text-white py-2 px-3 outline-none" onClick={(e) => { e.preventDefault(); setProjectMenuOpen(false); onAddProject?.(); }}>
                 <PlusCircle className="w-4 h-4 mr-2 text-blue-400" />
                 Añadir Proyecto
-              </DropdownMenuItem>
+              </div>
             </DropdownMenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>
