@@ -181,8 +181,8 @@ interface Note {
         <button
           onClick={close}
           className="text-zinc-400 hover:text-white focus-visible:ring-2 focus-visible:outline-none rounded"
-          aria-label="Close"
-          title="Close"
+          aria-label="Cerrar"
+          title="Cerrar"
         >
           <span aria-hidden="true">✕</span>
         </button>
