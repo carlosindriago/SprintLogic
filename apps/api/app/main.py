@@ -72,23 +72,7 @@ async def lifespan(app: FastAPI):
 
     sessionmaker = get_sessionmaker()
     async with sessionmaker() as session:
-        try:
-            await session.execute(text("ALTER TABLE analysis_reports ADD COLUMN type VARCHAR(50) DEFAULT 'code_analysis'"))
-            await session.commit()
-        except Exception:
-            pass  # Column likely already exists
-        try:
-            await session.execute(text("ALTER TABLE tool_model_mappings ADD COLUMN fallback_models JSON"))
-            await session.commit()
-        except Exception:
-            pass  # Column likely already exists
-        try:
-            await session.execute(text("ALTER TABLE projects ADD COLUMN cached_schema JSON"))
-            await session.execute(text("ALTER TABLE projects ADD COLUMN schema_hash VARCHAR(255)"))
-            await session.execute(text("ALTER TABLE projects ADD COLUMN schema_updated_at DATETIME"))
-            await session.commit()
-        except Exception:
-            pass  # Columns likely already exist
+
         await initialize_prompts(session)
 
 
