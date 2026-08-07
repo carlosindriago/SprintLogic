@@ -728,11 +728,20 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     return { nodes, links };
   }, [graphData, focusNode, neighbors, activeTypes]);
 
+  const nodeMap = useMemo(() => {
+    const map = new Map<string, ForceNode>();
+    if (!displayGraphData || !displayGraphData.nodes) return map;
+    for (const n of displayGraphData.nodes) {
+      map.set(n.id as string, n);
+    }
+    return map;
+  }, [displayGraphData]);
+
   const activeNode = useMemo(() => {
     const activeId = focusNode || hoverNode;
     if (!activeId) return null;
-    return displayGraphData.nodes.find(n => n.id === activeId) as ForceNode | undefined;
-  }, [focusNode, hoverNode, displayGraphData]);
+    return nodeMap.get(activeId as string);
+  }, [focusNode, hoverNode, nodeMap]);
 
   const bgCentroidsRef = useRef<Map<string, { x: number; y: number; count: number; upperMod: string }>>(new Map());
 
