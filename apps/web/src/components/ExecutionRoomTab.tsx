@@ -287,9 +287,11 @@ export default function ExecutionRoomTab({ data }: ExecutionRoomTabProps) {
               <button
                 onClick={handleSend}
                 disabled={isLoading || !input.trim()}
-                className="bg-blue-600 hover:bg-blue-500 text-white p-2 rounded-md transition-colors disabled:opacity-40"
+                className="bg-blue-600 hover:bg-blue-500 text-white p-2 rounded-md transition-colors disabled:opacity-40 focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-blue-500"
+                aria-label="Enviar instrucción"
+                title="Enviar instrucción"
               >
-                <Send className="w-4 h-4" />
+                <Send className="w-4 h-4" aria-hidden="true" />
               </button>
             </div>
           </div>
