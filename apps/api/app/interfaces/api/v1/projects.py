@@ -60,6 +60,7 @@ from app.utils.async_io import (
     async_rename,
     async_write_text,
 )
+from app.utils.security import resolve_project_path
 
 logger = logging.getLogger(__name__)
 
@@ -1032,13 +1033,7 @@ async def get_project_file_content(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    project_root = Path(project.path).resolve()
-    target = Path(path)
-    candidate = (target if target.is_absolute() else project_root / target).resolve()
-
-    # Security check FIRST: must be strictly inside the project root.
-    if not candidate.is_relative_to(project_root):
-        raise HTTPException(status_code=403, detail="Path is outside project directory")
+    candidate = resolve_project_path(project.path, path)
 
     if not await asyncio.to_thread(candidate.is_file):
         raise HTTPException(status_code=404, detail="File not found")
@@ -1072,13 +1067,7 @@ async def update_project_file_content(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    project_root = Path(project.path).resolve()
-    target = Path(path)
-    candidate = (target if target.is_absolute() else project_root / target).resolve()
-
-    # Security check FIRST: must be strictly inside the project root.
-    if not candidate.is_relative_to(project_root):
-        raise HTTPException(status_code=403, detail="Path is outside project directory")
+    candidate = resolve_project_path(project.path, path)
 
     if not await asyncio.to_thread(candidate.is_file):
         raise HTTPException(status_code=404, detail="File not found")
@@ -1125,12 +1114,7 @@ async def create_project_file(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    project_root = Path(project.path).resolve()
-    target = Path(path)
-    candidate = (target if target.is_absolute() else project_root / target).resolve()
-
-    if not candidate.is_relative_to(project_root):
-        raise HTTPException(status_code=403, detail="Path is outside project directory")
+    candidate = resolve_project_path(project.path, path)
 
     if await async_exists(candidate):
         raise HTTPException(status_code=409, detail="File already exists")
@@ -1138,20 +1122,11 @@ async def create_project_file(
     try:
         await async_mkdir_parents(candidate)
         await async_write_text(candidate, payload.content)
-        return {"status": "created", "path": str(candidate.relative_to(project_root))}
+        return {"status": "created", "path": str(candidate.relative_to(Path(project.path).resolve()))}
     except Exception as e:
         logger.error("Failed to create file failed: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="An internal error occurred")
 
-
-def _validate_and_resolve(project_path: str, file_path: str) -> Path:
-    project_root = Path(project_path).resolve()
-    target = Path(file_path)
-    candidate = (target if target.is_absolute() else project_root / target).resolve()
-
-    if not candidate.is_relative_to(project_root):
-        raise HTTPException(status_code=403, detail="Path is outside project directory")
-    return candidate
 
 
 @router.post("/projects/{project_id}/file/rename")
@@ -1170,7 +1145,7 @@ async def rename_project_file(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    candidate = _validate_and_resolve(project.path, request.path)
+    candidate = resolve_project_path(project.path, request.path)
 
     if not await async_exists(candidate):
         raise HTTPException(status_code=404, detail="File not found")
@@ -1212,7 +1187,7 @@ async def duplicate_project_file(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    candidate = _validate_and_resolve(project.path, request.path)
+    candidate = resolve_project_path(project.path, request.path)
 
     if not await async_is_file(candidate):
         raise HTTPException(status_code=404, detail="File not found")
@@ -1251,7 +1226,7 @@ async def delete_project_file(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    candidate = _validate_and_resolve(project.path, path)
+    candidate = resolve_project_path(project.path, path)
 
     if not await async_is_file(candidate):
         raise HTTPException(status_code=404, detail="File not found")
