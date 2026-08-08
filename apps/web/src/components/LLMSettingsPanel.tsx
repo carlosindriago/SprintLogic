@@ -45,7 +45,7 @@ function maskKey(key: string | null): string {
 
 function SkeletonModelList() {
   return (
-    <div className="flex flex-col gap-2" role="status" aria-label="Loading models">
+    <div className="flex flex-col gap-2" role="status" aria-label="Cargando modelos">
       {[0, 1, 2].map((i) => (
         <div
           key={i}
@@ -205,7 +205,7 @@ function ProviderConfig({
               size="icon"
               className="bg-zinc-800/50 border-zinc-700/50 hover:bg-red-950/40 hover:text-red-400 hover:border-red-900/60 h-9 px-3"
               onClick={handleDeleteKey}
-              aria-label="Delete key"
+              aria-label="Eliminar clave"
             >
               <Trash2 className="w-4 h-4" aria-hidden="true" />
             </Button>
@@ -365,7 +365,7 @@ function Context7Section({
               size="sm"
               className="bg-zinc-800/50 border-zinc-700/50 hover:bg-red-950/40 hover:text-red-400 hover:border-red-900/60 h-9 px-3"
               onClick={handleClear}
-              aria-label="Clear"
+              aria-label="Limpiar"
             >
               <Trash2 className="w-4 h-4" aria-hidden="true" />
             </Button>
