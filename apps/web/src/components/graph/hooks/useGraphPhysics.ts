@@ -11,7 +11,7 @@ interface UseGraphPhysicsProps {
 
 export function useGraphPhysics({ fgRef, hasGraphData, width }: UseGraphPhysicsProps) {
   const [isPhysicsActive, setIsPhysicsActive] = useState(true);
-  const initialFitDone = useRef(false);
+  const initialFitDoneRef = useRef(false);
 
   const togglePhysics = useCallback(() => {
     setIsPhysicsActive(prev => {
@@ -31,7 +31,7 @@ export function useGraphPhysics({ fgRef, hasGraphData, width }: UseGraphPhysicsP
   useEffect(() => {
     if (!fgRef.current || !hasGraphData || width === 0) return;
 
-    initialFitDone.current = false;
+    initialFitDoneRef.current = false;
     const fg = fgRef.current;
 
     const charge = fg.d3Force('charge');
@@ -113,6 +113,6 @@ export function useGraphPhysics({ fgRef, hasGraphData, width }: UseGraphPhysicsP
   return {
     isPhysicsActive,
     togglePhysics,
-    initialFitDone
+    initialFitDoneRef
   };
 }

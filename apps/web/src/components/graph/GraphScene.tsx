@@ -1,11 +1,12 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useRef, useCallback, useMemo } from "react";
+import { useRef, useCallback, useMemo, useState } from "react";
 import { LinkObject, NodeObject, type ForceGraphMethods } from "react-force-graph-2d";
 import { RefreshCw } from "lucide-react";
 import { graphTheme } from "@/lib/graph-theme";
 import { GraphNodeLabel } from "@/types";
+import { useTabsStore } from "@/store/tabsStore";
 
 import { GraphSceneProps, ForceNode, ForceLink } from "./types";
 import { getSafeTime } from "./utils";
@@ -41,11 +42,11 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
   const { dimensions } = useGraphViewport(containerRef);
 
   const {
-    hoverNode, setHoverNode,
+    hoverNode,
     focusNode, setFocusNode,
     contextMenu, setContextMenu,
     handleZoomIn, handleZoomOut, handleFitView,
-    onNodeHover, onNodeRightClick, handleNodeClick
+    onNodeHover, onNodeRightClick
   } = useGraphInteraction({ fgRef, onNodeClick });
 
   const {
@@ -71,14 +72,9 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     cutoffTimeRef
   } = useGraphAnimation({ graphData, idPairCache: caches.idPairCache });
 
-  const { isPhysicsActive, togglePhysics, initialFitDone } = useGraphPhysics({ fgRef, hasGraphData, width: dimensions.width });
+  const { isPhysicsActive, togglePhysics, initialFitDoneRef } = useGraphPhysics({ fgRef, hasGraphData, width: dimensions.width });
 
-  const showCycles = false;
-  // TODO: Add state for showCycles if needed, it was toggled in StatsPanel
-
-  // We actually need showCycles state since it is a toggle
-  // Wait, I missed showCycles in useGraphData. I can just put it here in GraphScene.
-  const [showCyclesState, setShowCycles] = require('react').useState(false);
+  const [showCyclesState, setShowCycles] = useState(false);
 
   const {
     paintBackground,
@@ -88,6 +84,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     getLinkWidth,
     getLinkVisibility
   } = useGraphCanvas({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     displayGraphData: displayGraphData as any,
     graphDataLength: graphData.nodes.length,
     activeTypes,
@@ -129,13 +126,11 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
 
   const handleNodeDrag = useCallback(() => {}, []);
 
-  // For handleAnalyze and handleShowAnalysis, let's keep them here or move them to useGraphData
-  // Wait, useGraphData already has the hooks for that, but we need to implement the fetch logic.
-  // Actually, I skipped the handleAnalyze logic in useGraphData. Let's patch that.
-  // I will just add dummy functions here if not implemented, or use the ones from useTabsStore.
-  const { addTab } = require("@/store/tabsStore").useTabsStore();
-  const [analyzing, setAnalyzing] = require('react').useState(false);
-  const [analyzingText, setAnalyzingText] = require('react').useState("");
+  const { addTab } = useTabsStore();
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [analyzing, setAnalyzing] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [analyzingText, setAnalyzingText] = useState("");
 
   const handleAnalyze = async () => {
     // Basic analyze function
@@ -202,6 +197,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
           ref={fgRef}
           width={dimensions.width || 800}
           height={dimensions.height || 600}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           graphData={displayGraphData as any}
           backgroundColor={graphTheme.background}
           onRenderFramePre={paintBackground}
@@ -244,6 +240,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
           onNodeClick={(node) => {
             const n = node as ForceNode;
             if (n.label === "Module") {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               setGraphData((prevGraph: any) => {
                 prevGraph.nodes.forEach((nItem: ForceNode) => {
                   if (nItem.x !== undefined) nItem.x = nItem.x;
@@ -277,8 +274,8 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
           enableZoomInteraction={true}
           enablePanInteraction={true}
           onEngineStop={() => {
-            if (fgRef.current && !initialFitDone.current) {
-              initialFitDone.current = true;
+            if (fgRef.current && !initialFitDoneRef.current) {
+              initialFitDoneRef.current = true;
               fgRef.current.zoomToFit(800, 100);
             }
           }}

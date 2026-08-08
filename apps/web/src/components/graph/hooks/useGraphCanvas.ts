@@ -141,7 +141,6 @@ export function useGraphCanvas({
     ctx.restore();
   }, [displayGraphData, cutoffTimeRef]);
 
-  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const paintNode = useCallback((node: NodeObject, ctx: CanvasRenderingContext2D, globalScale: number) => {
     const isMassive = graphDataLength > 1000;
     const n = node as ForceNode;

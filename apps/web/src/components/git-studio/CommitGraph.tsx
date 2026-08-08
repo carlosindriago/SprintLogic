@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
-import { Commit, CommitDetails, CommitFile } from '@/types';
-import { getBranchColor, formatDate, truncate, getFileIcon } from './utils'; // we'll need to move helpers to a utils file
+import { Commit } from '@/types';
+import { getBranchColor, formatDate, truncate } from './utils'; // we'll need to move helpers to a utils file
 import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuGroup } from '@/components/ui/context-menu';
 
 const ROW_HEIGHT = 72;

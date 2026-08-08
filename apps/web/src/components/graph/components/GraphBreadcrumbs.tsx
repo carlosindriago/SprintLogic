@@ -9,13 +9,13 @@ interface GraphBreadcrumbsProps {
 }
 
 export function GraphBreadcrumbs({ activeNode }: GraphBreadcrumbsProps) {
-  if (!activeNode) return null;
-
   const activeNodeBreadcrumbs = useMemo(() => {
     if (!activeNode) return [];
     const path = activeNode.label === "Module" ? (activeNode.folder || "") : (activeNode.file_path || activeNode.name);
     return path.split("/").filter(Boolean);
   }, [activeNode]);
+
+  if (!activeNode) return null;
 
   return (
     <div className={cn("absolute top-4 left-4 z-10 flex items-center px-3 py-1.5 rounded-lg max-w-full overflow-hidden whitespace-nowrap", graphUI.background, graphUI.blur, graphUI.border, graphUI.shadow)}>

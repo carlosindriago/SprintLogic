@@ -43,7 +43,7 @@ export function useGraphAnimation({ graphData, idPairCache }: UseGraphAnimationP
 
   useEffect(() => {
     if (!enableFlow || !graphData || !graphData.links) {
-      setGlowingLinks(new Set());
+      setTimeout(() => setGlowingLinks(new Set()), 0);
       return;
     }
 

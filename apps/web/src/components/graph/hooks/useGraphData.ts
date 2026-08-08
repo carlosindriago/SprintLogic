@@ -72,7 +72,7 @@ export function useGraphData({ projectId, focusNode }: UseGraphDataProps) {
               return data;
             });
           }
-        } catch (err) {
+        } catch {
           // Ignore 404s
           if (active) setGraphData({ nodes: [], links: [] });
         }
