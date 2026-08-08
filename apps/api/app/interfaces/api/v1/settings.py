@@ -237,41 +237,41 @@ async def delete_api_key(provider: str):
 
 CURATED_MODELS = {
     "gemini": [
-        {"id": "gemini/gemini-2.5-flash", "name": "Gemini 2.5 Flash"},
-        {"id": "gemini/gemini-1.5-pro", "name": "Gemini 1.5 Pro"},
+        ProviderModel(id="gemini/gemini-2.5-flash", name="Gemini 2.5 Flash"),
+        ProviderModel(id="gemini/gemini-1.5-pro", name="Gemini 1.5 Pro"),
     ],
     "openai": [
-        {"id": "openai/gpt-4o", "name": "GPT-4o"},
-        {"id": "openai/gpt-4o-mini", "name": "GPT-4o Mini"},
+        ProviderModel(id="openai/gpt-4o", name="GPT-4o"),
+        ProviderModel(id="openai/gpt-4o-mini", name="GPT-4o Mini"),
     ],
     "anthropic": [
-        {"id": "anthropic/claude-3-5-sonnet-20241022", "name": "Claude 3.5 Sonnet"},
-        {"id": "anthropic/claude-3-haiku-20240307", "name": "Claude 3 Haiku"},
+        ProviderModel(id="anthropic/claude-3-5-sonnet-20241022", name="Claude 3.5 Sonnet"),
+        ProviderModel(id="anthropic/claude-3-haiku-20240307", name="Claude 3 Haiku"),
     ],
     "openrouter": [
-        {"id": "openrouter/anthropic/claude-3.5-sonnet", "name": "Claude 3.5 Sonnet"},
-        {"id": "openrouter/openai/gpt-4o", "name": "GPT-4o"},
+        ProviderModel(id="openrouter/anthropic/claude-3.5-sonnet", name="Claude 3.5 Sonnet"),
+        ProviderModel(id="openrouter/openai/gpt-4o", name="GPT-4o"),
     ],
     "opencode-zen": [
-        {"id": "opencode-zen/gpt-4o", "name": "OpenCode Zen"},
+        ProviderModel(id="opencode-zen/gpt-4o", name="OpenCode Zen"),
     ],
     "opencode-go": [
-        {"id": "opencode-go/deepseek-v4-flash", "name": "OpenCode Go"},
+        ProviderModel(id="opencode-go/deepseek-v4-flash", name="OpenCode Go"),
     ],
     "groq": [
-        {"id": "groq/llama-3.1-8b-instant", "name": "Llama 3.1 8B"},
+        ProviderModel(id="groq/llama-3.1-8b-instant", name="Llama 3.1 8B"),
     ],
     "ollama_cloud": [
-        {"id": "ollama_cloud/gpt-oss:120b-cloud", "name": "GPT-OSS 120B"},
+        ProviderModel(id="ollama_cloud/gpt-oss:120b-cloud", name="GPT-OSS 120B"),
     ],
     "ollama": [
-        {"id": "ollama/llama3.2:1b", "name": "Llama 3.2 1B"},
+        ProviderModel(id="ollama/llama3.2:1b", name="Llama 3.2 1B"),
     ],
     "nvidia": [
-        {"id": "nvidia_nim/meta/llama-3.1-70b-instruct", "name": "Llama 3.1 70B (NIM)"},
-        {"id": "nvidia_nim/meta/llama-3.1-8b-instruct", "name": "Llama 3.1 8B (NIM)"},
-        {"id": "nvidia_nim/mistralai/mixtral-8x22b-instruct-v0.1", "name": "Mixtral 8x22B (NIM)"},
-        {"id": "nvidia_nim/nvidia/nemotron-4-340b-instruct", "name": "Nemotron 4 340B (NIM)"},
+        ProviderModel(id="nvidia_nim/meta/llama-3.1-70b-instruct", name="Llama 3.1 70B (NIM)"),
+        ProviderModel(id="nvidia_nim/meta/llama-3.1-8b-instruct", name="Llama 3.1 8B (NIM)"),
+        ProviderModel(id="nvidia_nim/mistralai/mixtral-8x22b-instruct-v0.1", name="Mixtral 8x22B (NIM)"),
+        ProviderModel(id="nvidia_nim/nvidia/nemotron-4-340b-instruct", name="Nemotron 4 340B (NIM)"),
     ],
 }
 

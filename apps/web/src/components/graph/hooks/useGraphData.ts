@@ -26,10 +26,10 @@ export function useGraphData({ projectId, focusNode }: UseGraphDataProps) {
 
   const rescanHandledRef = useRef(false);
 
-  const extCache = useRef(new WeakMap<object, string>()).current;
-  const modCache = useRef(new WeakMap<object, string | null>()).current;
-  const lowerNameCache = useRef(new WeakMap<object, string>()).current;
-  const idPairCache = useRef(new WeakMap<object, string>()).current;
+  const [extCache] = useState(() => new WeakMap<object, string>());
+  const [modCache] = useState(() => new WeakMap<object, string | null>());
+  const [lowerNameCache] = useState(() => new WeakMap<object, string>());
+  const [idPairCache] = useState(() => new WeakMap<object, string>());
 
   // Handle Scan completion
   useEffect(() => {
