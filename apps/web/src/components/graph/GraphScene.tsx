@@ -102,11 +102,20 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     glowingLinks
   });
 
+  const nodeById = useMemo(() => {
+    const map = new Map<string, ForceNode>();
+    for (let i = 0; i < displayGraphData.nodes.length; i++) {
+      const n = displayGraphData.nodes[i] as ForceNode;
+      map.set(n.id as string, n);
+    }
+    return map;
+  }, [displayGraphData]);
+
   const activeNode = useMemo(() => {
     const activeId = focusNode || hoverNode;
     if (!activeId) return null;
-    return displayGraphData.nodes.find(n => n.id === activeId) as ForceNode | undefined;
-  }, [focusNode, hoverNode, displayGraphData]);
+    return nodeById.get(activeId) || null;
+  }, [focusNode, hoverNode, nodeById]);
 
   const handleNodeDragEnd = useCallback((node: NodeObject) => {
     const n = node as ForceNode;
