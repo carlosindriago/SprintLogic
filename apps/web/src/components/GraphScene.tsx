@@ -728,11 +728,33 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     return { nodes, links };
   }, [graphData, focusNode, neighbors, activeTypes]);
 
+  const nodeById = useMemo(() => {
+    const map = new Map<string, ForceNode>();
+    for (let i = 0; i < displayGraphData.nodes.length; i++) {
+      const n = displayGraphData.nodes[i] as ForceNode;
+      map.set(n.id as string, n);
+    }
+    return map;
+  }, [displayGraphData]);
+
   const activeNode = useMemo(() => {
     const activeId = focusNode || hoverNode;
     if (!activeId) return null;
-    return displayGraphData.nodes.find(n => n.id === activeId) as ForceNode | undefined;
-  }, [focusNode, hoverNode, displayGraphData]);
+    return nodeById.get(activeId) || null;
+  }, [focusNode, hoverNode, nodeById]);
+
+  const activeNodeBreadcrumbs = useMemo(() => {
+    if (!activeNode) return [];
+    const path = activeNode.label === "Module" ? (activeNode.folder || "") : (activeNode.file_path || activeNode.name);
+    return path.split("/").filter(Boolean);
+  }, [activeNode]);
+
+  const expandedFolderList = useMemo(() => {
+    return Array.from(expandedFolders).map(folderPath => ({
+      folderPath,
+      name: folderPath.split('/').pop() || folderPath
+    }));
+  }, [expandedFolders]);
 
   const bgCentroidsRef = useRef<Map<string, { x: number; y: number; count: number; upperMod: string }>>(new Map());
 
@@ -1356,7 +1378,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
         <div className={cn("absolute top-4 left-4 z-10 flex items-center px-3 py-1.5 rounded-lg max-w-full overflow-hidden whitespace-nowrap", graphUI.background, graphUI.blur, graphUI.border, graphUI.shadow)}>
           {activeNode.label === "Module" ? <Folder className="w-3.5 h-3.5 text-indigo-400 mr-2 shrink-0" /> : <File className="w-3.5 h-3.5 text-blue-400 mr-2 shrink-0" />}
           <div className="flex items-center text-xs text-zinc-300 font-mono tracking-tight gap-1 truncate overflow-hidden">
-            {(activeNode.label === "Module" ? (activeNode.folder || "") : (activeNode.file_path || activeNode.name)).split("/").filter(Boolean).map((part, i, arr) => (
+            {activeNodeBreadcrumbs.map((part, i, arr) => (
               <div key={i} className="flex items-center gap-1 shrink-0">
                 <span className={i === arr.length - 1 ? "text-zinc-100 font-medium" : "text-zinc-500"}>{part}</span>
                 {i < arr.length - 1 && <ChevronRight className="w-3 h-3 text-zinc-600 shrink-0" />}
@@ -1496,13 +1518,13 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
 
         {expandedFolders.size > 0 && (
           <div className="absolute top-6 left-1/2 -translate-x-1/2 z-20 flex flex-row flex-wrap justify-center gap-2 w-full max-w-3xl pointer-events-none">
-            {Array.from(expandedFolders).map((folderPath) => (
+            {expandedFolderList.map(({ folderPath, name }) => (
               <div 
                 key={folderPath}
                 className="flex items-center gap-1 px-2 py-0.5 bg-indigo-950/80 border border-indigo-500/50 rounded-full text-[11px] font-medium tracking-wide text-indigo-100 shadow-[0_0_15px_rgba(99,102,241,0.3)] pointer-events-auto backdrop-blur-md transition-all hover:bg-indigo-900/90"
               >
                 <FolderOpen className="w-2.5 h-2.5 text-blue-400" />
-                <span className="truncate max-w-[150px]">{folderPath.split('/').pop() || folderPath}</span>
+                <span className="truncate max-w-[150px]">{name}</span>
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
