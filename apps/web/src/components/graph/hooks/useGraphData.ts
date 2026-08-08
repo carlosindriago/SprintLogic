@@ -219,10 +219,13 @@ export function useGraphData({ projectId, focusNode }: UseGraphDataProps) {
 
     let links = graphData.links.map((l: GraphEdge) => {
       const clone = { ...l } as ForceLink;
+      const sourceId = typeof clone.source === 'object' ? clone.source.id : clone.source;
+      const targetId = typeof clone.target === 'object' ? clone.target.id : clone.target;
+      clone._sourceId = sourceId as string;
+      clone._targetId = targetId as string;
+
       let idPair = idPairCache.get(l);
       if (idPair === undefined) {
-        const sourceId = typeof clone.source === 'object' ? clone.source.id : clone.source;
-        const targetId = typeof clone.target === 'object' ? clone.target.id : clone.target;
         idPair = `${sourceId}-${targetId}`;
         idPairCache.set(l, idPair);
       }
@@ -243,9 +246,7 @@ export function useGraphData({ projectId, focusNode }: UseGraphDataProps) {
 
     const visibleIds = new Set(nodes.map(n => n.id));
     links = links.filter((l) => {
-      const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
-      const targetId = typeof l.target === 'object' ? l.target.id : l.target;
-      return visibleIds.has(sourceId) && visibleIds.has(targetId);
+      return visibleIds.has(l._sourceId as string) && visibleIds.has(l._targetId as string);
     });
 
     return { nodes, links };

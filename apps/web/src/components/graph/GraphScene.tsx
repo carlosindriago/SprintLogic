@@ -212,8 +212,8 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
           linkCurvature={0.15}
           linkDirectionalParticles={enableFlow ? ((link: LinkObject) => {
             const l = link as ForceLink;
-            const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
-            const targetId = typeof l.target === 'object' ? l.target.id : l.target;
+            const sourceId = l._sourceId;
+            const targetId = l._targetId;
             const activeFocus = focusNode || hoverNode;
             let faded = false;
             if (activeFocus) {
