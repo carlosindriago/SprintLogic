@@ -197,7 +197,7 @@ export const ScanProgressBar: React.FC<ScanProgressBarProps> = ({ projectId }) =
         <button
           aria-label="Expand scan progress"
           onClick={() => toggleMinimize(projectId)}
-          className="ml-1 hover:bg-slate-800 p-1 rounded-full text-slate-400 hover:text-white transition-colors"
+          className="ml-1 hover:bg-slate-800 p-1 rounded-full text-slate-400 hover:text-white transition-colors focus-visible:ring-2 focus-visible:outline-none"
           title="Expand"
         >
           <Maximize2 aria-hidden="true" className="w-3.5 h-3.5" />
@@ -206,7 +206,7 @@ export const ScanProgressBar: React.FC<ScanProgressBarProps> = ({ projectId }) =
           <button
             aria-label="Cancel scan"
             onClick={() => requestAbort(projectId)}
-            className="hover:bg-slate-800 p-1 rounded-full text-red-400 hover:text-red-300 transition-colors"
+            className="hover:bg-slate-800 p-1 rounded-full text-red-400 hover:text-red-300 transition-colors focus-visible:ring-2 focus-visible:outline-none"
             title="Cancel scan"
           >
             <XCircle aria-hidden="true" className="w-3.5 h-3.5" />
@@ -235,7 +235,7 @@ export const ScanProgressBar: React.FC<ScanProgressBarProps> = ({ projectId }) =
           <button
             aria-label="Minimize scan progress"
             onClick={() => toggleMinimize(projectId)}
-            className="hover:bg-slate-800 p-1.5 rounded text-slate-400 hover:text-white transition-colors"
+            className="hover:bg-slate-800 p-1.5 rounded text-slate-400 hover:text-white transition-colors focus-visible:ring-2 focus-visible:outline-none"
             title="Minimize"
           >
             <Minimize2 aria-hidden="true" className="w-4 h-4" />
@@ -244,7 +244,7 @@ export const ScanProgressBar: React.FC<ScanProgressBarProps> = ({ projectId }) =
             <button
               aria-label="Cancel scan"
               onClick={() => requestAbort(projectId)}
-              className="hover:bg-slate-800 p-1.5 rounded text-red-400 hover:text-red-300 transition-colors"
+              className="hover:bg-slate-800 p-1.5 rounded text-red-400 hover:text-red-300 transition-colors focus-visible:ring-2 focus-visible:outline-none"
               title="Cancel scan"
             >
               <XCircle aria-hidden="true" className="w-4 h-4" />
