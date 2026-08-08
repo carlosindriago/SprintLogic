@@ -72,7 +72,7 @@ import { CheatSheetModal } from "@/components/CheatSheetModal";
 // every page render. Lazy-load them on the client only, identical to
 // the pattern already in use for `GraphScene` below.
 const EditorTab = dynamic(
-  () => import('@/components/EditorTab').then((m) => m.default),
+  () => import('@/components/editor').then((m) => m.default),
   { ssr: false },
 );
 const DiffTab = dynamic(
