@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { RefreshCw, FilePlus, FileMinus, FileText, AlertTriangle, GitBranch } from 'lucide-react';
+import { RefreshCw, FilePlus, FileMinus, FileText, AlertTriangle } from 'lucide-react';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { API_BASE_URL, getCommitDetails, getFileContent, saveFileContent } from '@/lib/api';
 import { useTabsStore } from '@/store/tabsStore';

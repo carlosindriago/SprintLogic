@@ -5,7 +5,7 @@
 import React, { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { getProjectReport, createKanbanTicket } from "../lib/api";
+import { getProjectReport, createKanbanTicket, deleteKanbanTicket } from "../lib/api";
 import type { TicketType, TicketPriority } from "@/types";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -210,12 +210,15 @@ export function AIReportViewer({ projectId, reportId, markdown: initialMarkdown 
 
   const handleSaveWbs = async (data: WBSHierarchicalResponse) => {
     if (!projectId) return;
+
+    const createdTicketIds: string[] = [];
+    let createdCount = 0;
+
     try {
-      let createdCount = 0;
       for (const pkg of data.work_packages) {
         const epicBadge = `[📦 ${pkg.title}]`;
         for (const sub of pkg.subtasks) {
-          await createKanbanTicket(projectId, {
+          const ticket = await createKanbanTicket(projectId, {
             title: `${epicBadge} ${sub.title}`,
             type: "Feature",
             priority: "Medium",
@@ -223,12 +226,29 @@ export function AIReportViewer({ projectId, reportId, markdown: initialMarkdown 
             report_id: reportId,
             affected_nodes: [],
           });
+          createdTicketIds.push(ticket.id);
           createdCount++;
         }
       }
       toast.success(`Se crearon ${createdCount} tickets de WBS en el Kanban`);
     } catch (err) {
-      toast.error("Error guardando tareas WBS", { description: err instanceof Error ? err.message : String(err) });
+      toast.error("Error guardando tareas WBS. Ejecutando rollback...", { description: err instanceof Error ? err.message : String(err) });
+      
+      let rollbackErrors = 0;
+      for (const id of createdTicketIds) {
+        try {
+          await deleteKanbanTicket(id);
+        } catch (rollbackErr) {
+          console.error(`Rollback failed for ticket ${id}`, rollbackErr);
+          rollbackErrors++;
+        }
+      }
+      
+      if (rollbackErrors > 0) {
+        toast.error(`Atención: El rollback falló para ${rollbackErrors} tickets.`);
+      } else if (createdTicketIds.length > 0) {
+        toast.success("Rollback completado: los tickets parciales fueron eliminados.");
+      }
     }
   };
 

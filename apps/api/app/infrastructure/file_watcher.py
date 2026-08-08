@@ -110,7 +110,7 @@ class FileWatcherService:
 
     async def trigger_bulk_sync(self, project_id: str, batch: set[str]):
         _logger.info(f"[Watchdog] Tsunami Sync (Bulk): {len(batch)} files in project {project_id}")
-        # TODO: Implement CAS Bulk Sync
+        raise NotImplementedError("CAS Bulk Sync is not implemented yet")
 
     async def _vector_sync_worker(self, project_id: str):
         queue = self._queues.get(project_id)

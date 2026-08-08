@@ -31,10 +31,10 @@ export default function GitDiffView({ projectId }: { projectId: string }) {
 
   useEffect(() => {
     if (!selectedFile) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setOriginal('');
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setModified('');
+      setTimeout(() => {
+        setOriginal('');
+        setModified('');
+      }, 0);
       return;
     }
 

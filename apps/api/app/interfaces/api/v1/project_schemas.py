@@ -54,3 +54,8 @@ class ProjectDeletedResponse(BaseModel):
 
 class GraphAnalysisResponse(BaseModel):
     analysis: str
+
+
+class AnalyzeGraphRequest(BaseModel):
+    model: str | None = None
+    fallback_model: str | None = None

@@ -39,6 +39,7 @@ from app.infrastructure.repositories.tool_model_repository import (
 )
 from app.infrastructure.security.rate_limiter import require_rate_limit
 from app.interfaces.api.v1.project_schemas import (
+    AnalyzeGraphRequest,
     ProjectDeletedResponse,
     ProjectListResponse,
     ProjectResponse,
@@ -361,15 +362,9 @@ from concurrent.futures import ProcessPoolExecutor
 def get_process_pool(request: Request) -> ProcessPoolExecutor:
     return request.app.state.process_pool
 
-
-
-
-class AnalyzeGraphRequest(BaseModel):
-    model: str | None = None
-    fallback_model: str | None = None
-
-
 from fastapi.responses import StreamingResponse
+
+from app.application.analyze_project_graph import AnalyzeProjectGraphUseCase
 
 
 @router.post("/projects/{project_id}/graph/analyze")
@@ -385,274 +380,16 @@ async def analyze_project_graph(
         repo = SQLAlchemyProjectRepository(session)
         project = await repo.get_project(project_uuid)
 
-        # actual_model is not used in get_project
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
+
+        lang_code = req.headers.get("Accept-Language", "en").split("-")[0]
+        use_case = AnalyzeProjectGraphUseCase(session, project, lang_code=lang_code)
+
+        return StreamingResponse(use_case.execute(), media_type="text/event-stream")
+
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid project ID format")
-
-    try:
-
-        graph_repo = SQLAlchemyGraphRepository(session)
-        nodes = await graph_repo.get_nodes_by_project(project_uuid)
-        edges = await graph_repo.get_edges_by_project(project_uuid)
-
-        project_path = os.path.abspath(project.path)
-        filtered_nodes = [n for n in nodes if os.path.abspath(n.file_path).startswith(project_path)]
-
-        valid_ids = {n.id for n in filtered_nodes}
-        filtered_edges = [e for e in edges if e.source_id in valid_ids and e.target_id in valid_ids]
-
-        node_file_paths = {n.id: os.path.abspath(n.file_path) for n in filtered_nodes}
-        pruned_edges = [e for e in filtered_edges if node_file_paths.get(e.source_id) != node_file_paths.get(e.target_id)]
-
-        import asyncio as _asyncio
-
-        from app.application.graph_metrics import _compute_graph_metrics_cpu_bound
-
-        file_nodes_dict: dict[str, dict] = {}
-        for n in filtered_nodes:
-            if not n.file_path:
-                continue
-            abs_path = os.path.abspath(n.file_path)
-            if abs_path not in file_nodes_dict:
-                fname = os.path.basename(abs_path)
-                is_test_flag = abs_path.endswith(".spec.ts") or abs_path.endswith("Test.java")
-                file_nodes_dict[abs_path] = {
-                    "id": abs_path,
-                    "label": fname,
-                    "is_test": is_test_flag,
-                    "file_path": abs_path,
-                }
-
-        nodes_for_metrics = list(file_nodes_dict.values())
-
-        seen_file_edges: set[tuple[str, str]] = set()
-        nx_edges = []
-        for e in pruned_edges:
-            src_file = node_file_paths.get(e.source_id)
-            tgt_file = node_file_paths.get(e.target_id)
-            if src_file and tgt_file and src_file != tgt_file:
-                pair = (src_file, tgt_file)
-                if pair not in seen_file_edges:
-                    seen_file_edges.add(pair)
-                    edge_type = e.type.value if hasattr(e.type, "value") else str(e.type)
-                    nx_edges.append({
-                        "source": src_file,
-                        "target": tgt_file,
-                        "type": edge_type
-                    })
-
-        # --- IRON PROMPT V3 CONTEXT EXTRACTION ---
-        all_file_paths = {os.path.abspath(n.file_path) for n in filtered_nodes if n.file_path}
-        total_files = len(all_file_paths)
-
-        extensions: dict[str, int] = {}
-        for path in all_file_paths:
-            ext = os.path.splitext(path)[1].lower()
-            if ext:
-                extensions[ext] = extensions.get(ext, 0) + 1
-
-        sorted_exts = sorted(extensions.items(), key=lambda x: x[1], reverse=True)[:3]
-        main_langs_str = ", ".join([f"{ext} ({count})" for ext, count in sorted_exts])
-
-        class DirNode:
-            def __init__(self):
-                self.children = {}
-
-        root_dir = DirNode()
-        for path in all_file_paths:
-            rel_path = os.path.relpath(path, project_path)
-            parts = rel_path.split(os.sep)[:-1]
-            current = root_dir
-            for part in parts:
-                if part not in current.children:
-                    current.children[part] = DirNode()
-                current = current.children[part]
-
-        def collapse_tree(node, current_name=""):
-            while len(node.children) == 1:
-                child_name, child_node = next(iter(node.children.items()))
-                current_name = f"{current_name}/{child_name}" if current_name else child_name
-                node = child_node
-
-            result_children = {}
-            for child_name, child_node in node.children.items():
-                res_name, res_node = collapse_tree(child_node, child_name)
-                result_children[res_name] = res_node
-
-            class DummyNode:
-                pass
-            ret_node = DummyNode()
-            ret_node.children = result_children
-            return current_name, ret_node
-
-        _, collapsed_root = collapse_tree(root_dir)
-
-        def format_tree(node, prefix="", depth=1, max_depth=3):
-            lines = []
-            if depth > max_depth:
-                return lines
-            for child_name, child_node in sorted(node.children.items()):
-                lines.append(f"{prefix}- {child_name}/")
-                lines.extend(format_tree(child_node, prefix + "  ", depth + 1, max_depth))
-            return lines
-
-        dir_structure = "\n".join(format_tree(collapsed_root))
-
-        # -----------------------------------------
-
-        metrics = await _asyncio.to_thread(
-            _compute_graph_metrics_cpu_bound,
-            nodes_for_metrics,
-            nx_edges,
-        )
-
-        top_files_xml = "<archivos_con_mas_dependencias>\n"
-        for go in metrics.get("god_objects_in", [])[:5]:
-            fpath = go.get("file_path", go.get("node"))
-            test_str = "test" if go.get("is_test") else "fuente"
-            code_cnt = go.get("code_count", go["count"])
-            api_cnt = go.get("api_count", 0)
-            top_files_xml += (
-                f'  <archivo nombre="{fpath}" tipo="{test_str}">\n'
-                f"    <dependencias_codigo_entrantes>{code_cnt}</dependencias_codigo_entrantes>\n"
-                f"    <llamadas_api_http_entrantes>{api_cnt}</llamadas_api_http_entrantes>\n"
-                f"  </archivo>\n"
-            )
-        for go in metrics.get("god_objects_out", [])[:5]:
-            fpath = go.get("file_path", go.get("node"))
-            test_str = "test" if go.get("is_test") else "fuente"
-            code_cnt = go.get("code_count", go["count"])
-            api_cnt = go.get("api_count", 0)
-            top_files_xml += (
-                f'  <archivo nombre="{fpath}" tipo="{test_str}">\n'
-                f"    <dependencias_codigo_salientes>{code_cnt}</dependencias_codigo_salientes>\n"
-                f"    <llamadas_api_http_salientes>{api_cnt}</llamadas_api_http_salientes>\n"
-                f"  </archivo>\n"
-            )
-        top_files_xml += "</archivos_con_mas_dependencias>"
-
-        # 1. Calcular grados usando matemáticas de grafos O(1)
-        in_degrees: dict[str, int] = {}
-        out_degrees: dict[str, int] = {}
-        for edge_dict in nx_edges:
-            src = edge_dict["source"]
-            tgt = edge_dict["target"]
-            out_degrees[src] = out_degrees.get(src, 0) + 1
-            in_degrees[tgt] = in_degrees.get(tgt, 0) + 1
-
-        file_nodes = list(file_nodes_dict.values())
-
-        # 2. El Radar: Seleccionar los 3 archivos clave
-        # El Orquestador: Mayor Out-Degree
-        top_out_node = max(file_nodes, key=lambda n: out_degrees.get(n["id"], 0), default=None)
-
-        # El Core/Dominio: Mayores In-Degree
-        top_in_nodes = sorted(
-            [n for n in file_nodes if n != top_out_node],
-            key=lambda n: in_degrees.get(n["id"], 0),
-            reverse=True
-        )[:2]
-
-        key_nodes = [n for n in [top_out_node] + top_in_nodes if n is not None]
-
-        # 3. Leer el código fuente (Salvaguardando el FinOps)
-        key_files_xml = "<archivos_clave_dominio>\n"
-        for node in key_nodes:
-            file_path = node["file_path"]
-            if not file_path or not await asyncio.to_thread(os.path.exists, file_path):
-                continue
-
-            try:
-                content = await async_read_text(file_path)
-                lines = content.splitlines(keepends=True)
-                content = "".join(lines[:300]) # Límite estricto de 300 líneas
-                if len(lines) > 300:
-                    content += "\n... [CÓDIGO TRUNCADO PARA PROTEGER CONTEXTO] ..."
-
-                node_role = "Orquestador/Router (Alto Fan-Out)" if node == top_out_node else "Core/Dominio (Alto Fan-In)"
-
-                key_files_xml += f"""  <archivo rol="{node_role}" ruta="{file_path}">\n    <codigo_fuente>\n{content}\n    </codigo_fuente>\n  </archivo>\n"""
-            except Exception:
-                logger.warning("Unhandled exception", exc_info=True)
-                pass # Silenciamos errores de lectura de archivos binarios/ilegibles
-
-        key_files_xml += "</archivos_clave_dominio>"
-
-        project_context_xml = f"""<contexto_del_proyecto>
-  <estadisticas>
-    <archivos_fuente_reales>{total_files}</archivos_fuente_reales>
-    <lenguajes_principales>{main_langs_str}</lenguajes_principales>
-  </estadisticas>
-  <estructura_directorios>
-{dir_structure}
-  </estructura_directorios>
-  {top_files_xml}
-  {key_files_xml}
-</contexto_del_proyecto>"""
-
-        from app.infrastructure.llm.litellm_gateway import LiteLLMGateway
-
-        # BD es la única fuente de verdad: el override del tool `graph_analysis`
-        # (o el global default) se resuelve desde tool_model_mappings. El
-        # request.body ya NO dicta el modelo — ver resolve_tool_model().
-        resolved_provider, resolved_model, _ = await resolve_tool_model(session, "graph_analysis")
-        resolved_model_id = tool_model_label(resolved_provider, resolved_model)
-        gateway = LiteLLMGateway(model_name=resolved_model_id)
-
-        # Resolvemos también el modelo del Phantom Extractor ANTES de entrar al
-        # event_generator, porque la session del request se cierra al devolver
-        # el StreamingResponse y no estará disponible dentro del stream.
-        extractor_provider, extractor_model_id, _ = await resolve_tool_model(session, "phantom_extractor")
-        extractor_model = tool_model_label(extractor_provider, extractor_model_id)
-
-        async def event_generator():
-            try:
-                full_text = []
-                lang_code = req.headers.get("Accept-Language", "en").split("-")[0]
-                async for chunk in gateway.analyze_anomalies_stream(
-                    project.name, project.path, metrics, {}, project_context_xml, lang_code=lang_code
-                ):
-                    full_text.append(chunk)
-                    yield f"data: {json.dumps({'type': 'message_chunk', 'text': chunk})}\n\n"
-
-                final_content = "".join(full_text)
-                if final_content.strip():
-                    import uuid
-
-                    from app.infrastructure.db.database import get_sessionmaker
-                    from app.infrastructure.db.models import AnalysisReportModel
-
-                    async with get_sessionmaker()() as db_session:
-                        new_report = AnalysisReportModel(
-                            id=uuid.uuid4(),
-                            project_id=project_uuid,
-                            type="code_analysis",
-                            content=final_content,
-                            ai_model_version=resolved_model_id,
-                            structural_metrics=metrics
-                        )
-                        db_session.add(new_report)
-                        await db_session.commit()
-
-                try:
-                    extracted_tickets = await gateway.extract_kanban_tickets_phantom(final_content, extractor_model, lang_code=lang_code)
-                    if extracted_tickets:
-                        yield f"data: {json.dumps({'type': 'kanban_suggestions', 'tickets': extracted_tickets})}\n\n"
-                except Exception as ex:
-                    logger.error(f"Failed to generate kanban suggestions: {ex}")
-
-                yield f"data: {json.dumps({'type': 'done'})}\n\n"
-            except _asyncio.CancelledError:
-                logger.warning("Streaming cancelled by client.")
-                raise
-            except Exception as e:
-                logger.error("Error streaming LLM response: %s", e, exc_info=True)
-                yield f"data: {json.dumps({'type': 'error', 'message': 'An internal error occurred'})}\n\n"
-
-        return StreamingResponse(event_generator(), media_type="text/event-stream")
-
     except Exception as e:
         logger.error("Analysis failed: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="An internal error occurred")
