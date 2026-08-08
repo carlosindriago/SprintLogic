@@ -24,6 +24,8 @@ export interface ForceLink extends GraphEdge {
   source: string | ForceNode;
   target: string | ForceNode;
   _idPair?: string;
+  _sourceId?: string;
+  _targetId?: string;
 }
 
 export interface GraphSceneProps {

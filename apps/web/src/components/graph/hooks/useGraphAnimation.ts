@@ -53,8 +53,10 @@ export function useGraphAnimation({ graphData, idPairCache }: UseGraphAnimationP
         if (Math.random() < 0.1) {
           let idPair = idPairCache.get(link);
           if (idPair === undefined) {
-            const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
-            const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+            // Using ForceLink typing to access caches
+            const l = link as import("../types").ForceLink;
+            const sourceId = l._sourceId || (typeof link.source === 'object' ? link.source.id : link.source);
+            const targetId = l._targetId || (typeof link.target === 'object' ? link.target.id : link.target);
             idPair = `${sourceId}-${targetId}`;
             idPairCache.set(link, idPair);
           }

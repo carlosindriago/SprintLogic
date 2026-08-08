@@ -363,8 +363,8 @@ export function useGraphCanvas({
 
   const getLinkColor = useCallback((link: LinkObject) => {
     const l = link as ForceLink;
-    const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
-    const targetId = typeof l.target === 'object' ? l.target.id : l.target;
+    const sourceId = l._sourceId;
+    const targetId = l._targetId;
 
     const faded = isFaded(sourceId as string) && isFaded(targetId as string);
 
@@ -393,8 +393,8 @@ export function useGraphCanvas({
 
   const getLinkWidth = useCallback((link: LinkObject) => {
     const l = link as ForceLink;
-    const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
-    const targetId = typeof l.target === 'object' ? l.target.id : l.target;
+    const sourceId = l._sourceId;
+    const targetId = l._targetId;
     const faded = isFaded(sourceId as string) && isFaded(targetId as string);
 
     if (glowingLinks.has(l._idPair || "") && !faded) {
@@ -410,21 +410,21 @@ export function useGraphCanvas({
 
   const getLinkVisibility = useCallback((link: LinkObject) => {
     const l = link as ForceLink;
-    const sourceNode = l.source;
-    const targetNode = l.target;
+    const sourceNode = l.source as ForceNode;
+    const targetNode = l.target as ForceNode;
     if (!sourceNode || !targetNode) return false;
     
     if (l.type === "internal_cluster") return false;
 
-    const sourceLabel = typeof sourceNode === 'object' ? sourceNode.label : null;
-    const targetLabel = typeof targetNode === 'object' ? targetNode.label : null;
+    const sourceLabel = sourceNode.label;
+    const targetLabel = targetNode.label;
 
     if (sourceLabel && !activeTypes.has(sourceLabel)) return false;
     if (targetLabel && !activeTypes.has(targetLabel)) return false;
 
     if (lowerSearchQuery) {
-      const sourceName = (typeof sourceNode === 'object' ? (sourceNode as ForceNode)._lowerName || '' : '');
-      const targetName = (typeof targetNode === 'object' ? (targetNode as ForceNode)._lowerName || '' : '');
+      const sourceName = sourceNode._lowerName || '';
+      const targetName = targetNode._lowerName || '';
       if (!sourceName.includes(lowerSearchQuery) && !targetName.includes(lowerSearchQuery)) return false;
     }
 
