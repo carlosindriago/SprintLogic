@@ -101,7 +101,7 @@ const ReportHistoryPanel = dynamic(
   { ssr: false },
 );
 
-const GraphScene = dynamic(() => import("@/components/GraphScene"), { ssr: false });
+const GraphScene = dynamic(() => import("@/components/graph/GraphScene"), { ssr: false });
 const DatabaseStudioTab = dynamic(() => import("@/components/DatabaseStudio/DatabaseStudioTab"), { ssr: false });
 const TestStudioTab = dynamic(() => import("@/components/TestStudioTab"), { ssr: false });
 const DocumentStudioTab = dynamic(() => import("@/components/DocumentStudioTab"), { ssr: false });
