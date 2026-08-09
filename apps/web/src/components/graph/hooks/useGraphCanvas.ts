@@ -142,7 +142,7 @@ export function useGraphCanvas({
   }, [displayGraphData, cutoffTimeRef]);
 
   const paintNode = useCallback((node: NodeObject, ctx: CanvasRenderingContext2D, globalScale: number) => {
-    const isMassive = graphDataLength > 1000;
+    const isMassive = graphDataLength >= 500;
     const n = node as ForceNode;
     const { id, label, name } = n;
     const nx = n.x || 0;
@@ -151,7 +151,6 @@ export function useGraphCanvas({
     globalScaleRef.current = globalScale;
 
     if (!activeTypes.has(label)) return;
-    if (lowerSearchQuery && !(n._lowerName || "").includes(lowerSearchQuery)) return;
 
     const progress = animProgressRef.current;
     const bTime = getSafeTime(n);
@@ -164,6 +163,10 @@ export function useGraphCanvas({
     const outDegree = n.out_degree || 0;
     const degreeRadius = 1 + Math.log2(1 + degree) * 1.8;
 
+    const locRadius = n.loc ? Math.log2(1 + n.loc) * 0.8 : 0;
+    const sizeRadius = n.size ? Math.log2(1 + n.size) * 0.5 : 0;
+    const complexityRadius = degreeRadius + Math.max(locRadius, sizeRadius);
+
     let radius = 4;
     let color = graphTheme.unknown;
     let glowColor = "rgba(148, 163, 184, 0.4)";
@@ -171,7 +174,7 @@ export function useGraphCanvas({
     if (label === "File") {
       color = n._colorCache || graphTheme.unknown;
       glowColor = n._glowColorCache || "rgba(148, 163, 184, 0.4)";
-      radius = Math.max(3.5, degreeRadius * 0.9);
+      radius = Math.max(3.5, complexityRadius * 0.9);
     } else if (label === "Class") {
       color = graphTheme.class;
       glowColor = graphTheme.glowClass;
@@ -196,7 +199,7 @@ export function useGraphCanvas({
     const isActive = id === hoverNode || id === focusNode;
 
     let isSupernova = false;
-    if (progress > 0 && progress < 1 && timeRange && !faded) {
+    if (!isMassive && progress > 0 && progress < 1 && timeRange && !faded) {
       const currentCutoff = timeRange.min + (timeRange.max - timeRange.min) * progress;
       const age = currentCutoff - bTime;
       const supernovaWindow = (timeRange.max - timeRange.min) * 0.05;
@@ -222,10 +225,10 @@ export function useGraphCanvas({
     if (!faded && !isZoomedOut) {
       const bloomRadius = isActive ? radius * 2.6 : radius * 1.9;
       ctx.save();
-      ctx.shadowColor = glowColor;
-      ctx.shadowBlur = (isMassive && !isActive) ? 0 : (isActive ? 18 : 10);
       
       if (!isMassive || isActive) {
+        ctx.shadowColor = glowColor;
+        ctx.shadowBlur = isActive ? 18 : 10;
         ctx.beginPath();
         ctx.arc(nx, ny, bloomRadius * 0.5, 0, 2 * Math.PI);
         ctx.fillStyle = glowColor;
@@ -252,8 +255,10 @@ export function useGraphCanvas({
 
     if (!isIconDrawn) {
       ctx.save();
-      ctx.shadowColor = glowColor;
-      ctx.shadowBlur = (isMassive && !isActive) ? 0 : (isActive ? 16 : 8);
+      if (!isMassive || isActive) {
+        ctx.shadowColor = glowColor;
+        ctx.shadowBlur = isActive ? 16 : 8;
+      }
       ctx.fillStyle = color;
 
       if (isMassive && globalScale < 0.3 && !isActive) {
@@ -421,12 +426,6 @@ export function useGraphCanvas({
 
     if (sourceLabel && !activeTypes.has(sourceLabel)) return false;
     if (targetLabel && !activeTypes.has(targetLabel)) return false;
-
-    if (lowerSearchQuery) {
-      const sourceName = sourceNode._lowerName || '';
-      const targetName = targetNode._lowerName || '';
-      if (!sourceName.includes(lowerSearchQuery) && !targetName.includes(lowerSearchQuery)) return false;
-    }
 
     if (cutoffTimeRef.current) {
       const sTime = getSafeTime(sourceNode);
