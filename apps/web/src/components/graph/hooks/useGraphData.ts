@@ -10,6 +10,7 @@ import { extColorHash, bloomGlow } from "@/lib/graph-theme";
 interface UseGraphDataProps {
   projectId: string | null;
   focusNode: string | null;
+  viewMode: "REAL" | "GROUPED";
 }
 
 const extCache = new WeakMap<object, string>();
@@ -60,7 +61,7 @@ const enrichGraphData = (data: GraphData) => {
   });
 };
 
-export function useGraphData({ projectId, focusNode }: UseGraphDataProps) {
+export function useGraphData({ projectId, focusNode, viewMode }: UseGraphDataProps) {
 
   const [graphData, setGraphData] = useState<GraphData>({ nodes: [], links: [] });
   const [searchQuery, setSearchQuery] = useState("");
@@ -86,7 +87,8 @@ export function useGraphData({ projectId, focusNode }: UseGraphDataProps) {
     }
     if (scanStatus === "completed" && !rescanHandledRef.current) {
       rescanHandledRef.current = true;
-      getProjectGraph(projectId, Array.from(expandedFolders).join(","))
+      const expandedStr = viewMode === "REAL" ? "ALL_FILES" : Array.from(expandedFolders).join(",");
+      getProjectGraph(projectId, expandedStr)
         .then((data) => {
           enrichGraphData(data);
           setGraphData(data);
@@ -100,7 +102,7 @@ export function useGraphData({ projectId, focusNode }: UseGraphDataProps) {
     if (scanStatus === "failed") {
       clearScan(projectId);
     }
-  }, [scanStatus, projectId, clearScan, expandedFolders]);
+  }, [scanStatus, projectId, clearScan, expandedFolders, viewMode]);
 
   // Initial Load
   useEffect(() => {
@@ -108,7 +110,8 @@ export function useGraphData({ projectId, focusNode }: UseGraphDataProps) {
     const loadData = async () => {
       if (projectId !== null) {
         try {
-          const data = await getProjectGraph(projectId, Array.from(expandedFolders).join(","));
+          const expandedStr = viewMode === "REAL" ? "ALL_FILES" : Array.from(expandedFolders).join(",");
+          const data = await getProjectGraph(projectId, expandedStr);
           enrichGraphData(data);
           if (active) {
             setGraphData((prevGraph) => {
@@ -133,7 +136,7 @@ export function useGraphData({ projectId, focusNode }: UseGraphDataProps) {
     };
     loadData();
     return () => { active = false; };
-  }, [projectId, expandedFolders]);
+  }, [projectId, expandedFolders, viewMode]);
 
   const handleRescan = async () => {
     if (!projectId) return;

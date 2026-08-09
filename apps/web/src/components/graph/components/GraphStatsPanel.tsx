@@ -9,6 +9,8 @@ interface GraphStatsPanelProps {
   toggleType: (type: string) => void;
   showCycles: boolean;
   setShowCycles: (s: boolean) => void;
+  viewMode: "REAL" | "GROUPED";
+  setViewMode: (mode: "REAL" | "GROUPED") => void;
   stats: {
     files: number;
     classes: number;
@@ -33,6 +35,8 @@ export function GraphStatsPanel({
   toggleType,
   showCycles,
   setShowCycles,
+  viewMode,
+  setViewMode,
   stats,
   isScanning,
   handleRescan,
@@ -90,6 +94,22 @@ export function GraphStatsPanel({
         <RotateCcw className="w-3 h-3" />
         Highlight Cycles
       </button>
+
+      {/* Toggle View Mode */}
+      <div className="flex bg-[#18181b] border border-[#3f3f46] rounded-md p-0.5 mt-1">
+        <button
+          onClick={() => setViewMode("REAL")}
+          className={`flex-1 text-[10px] py-1.5 rounded transition-colors ${viewMode === "REAL" ? "bg-zinc-700 text-white" : "text-zinc-400 hover:text-zinc-300"}`}
+        >
+          Archivos Reales
+        </button>
+        <button
+          onClick={() => setViewMode("GROUPED")}
+          className={`flex-1 text-[10px] py-1.5 rounded transition-colors ${viewMode === "GROUPED" ? "bg-zinc-700 text-white" : "text-zinc-400 hover:text-zinc-300"}`}
+        >
+          Agrupar por Carpetas
+        </button>
+      </div>
 
       {/* Project Statistics */}
       <div className="border-t border-[#3f3f46] pt-3 mt-1">

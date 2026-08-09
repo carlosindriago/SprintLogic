@@ -378,10 +378,13 @@ async def get_project_graph(project_id: str, expanded_folders: str | None = None
             }
         )
 
-    # Apply Macro-to-Micro density collapse
-    from app.application.graph_collapse import collapse_graph_by_density
-    expanded_set = set(expanded_folders.split(",")) if expanded_folders else set()
-    collapsed = collapse_graph_by_density(nodes_dict, links_dict, max_density=15, expanded_folders=expanded_set)
+    if expanded_folders == "ALL_FILES":
+        collapsed = {"nodes": nodes_dict, "links": links_dict}
+    else:
+        # Apply Macro-to-Micro density collapse
+        from app.application.graph_collapse import collapse_graph_by_density
+        expanded_set = set(expanded_folders.split(",")) if expanded_folders else set()
+        collapsed = collapse_graph_by_density(nodes_dict, links_dict, max_density=15, expanded_folders=expanded_set)
 
     graph_cache[project_uuid] = (collapsed, time.time())
 
@@ -394,7 +397,7 @@ from concurrent.futures import ProcessPoolExecutor
 def get_process_pool(request: Request) -> ProcessPoolExecutor:
     return request.app.state.process_pool
 
-from fastapi.responses import StreamingResponse
+from fastapi.responses import PlainTextResponse, StreamingResponse
 
 from app.application.analyze_project_graph import AnalyzeProjectGraphUseCase
 
@@ -2086,3 +2089,23 @@ async def get_project_repo_insights(
         "velocity": velocity,
         "recent_commits": recent_commits,
     }
+
+@router.get("/projects/{project_id}/graph/export/md")
+async def export_project_graph_md(project_id: str, session: AsyncSession = Depends(get_db_session)):
+    try:
+        project_uuid = UUID(project_id)
+        repo = SQLAlchemyProjectRepository(session)
+        project = await repo.get_project(project_uuid)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        from app.application.graph_exporter import generate_codebase_map_md
+        md_content = await generate_codebase_map_md(
+            project_id=project_uuid,
+            session=session,
+            max_files=None, # Rest endpoint returns all
+            project_path=project.path
+        )
+        return PlainTextResponse(content=md_content)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")

@@ -207,14 +207,11 @@ export function useGraphCanvas({
     }
 
     if (isSupernova) {
-      const pulse = Math.sin(Date.now() / 200) * 0.3 + 0.7;
       ctx.save();
       ctx.beginPath();
-      ctx.arc(nx, ny, radius * (2.2 + pulse * 0.8), 0, 2 * Math.PI);
-      ctx.shadowColor = "white";
-      ctx.shadowBlur = 22 * pulse;
+      ctx.arc(nx, ny, radius * 2.2, 0, 2 * Math.PI);
       ctx.fillStyle = "rgba(255, 255, 255, 0.92)";
-      ctx.globalAlpha = 0.85 * pulse;
+      ctx.globalAlpha = 0.85;
       ctx.fill();
       ctx.restore();
     }
@@ -227,8 +224,6 @@ export function useGraphCanvas({
       ctx.save();
       
       if (!isMassive || isActive) {
-        ctx.shadowColor = glowColor;
-        ctx.shadowBlur = isActive ? 18 : 10;
         ctx.beginPath();
         ctx.arc(nx, ny, bloomRadius * 0.5, 0, 2 * Math.PI);
         ctx.fillStyle = glowColor;
@@ -244,8 +239,6 @@ export function useGraphCanvas({
       const img = iconImages.current[ext];
       if (img && img.complete && img.naturalWidth !== 0) {
         ctx.save();
-        ctx.shadowColor = glowColor;
-        ctx.shadowBlur = isActive ? 14 : 7;
         const iconSize = radius * 2.6;
         ctx.drawImage(img, nx - iconSize / 2, ny - iconSize / 2, iconSize, iconSize);
         ctx.restore();
@@ -255,10 +248,6 @@ export function useGraphCanvas({
 
     if (!isIconDrawn) {
       ctx.save();
-      if (!isMassive || isActive) {
-        ctx.shadowColor = glowColor;
-        ctx.shadowBlur = isActive ? 16 : 8;
-      }
       ctx.fillStyle = color;
 
       if (isMassive && globalScale < 0.3 && !isActive) {
@@ -283,7 +272,6 @@ export function useGraphCanvas({
         ctx.fill();
 
         if (!faded && !isZoomedOut && !isMassive && label !== "Module") {
-          ctx.shadowBlur = 0;
           ctx.fillStyle = "rgba(255, 255, 255, 0.18)";
           ctx.beginPath();
           ctx.arc(nx - radius * 0.3, ny - radius * 0.3, radius * 0.35, 0, 2 * Math.PI);
@@ -296,7 +284,6 @@ export function useGraphCanvas({
           ctx.textBaseline = "middle";
           const fontSize = Math.max(4, radius * 0.4);
           ctx.font = `600 ${fontSize}px Inter, sans-serif`;
-          ctx.shadowBlur = 0;
           const count = (n as ForceNode).children_count || 1;
           ctx.fillText(String(count), nx, ny);
         }
@@ -306,8 +293,6 @@ export function useGraphCanvas({
 
     if (outDegree >= 10 && !faded && !isZoomedOut) {
       ctx.save();
-      ctx.shadowColor = "rgba(251, 113, 133, 0.7)";
-      ctx.shadowBlur = 6;
       ctx.beginPath();
       ctx.arc(nx, ny, radius + 2, 0, 2 * Math.PI);
       ctx.strokeStyle = "rgba(251, 113, 133, 0.65)";
@@ -317,13 +302,12 @@ export function useGraphCanvas({
     }
 
     if (degree > 0 && !faded && !isZoomedOut && !isMassive && (label === "Function" || label === "Interface")) {
-      const t = (Date.now() / 1400) % 1.0;
-      const rippleRadius = radius + t * 9;
+      const rippleRadius = radius + 9;
       ctx.beginPath();
       ctx.arc(nx, ny, rippleRadius, 0, 2 * Math.PI);
       ctx.strokeStyle = color;
       ctx.lineWidth = 0.5;
-      ctx.globalAlpha = (1 - t) * 0.35;
+      ctx.globalAlpha = 0.35;
       ctx.stroke();
       ctx.globalAlpha = faded ? graphTheme.dimOpacity : 1;
     }
@@ -355,11 +339,8 @@ export function useGraphCanvas({
         const fontSize = Math.max(7, 11 / globalScale);
         ctx.font = `${fontSize}px "Inter", sans-serif`;
         ctx.textAlign = "center";
-        ctx.shadowColor = "rgba(0,0,0,0.9)";
-        ctx.shadowBlur = (isMassive && !isActive) ? 0 : 4;
         ctx.fillStyle = isActive ? "rgba(255, 255, 255, 1)" : "rgba(200, 200, 220, 0.75)";
         ctx.fillText(name || "", nx, ny + radius + fontSize + 2);
-        ctx.shadowBlur = 0;
       }
     }
 
@@ -368,10 +349,11 @@ export function useGraphCanvas({
 
   const getLinkColor = useCallback((link: LinkObject) => {
     const l = link as ForceLink;
-    const sourceId = l._sourceId;
-    const targetId = l._targetId;
+    const sourceId = l._sourceId as string;
+    const targetId = l._targetId as string;
 
-    const faded = isFaded(sourceId as string) && isFaded(targetId as string);
+    const activeFocus = focusNode || hoverNode;
+    const faded = isFaded(sourceId) && isFaded(targetId);
 
     const isGlowing = glowingLinks.has(l._idPair || "");
     if (isGlowing && !faded) {
@@ -382,11 +364,22 @@ export function useGraphCanvas({
       return "rgba(255, 255, 255, 0.025)";
     }
 
+    if (activeFocus) {
+      if (sourceId === activeFocus) {
+        // Node is importing target -> Dependency (Orange)
+        return "#f97316";
+      }
+      if (targetId === activeFocus) {
+        // Node is being imported by source -> Dependent (Green)
+        return "#22c55e";
+      }
+    }
+
     if (showCycles && l.is_cycle) {
       return graphTheme.edgeCycle;
     }
-    return graphTheme.edgeDefault;
-  }, [isFaded, showCycles, glowingLinks]);
+    return "rgba(255, 255, 255, 0.15)";
+  }, [isFaded, showCycles, glowingLinks, focusNode, hoverNode]);
 
   const getParticleColor = useCallback((link: LinkObject) => {
     const l = link as ForceLink;
@@ -400,6 +393,7 @@ export function useGraphCanvas({
     const l = link as ForceLink;
     const sourceId = l._sourceId;
     const targetId = l._targetId;
+    const activeFocus = focusNode || hoverNode;
     const faded = isFaded(sourceId as string) && isFaded(targetId as string);
 
     if (glowingLinks.has(l._idPair || "") && !faded) {
@@ -408,10 +402,15 @@ export function useGraphCanvas({
 
     if (faded) return 0.5;
 
+    if (activeFocus) {
+      if (sourceId === activeFocus || targetId === activeFocus) {
+        return 2.5;
+      }
+    }
+
     if (showCycles && l.is_cycle) return 2;
-    if (hoverNode === sourceId || hoverNode === targetId) return 2;
-    return Math.max(1, 1.5 / globalScaleRef.current);
-  }, [isFaded, hoverNode, showCycles, glowingLinks]);
+    return Math.max(0.5, 0.5 / globalScaleRef.current);
+  }, [isFaded, hoverNode, focusNode, showCycles, glowingLinks]);
 
   const getLinkVisibility = useCallback((link: LinkObject) => {
     const l = link as ForceLink;

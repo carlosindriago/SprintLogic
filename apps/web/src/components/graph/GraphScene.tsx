@@ -49,6 +49,8 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     onNodeHover, onNodeRightClick
   } = useGraphInteraction({ fgRef, onNodeClick });
 
+  const [viewMode, setViewMode] = useState<"REAL" | "GROUPED">("REAL");
+
   const {
     graphData, setGraphData,
     searchQuery, setSearchQuery,
@@ -61,7 +63,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     neighbors, displayGraphData,
     hasGraphData,
     caches
-  } = useGraphData({ projectId, focusNode });
+  } = useGraphData({ projectId, focusNode, viewMode });
 
   const {
     animating, setAnimating,
@@ -146,6 +148,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
         searchQuery={searchQuery} setSearchQuery={setSearchQuery}
         activeTypes={activeTypes} toggleType={toggleType}
         showCycles={showCyclesState} setShowCycles={setShowCycles}
+        viewMode={viewMode} setViewMode={setViewMode}
         stats={stats}
         isScanning={isScanning} handleRescan={handleRescan}
         savedAnalysis={savedAnalysis}
@@ -228,7 +231,8 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
           linkDirectionalParticleColor={getParticleColor}
           linkDirectionalArrowLength={3.5}
           linkDirectionalArrowRelPos={1}
-          d3AlphaDecay={((graphData?.nodes?.length || 0) > 1000) ? 0.06 : 0.0228}
+          d3AlphaDecay={0.1}
+          d3AlphaMin={0.05}
           cooldownTicks={100}
           nodePointerAreaPaint={(node: NodeObject, color: string, ctx: CanvasRenderingContext2D) => {
             ctx.fillStyle = color;
@@ -274,9 +278,15 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
           enableZoomInteraction={true}
           enablePanInteraction={true}
           onEngineStop={() => {
-            if (fgRef.current && !initialFitDoneRef.current) {
-              initialFitDoneRef.current = true;
-              fgRef.current.zoomToFit(800, 100);
+            if (fgRef.current) {
+              if (!initialFitDoneRef.current) {
+                initialFitDoneRef.current = true;
+                fgRef.current.zoomToFit(800, 100);
+              }
+              // Stop the animation loop entirely to bring CPU to 0% when idle
+              if (!enableFlow) {
+                fgRef.current.pauseAnimation();
+              }
             }
           }}
         />
