@@ -4,10 +4,12 @@ import json
 import logging
 import os
 import re
+import time
 from pathlib import Path
 from typing import Any
 from uuid import UUID
 
+import networkx as nx
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -66,6 +68,8 @@ from app.utils.security import resolve_project_path
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+graph_cache: dict[UUID, tuple[dict, float]] = {}
 
 
 # ── Request models not yet moved to project_schemas ───────────────────────────
@@ -187,6 +191,9 @@ async def rescan_project(
 
     await graph_repo.clear_by_project(project_uuid)
 
+    if project_uuid in graph_cache:
+        del graph_cache[project_uuid]
+
     scan_codebase_usecase = ScanCodebaseUseCase(provider, parser, global_event_bus, graph_repo)
     cancel_token = asyncio.Event()
     active_scans[str(project_uuid)] = cancel_token
@@ -263,6 +270,10 @@ async def get_project_graph(project_id: str, expanded_folders: str | None = None
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid project ID format")
 
+    cached = graph_cache.get(project_uuid)
+    if cached and (time.time() - cached[1]) < 300:
+        return cached[0]
+
     graph_repo = SQLAlchemyGraphRepository(session)
     nodes = await graph_repo.get_nodes_by_project(project_uuid)
     edges = await graph_repo.get_edges_by_project(project_uuid)
@@ -288,18 +299,21 @@ async def get_project_graph(project_id: str, expanded_folders: str | None = None
         out_degree[edge.source_id] += 1
         adj[edge.source_id].append(edge.target_id)
 
-    # NetworkX SCC — O(V+E) linear time, iterative, no stack overflow
-    import networkx as nx
+    # NetworkX SCC — O(V+E) linear time, extracted to thread
+    def _compute_scc(edges) -> dict[str, int]:
+        G_local: nx.DiGraph[str] = nx.DiGraph()
+        for e in edges:
+            G_local.add_edge(e.source_id, e.target_id)
 
-    G: nx.DiGraph[str] = nx.DiGraph()
-    for edge in filtered_edges:
-        G.add_edge(edge.source_id, edge.target_id)
+        mapping: dict[str, int] = {}
+        for i, scc in enumerate(nx.strongly_connected_components(G_local)):
+            if len(scc) > 1:
+                for v in scc:
+                    mapping[v] = i
+        return mapping
 
-    node_to_scc: dict[str, int] = {}
-    for i, scc in enumerate(nx.strongly_connected_components(G)):
-        if len(scc) > 1:
-            for v in scc:
-                node_to_scc[v] = i
+    node_to_scc = await asyncio.to_thread(_compute_scc, filtered_edges)
+
 
     nodes_dict = []
     for n in filtered_nodes:
@@ -352,6 +366,8 @@ async def get_project_graph(project_id: str, expanded_folders: str | None = None
     from app.application.graph_collapse import collapse_graph_by_density
     expanded_set = set(expanded_folders.split(",")) if expanded_folders else set()
     collapsed = collapse_graph_by_density(nodes_dict, links_dict, max_density=15, expanded_folders=expanded_set)
+
+    graph_cache[project_uuid] = (collapsed, time.time())
 
     return collapsed
 
