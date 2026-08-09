@@ -169,6 +169,20 @@ async def stream_scan_progress(project_id: str):
     return EventSourceResponse(event_generator())
 
 
+async def _run_background_scan(project_uuid: UUID, project_path: str, cancel_token: asyncio.Event):
+    async_session = get_sessionmaker()
+    async with async_session() as bg_session:
+        parser = ASTParserService()
+        graph_repo = SQLAlchemyGraphRepository(bg_session)
+        provider = LocalFileSystemProvider(project_path)
+        usecase = ScanCodebaseUseCase(provider, parser, global_event_bus, graph_repo)
+        try:
+            await usecase.execute(project_uuid, cancel_token, project_path)
+        except Exception as e:
+            logger.error(f"Background scan failed for {project_uuid}: {e}", exc_info=True)
+            await global_event_bus.publish(f"scan:{project_uuid}", {"type": "failed", "error": str(e)})
+
+
 @router.post("/projects/{project_id}/rescan", status_code=202)
 async def rescan_project(
     project_id: str,
@@ -185,21 +199,17 @@ async def rescan_project(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    parser = ASTParserService()
     graph_repo = SQLAlchemyGraphRepository(session)
-    provider = LocalFileSystemProvider(project.path)
-
     await graph_repo.clear_by_project(project_uuid)
 
     if project_uuid in graph_cache:
         del graph_cache[project_uuid]
 
-    scan_codebase_usecase = ScanCodebaseUseCase(provider, parser, global_event_bus, graph_repo)
     cancel_token = asyncio.Event()
     active_scans[str(project_uuid)] = cancel_token
 
     background_tasks.add_task(
-        scan_codebase_usecase.execute, project_uuid, cancel_token, project.path
+        _run_background_scan, project_uuid, project.path, cancel_token
     )
 
     return {
