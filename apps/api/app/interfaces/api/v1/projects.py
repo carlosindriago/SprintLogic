@@ -205,8 +205,14 @@ async def rescan_project(
     if project_uuid in graph_cache:
         del graph_cache[project_uuid]
 
+    if project_id in active_scans:
+        return {"message": "Project is already being scanned."}
+
     cancel_token = asyncio.Event()
     active_scans[str(project_uuid)] = cancel_token
+
+    # Limpiar estado previo para que SSE no lea un "completed" del escaneo anterior
+    global_event_bus.clear_latest(f"scan:{project_uuid}")
 
     background_tasks.add_task(
         _run_background_scan, project_uuid, project.path, cancel_token
