@@ -1,7 +1,6 @@
 import json
 import logging
 from collections.abc import AsyncGenerator
-from pathlib import Path
 from typing import Any
 
 import httpx
@@ -22,6 +21,7 @@ from app.infrastructure.repositories.tool_model_repository import (
 )
 from app.infrastructure.security.credential_manager import CredentialManager
 from app.infrastructure.security.rate_limiter import require_rate_limit
+from app.utils.security import resolve_project_path
 
 router = APIRouter()
 
@@ -509,12 +509,7 @@ async def ticket_mentor(
 
     file_content = ""
     try:
-        project_root = Path(project.path).resolve()
-        target_path_obj = Path(target_path)
-        full_path = (target_path_obj if target_path_obj.is_absolute() else project_root / target_path_obj).resolve()
-
-        if not full_path.is_relative_to(project_root):
-            raise HTTPException(status_code=403, detail="Invalid file path (Path Traversal attempt)")
+        full_path = resolve_project_path(project.path, target_path)
 
         with open(full_path, encoding="utf-8") as f:
             file_content = f.read()
@@ -612,12 +607,7 @@ async def auto_fix(
 
     file_content = ""
     try:
-        project_root = Path(project.path).resolve()
-        target_path_obj = Path(target_path)
-        full_path = (target_path_obj if target_path_obj.is_absolute() else project_root / target_path_obj).resolve()
-
-        if not full_path.is_relative_to(project_root):
-            raise HTTPException(status_code=403, detail="Invalid file path (Path Traversal attempt)")
+        full_path = resolve_project_path(project.path, target_path)
 
         with open(full_path, encoding="utf-8") as f:
             file_content = f.read()
