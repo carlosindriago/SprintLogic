@@ -12,6 +12,11 @@ interface UseGraphDataProps {
   focusNode: string | null;
 }
 
+const extCache = new WeakMap<object, string>();
+const modCache = new WeakMap<object, string | null>();
+const lowerNameCache = new WeakMap<object, string>();
+const idPairCache = new WeakMap<object, string>();
+
 export function useGraphData({ projectId, focusNode }: UseGraphDataProps) {
   const [graphData, setGraphData] = useState<GraphData>({ nodes: [], links: [] });
   const [searchQuery, setSearchQuery] = useState("");
@@ -26,10 +31,7 @@ export function useGraphData({ projectId, focusNode }: UseGraphDataProps) {
 
   const rescanHandledRef = useRef(false);
 
-  const [extCache] = useState(() => new WeakMap<object, string>());
-  const [modCache] = useState(() => new WeakMap<object, string | null>());
-  const [lowerNameCache] = useState(() => new WeakMap<object, string>());
-  const [idPairCache] = useState(() => new WeakMap<object, string>());
+
 
   // Handle Scan completion
   useEffect(() => {
@@ -140,7 +142,7 @@ export function useGraphData({ projectId, focusNode }: UseGraphDataProps) {
     });
 
     return { files, classes, functions, interfaces, loc, extMap };
-  }, [graphData, extCache]);
+  }, [graphData]);
 
   const currentSignature = `${graphData.nodes.length}_${graphData.links.length}_${stats.loc}`;
 
@@ -166,7 +168,7 @@ export function useGraphData({ projectId, focusNode }: UseGraphDataProps) {
       }
     }
     return Array.from(extMap.entries()).map(([name, color]) => ({ name, color }));
-  }, [graphData, extCache]);
+  }, [graphData]);
 
   const lowerSearchQuery = useMemo(() => searchQuery?.toLowerCase() || "", [searchQuery]);
 
@@ -250,7 +252,7 @@ export function useGraphData({ projectId, focusNode }: UseGraphDataProps) {
     });
 
     return { nodes, links };
-  }, [graphData, focusNode, neighbors, activeTypes, extCache, modCache, lowerNameCache, idPairCache]);
+  }, [graphData, focusNode, neighbors, activeTypes]);
 
   const toggleType = (type: string) => {
     setActiveTypes(prev => {
