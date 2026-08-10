@@ -85,6 +85,10 @@ KNOWN_TOOLS: dict[str, ToolDef] = {
         "display_name": "Document Studio",
         "description": "Asistente de documentación — genera READMEs, guías y documentos de diseño a partir del código",
     },
+    "graph_node_insight": {
+        "display_name": "Insight de Nodo del Grafo",
+        "description": "Genera resúmenes ejecutivos de 3 líneas sobre la responsabilidad del archivo seleccionado",
+    },
 }
 
 

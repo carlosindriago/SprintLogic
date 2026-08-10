@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
+import litellm
 import networkx as nx
 from fastapi import (
     APIRouter,
@@ -39,6 +40,7 @@ from app.infrastructure.repositories.tool_model_repository import (
     resolve_tool_model,
     tool_model_label,
 )
+from app.infrastructure.security.credential_manager import CredentialManager
 from app.infrastructure.security.rate_limiter import require_rate_limit
 from app.interfaces.api.v1.project_schemas import (
     AnalyzeGraphRequest,
@@ -352,6 +354,7 @@ async def get_project_graph(project_id: str, expanded_folders: str | None = None
             "name": n.name,
             "file_path": n.file_path,
             "folder": folder,
+            "domain_group": _assign_domain_group(n.file_path),
             "in_degree": in_degree.get(n.id, 0),
             "out_degree": out_degree.get(n.id, 0),
         }
@@ -390,12 +393,166 @@ async def get_project_graph(project_id: str, expanded_folders: str | None = None
         expanded_set = set(expanded_folders.split(",")) if expanded_folders else set()
         collapsed = collapse_graph_by_density(nodes_dict, links_dict, max_density=15, expanded_folders=expanded_set)
 
+    collapsed["framework"] = _detect_project_framework(project.path)
+
     graph_cache[cache_key] = (collapsed, time.time())
 
     return collapsed
 
 
 from concurrent.futures import ProcessPoolExecutor
+
+
+def _detect_project_framework(project_path: str) -> str:
+    path = Path(project_path)
+    pkg_json = path / "package.json"
+    if pkg_json.exists():
+        try:
+            content = pkg_json.read_text(encoding="utf-8")
+            if '"next"' in content:
+                return "Next.js"
+            if '"laravel-vite-plugin"' in content:
+                return "Laravel (Hybrid)"
+            if '"react"' in content:
+                return "React"
+            if '"vue"' in content:
+                return "Vue.js"
+            if '"express"' in content:
+                return "Express"
+            if '"@nestjs/core"' in content:
+                return "NestJS"
+        except Exception:
+            pass
+
+    composer = path / "composer.json"
+    if composer.exists():
+        try:
+            content = composer.read_text(encoding="utf-8")
+            if "laravel/framework" in content:
+                return "Laravel"
+            if "symfony/framework-bundle" in content:
+                return "Symfony"
+        except Exception:
+            pass
+
+    for py_file in ["pyproject.toml", "requirements.txt", "Pipfile"]:
+        f = path / py_file
+        if f.exists():
+            try:
+                content = f.read_text(encoding="utf-8")
+                if "fastapi" in content.lower():
+                    return "FastAPI"
+                if "django" in content.lower():
+                    return "Django"
+                if "flask" in content.lower():
+                    return "Flask"
+            except Exception:
+                pass
+
+    if (path / "Cargo.toml").exists():
+        return "Rust"
+    if (path / "go.mod").exists():
+        return "Go"
+    if (path / "pom.xml").exists() or (path / "build.gradle").exists():
+        return "Spring Boot"
+
+    return "TypeScript / JavaScript"
+
+
+def _assign_domain_group(file_path: str) -> str:
+    path_lower = file_path.lower()
+    if any(k in path_lower for k in [".spec.", ".test.", "tests/", "test/"]):
+        return "test"
+    if any(k in path_lower for k in ["controller", "routes/", "views.py", "router", "api/"]):
+        return "backend_controller"
+    if any(k in path_lower for k in ["model", "entity", "schemas", "schema.py", "entities"]):
+        return "database_model"
+    if any(k in path_lower for k in ["components/", "views/", "resources/js/", "pages/", "src/app/", "ui/"]):
+        return "frontend"
+    if any(k in path_lower for k in ["service", "usecase", "repository", "application/", "domain/"]):
+        return "domain_service"
+    if any(k in path_lower for k in ["config", "util", "helper", "lib/"]):
+        return "utility"
+    return "other"
+
+
+@router.get("/projects/{project_id}/nodes/{node_id:path}/insight")
+async def get_node_insight(
+    project_id: str,
+    node_id: str,
+    session: AsyncSession = Depends(get_db_session),
+):
+    try:
+        proj_uuid = UUID(project_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+
+    repo = SQLAlchemyProjectRepository(session)
+    project = await repo.get_project(proj_uuid)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    result = await session.execute(
+        select(GraphNodeModel).where(
+            GraphNodeModel.project_id == proj_uuid,
+            (GraphNodeModel.id == node_id) | (GraphNodeModel.file_path == node_id),
+        )
+    )
+    node = result.scalars().first()
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found in graph")
+
+    meta_dict: dict[str, Any] = {}
+    if node.meta_data:
+        try:
+            meta_dict = json.loads(node.meta_data)
+        except (json.JSONDecodeError, TypeError):
+            meta_dict = {}
+
+    if meta_dict.get("ai_summary"):
+        return {"ai_summary": meta_dict["ai_summary"], "cached": True}
+
+    file_content = ""
+    try:
+        full_path = resolve_project_path(project.path, node.file_path)
+        with open(full_path, encoding="utf-8") as f:
+            file_content = f.read()
+    except Exception:
+        file_content = f"// Archivo: {node.file_path} (Contenido no disponible)"
+
+    provider_id, model_name, _ = await resolve_tool_model(session, "graph_node_insight")
+    actual_model = tool_model_label(provider_id, model_name)
+    api_key = CredentialManager.get_api_key(f"sprintlogic_{provider_id}") or CredentialManager.get_api_key(provider_id)
+    if not api_key:
+        api_key = CredentialManager.get_api_key("sprintlogic_openrouter")
+        if not api_key:
+            raise HTTPException(status_code=400, detail=f"API key for {provider_id} not configured")
+
+    from app.infrastructure.repositories.prompt_repository import get_prompt_async
+    prompt_record = await get_prompt_async(session, "graph_node_insight")
+    system_prompt = prompt_record.content if prompt_record else "Eres un arquitecto de software experto. Analiza este código y genera un resumen técnico directo de máximo 3 líneas sobre su responsabilidad principal en el sistema. No uses saludos."
+
+    user_msg = f"Archivo: {node.file_path}\nNombre: {node.name}\n\nCódigo fuente:\n```\n{file_content[:6000]}\n```"
+
+    try:
+        response = await litellm.acompletion(
+            model=actual_model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_msg},
+            ],
+            api_key=api_key,
+        )
+        ai_summary = response.choices[0].message.content.strip()
+    except Exception as e:
+        logger.error(f"Failed to generate node insight: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Error al generar el resumen del nodo con IA")
+
+    meta_dict["ai_summary"] = ai_summary
+    node.meta_data = json.dumps(meta_dict)
+    await session.commit()
+
+    return {"ai_summary": ai_summary, "cached": False}
 
 
 def get_process_pool(request: Request) -> ProcessPoolExecutor:
