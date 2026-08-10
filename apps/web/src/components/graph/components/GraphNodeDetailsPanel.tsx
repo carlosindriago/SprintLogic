@@ -18,7 +18,7 @@ export default function GraphNodeDetailsPanel({
 }: GraphNodeDetailsPanelProps) {
   const [insight, setInsight] = useState<string | null>(null);
   const [isCached, setIsCached] = useState<boolean>(false);
-  const [loading, setLoading] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchInsight = useCallback(async () => {
@@ -39,9 +39,6 @@ export default function GraphNodeDetailsPanel({
   useEffect(() => {
     let isMounted = true;
     if (activeNode && projectId) {
-      setLoading(true);
-      setError(null);
-      setInsight(null);
       getNodeInsight(projectId, activeNode.id)
         .then((res) => {
           if (isMounted) {
@@ -57,8 +54,7 @@ export default function GraphNodeDetailsPanel({
           }
         });
     } else {
-      setInsight(null);
-      setError(null);
+      setLoading(false);
     }
     return () => {
       isMounted = false;
