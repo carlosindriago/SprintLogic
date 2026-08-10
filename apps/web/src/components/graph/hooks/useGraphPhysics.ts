@@ -33,26 +33,34 @@ export function useGraphPhysics({ fgRef, hasGraphData, width }: UseGraphPhysicsP
 
     initialFitDoneRef.current = false;
     const fg = fgRef.current;
+    
+    // Pre-calculate dynamic layout targets based on nodes present
+    const rawNodes = fg.graphData().nodes as ForceNode[];
 
     const charge = fg.d3Force('charge');
     if (charge && 'strength' in charge && typeof (charge as { strength?: unknown }).strength === 'function') {
-      (charge as unknown as { strength: (val: number) => void }).strength(-350);
+      (charge as unknown as { strength: (val: number) => void }).strength(-1000);
     }
 
     const linkForce = fg.d3Force('link');
     if (linkForce && 'distance' in linkForce && typeof (linkForce as { distance?: unknown }).distance === 'function') {
       (linkForce as unknown as { distance: (val: number) => void }).distance(40);
     }
-    
+
     fg.d3Force('collide', forceCollide<NodeObject>().radius((node: NodeObject) => {
       const fn = node as ForceNode;
-      return fn.label === "Module" ? 22 : 10;
+      if (fn.label === "Module") {
+        const children = fn.children_count || 1;
+        const visualRadius = Math.max(12, 6 + Math.log2(children) * 3);
+        return visualRadius + 80;
+      }
+      return 15;
     }).iterations(2) as unknown as Parameters<typeof fg.d3Force>[1]);
 
     function forceCluster() {
       let nodes: ForceNode[];
       const centroids = new Map<string, { x: number; y: number; count: number }>();
-      
+
       function force(alpha: number) {
         for (const v of centroids.values()) {
           v.x = 0;
@@ -63,7 +71,7 @@ export function useGraphPhysics({ fgRef, hasGraphData, width }: UseGraphPhysicsP
         nodes.forEach(d => {
           const mod = d._modCache;
           if (!mod) return;
-          
+
           const c = centroids.get(mod);
           if (!c) {
              centroids.set(mod, { x: d.x || 0, y: d.y || 0, count: 1 });
@@ -79,11 +87,11 @@ export function useGraphPhysics({ fgRef, hasGraphData, width }: UseGraphPhysicsP
           const mod = d._modCache;
           if (!mod) return;
           const centroid = centroids.get(mod);
-          
+
           if (centroid && centroid.count > 0 && d.vx !== undefined && d.vy !== undefined && d.x !== undefined && d.y !== undefined) {
             const cx = centroid.x / centroid.count;
             const cy = centroid.y / centroid.count;
-            
+
             d.vx -= (d.x - cx) * strength;
             d.vy -= (d.y - cy) * strength;
           }
@@ -102,22 +110,42 @@ export function useGraphPhysics({ fgRef, hasGraphData, width }: UseGraphPhysicsP
       return degree === 0 ? 0.05 : 0;
     });
 
-    const domainXTargets: Record<string, number> = {
-      frontend: -350,
-      utility: -150,
-      domain_service: 0,
-      backend_controller: 200,
-      database_model: 400,
-      test: -100,
+    const mvcTargets: Record<string, {x: number, y: number}> = {
+      frontend: { x: -600, y: 0 },
+      backend_controller: { x: 0, y: -450 },
+      database_model: { x: 0, y: 450 },
+      domain_service: { x: 600, y: 0 },
+      utility: { x: 600, y: 0 },
+      test: { x: 600, y: 0 },
     };
 
-    const domainYTargets: Record<string, number> = {
-      test: 250,
-    };
+    const uniqueGroups = Array.from(new Set(rawNodes.map(n => n.domain_group || 'other').filter(g => !mvcTargets[g] && g !== 'other')));
+    const dynamicTargets = new Map<string, {x: number, y: number}>();
+    
+    uniqueGroups.forEach((group, index) => {
+        const angle = (index / Math.max(1, uniqueGroups.length)) * Math.PI * 2;
+        dynamicTargets.set(group, {
+            x: Math.cos(angle) * 800,
+            y: Math.sin(angle) * 800
+        });
+    });
 
     fg.d3Force('cluster', forceCluster() as unknown as Parameters<typeof fg.d3Force>[1]);
-    fg.d3Force('x', forceX<ForceNode>((node) => domainXTargets[node.domain_group || 'other'] || 0).strength(node => node.domain_group ? 0.12 : 0) as unknown as Parameters<typeof fg.d3Force>[1]);
-    fg.d3Force('y', forceY<ForceNode>((node) => domainYTargets[node.domain_group || 'other'] || 0).strength(node => node.domain_group === 'test' ? 0.2 : 0.04) as unknown as Parameters<typeof fg.d3Force>[1]);
+    
+    fg.d3Force('x', forceX<ForceNode>((node) => {
+      const group = node.domain_group || 'other';
+      if (mvcTargets[group]) return mvcTargets[group].x;
+      if (dynamicTargets.has(group)) return dynamicTargets.get(group)!.x;
+      return 0;
+    }).strength(node => (node.domain_group && node.domain_group !== 'other') ? 0.15 : 0.05) as unknown as Parameters<typeof fg.d3Force>[1]);
+    
+    fg.d3Force('y', forceY<ForceNode>((node) => {
+      const group = node.domain_group || 'other';
+      if (mvcTargets[group]) return mvcTargets[group].y;
+      if (dynamicTargets.has(group)) return dynamicTargets.get(group)!.y;
+      return 0;
+    }).strength(node => (node.domain_group && node.domain_group !== 'other') ? 0.15 : 0.05) as unknown as Parameters<typeof fg.d3Force>[1]);
+
     fg.d3Force('radial', centerForce as unknown as Parameters<typeof fg.d3Force>[1]);
 
     fg.d3ReheatSimulation();
