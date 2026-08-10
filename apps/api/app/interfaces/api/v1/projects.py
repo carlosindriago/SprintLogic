@@ -71,7 +71,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-graph_cache: dict[UUID, tuple[dict, float]] = {}
+graph_cache: dict[str, tuple[dict, float]] = {}
 
 
 # ── Request models not yet moved to project_schemas ───────────────────────────
@@ -160,13 +160,11 @@ async def stream_scan_progress(project_id: str):
             topic = f"scan:{project_id}"
             async for event in global_event_bus.event_generator(topic):
                 yield {"data": event}
-                if event.get("type") == "completed":
+                if event.get("type") in ("completed", "failed", "error"):
                     break
         except asyncio.CancelledError:
             logger.warning("TCP client disconnected abruptly for project %s", project_id)
             raise
-        finally:
-            active_scans.pop(project_id, None)
 
     return EventSourceResponse(event_generator())
 
@@ -204,14 +202,18 @@ async def rescan_project(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
+    if project_id in active_scans:
+        # Cancel the existing scan
+        old_token = active_scans.pop(project_id)
+        old_token.set()
+        await asyncio.sleep(0.5) # Give it a moment to gracefully shutdown
+
     graph_repo = SQLAlchemyGraphRepository(session)
     await graph_repo.clear_by_project(project_uuid)
 
-    if project_uuid in graph_cache:
-        del graph_cache[project_uuid]
-
-    if project_id in active_scans:
-        return {"message": "Project is already being scanned."}
+    keys_to_del = [k for k in graph_cache if k.startswith(str(project_uuid))]
+    for k in keys_to_del:
+        del graph_cache[k]
 
     cancel_token = asyncio.Event()
     active_scans[str(project_uuid)] = cancel_token
