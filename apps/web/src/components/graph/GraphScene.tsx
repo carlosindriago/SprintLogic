@@ -1,12 +1,14 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useRef, useCallback, useMemo, useState } from "react";
+import { useRef, useCallback, useMemo, useState, useEffect } from "react";
 import { LinkObject, NodeObject, type ForceGraphMethods } from "react-force-graph-2d";
 import { RefreshCw } from "lucide-react";
 import { graphTheme } from "@/lib/graph-theme";
 import { GraphNodeLabel } from "@/types";
 import { useTabsStore } from "@/store/tabsStore";
+import { getLocalChanges } from "@/lib/api";
+import GraphNodeDetailsPanel from "./components/GraphNodeDetailsPanel";
 
 import { GraphSceneProps, ForceNode, ForceLink } from "./types";
 import { getSafeTime } from "./utils";
@@ -50,6 +52,25 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
   } = useGraphInteraction({ fgRef, onNodeClick });
 
   const [viewMode, setViewMode] = useState<"REAL" | "GROUPED">("REAL");
+  const [showGitRadar, setShowGitRadar] = useState(false);
+  const [changedFiles, setChangedFiles] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (showGitRadar && projectId) {
+      getLocalChanges(projectId)
+        .then((res) => {
+          const set = new Set<string>();
+          if (res?.files) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            res.files.forEach((f: any) => {
+              if (f.file_path) set.add(f.file_path);
+            });
+          }
+          setChangedFiles(set);
+        })
+        .catch(() => {});
+    }
+  }, [showGitRadar, projectId]);
 
   const {
     graphData, setGraphData,
@@ -98,7 +119,9 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     animProgressRef,
     cutoffTimeRef,
     showCycles: showCyclesState,
-    glowingLinks
+    glowingLinks,
+    showGitRadar,
+    changedFiles,
   });
 
   const nodeById = useMemo(() => {
@@ -148,6 +171,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
         searchQuery={searchQuery} setSearchQuery={setSearchQuery}
         activeTypes={activeTypes} toggleType={toggleType}
         showCycles={showCyclesState} setShowCycles={setShowCycles}
+        showGitRadar={showGitRadar} setShowGitRadar={setShowGitRadar}
         viewMode={viewMode} setViewMode={setViewMode}
         stats={stats}
         isScanning={isScanning} handleRescan={handleRescan}
@@ -158,6 +182,21 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
 
       <GraphModuleLegend moduleLegend={moduleLegend} />
       <GraphBreadcrumbs activeNode={activeNode || null} />
+
+      {graphData?.framework && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 px-3 py-1 rounded-full bg-zinc-900/90 border border-blue-500/30 backdrop-blur-md shadow-lg flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+          <span className="text-xs font-semibold text-zinc-200 tracking-wide">
+            {graphData.framework} Architecture
+          </span>
+        </div>
+      )}
+
+      <GraphNodeDetailsPanel
+        projectId={projectId}
+        activeNode={activeNode}
+        onClose={() => setFocusNode(null)}
+      />
 
       <GraphToolbar
         handleZoomIn={handleZoomIn}

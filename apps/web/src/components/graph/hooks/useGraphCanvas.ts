@@ -17,6 +17,8 @@ interface UseGraphCanvasProps {
   cutoffTimeRef: React.MutableRefObject<number | null>;
   showCycles: boolean;
   glowingLinks: Set<string>;
+  showGitRadar?: boolean;
+  changedFiles?: Set<string>;
 }
 
 const ICON_URLS: Record<string, string> = {
@@ -48,7 +50,9 @@ export function useGraphCanvas({
   animProgressRef,
   cutoffTimeRef,
   showCycles,
-  glowingLinks
+  glowingLinks,
+  showGitRadar = false,
+  changedFiles = new Set(),
 }: UseGraphCanvasProps) {
   const globalScaleRef = useRef(1);
   const bgCentroidsRef = useRef<Map<string, { x: number; y: number; count: number; upperMod: string }>>(new Map());
@@ -310,6 +314,18 @@ export function useGraphCanvas({
       ctx.globalAlpha = 0.35;
       ctx.stroke();
       ctx.globalAlpha = faded ? graphTheme.dimOpacity : 1;
+    }
+
+    if (showGitRadar && (changedFiles.has(n.file_path) || (id && changedFiles.has(id)))) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(nx, ny, radius + 4, 0, 2 * Math.PI);
+      ctx.strokeStyle = "#06b6d4";
+      ctx.lineWidth = 2.5;
+      ctx.shadowColor = "#06b6d4";
+      ctx.shadowBlur = 10;
+      ctx.stroke();
+      ctx.restore();
     }
 
     if (id === hoverNode && !faded) {

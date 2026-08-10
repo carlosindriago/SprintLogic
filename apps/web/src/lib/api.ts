@@ -191,6 +191,10 @@ export const getProjectGraph = (projectId: string, expandedFolders: string = "")
   const url = expandedFolders ? `/projects/${projectId}/graph?expanded_folders=${encodeURIComponent(expandedFolders)}` : `/projects/${projectId}/graph`;
   return api.get<GraphData>(url);
 };
+export const getNodeInsight = (projectId: string, nodeId: string) =>
+  api.get<{ ai_summary: string; cached: boolean }>(
+    `/projects/${projectId}/nodes/${encodeURIComponent(nodeId)}/insight`
+  );
 
 // --- Files ---
 export const getProjectFiles = (projectId: string) => api.get<FileTreeNode>(`/projects/${projectId}/files`);
