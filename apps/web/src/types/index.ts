@@ -25,6 +25,7 @@ export interface GraphNode {
   birth_time?: number;
   in_degree?: number;
   out_degree?: number;
+  domain_group?: string;
   metadata?: Record<string, unknown>;
 }
 
@@ -40,6 +41,7 @@ export interface GraphEdge {
 export interface GraphData {
   nodes: GraphNode[];
   links: GraphEdge[];
+  framework?: string;
 }
 
 export interface Task {

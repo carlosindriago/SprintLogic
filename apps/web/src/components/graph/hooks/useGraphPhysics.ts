@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { forceRadial, forceCollide } from "d3-force";
+import { forceRadial, forceCollide, forceX, forceY } from "d3-force";
 import type { ForceGraphMethods, NodeObject, LinkObject } from "react-force-graph-2d";
 import { ForceNode } from "../types";
 
@@ -102,9 +102,22 @@ export function useGraphPhysics({ fgRef, hasGraphData, width }: UseGraphPhysicsP
       return degree === 0 ? 0.05 : 0;
     });
 
+    const domainXTargets: Record<string, number> = {
+      frontend: -350,
+      utility: -150,
+      domain_service: 0,
+      backend_controller: 200,
+      database_model: 400,
+      test: -100,
+    };
+
+    const domainYTargets: Record<string, number> = {
+      test: 250,
+    };
+
     fg.d3Force('cluster', forceCluster() as unknown as Parameters<typeof fg.d3Force>[1]);
-    fg.d3Force('x', null);
-    fg.d3Force('y', null);
+    fg.d3Force('x', forceX<ForceNode>((node) => domainXTargets[node.domain_group || 'other'] || 0).strength(node => node.domain_group ? 0.12 : 0) as unknown as Parameters<typeof fg.d3Force>[1]);
+    fg.d3Force('y', forceY<ForceNode>((node) => domainYTargets[node.domain_group || 'other'] || 0).strength(node => node.domain_group === 'test' ? 0.2 : 0.04) as unknown as Parameters<typeof fg.d3Force>[1]);
     fg.d3Force('radial', centerForce as unknown as Parameters<typeof fg.d3Force>[1]);
 
     fg.d3ReheatSimulation();
