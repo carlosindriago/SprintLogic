@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { Send, Download, Play, Zap, GraduationCap, Layout, Settings2, CheckCircle2 } from "lucide-react";
 import { DiffEditor } from "@monaco-editor/react";
 import { useProjectStore } from "@/store/projectStore";
@@ -199,8 +199,8 @@ export default function ExecutionRoomTab({ data }: ExecutionRoomTabProps) {
     }
   };
 
-  const currentDiff = diffBlocks.find((b) => b.id === activeDiff);
-  const activeModeConfig = MODES.find((m) => m.id === executionMode) || MODES[0];
+  const currentDiff = useMemo(() => diffBlocks.find((b) => b.id === activeDiff), [diffBlocks, activeDiff]);
+  const activeModeConfig = useMemo(() => MODES.find((m) => m.id === executionMode) || MODES[0], [executionMode]);
 
   return (
     <div className="flex flex-col h-full w-full bg-zinc-950 text-zinc-200 overflow-hidden font-sans relative">
