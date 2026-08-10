@@ -170,17 +170,20 @@ async def stream_scan_progress(project_id: str):
 
 
 async def _run_background_scan(project_uuid: UUID, project_path: str, cancel_token: asyncio.Event):
-    async_session = get_sessionmaker()
-    async with async_session() as bg_session:
-        parser = ASTParserService()
-        graph_repo = SQLAlchemyGraphRepository(bg_session)
-        provider = LocalFileSystemProvider(project_path)
-        usecase = ScanCodebaseUseCase(provider, parser, global_event_bus, graph_repo)
-        try:
-            await usecase.execute(project_uuid, cancel_token, project_path)
-        except Exception as e:
-            logger.error(f"Background scan failed for {project_uuid}: {e}", exc_info=True)
-            await global_event_bus.publish(f"scan:{project_uuid}", {"type": "failed", "error": str(e)})
+    try:
+        async_session = get_sessionmaker()
+        async with async_session() as bg_session:
+            parser = ASTParserService()
+            graph_repo = SQLAlchemyGraphRepository(bg_session)
+            provider = LocalFileSystemProvider(project_path)
+            usecase = ScanCodebaseUseCase(provider, parser, global_event_bus, graph_repo)
+            try:
+                await usecase.execute(project_uuid, cancel_token, project_path)
+            except Exception as e:
+                logger.error(f"Background scan failed for {project_uuid}: {e}", exc_info=True)
+                await global_event_bus.publish(f"scan:{project_uuid}", {"type": "failed", "error": str(e)})
+    finally:
+        active_scans.pop(str(project_uuid), None)
 
 
 @router.post("/projects/{project_id}/rescan", status_code=202)
