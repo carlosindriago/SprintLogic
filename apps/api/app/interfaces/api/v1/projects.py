@@ -4,10 +4,13 @@ import json
 import logging
 import os
 import re
+import time
 from pathlib import Path
 from typing import Any
 from uuid import UUID
 
+import litellm
+import networkx as nx
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -37,6 +40,7 @@ from app.infrastructure.repositories.tool_model_repository import (
     resolve_tool_model,
     tool_model_label,
 )
+from app.infrastructure.security.credential_manager import CredentialManager
 from app.infrastructure.security.rate_limiter import require_rate_limit
 from app.interfaces.api.v1.project_schemas import (
     AnalyzeGraphRequest,
@@ -66,6 +70,8 @@ from app.utils.security import resolve_project_path
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+graph_cache: dict[str, tuple[dict, float]] = {}
 
 
 # ── Request models not yet moved to project_schemas ───────────────────────────
@@ -154,15 +160,30 @@ async def stream_scan_progress(project_id: str):
             topic = f"scan:{project_id}"
             async for event in global_event_bus.event_generator(topic):
                 yield {"data": event}
-                if event.get("type") == "completed":
+                if event.get("type") in ("completed", "failed", "error"):
                     break
         except asyncio.CancelledError:
             logger.warning("TCP client disconnected abruptly for project %s", project_id)
             raise
-        finally:
-            active_scans.pop(project_id, None)
 
     return EventSourceResponse(event_generator())
+
+
+async def _run_background_scan(project_uuid: UUID, project_path: str, cancel_token: asyncio.Event):
+    try:
+        async_session = get_sessionmaker()
+        async with async_session() as bg_session:
+            parser = ASTParserService()
+            graph_repo = SQLAlchemyGraphRepository(bg_session)
+            provider = LocalFileSystemProvider(project_path)
+            usecase = ScanCodebaseUseCase(provider, parser, global_event_bus, graph_repo)
+            try:
+                await usecase.execute(project_uuid, cancel_token, project_path)
+            except Exception as e:
+                logger.error(f"Background scan failed for {project_uuid}: {e}", exc_info=True)
+                await global_event_bus.publish(f"scan:{project_uuid}", {"type": "failed", "error": str(e)})
+    finally:
+        active_scans.pop(str(project_uuid), None)
 
 
 @router.post("/projects/{project_id}/rescan", status_code=202)
@@ -181,18 +202,27 @@ async def rescan_project(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    parser = ASTParserService()
-    graph_repo = SQLAlchemyGraphRepository(session)
-    provider = LocalFileSystemProvider(project.path)
+    if project_id in active_scans:
+        # Cancel the existing scan
+        old_token = active_scans.pop(project_id)
+        old_token.set()
+        await asyncio.sleep(0.5) # Give it a moment to gracefully shutdown
 
+    graph_repo = SQLAlchemyGraphRepository(session)
     await graph_repo.clear_by_project(project_uuid)
 
-    scan_codebase_usecase = ScanCodebaseUseCase(provider, parser, global_event_bus, graph_repo)
+    keys_to_del = [k for k in graph_cache if k.startswith(str(project_uuid))]
+    for k in keys_to_del:
+        del graph_cache[k]
+
     cancel_token = asyncio.Event()
     active_scans[str(project_uuid)] = cancel_token
 
+    # Limpiar estado previo para que SSE no lea un "completed" del escaneo anterior
+    global_event_bus.clear_latest(f"scan:{project_uuid}")
+
     background_tasks.add_task(
-        scan_codebase_usecase.execute, project_uuid, cancel_token, project.path
+        _run_background_scan, project_uuid, project.path, cancel_token
     )
 
     return {
@@ -263,6 +293,11 @@ async def get_project_graph(project_id: str, expanded_folders: str | None = None
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid project ID format")
 
+    cache_key = f"{project_uuid}_{expanded_folders or ''}"
+    cached = graph_cache.get(cache_key)
+    if cached and (time.time() - cached[1]) < 300:
+        return cached[0]
+
     graph_repo = SQLAlchemyGraphRepository(session)
     nodes = await graph_repo.get_nodes_by_project(project_uuid)
     edges = await graph_repo.get_edges_by_project(project_uuid)
@@ -288,18 +323,21 @@ async def get_project_graph(project_id: str, expanded_folders: str | None = None
         out_degree[edge.source_id] += 1
         adj[edge.source_id].append(edge.target_id)
 
-    # NetworkX SCC — O(V+E) linear time, iterative, no stack overflow
-    import networkx as nx
+    # NetworkX SCC — O(V+E) linear time, extracted to thread
+    def _compute_scc(edges) -> dict[str, int]:
+        G_local: nx.DiGraph[str] = nx.DiGraph()
+        for e in edges:
+            G_local.add_edge(e.source_id, e.target_id)
 
-    G: nx.DiGraph[str] = nx.DiGraph()
-    for edge in filtered_edges:
-        G.add_edge(edge.source_id, edge.target_id)
+        mapping: dict[str, int] = {}
+        for i, scc in enumerate(nx.strongly_connected_components(G_local)):
+            if len(scc) > 1:
+                for v in scc:
+                    mapping[v] = i
+        return mapping
 
-    node_to_scc: dict[str, int] = {}
-    for i, scc in enumerate(nx.strongly_connected_components(G)):
-        if len(scc) > 1:
-            for v in scc:
-                node_to_scc[v] = i
+    node_to_scc = await asyncio.to_thread(_compute_scc, filtered_edges)
+
 
     nodes_dict = []
     for n in filtered_nodes:
@@ -318,6 +356,7 @@ async def get_project_graph(project_id: str, expanded_folders: str | None = None
             "name": n.name,
             "file_path": n.file_path,
             "folder": folder,
+            "domain_group": _assign_domain_group(n.file_path),
             "in_degree": in_degree.get(n.id, 0),
             "out_degree": out_degree.get(n.id, 0),
         }
@@ -348,10 +387,17 @@ async def get_project_graph(project_id: str, expanded_folders: str | None = None
             }
         )
 
-    # Apply Macro-to-Micro density collapse
-    from app.application.graph_collapse import collapse_graph_by_density
-    expanded_set = set(expanded_folders.split(",")) if expanded_folders else set()
-    collapsed = collapse_graph_by_density(nodes_dict, links_dict, max_density=15, expanded_folders=expanded_set)
+    if expanded_folders == "ALL_FILES":
+        collapsed = {"nodes": nodes_dict, "links": links_dict}
+    else:
+        # Apply Macro-to-Micro density collapse
+        from app.application.graph_collapse import collapse_graph_by_density
+        expanded_set = set(expanded_folders.split(",")) if expanded_folders else set()
+        collapsed = collapse_graph_by_density(nodes_dict, links_dict, max_density=15, expanded_folders=expanded_set)
+
+    collapsed["framework"] = _detect_project_framework(project.path)
+
+    graph_cache[cache_key] = (collapsed, time.time())
 
     return collapsed
 
@@ -359,10 +405,169 @@ async def get_project_graph(project_id: str, expanded_folders: str | None = None
 from concurrent.futures import ProcessPoolExecutor
 
 
+def _detect_project_framework(project_path: str) -> str:
+    path = Path(project_path)
+    pkg_json = path / "package.json"
+    if pkg_json.exists():
+        try:
+            content = pkg_json.read_text(encoding="utf-8")
+            if '"next"' in content:
+                return "Next.js"
+            if '"laravel-vite-plugin"' in content:
+                return "Laravel (Hybrid)"
+            if '"react"' in content:
+                return "React"
+            if '"vue"' in content:
+                return "Vue.js"
+            if '"express"' in content:
+                return "Express"
+            if '"@nestjs/core"' in content:
+                return "NestJS"
+        except Exception:
+            pass
+
+    composer = path / "composer.json"
+    if composer.exists():
+        try:
+            content = composer.read_text(encoding="utf-8")
+            if "laravel/framework" in content:
+                return "Laravel"
+            if "symfony/framework-bundle" in content:
+                return "Symfony"
+        except Exception:
+            pass
+
+    for py_file in ["pyproject.toml", "requirements.txt", "Pipfile"]:
+        f = path / py_file
+        if f.exists():
+            try:
+                content = f.read_text(encoding="utf-8")
+                if "fastapi" in content.lower():
+                    return "FastAPI"
+                if "django" in content.lower():
+                    return "Django"
+                if "flask" in content.lower():
+                    return "Flask"
+            except Exception:
+                pass
+
+    if (path / "Cargo.toml").exists():
+        return "Rust"
+    if (path / "go.mod").exists():
+        return "Go"
+    if (path / "pom.xml").exists() or (path / "build.gradle").exists():
+        return "Spring Boot"
+
+    return "TypeScript / JavaScript"
+
+
+def _assign_domain_group(file_path: str) -> str:
+    path_lower = file_path.lower()
+    if any(k in path_lower for k in [".spec.", ".test.", "tests/", "test/"]):
+        return "test"
+    if any(k in path_lower for k in ["controller", "routes/", "views.py", "router", "api/"]):
+        return "backend_controller"
+    if any(k in path_lower for k in ["model", "entity", "schemas", "schema.py", "entities"]):
+        return "database_model"
+    if any(k in path_lower for k in ["components/", "views/", "resources/js/", "pages/", "src/app/", "ui/"]):
+        return "frontend"
+    if any(k in path_lower for k in ["service", "usecase", "repository", "application/", "domain/"]):
+        return "domain_service"
+    if any(k in path_lower for k in ["config", "util", "helper", "lib/"]):
+        return "utility"
+    return "other"
+
+
+@router.get("/projects/{project_id}/nodes/{node_id:path}/insight")
+async def get_node_insight(
+    project_id: str,
+    node_id: str,
+    session: AsyncSession = Depends(get_db_session),
+):
+    try:
+        proj_uuid = UUID(project_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+
+    repo = SQLAlchemyProjectRepository(session)
+    project = await repo.get_project(proj_uuid)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    result = await session.execute(
+        select(GraphNodeModel).where(
+            GraphNodeModel.project_id == proj_uuid,
+            (GraphNodeModel.id == node_id) | (GraphNodeModel.file_path == node_id),
+        )
+    )
+    node = result.scalars().first()
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found in graph")
+
+    meta_dict: dict[str, Any] = {}
+    if node.meta_data:
+        try:
+            meta_dict = json.loads(node.meta_data)
+        except (json.JSONDecodeError, TypeError):
+            meta_dict = {}
+
+    if meta_dict.get("ai_summary"):
+        return {"ai_summary": meta_dict["ai_summary"], "cached": True}
+
+    file_content = ""
+    try:
+        full_path = resolve_project_path(project.path, node.file_path)
+        with open(full_path, encoding="utf-8") as f:
+            file_content = f.read()
+    except Exception:
+        file_content = f"// Archivo: {node.file_path} (Contenido no disponible)"
+
+    provider_id, model_name, _ = await resolve_tool_model(session, "graph_node_insight")
+    actual_model = tool_model_label(provider_id, model_name)
+    api_key = CredentialManager.get_api_key(f"sprintlogic_{provider_id}") or CredentialManager.get_api_key(provider_id)
+    if not api_key:
+        api_key = CredentialManager.get_api_key("sprintlogic_openrouter")
+        if not api_key:
+            raise HTTPException(status_code=400, detail=f"API key for {provider_id} not configured")
+
+    from app.infrastructure.ai.provider_adapter import ProviderAdapter
+    from app.interfaces.api.v1.ai import _normalize_model_name
+
+    adapted = ProviderAdapter.adapt(actual_model, api_key)
+    normalized_model = _normalize_model_name(adapted["model"])
+
+    from app.infrastructure.repositories.prompt_repository import get_prompt_async
+    prompt_record = await get_prompt_async(session, "graph_node_insight")
+    system_prompt = prompt_record.content if prompt_record else "Eres un arquitecto de software experto. Analiza este código y genera un resumen técnico directo de máximo 3 líneas sobre su responsabilidad principal en el sistema. No uses saludos."
+
+    user_msg = f"Archivo: {node.file_path}\nNombre: {node.name}\n\nCódigo fuente:\n```\n{file_content[:6000]}\n```"
+
+    try:
+        response = await litellm.acompletion(
+            model=normalized_model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_msg},
+            ],
+            api_key=adapted["api_key"],
+            **adapted["kwargs"]
+        )
+        ai_summary = response.choices[0].message.content.strip()
+    except Exception as e:
+        logger.error(f"Failed to generate node insight: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Error al generar el resumen del nodo con IA")
+
+    meta_dict["ai_summary"] = ai_summary
+    node.meta_data = json.dumps(meta_dict)
+    await session.commit()
+
+    return {"ai_summary": ai_summary, "cached": False}
+
+
 def get_process_pool(request: Request) -> ProcessPoolExecutor:
     return request.app.state.process_pool
 
-from fastapi.responses import StreamingResponse
+from fastapi.responses import PlainTextResponse, StreamingResponse
 
 from app.application.analyze_project_graph import AnalyzeProjectGraphUseCase
 
@@ -2054,3 +2259,23 @@ async def get_project_repo_insights(
         "velocity": velocity,
         "recent_commits": recent_commits,
     }
+
+@router.get("/projects/{project_id}/graph/export/md")
+async def export_project_graph_md(project_id: str, session: AsyncSession = Depends(get_db_session)):
+    try:
+        project_uuid = UUID(project_id)
+        repo = SQLAlchemyProjectRepository(session)
+        project = await repo.get_project(project_uuid)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        from app.application.graph_exporter import generate_codebase_map_md
+        md_content = await generate_codebase_map_md(
+            project_id=project_uuid,
+            session=session,
+            max_files=None, # Rest endpoint returns all
+            project_path=project.path
+        )
+        return PlainTextResponse(content=md_content)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")

@@ -10,6 +10,7 @@ import { extColorHash, bloomGlow } from "@/lib/graph-theme";
 interface UseGraphDataProps {
   projectId: string | null;
   focusNode: string | null;
+  viewMode: "REAL" | "GROUPED";
 }
 
 const extCache = new WeakMap<object, string>();
@@ -17,7 +18,51 @@ const modCache = new WeakMap<object, string | null>();
 const lowerNameCache = new WeakMap<object, string>();
 const idPairCache = new WeakMap<object, string>();
 
-export function useGraphData({ projectId, focusNode }: UseGraphDataProps) {
+const enrichGraphData = (data: GraphData) => {
+  data.nodes.forEach((n) => {
+    const node = n as ForceNode;
+    if (node.label === "File") {
+      let ext = extCache.get(n);
+      if (ext === undefined) {
+        ext = node.name?.split(".").pop()?.toLowerCase() || "";
+        extCache.set(n, ext);
+      }
+      node._extCache = ext;
+      node._colorCache = extColorHash(ext);
+      node._glowColorCache = bloomGlow(node._colorCache, 0.45);
+    }
+    let mod = modCache.get(n);
+    if (mod === undefined) {
+      mod = (node.folder && node.folder !== "/") ? node.folder.split('/').filter(Boolean).slice(0, 2).join('/') : null;
+      modCache.set(n, mod);
+    }
+    node._modCache = mod;
+    let lowerName = lowerNameCache.get(n);
+    if (lowerName === undefined) {
+      lowerName = node.name ? node.name.toLowerCase() : "";
+      lowerNameCache.set(n, lowerName);
+    }
+    node._lowerName = lowerName;
+  });
+
+  data.links.forEach((l) => {
+    const link = l as ForceLink;
+    const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+    const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+    link._sourceId = sourceId as string;
+    link._targetId = targetId as string;
+
+    let idPair = idPairCache.get(l);
+    if (idPair === undefined) {
+      idPair = `${sourceId}-${targetId}`;
+      idPairCache.set(l, idPair);
+    }
+    link._idPair = idPair;
+  });
+};
+
+export function useGraphData({ projectId, focusNode, viewMode }: UseGraphDataProps) {
+
   const [graphData, setGraphData] = useState<GraphData>({ nodes: [], links: [] });
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTypes, setActiveTypes] = useState<Set<string>>(new Set(["File", "Module"]));
@@ -42,8 +87,13 @@ export function useGraphData({ projectId, focusNode }: UseGraphDataProps) {
     }
     if (scanStatus === "completed" && !rescanHandledRef.current) {
       rescanHandledRef.current = true;
-      getProjectGraph(projectId, Array.from(expandedFolders).join(","))
-        .then((data) => setGraphData(data))
+      const expandedStr = viewMode === "REAL" ? "ALL_FILES" : Array.from(expandedFolders).join(",");
+      getProjectGraph(projectId, expandedStr)
+        .then((data) => {
+          enrichGraphData(data);
+          setGraphData(data);
+        })
+
         .catch(() => {
           toast.error("El escaneo terminó, pero falló la descarga del nuevo grafo. Reintentá.");
         })
@@ -52,7 +102,7 @@ export function useGraphData({ projectId, focusNode }: UseGraphDataProps) {
     if (scanStatus === "failed") {
       clearScan(projectId);
     }
-  }, [scanStatus, projectId, clearScan, expandedFolders]);
+  }, [scanStatus, projectId, clearScan, expandedFolders, viewMode]);
 
   // Initial Load
   useEffect(() => {
@@ -60,7 +110,9 @@ export function useGraphData({ projectId, focusNode }: UseGraphDataProps) {
     const loadData = async () => {
       if (projectId !== null) {
         try {
-          const data = await getProjectGraph(projectId, Array.from(expandedFolders).join(","));
+          const expandedStr = viewMode === "REAL" ? "ALL_FILES" : Array.from(expandedFolders).join(",");
+          const data = await getProjectGraph(projectId, expandedStr);
+          enrichGraphData(data);
           if (active) {
             setGraphData((prevGraph) => {
               const existingCoords = new Map(prevGraph.nodes.map((n: ForceNode) => [n.id, { x: n.x, y: n.y }]));
@@ -84,7 +136,7 @@ export function useGraphData({ projectId, focusNode }: UseGraphDataProps) {
     };
     loadData();
     return () => { active = false; };
-  }, [projectId, expandedFolders]);
+  }, [projectId, expandedFolders, viewMode]);
 
   const handleRescan = async () => {
     if (!projectId) return;
@@ -189,70 +241,30 @@ export function useGraphData({ projectId, focusNode }: UseGraphDataProps) {
   const displayGraphData = useMemo(() => {
     if (!graphData || !graphData.nodes) return { nodes: [], links: [] };
 
-    let nodes = graphData.nodes.map((n: GraphNode) => {
-      const clone = { ...n } as ForceNode;
+    let nodes = graphData.nodes as ForceNode[];
 
-      if (clone.label === "File") {
-        let ext = extCache.get(n);
-        if (ext === undefined) {
-          ext = clone.name?.split(".").pop()?.toLowerCase() || "";
-          extCache.set(n, ext);
-        }
-        clone._extCache = ext;
-        clone._colorCache = extColorHash(ext);
-        clone._glowColorCache = bloomGlow(clone._colorCache, 0.45);
-      }
-
-      let mod = modCache.get(n);
-      if (mod === undefined) {
-        mod = (clone.folder && clone.folder !== "/") ? clone.folder.split('/').filter(Boolean).slice(0, 2).join('/') : null;
-        modCache.set(n, mod);
-      }
-      clone._modCache = mod;
-      let lowerName = lowerNameCache.get(n);
-      if (lowerName === undefined) {
-        lowerName = clone.name ? clone.name.toLowerCase() : "";
-        lowerNameCache.set(n, lowerName);
-      }
-      clone._lowerName = lowerName;
-
-      return clone;
-    });
-
-    let links = graphData.links.map((l: GraphEdge) => {
-      const clone = { ...l } as ForceLink;
-      const sourceId = typeof clone.source === 'object' ? clone.source.id : clone.source;
-      const targetId = typeof clone.target === 'object' ? clone.target.id : clone.target;
-      clone._sourceId = sourceId as string;
-      clone._targetId = targetId as string;
-
-      let idPair = idPairCache.get(l);
-      if (idPair === undefined) {
-        idPair = `${sourceId}-${targetId}`;
-        idPairCache.set(l, idPair);
-      }
-      clone._idPair = idPair;
-      return clone;
-    });
-
-    nodes = nodes.filter((n: GraphNode) => {
+    nodes = nodes.filter((n: ForceNode) => {
       const titleLabel = n.label ? toTitleCase(String(n.label)) : "";
       return activeTypes.has(titleLabel);
     });
 
+    if (lowerSearchQuery) {
+      nodes = nodes.filter(n => (n._lowerName || "").includes(lowerSearchQuery));
+    }
+
     if (focusNode) {
       const neighborsSet = neighbors.get(focusNode) || new Set();
       const visibleNodes = new Set([focusNode, ...neighborsSet]);
-      nodes = nodes.filter((n) => visibleNodes.has(n.id));
+      nodes = nodes.filter((n) => visibleNodes.has(n.id as string));
     }
 
     const visibleIds = new Set(nodes.map(n => n.id));
-    links = links.filter((l) => {
+    const links = (graphData.links as ForceLink[]).filter((l) => {
       return visibleIds.has(l._sourceId as string) && visibleIds.has(l._targetId as string);
     });
 
     return { nodes, links };
-  }, [graphData, focusNode, neighbors, activeTypes]);
+  }, [graphData, focusNode, neighbors, activeTypes, lowerSearchQuery]);
 
   const toggleType = (type: string) => {
     setActiveTypes(prev => {

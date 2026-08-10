@@ -39,7 +39,7 @@ def _build_tree(root_path: str, max_depth: int = 2) -> str:
     return "\n".join(tree_lines)
 
 
-def build_awareness_xml(project_path: str, project_type: str, core_tech: set[str], total_files: int) -> str:
+def build_awareness_xml(project_path: str, project_type: str, core_tech: set[str], total_files: int, topological_map_md: str = "") -> str:
     """Builds the final XML block for the project scanner."""
     if not core_tech:
         core_tech.add("Generic")
@@ -55,7 +55,15 @@ def build_awareness_xml(project_path: str, project_type: str, core_tech: set[str
         f"  <size>{total_files} files (excluding dependencies)</size>",
         "  <root_structure>",
         tree_str,
-        "  </root_structure>",
-        "</PROJECT_AWARENESS>"
+        "  </root_structure>"
     ]
+
+    if topological_map_md:
+        xml_lines.extend([
+            "  <topological_map>",
+            topological_map_md,
+            "  </topological_map>"
+        ])
+
+    xml_lines.append("</PROJECT_AWARENESS>")
     return "\n".join(xml_lines)

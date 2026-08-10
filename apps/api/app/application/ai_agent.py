@@ -514,7 +514,7 @@ class AIAgent:
                     return "Error: No project context available."
                 try:
                     from app.infrastructure.ai.project_scanner import get_project_awareness_xml
-                    awareness_xml = await get_project_awareness_xml(root)
+                    awareness_xml = await get_project_awareness_xml(root, self.project_id, getattr(self, 'session', None))
                     return awareness_xml if awareness_xml else "Project has no tracked dependencies."
                 except Exception as e:
                     logger.warning("Unhandled exception: %s", e, exc_info=True)
@@ -857,7 +857,7 @@ class AIAgent:
         awareness_xml = ""
         try:
             from app.infrastructure.ai.project_scanner import get_project_awareness_xml
-            awareness_xml = await get_project_awareness_xml(root)
+            awareness_xml = await get_project_awareness_xml(root, self.project_id, getattr(self, 'session', None))
             if not awareness_xml:
                 awareness_xml = ""
         except Exception:

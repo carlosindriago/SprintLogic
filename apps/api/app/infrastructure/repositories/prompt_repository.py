@@ -253,6 +253,12 @@ async def initialize_prompts(session: AsyncSession):
             "description": "Execution Room — Modo Pizarra",
             "content": EXEC_MODE_WHITEBOARD_CONTENT,
             "required_variables": EXEC_MODE_WHITEBOARD_VARS
+        },
+        {
+            "id": GRAPH_NODE_INSIGHT_ID,
+            "description": "Insight de Nodo del Grafo — Resumen ejecutivo de 3 líneas",
+            "content": GRAPH_NODE_INSIGHT_CONTENT,
+            "required_variables": GRAPH_NODE_INSIGHT_VARS
         }
     ]
 
@@ -363,6 +369,8 @@ async def restore_prompt(session: AsyncSession, prompt_id: str) -> PromptRegistr
         golden_content = EXEC_MODE_PAIR_PROGRAMMING_CONTENT
     elif prompt_id == EXEC_MODE_WHITEBOARD_ID:
         golden_content = EXEC_MODE_WHITEBOARD_CONTENT
+    elif prompt_id == GRAPH_NODE_INSIGHT_ID:
+        golden_content = GRAPH_NODE_INSIGHT_CONTENT
     else:
         raise ValueError(f"No golden content available for {prompt_id}")
 
@@ -373,6 +381,10 @@ async def restore_prompt(session: AsyncSession, prompt_id: str) -> PromptRegistr
     return prompt
 
 # --- NEW PROMPTS ---
+
+GRAPH_NODE_INSIGHT_ID = "graph_node_insight"
+GRAPH_NODE_INSIGHT_CONTENT = """Eres un arquitecto de software experto. Analiza este código y genera un resumen técnico directo de máximo 3 líneas sobre su responsabilidad principal en el sistema. No uses saludos."""
+GRAPH_NODE_INSIGHT_VARS = ["source_code"]
 
 AI_AGENT_BASE_ID = "ai_agent_base"
 AI_AGENT_BASE_CONTENT = """Eres SprintLogic AI (El Crisol), el arquitecto de software socrático integrado en el IDE del usuario.

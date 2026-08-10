@@ -109,10 +109,10 @@ export const ScanProgressBar: React.FC<ScanProgressBarProps> = ({ projectId }) =
               return;
             }
 
-            if (data.type === 'error') {
+            if (data.type === 'error' || data.type === 'failed') {
               eventSource.close();
               setPhase('aborted');
-              toast.error(data.message || 'Scan failed due to a server error');
+              toast.error(data.error || data.message || 'Scan failed due to a server error');
               setScanStatus(projectId, 'failed');
               setTimeout(() => clearScan(projectId), 5000);
               return;

@@ -1,4 +1,4 @@
-import { Search, RotateCcw, RefreshCw, Brain } from "lucide-react";
+import { Search, RotateCcw, RefreshCw, Radio, Brain } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { graphUI, graphTheme } from "@/lib/graph-theme";
 
@@ -9,6 +9,10 @@ interface GraphStatsPanelProps {
   toggleType: (type: string) => void;
   showCycles: boolean;
   setShowCycles: (s: boolean) => void;
+  showGitRadar: boolean;
+  setShowGitRadar: (s: boolean) => void;
+  viewMode: "REAL" | "GROUPED";
+  setViewMode: (mode: "REAL" | "GROUPED") => void;
   stats: {
     files: number;
     classes: number;
@@ -33,6 +37,10 @@ export function GraphStatsPanel({
   toggleType,
   showCycles,
   setShowCycles,
+  showGitRadar,
+  setShowGitRadar,
+  viewMode,
+  setViewMode,
   stats,
   isScanning,
   handleRescan,
@@ -83,13 +91,40 @@ export function GraphStatsPanel({
         ))}
       </div>
 
-      <button
-        onClick={() => setShowCycles(!showCycles)}
-        className={`flex items-center justify-center gap-2 text-xs py-1.5 rounded-md transition-colors ${showCycles ? 'bg-red-900/40 text-red-400 border border-red-900/50' : 'bg-[#18181b] text-zinc-400 border border-[#3f3f46]'}`}
-      >
-        <RotateCcw className="w-3 h-3" />
-        Highlight Cycles
-      </button>
+      <div className="flex gap-1.5">
+        <button
+          onClick={() => setShowCycles(!showCycles)}
+          className={`flex-1 flex items-center justify-center gap-1.5 text-xs py-1.5 rounded-md transition-colors ${showCycles ? 'bg-red-900/40 text-red-400 border border-red-900/50' : 'bg-[#18181b] text-zinc-400 border border-[#3f3f46]'}`}
+        >
+          <RotateCcw className="w-3 h-3" />
+          Cycles
+        </button>
+
+        <button
+          onClick={() => setShowGitRadar(!showGitRadar)}
+          className={`flex-1 flex items-center justify-center gap-1.5 text-xs py-1.5 rounded-md transition-colors ${showGitRadar ? 'bg-cyan-950/80 text-cyan-400 border border-cyan-500/50 shadow-sm shadow-cyan-500/20' : 'bg-[#18181b] text-zinc-400 border border-[#3f3f46]'}`}
+          title="Resaltar archivos modificados en Git"
+        >
+          <Radio className={`w-3 h-3 ${showGitRadar ? 'animate-pulse text-cyan-400' : ''}`} />
+          Radar Git
+        </button>
+      </div>
+
+      {/* Toggle View Mode */}
+      <div className="flex bg-[#18181b] border border-[#3f3f46] rounded-md p-0.5 mt-1">
+        <button
+          onClick={() => setViewMode("REAL")}
+          className={`flex-1 text-[10px] py-1.5 rounded transition-colors ${viewMode === "REAL" ? "bg-zinc-700 text-white" : "text-zinc-400 hover:text-zinc-300"}`}
+        >
+          Archivos Reales
+        </button>
+        <button
+          onClick={() => setViewMode("GROUPED")}
+          className={`flex-1 text-[10px] py-1.5 rounded transition-colors ${viewMode === "GROUPED" ? "bg-zinc-700 text-white" : "text-zinc-400 hover:text-zinc-300"}`}
+        >
+          Agrupar por Carpetas
+        </button>
+      </div>
 
       {/* Project Statistics */}
       <div className="border-t border-[#3f3f46] pt-3 mt-1">

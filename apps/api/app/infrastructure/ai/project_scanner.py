@@ -17,7 +17,7 @@ from .scanner._detect_patterns import determine_project_type
 from .scanner._parse_files import parse_project_files
 
 
-def _scan_blocking(project_path: str) -> str:
+def _scan_blocking(project_path: str, topological_map_md: str = "") -> str:
     """
     Synchronous blocking function to scan the project.
     Must be run in a separate thread.
@@ -32,10 +32,19 @@ def _scan_blocking(project_path: str) -> str:
     # from .scanner._analyze_metrics import analyze_project_metrics
     # metrics = analyze_project_metrics({})
 
-    return build_awareness_xml(project_path, project_type, core_tech, total_files)
+    return build_awareness_xml(project_path, project_type, core_tech, total_files, topological_map_md)
 
 
-async def get_project_awareness_xml(project_path: str | None) -> str:
+from uuid import UUID
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+
+async def get_project_awareness_xml(
+    project_path: str | None,
+    project_id: UUID | None = None,
+    session: AsyncSession | None = None
+) -> str:
     """
     Returns an XML block summarizing the project structure and tech stack.
     Delegates the heavy I/O to a background thread to prevent blocking the Event Loop.
@@ -52,8 +61,22 @@ async def get_project_awareness_xml(project_path: str | None) -> str:
         if now - timestamp < _CACHE_TTL_SECONDS:
             return result
 
+    # If project_id is provided, generate topological map (limited to 100 for token limits)
+    topological_map_md = ""
+    if project_id:
+        try:
+            from app.application.graph_exporter import generate_codebase_map_md
+            topological_map_md = await generate_codebase_map_md(
+                project_id=project_id,
+                session=session,
+                max_files=100,
+                project_path=project_path
+            )
+        except Exception as e:
+            logger.warning(f"Failed to generate topological map for AI: {e}")
+
     # Delegate blocking I/O to thread pool
-    result = await asyncio.to_thread(_scan_blocking, project_path)
+    result = await asyncio.to_thread(_scan_blocking, project_path, topological_map_md)
 
     # Update cache
     _SCAN_CACHE[project_path] = (now, result)

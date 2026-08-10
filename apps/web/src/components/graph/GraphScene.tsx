@@ -1,12 +1,14 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useRef, useCallback, useMemo, useState } from "react";
+import { useRef, useCallback, useMemo, useState, useEffect } from "react";
 import { LinkObject, NodeObject, type ForceGraphMethods } from "react-force-graph-2d";
 import { RefreshCw } from "lucide-react";
 import { graphTheme } from "@/lib/graph-theme";
 import { GraphNodeLabel } from "@/types";
 import { useTabsStore } from "@/store/tabsStore";
+import { getLocalChanges } from "@/lib/api";
+import GraphNodeDetailsPanel from "./components/GraphNodeDetailsPanel";
 
 import { GraphSceneProps, ForceNode, ForceLink } from "./types";
 import { getSafeTime } from "./utils";
@@ -49,6 +51,27 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     onNodeHover, onNodeRightClick
   } = useGraphInteraction({ fgRef, onNodeClick });
 
+  const [viewMode, setViewMode] = useState<"REAL" | "GROUPED">("REAL");
+  const [showGitRadar, setShowGitRadar] = useState(false);
+  const [changedFiles, setChangedFiles] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (showGitRadar && projectId) {
+      getLocalChanges(projectId)
+        .then((res) => {
+          const set = new Set<string>();
+          if (res?.files) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            res.files.forEach((f: any) => {
+              if (f.file_path) set.add(f.file_path);
+            });
+          }
+          setChangedFiles(set);
+        })
+        .catch(() => {});
+    }
+  }, [showGitRadar, projectId]);
+
   const {
     graphData, setGraphData,
     searchQuery, setSearchQuery,
@@ -61,7 +84,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     neighbors, displayGraphData,
     hasGraphData,
     caches
-  } = useGraphData({ projectId, focusNode });
+  } = useGraphData({ projectId, focusNode, viewMode });
 
   const {
     animating, setAnimating,
@@ -72,7 +95,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     cutoffTimeRef
   } = useGraphAnimation({ graphData, idPairCache: caches.idPairCache });
 
-  const { isPhysicsActive, togglePhysics, initialFitDoneRef } = useGraphPhysics({ fgRef, hasGraphData, width: dimensions.width });
+  const { isPhysicsActive, togglePhysics, initialFitDoneRef } = useGraphPhysics({ fgRef, hasGraphData, width: dimensions.width, displayGraphData });
 
   const [showCyclesState, setShowCycles] = useState(false);
 
@@ -88,7 +111,6 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     displayGraphData: displayGraphData as any,
     graphDataLength: graphData.nodes.length,
     activeTypes,
-    lowerSearchQuery,
     focusNode,
     hoverNode,
     neighbors,
@@ -96,7 +118,9 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     animProgressRef,
     cutoffTimeRef,
     showCycles: showCyclesState,
-    glowingLinks
+    glowingLinks,
+    showGitRadar,
+    changedFiles,
   });
 
   const nodeById = useMemo(() => {
@@ -146,6 +170,8 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
         searchQuery={searchQuery} setSearchQuery={setSearchQuery}
         activeTypes={activeTypes} toggleType={toggleType}
         showCycles={showCyclesState} setShowCycles={setShowCycles}
+        showGitRadar={showGitRadar} setShowGitRadar={setShowGitRadar}
+        viewMode={viewMode} setViewMode={setViewMode}
         stats={stats}
         isScanning={isScanning} handleRescan={handleRescan}
         savedAnalysis={savedAnalysis}
@@ -155,6 +181,21 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
 
       <GraphModuleLegend moduleLegend={moduleLegend} />
       <GraphBreadcrumbs activeNode={activeNode || null} />
+
+      {graphData?.framework && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 px-3 py-1 rounded-full bg-zinc-900/90 border border-blue-500/30 backdrop-blur-md shadow-lg flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+          <span className="text-xs font-semibold text-zinc-200 tracking-wide">
+            {graphData.framework} Architecture
+          </span>
+        </div>
+      )}
+
+      <GraphNodeDetailsPanel
+        projectId={projectId}
+        activeNode={activeNode}
+        onClose={() => setFocusNode(null)}
+      />
 
       <GraphToolbar
         handleZoomIn={handleZoomIn}
@@ -228,7 +269,8 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
           linkDirectionalParticleColor={getParticleColor}
           linkDirectionalArrowLength={3.5}
           linkDirectionalArrowRelPos={1}
-          d3AlphaDecay={((graphData?.nodes?.length || 0) > 1000) ? 0.06 : 0.0228}
+          d3AlphaDecay={0.1}
+          d3AlphaMin={0.05}
           cooldownTicks={100}
           nodePointerAreaPaint={(node: NodeObject, color: string, ctx: CanvasRenderingContext2D) => {
             ctx.fillStyle = color;
@@ -274,9 +316,15 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
           enableZoomInteraction={true}
           enablePanInteraction={true}
           onEngineStop={() => {
-            if (fgRef.current && !initialFitDoneRef.current) {
-              initialFitDoneRef.current = true;
-              fgRef.current.zoomToFit(800, 100);
+            if (fgRef.current) {
+              if (!initialFitDoneRef.current) {
+                initialFitDoneRef.current = true;
+                fgRef.current.zoomToFit(800, 100);
+              }
+              // Stop the animation loop entirely to bring CPU to 0% when idle
+              if (!enableFlow) {
+                fgRef.current.pauseAnimation();
+              }
             }
           }}
         />

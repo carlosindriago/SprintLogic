@@ -15,6 +15,8 @@ class EventBus:
         self._subscribers: dict[str, list[asyncio.Queue[dict]]] = {}
         # Estado para el throttling: topic -> timestamp del último envío
         self._last_emitted: dict[str, float] = {}
+        # Último evento por topic para late-subscribers
+        self._latest_event: dict[str, dict] = {}
 
     def subscribe(self, topic: str) -> asyncio.Queue[dict]:
         if topic not in self._subscribers:
@@ -23,11 +25,15 @@ class EventBus:
         self._subscribers[topic].append(queue)
         return queue
 
+    def clear_latest(self, topic: str):
+        self._latest_event.pop(topic, None)
+
     def unsubscribe(self, topic: str, queue: asyncio.Queue[dict]):
         if topic in self._subscribers and queue in self._subscribers[topic]:
             self._subscribers[topic].remove(queue)
 
     async def publish(self, topic: str, data: dict):
+        self._latest_event[topic] = data
         if topic in self._subscribers:
             for queue in self._subscribers[topic]:
                 await queue.put(data)
@@ -49,6 +55,11 @@ class EventBus:
     async def event_generator(self, topic: str) -> AsyncGenerator[dict, None]:
         """Generador asíncrono que consume eventos de una cola para Server-Sent Events."""
         queue = self.subscribe(topic)
+
+        # Catch-up for late subscribers
+        if topic in self._latest_event:
+            await queue.put(self._latest_event[topic])
+
         try:
             while True:
                 data = await queue.get()

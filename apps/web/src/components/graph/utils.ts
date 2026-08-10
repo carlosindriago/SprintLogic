@@ -27,6 +27,23 @@ export function drawRoundedSquare(ctx: CanvasRenderingContext2D, cx: number, cy:
   ctx.closePath();
 }
 
+// Draw a file shape (document with a folded corner)
+export function drawFile(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number) {
+  const w = r * 1.5;
+  const h = r * 2.0;
+  const fold = r * 0.6;
+  const x = cx - w / 2;
+  const y = cy - h / 2;
+  
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x + w - fold, y);
+  ctx.lineTo(x + w, y + fold);
+  ctx.lineTo(x + w, y + h);
+  ctx.lineTo(x, y + h);
+  ctx.closePath();
+}
+
 // Draw a diamond (rotated square) centered at (cx, cy) with half-size r
 export function drawDiamond(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number) {
   ctx.beginPath();
