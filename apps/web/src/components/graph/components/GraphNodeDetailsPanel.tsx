@@ -53,8 +53,6 @@ export default function GraphNodeDetailsPanel({
             setLoading(false);
           }
         });
-    } else {
-      setLoading(false);
     }
     return () => {
       isMounted = false;

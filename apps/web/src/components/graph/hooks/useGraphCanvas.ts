@@ -8,7 +8,6 @@ interface UseGraphCanvasProps {
   displayGraphData: { nodes: ForceNode[]; links: ForceLink[] };
   graphDataLength: number;
   activeTypes: Set<string>;
-  lowerSearchQuery: string;
   focusNode: string | null;
   hoverNode: string | null;
   neighbors: Map<string, Set<string>>;

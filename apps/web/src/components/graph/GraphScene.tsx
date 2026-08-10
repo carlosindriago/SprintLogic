@@ -111,7 +111,6 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     displayGraphData: displayGraphData as any,
     graphDataLength: graphData.nodes.length,
     activeTypes,
-    lowerSearchQuery,
     focusNode,
     hoverNode,
     neighbors,
