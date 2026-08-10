@@ -150,7 +150,7 @@ export function useGraphPhysics({ fgRef, hasGraphData, width, displayGraphData }
     fg.d3Force('radial', centerForce as unknown as Parameters<typeof fg.d3Force>[1]);
 
     fg.d3ReheatSimulation();
-  }, [hasGraphData, width, fgRef]);
+  }, [hasGraphData, width, fgRef, displayGraphData.nodes]);
 
   return {
     isPhysicsActive,

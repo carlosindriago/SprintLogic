@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { X, Sparkles, Loader2, FileCode, Layers, ArrowDownLeft, ArrowUpRight, RefreshCw } from "lucide-react";
+import { useEffect, useState, useCallback } from "react";
+import { X, Sparkles, Loader2, FileCode, ArrowDownLeft, ArrowUpRight, RefreshCw } from "lucide-react";
 import { ForceNode } from "../types";
 import { getNodeInsight } from "@/lib/api";
 
@@ -21,7 +21,7 @@ export default function GraphNodeDetailsPanel({
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchInsight = async () => {
+  const fetchInsight = useCallback(async () => {
     if (!projectId || !activeNode) return;
     setLoading(true);
     setError(null);
@@ -29,20 +29,41 @@ export default function GraphNodeDetailsPanel({
       const res = await getNodeInsight(projectId, activeNode.id);
       setInsight(res.ai_summary);
       setIsCached(res.cached);
-    } catch (err) {
+    } catch {
       setError("No se pudo obtener el resumen IA del nodo.");
     } finally {
       setLoading(false);
     }
-  };
+  }, [projectId, activeNode]);
 
   useEffect(() => {
-    setInsight(null);
-    setError(null);
-    if (activeNode) {
-      fetchInsight();
+    let isMounted = true;
+    if (activeNode && projectId) {
+      setLoading(true);
+      setError(null);
+      setInsight(null);
+      getNodeInsight(projectId, activeNode.id)
+        .then((res) => {
+          if (isMounted) {
+            setInsight(res.ai_summary);
+            setIsCached(res.cached);
+            setLoading(false);
+          }
+        })
+        .catch(() => {
+          if (isMounted) {
+            setError("No se pudo obtener el resumen IA del nodo.");
+            setLoading(false);
+          }
+        });
+    } else {
+      setInsight(null);
+      setError(null);
     }
-  }, [activeNode?.id, projectId]);
+    return () => {
+      isMounted = false;
+    };
+  }, [activeNode, projectId]);
 
   if (!activeNode) return null;
 

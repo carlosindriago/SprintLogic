@@ -1,6 +1,5 @@
 import React, { useMemo } from "react";
 import { FolderOpen, X } from "lucide-react";
-import { GraphData } from "@/types";
 import type { ForceGraphMethods, NodeObject, LinkObject } from "react-force-graph-2d";
 import { ForceNode } from "../types";
 

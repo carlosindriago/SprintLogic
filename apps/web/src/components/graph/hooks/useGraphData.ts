@@ -19,7 +19,7 @@ const lowerNameCache = new WeakMap<object, string>();
 const idPairCache = new WeakMap<object, string>();
 
 const enrichGraphData = (data: GraphData) => {
-  data.nodes.forEach((n: any) => {
+  data.nodes.forEach((n) => {
     const node = n as ForceNode;
     if (node.label === "File") {
       let ext = extCache.get(n);
@@ -45,7 +45,7 @@ const enrichGraphData = (data: GraphData) => {
     node._lowerName = lowerName;
   });
 
-  data.links.forEach((l: any) => {
+  data.links.forEach((l) => {
     const link = l as ForceLink;
     const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
     const targetId = typeof link.target === 'object' ? link.target.id : link.target;
@@ -259,7 +259,7 @@ export function useGraphData({ projectId, focusNode, viewMode }: UseGraphDataPro
     }
 
     const visibleIds = new Set(nodes.map(n => n.id));
-    let links = (graphData.links as ForceLink[]).filter((l) => {
+    const links = (graphData.links as ForceLink[]).filter((l) => {
       return visibleIds.has(l._sourceId as string) && visibleIds.has(l._targetId as string);
     });
 

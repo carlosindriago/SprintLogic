@@ -18,7 +18,7 @@ def _compute_metrics_and_format(
     project_path: str,
     max_files: int | None = None
 ) -> str:
-    G = nx.DiGraph()
+    G: nx.DiGraph = nx.DiGraph()
     # Add nodes
     for node in nodes:
         # Keep relative paths for better readability

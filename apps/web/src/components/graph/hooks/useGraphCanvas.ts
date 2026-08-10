@@ -361,7 +361,7 @@ export function useGraphCanvas({
     }
 
     ctx.restore();
-  }, [activeTypes, lowerSearchQuery, isFaded, hoverNode, focusNode, timeRange, graphDataLength, animProgressRef, cutoffTimeRef]);
+  }, [activeTypes, lowerSearchQuery, isFaded, hoverNode, focusNode, timeRange, graphDataLength, animProgressRef, cutoffTimeRef, showGitRadar, changedFiles]);
 
   const getLinkColor = useCallback((link: LinkObject) => {
     const l = link as ForceLink;
@@ -449,7 +449,7 @@ export function useGraphCanvas({
     }
 
     return true;
-  }, [activeTypes, lowerSearchQuery, cutoffTimeRef]);
+  }, [activeTypes, cutoffTimeRef]);
 
   return {
     paintBackground,
