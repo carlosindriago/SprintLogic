@@ -530,6 +530,12 @@ async def get_node_insight(
         if not api_key:
             raise HTTPException(status_code=400, detail=f"API key for {provider_id} not configured")
 
+    from app.infrastructure.ai.provider_adapter import ProviderAdapter
+    from app.interfaces.api.v1.ai import _normalize_model_name
+
+    adapted = ProviderAdapter.adapt(actual_model, api_key)
+    normalized_model = _normalize_model_name(adapted["model"])
+
     from app.infrastructure.repositories.prompt_repository import get_prompt_async
     prompt_record = await get_prompt_async(session, "graph_node_insight")
     system_prompt = prompt_record.content if prompt_record else "Eres un arquitecto de software experto. Analiza este código y genera un resumen técnico directo de máximo 3 líneas sobre su responsabilidad principal en el sistema. No uses saludos."
@@ -538,12 +544,13 @@ async def get_node_insight(
 
     try:
         response = await litellm.acompletion(
-            model=actual_model,
+            model=normalized_model,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_msg},
             ],
-            api_key=api_key,
+            api_key=adapted["api_key"],
+            **adapted["kwargs"]
         )
         ai_summary = response.choices[0].message.content.strip()
     except Exception as e:
