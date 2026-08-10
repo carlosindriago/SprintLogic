@@ -35,7 +35,7 @@ export function useGraphPhysics({ fgRef, hasGraphData, width }: UseGraphPhysicsP
     const fg = fgRef.current;
     
     // Pre-calculate dynamic layout targets based on nodes present
-    const rawNodes = fg.graphData().nodes as ForceNode[];
+    const rawNodes = (fg as any).graphData().nodes as ForceNode[];
 
     const charge = fg.d3Force('charge');
     if (charge && 'strength' in charge && typeof (charge as { strength?: unknown }).strength === 'function') {
