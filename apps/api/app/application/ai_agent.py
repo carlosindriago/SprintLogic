@@ -8,6 +8,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import litellm
+from fastapi import HTTPException
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,6 +17,7 @@ from app.infrastructure.ai.provider_adapter import ProviderAdapter
 from app.infrastructure.db.database import get_sessionmaker
 from app.infrastructure.db.models import AIMemoryModel, ContextSnippetModel, ProjectModel
 from app.infrastructure.security.credential_manager import CredentialManager
+from app.utils.security import resolve_project_path
 
 logger = logging.getLogger(__name__)
 
@@ -604,12 +606,9 @@ class AIAgent:
                 if not root:
                     return "Error: No project context available."
 
-                target = Path(file_path)
-                if not target.is_absolute():
-                    target = Path(root) / file_path
-                target = target.resolve()
-
-                if not target.is_relative_to(root):
+                try:
+                    target = resolve_project_path(root, file_path)
+                except HTTPException:
                     return "Error: Access denied — file is outside the project."
 
                 try:
@@ -729,12 +728,9 @@ class AIAgent:
                 if not root:
                     return "Error: No hay proyecto cargado."
 
-                target = Path(file_path)
-                if not target.is_absolute():
-                    target = Path(root) / file_path
-                target = target.resolve()
-
-                if not target.is_relative_to(root):
+                try:
+                    target = resolve_project_path(root, file_path)
+                except HTTPException:
                     return "Error: Acceso denegado — el archivo está fuera del proyecto."
 
                 try:
