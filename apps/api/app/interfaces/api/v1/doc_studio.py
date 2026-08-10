@@ -98,7 +98,10 @@ async def chat_with_docs(
             break
 
         file_path = item["file_path"]
-        full_path = Path(project.path) / file_path
+        try:
+            full_path = resolve_project_path(project.path, file_path)
+        except HTTPException:
+            continue
 
         try:
             with open(full_path, encoding="utf-8") as f:
