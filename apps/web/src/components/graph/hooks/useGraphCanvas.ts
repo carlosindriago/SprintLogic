@@ -41,7 +41,6 @@ export function useGraphCanvas({
   displayGraphData,
   graphDataLength,
   activeTypes,
-  lowerSearchQuery,
   focusNode,
   hoverNode,
   neighbors,
