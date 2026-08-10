@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState, useEffect } from "react";
 import type { NodeObject, LinkObject } from "react-force-graph-2d";
 import { ForceNode, ForceLink } from "../types";
-import { getSafeTime, drawRoundedSquare, drawDiamond, drawTriangle } from "../utils";
+import { getSafeTime, drawRoundedSquare, drawDiamond, drawTriangle, drawFile } from "../utils";
 import { graphTheme, extColorHash } from "@/lib/graph-theme";
 
 interface UseGraphCanvasProps {
@@ -266,9 +266,9 @@ export function useGraphCanvas({
           ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
           ctx.stroke();
         } else {
-          ctx.beginPath();
-          ctx.arc(nx, ny, radius, 0, 2 * Math.PI);
+          drawFile(ctx, nx, ny, radius);
         }
+        
         ctx.fill();
 
         if (!faded && !isZoomedOut && !isMassive && label !== "Module") {
@@ -334,7 +334,7 @@ export function useGraphCanvas({
       }
     }
 
-    if (globalScale > 2.5 || id === focusNode || id === hoverNode) {
+    if (globalScale > 1.2 || id === focusNode || id === hoverNode) {
       if (!(isMassive && globalScale < 0.6 && !isActive)) {
         const fontSize = Math.max(7, 11 / globalScale);
         ctx.font = `${fontSize}px "Inter", sans-serif`;

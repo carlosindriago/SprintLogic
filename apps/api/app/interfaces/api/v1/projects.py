@@ -286,7 +286,8 @@ async def get_project_graph(project_id: str, expanded_folders: str | None = None
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid project ID format")
 
-    cached = graph_cache.get(project_uuid)
+    cache_key = f"{project_uuid}_{expanded_folders or ''}"
+    cached = graph_cache.get(cache_key)
     if cached and (time.time() - cached[1]) < 300:
         return cached[0]
 
@@ -386,7 +387,7 @@ async def get_project_graph(project_id: str, expanded_folders: str | None = None
         expanded_set = set(expanded_folders.split(",")) if expanded_folders else set()
         collapsed = collapse_graph_by_density(nodes_dict, links_dict, max_density=15, expanded_folders=expanded_set)
 
-    graph_cache[project_uuid] = (collapsed, time.time())
+    graph_cache[cache_key] = (collapsed, time.time())
 
     return collapsed
 
