@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Plus, Trash2, CheckCircle2, Circle, Bot } from 'lucide-react';
-import { updateKanbanTicket } from '@/lib/api';
+import { updateKanbanTicket, deleteKanbanTicket } from '@/lib/api';
 import { KanbanTicket, KanbanTicketUpdate } from '@/types';
 import { useTabsStore } from '@/store/tabsStore';
 import { useChatStore } from '@/store/chatStore';
@@ -30,6 +30,8 @@ export default function TicketDrawer({ ticket, allSprints, allEpics, onClose, on
   const [subtasks, setSubtasks] = useState<SubtaskItem[]>(ticket.subtasks || []);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
     setTitle(ticket.title);
@@ -72,6 +74,18 @@ export default function TicketDrawer({ ticket, allSprints, allEpics, onClose, on
       console.error('Failed to save ticket', error);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    setIsDeleting(true);
+    try {
+      await deleteKanbanTicket(ticket.id);
+      onUpdate(ticket); // This triggers fetchTasks and closes the drawer
+    } catch (error) {
+      console.error('Failed to delete ticket', error);
+      setIsDeleting(false);
+      setShowDeleteConfirm(false);
     }
   };
 
@@ -307,6 +321,28 @@ export default function TicketDrawer({ ticket, allSprints, allEpics, onClose, on
                 <Plus size={18} />
               </button>
             </form>
+          </div>
+
+          <div className="pt-6 mt-4">
+            {showDeleteConfirm ? (
+              <div className="flex items-center justify-between bg-red-950/30 border border-red-900/50 p-3 rounded-md">
+                <span className="text-xs text-red-400 font-medium">¿Estás seguro de eliminar este ticket?</span>
+                <div className="flex gap-2">
+                  <button onClick={() => setShowDeleteConfirm(false)} className="px-3 py-1.5 text-xs font-semibold text-zinc-400 hover:text-zinc-200 transition-colors">Cancelar</button>
+                  <button onClick={handleDelete} disabled={isDeleting} className="px-3 py-1.5 text-xs font-semibold bg-red-600 hover:bg-red-500 text-white rounded transition-colors disabled:opacity-50">
+                    {isDeleting ? 'Eliminando...' : 'Sí, eliminar'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button 
+                onClick={() => setShowDeleteConfirm(true)}
+                className="flex items-center gap-2 text-xs font-semibold text-red-400 hover:text-red-300 transition-colors py-2 px-4 rounded-md hover:bg-red-950/30 w-full justify-center border border-transparent hover:border-red-900/50"
+              >
+                <Trash2 size={16} />
+                <span>Eliminar Ticket</span>
+              </button>
+            )}
           </div>
 
         </div>

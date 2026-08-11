@@ -1,11 +1,11 @@
 {
     "schema_version": 1,
-    "commit": "47c6e7438f3f963fa7e0674b38de5a7741b8a09b",
-    "indexed_at": "2026-08-11T20:32:59Z",
+    "commit": "a882795bdf077f14f3c8172aafa10006f108cd85",
+    "indexed_at": "2026-08-11T21:55:49Z",
     "project": "home-carlos-Proyectos-spintlogic-sprintLogic-monorepo",
-    "nodes": 4475,
-    "edges": 12258,
-    "original_size": 15925248,
-    "compressed_size": 2658381,
+    "nodes": 4438,
+    "edges": 11423,
+    "original_size": 15466496,
+    "compressed_size": 2602100,
     "compression_level": 3
 }
