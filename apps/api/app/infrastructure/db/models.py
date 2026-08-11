@@ -5,7 +5,7 @@ from uuid import UUID
 
 from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, LargeBinary, String, Text
 from sqlalchemy import Enum as SQLAlchemyEnum
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.domain.graph_models import EdgeType, NodeLabel
 from app.domain.kanban_models import TicketPriority, TicketStatus, TicketType
