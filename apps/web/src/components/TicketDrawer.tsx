@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Trash2, CheckCircle2, Circle } from 'lucide-react';
+import { X, Plus, Trash2, CheckCircle2, Circle, Bot } from 'lucide-react';
 import { updateKanbanTicket } from '@/lib/api';
 import { KanbanTicket, KanbanTicketUpdate } from '@/types';
+import { useTabsStore } from '@/store/tabsStore';
+import { useChatStore } from '@/store/chatStore';
 
 export interface SubtaskItem {
   id: string;
@@ -39,6 +41,17 @@ export default function TicketDrawer({ ticket, allSprints, allEpics, onClose, on
     setSprint(ticket.sprint || '');
     setSubtasks(ticket.subtasks || []);
   }, [ticket]);
+
+  const addTab = useTabsStore(s => s.addTab);
+  const setPendingQuery = useChatStore(s => s.setPendingQuery);
+
+  const handleAIMentorClick = () => {
+    const prompt = `Mentor, necesito resolver el ticket ${ticket.type.toUpperCase()}-SL-${ticket.id.substring(0,6).toUpperCase()}: '${ticket.title}'. Por favor, usa tus herramientas para revisar mi estado de flujo actual y analiza el blast radius de los archivos que crees que deberíamos tocar. Dame un plan de ataque paso a paso.`;
+    setPendingQuery(prompt);
+    
+    addTab({ id: 'ai-history', title: 'SprintLogic AI', type: 'ai-history' });
+    onClose();
+  };
 
   const handleSaveMain = async () => {
     setIsSaving(true);
@@ -116,6 +129,14 @@ export default function TicketDrawer({ ticket, allSprints, allEpics, onClose, on
         <div className="flex items-center justify-between p-4 border-b border-[#27272a]">
           <h2 className="text-lg font-semibold text-zinc-100 truncate pr-4">SL-{ticket.id.substring(0,6).toUpperCase()}</h2>
           <div className="flex items-center gap-2">
+            <button
+              onClick={handleAIMentorClick}
+              className="flex items-center gap-1.5 bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600/30 hover:text-indigo-300 text-xs font-semibold px-3 py-1.5 rounded-md transition-colors border border-indigo-600/30 whitespace-nowrap"
+              title="Analizar con IA Mentor"
+            >
+              <Bot size={14} />
+              <span>Mentor IA</span>
+            </button>
             <button 
               onClick={handleSaveMain}
               disabled={isSaving}
