@@ -142,10 +142,17 @@ export interface KanbanTicket {
   status: TicketStatus;
   priority: TicketPriority;
   description: string;
+<<<<<<< Updated upstream
   branch_name?: string;
   epic?: string;
   sprint?: string;
   subtasks?: KanbanTicket[];
+=======
+  branch_name?: string | null;
+  epic?: string | null;
+  sprint?: string | null;
+  subtasks?: { id: string; title: string; completed: boolean }[];
+>>>>>>> Stashed changes
   created_at: string;
   updated_at: string;
   affected_nodes: TicketNodeLink[];
@@ -158,6 +165,10 @@ export interface KanbanTicketCreate {
   description: string;
   report_id?: string;
   affected_nodes?: TicketNodeLink[];
+  branch_name?: string | null;
+  epic?: string | null;
+  sprint?: string | null;
+  subtasks?: { id: string; title: string; completed: boolean }[];
 }
 
 export interface KanbanTicketUpdate {
@@ -166,6 +177,10 @@ export interface KanbanTicketUpdate {
   status?: TicketStatus;
   priority?: TicketPriority;
   description?: string;
+  branch_name?: string | null;
+  epic?: string | null;
+  sprint?: string | null;
+  subtasks?: { id: string; title: string; completed: boolean }[];
 }
 
 export interface BlastRadiusItem {

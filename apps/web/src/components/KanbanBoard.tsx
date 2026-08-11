@@ -8,7 +8,13 @@ import { CSS } from "@dnd-kit/utilities";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import ReactMarkdown from "react-markdown";
+<<<<<<< Updated upstream
 import { getProjectTasks, saveProjectTasks, getKanbanConfig, saveKanbanConfig, syncKanbanCommits, generateWBS, WBSHierarchicalResponse, KanbanColumn, fetchProjectTickets, updateKanbanTicket, deleteKanbanTicket } from '@/lib/api';
+=======
+import { getProjectTasks, saveProjectTasks, getKanbanConfig, saveKanbanConfig, syncKanbanCommits, KanbanColumn, fetchProjectTickets, updateKanbanTicket, deleteKanbanTicket, createKanbanTicket, createGitBranch, commitChanges } from '@/lib/api';
+import { KanbanTicket } from '@/types';
+import TicketDrawer from "./TicketDrawer";
+>>>>>>> Stashed changes
 import { toast } from "sonner";
 import { useLLMConfigStore } from '@/store/llmConfigStore';
 import { useTabsStore } from '@/store/tabsStore';
@@ -44,12 +50,14 @@ function SortableTask({
   task, 
   onNodeClick,
   onMentorClick,
-  onAutoFixClick
+  onAutoFixClick,
+  onClick
 }: { 
-  task: Task; 
+  task: Task & { subtasks?: any[] }; 
   onNodeClick?: (nodeId: string) => void; 
   onMentorClick?: (ticketId: string, nodeId: string) => void;
   onAutoFixClick?: (ticketId: string, nodeId: string, instruction: string) => void;
+  onClick?: () => void;
 }) {
   const router = useRouter();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id });
@@ -68,7 +76,7 @@ function SortableTask({
   };
 
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="mb-2 cursor-grab active:cursor-grabbing group">
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners} onClick={onClick} className="mb-2 cursor-grab active:cursor-grabbing group">
       <Card className="bg-zinc-800 border-zinc-700/50 hover:border-zinc-600 transition-colors">
         <CardContent className="p-3 text-xs text-zinc-200 flex flex-col gap-2">
           {/* Header with task ID and priority */}
@@ -114,6 +122,15 @@ function SortableTask({
               </span>
             ))}
           </div>
+
+          {task.subtasks && task.subtasks.length > 0 && (
+            <div className="mt-2 w-full bg-zinc-900 rounded-full h-1">
+              <div 
+                className="bg-blue-500 h-1 rounded-full" 
+                style={{ width: `${(task.subtasks.filter((s: any) => s.completed).length / task.subtasks.length) * 100}%` }} 
+              />
+            </div>
+          )}
 
           {task.affected_nodes && task.affected_nodes.length > 0 && (
             <div className="flex flex-col gap-1 border-t border-zinc-700/30 pt-2 mt-1">
@@ -205,6 +222,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
   const [newColRule, setNewColRule] = useState<'manual' | 'auto-on-test-fail' | 'auto-on-test-pass'>('manual');
   const [colError, setColError] = useState<string | null>(null);
 
+<<<<<<< Updated upstream
   // WBS Planner States
   const [showWbsModal, setShowWbsModal] = useState(false);
   const [wbsRequirements, setWbsRequirements] = useState("");
@@ -212,6 +230,24 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
   const [isWbsGenerating, setIsWbsGenerating] = useState(false);
   const wbsModel = useLLMConfigStore((s) => s.defaultModel);
   const [wbsError, setWbsError] = useState<string | null>(null);
+=======
+  // Filters State
+  const [sprintFilter, setSprintFilter] = useState("Todas");
+  const [epicFilter, setEpicFilter] = useState("Todas");
+
+  // Ticket Drawer State
+  const [rawTickets, setRawTickets] = useState<KanbanTicket[]>([]);
+  const [activeDrawerTicketId, setActiveDrawerTicketId] = useState<string | null>(null);
+
+  // Prompts State
+  const [branchPrompt, setBranchPrompt] = useState<{ticketId: string, title: string, type: string} | null>(null);
+  const [commitPrompt, setCommitPrompt] = useState<{ticketId: string, title: string} | null>(null);
+  const [commitMessage, setCommitMessage] = useState("");
+
+  // Quick Add State
+  const [quickAddText, setQuickAddText] = useState("");
+  const [isQuickAdding, setIsQuickAdding] = useState(false);
+>>>>>>> Stashed changes
 
   const handleGenerateWbs = async () => {
     if (!projectId || !wbsRequirements.trim()) return;
@@ -285,6 +321,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
 
       try {
         const dbTickets = await fetchProjectTickets(projectId);
+        setRawTickets(dbTickets);
         const ticketTasks: Task[] = dbTickets.map((t) => ({
           id: t.id,
           content: t.title + (t.description ? `\n\n${t.description}` : ""),
@@ -295,7 +332,8 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
           raw_line: -1,
           tags: [t.type],
           has_id: true,
-        }));
+          subtasks: t.subtasks
+        } as any));
 
         const existingIds = new Set(data.tasks.map((t) => t.id));
         const newDbTasks = ticketTasks.filter((t) => !existingIds.has(t.id));
@@ -406,6 +444,21 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
     if (isUuid) {
       try {
         await updateKanbanTicket(activeIdStr, { status: newStatus as TicketStatus });
+        const targetCol = columns.find(c => c.id === newStatus);
+        if (targetCol) {
+          if (targetCol.rule === 'create_ephemeral_branch') {
+            const raw = rawTickets.find(r => r.id === activeIdStr);
+            if (raw) {
+              setBranchPrompt({ ticketId: activeIdStr, title: raw.title, type: raw.type });
+            }
+          } else if (targetCol.rule === 'prompt_commit_push') {
+            const raw = rawTickets.find(r => r.id === activeIdStr);
+            if (raw) {
+              setCommitPrompt({ ticketId: activeIdStr, title: raw.title });
+              setCommitMessage(`${raw.type.toLowerCase()}(SL-${raw.id.substring(0,6).toUpperCase()}): ${raw.title}`);
+            }
+          }
+        }
       } catch (err) {
         // Rollback Optimistic UI state on error!
         setTasks(prevTasksState);
@@ -483,21 +536,46 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
     }
   };
 
+  const filteredTasks = useMemo(() => {
+    let filtered = tasks;
+    if (sprintFilter !== "Todas") {
+      filtered = filtered.filter(t => {
+        const raw = rawTickets.find(r => r.id === t.id);
+        return raw?.sprint === sprintFilter;
+      });
+    }
+    if (epicFilter !== "Todas") {
+      filtered = filtered.filter(t => {
+        const raw = rawTickets.find(r => r.id === t.id);
+        return raw?.epic === epicFilter;
+      });
+    }
+    return filtered;
+  }, [tasks, sprintFilter, epicFilter, rawTickets]);
+
   // ⚡ Bolt: Performance Optimization
   // Groups tasks by status in a single pass O(N).
   // Prevents filtering the entire tasks array 3 times per column on every render,
   // reducing complexity from O(C * N) to O(N) and improving drag-and-drop responsiveness.
   const tasksByStatus = useMemo(() => {
-    return tasks.reduce((acc, task) => {
+    return filteredTasks.reduce((acc, task) => {
       const status = task.status;
       if (!acc[status]) acc[status] = [];
       acc[status].push(task);
       return acc;
     }, {} as Record<string, Task[]>);
-  }, [tasks]);
+  }, [filteredTasks]);
+
+  const uniqueSprints = useMemo(() => {
+    return Array.from(new Set(rawTickets.map(t => t.sprint).filter(Boolean))) as string[];
+  }, [rawTickets]);
+
+  const uniqueEpics = useMemo(() => {
+    return Array.from(new Set(rawTickets.map(t => t.epic).filter(Boolean))) as string[];
+  }, [rawTickets]);
 
   if (!projectId) {
-    return <div className="h-full flex items-center justify-center text-zinc-500">Selecciona un proyecto para ver el Kanban.</div>;
+    return <div className="h-full flex items-center justify-center text-zinc-500">Selecciona un proyecto para ver el Sprint Center.</div>;
   }
 
   const activeTask = activeId ? tasks.find(t => t.id === activeId) : null;
@@ -508,9 +586,48 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
       <div className="flex items-center justify-between px-6 py-3 border-b border-zinc-800/50 bg-[#161618] shrink-0">
         <div className="flex items-center gap-2">
           <Brain className="w-4 h-4 text-blue-400" />
-          <span className="text-sm font-semibold text-zinc-200">Tablero Kanban del Proyecto</span>
+          <span className="text-sm font-semibold text-zinc-200">Sprint Center</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-zinc-400 font-medium">Sprint:</span>
+              <select 
+                value={sprintFilter} 
+                onChange={e => setSprintFilter(e.target.value)}
+                style={{ colorScheme: 'dark' }}
+                className="bg-[#18181b] text-zinc-100 text-xs px-2.5 py-1 rounded-md border border-[#3f3f46] hover:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-sm"
+              >
+                <option value="Todas" className="bg-[#18181b] text-zinc-100">Todos</option>
+                {uniqueSprints.map(s => <option key={s} value={s} className="bg-[#18181b] text-zinc-100">{s}</option>)}
+              </select>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-zinc-400 font-medium">Épica:</span>
+              <select 
+                value={epicFilter} 
+                onChange={e => setEpicFilter(e.target.value)}
+                style={{ colorScheme: 'dark' }}
+                className="bg-[#18181b] text-zinc-100 text-xs px-2.5 py-1 rounded-md border border-[#3f3f46] hover:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-sm"
+              >
+                <option value="Todas" className="bg-[#18181b] text-zinc-100">Todas</option>
+                {uniqueEpics.map(e => <option key={e} value={e} className="bg-[#18181b] text-zinc-100">{e}</option>)}
+              </select>
+            </div>
+          </div>
+          <button 
+            onClick={() => {
+              useTabsStore.getState().addTab({
+                id: 'planning-studio',
+                title: 'Planning Studio',
+                type: 'planning-studio',
+              });
+            }}
+            className="flex items-center gap-1.5 text-xs text-blue-300 hover:text-white px-3 py-1.5 rounded bg-blue-950/60 hover:bg-blue-900/80 transition-colors border border-blue-800/60 shadow-sm font-medium"
+          >
+            <Brain className="w-3.5 h-3.5 text-blue-400" />
+            Planning Studio
+          </button>
           <button 
             onClick={() => setShowWbsModal(true)}
             className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 px-3 py-1.5 rounded bg-blue-950/20 hover:bg-blue-950/30 transition-colors border border-blue-900/30"
@@ -561,6 +678,12 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
                           key={task.id}
                           task={task}
                           onNodeClick={onNodeClick}
+                          onClick={() => {
+                            const isDbTicket = rawTickets.some(r => r.id === task.id);
+                            if (isDbTicket) {
+                              setActiveDrawerTicketId(task.id);
+                            }
+                          }}
                           onMentorClick={(ticketId, nodeId) => {
                             setActiveMentorTicket({ ticketId, projectId: projectId!, filePath: nodeId });
                           }}
@@ -607,7 +730,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
             <div className="flex items-center justify-between px-6 py-4 border-b border-[#3f3f46]">
               <div className="flex items-center gap-2">
                 <Settings className="w-5 h-5 text-blue-400" />
-                <h3 className="text-md font-bold text-zinc-100">Configurar Columnas Kanban</h3>
+                <h3 className="text-md font-bold text-zinc-100">Configurar Columnas de Sprint Center</h3>
               </div>
               <button aria-label="Cerrar configuración" onClick={() => setShowConfigModal(false)} className="text-zinc-400 hover:text-zinc-250">
                 <X aria-hidden="true" className="w-5 h-5" />
@@ -878,6 +1001,90 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
           onClose={() => setActiveMentorTicket(null)}
         />
       )}
+
+      {/* Ticket Drawer */}
+      {activeDrawerTicketId && (
+        <TicketDrawer 
+          ticket={rawTickets.find(r => r.id === activeDrawerTicketId)!}
+          allSprints={uniqueSprints}
+          allEpics={uniqueEpics}
+          onClose={() => setActiveDrawerTicketId(null)}
+          onUpdate={(updated) => {
+            fetchTasks();
+            setActiveDrawerTicketId(null);
+          }}
+        />
+      )}
+
+      {/* Ephemeral Branch Prompt */}
+      {branchPrompt && projectId && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-[#18181b] border border-zinc-700 p-6 rounded-lg max-w-sm w-full shadow-2xl">
+            <h3 className="text-zinc-100 font-semibold mb-2 flex items-center gap-2"><GitBranch size={18}/> Crear Rama Efímera</h3>
+            <p className="text-zinc-400 text-xs mb-4">Se ha detectado el arrastre a una columna que requiere una rama git.</p>
+            
+            <div className="bg-zinc-950 border border-zinc-800 p-3 rounded text-sm text-zinc-300 font-mono mb-4 break-words">
+              {`${branchPrompt.type.toLowerCase()}/${branchPrompt.ticketId.substring(0,6).toUpperCase()}-${branchPrompt.title.toLowerCase().replace(/\s+/g, '-')}`}
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <button 
+                onClick={() => setBranchPrompt(null)}
+                className="px-3 py-1.5 rounded bg-zinc-800 text-zinc-300 hover:bg-zinc-700 text-xs font-semibold"
+              >Omitir</button>
+              <button 
+                onClick={async () => {
+                  try {
+                    await createGitBranch(projectId, branchPrompt.ticketId);
+                    toast.success("Rama creada exitosamente");
+                  } catch (e) {
+                    toast.error("Error al crear rama");
+                  }
+                  setBranchPrompt(null);
+                }}
+                className="px-3 py-1.5 rounded bg-blue-600 text-white hover:bg-blue-500 text-xs font-semibold"
+              >Crear Rama</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Commit & Push Prompt */}
+      {commitPrompt && projectId && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-[#18181b] border border-zinc-700 p-6 rounded-lg max-w-md w-full shadow-2xl">
+            <h3 className="text-zinc-100 font-semibold mb-2 flex items-center gap-2"><Check size={18}/> Hacer Commit & Push</h3>
+            <p className="text-zinc-400 text-xs mb-4">Has terminado esta tarea. ¿Deseas guardar los cambios locales?</p>
+            
+            <textarea 
+              value={commitMessage}
+              onChange={e => setCommitMessage(e.target.value)}
+              className="w-full bg-zinc-950 border border-zinc-800 rounded p-2 text-sm text-zinc-200 mb-4 font-mono focus:border-blue-500 outline-none"
+              rows={3}
+            />
+
+            <div className="flex justify-end gap-2">
+              <button 
+                onClick={() => setCommitPrompt(null)}
+                className="px-3 py-1.5 rounded bg-zinc-800 text-zinc-300 hover:bg-zinc-700 text-xs font-semibold"
+              >Más Tarde</button>
+              <button 
+                onClick={async () => {
+                  try {
+                    await commitChanges(projectId, commitMessage);
+                    toast.success("Commit & Push exitoso");
+                  } catch (e) {
+                    toast.error("Error en Commit & Push");
+                  }
+                  setCommitPrompt(null);
+                }}
+                className="px-3 py-1.5 rounded bg-green-600 text-white hover:bg-green-500 text-xs font-semibold"
+              >Commit & Push</button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

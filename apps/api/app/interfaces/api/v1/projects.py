@@ -1965,18 +1965,23 @@ async def generate_wbs(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    prompt = f"""Eres un Ingeniero de Software Principal y Gestor de Proyectos de gran experiencia. Descompón los siguientes requerimientos en una estructura jerárquica (WBS).
+    prompt = f"""Eres un Ingeniero de Software Principal y Gestor de Proyectos de gran experiencia. Descompón los siguientes requerimientos en una estructura jerárquica (WBS) para Sprint Center.
 
 Requerimientos:
 {request.requirements}
 
 Instrucciones de descomposición:
 1. Divide la feature en Work Packages (Epics).
-2. Para cada Work Package, define subtareas atómicas y secuenciales.
-3. Sugiere dependencias lógicas dentro de las subtareas de un paquete (por IDs, ej: 1.1, 1.2).
-4. Estima el tamaño en horas para cada subtarea.
-5. Suma el total de horas en total_estimated_hours.
-6. Devuelve la salida ESTRICTAMENTE en formato JSON.
+2. Para cada Work Package y subtarea, incluye los campos extendidos:
+   - type: ('Feature' | 'Refactor' | 'Technical Debt' | 'Security')
+   - priority: ('High' | 'Medium' | 'Low')
+   - epic: Nombre de la Épica
+   - sprint: Asignación de Sprint (ej: "Sprint 1")
+   - branch_name: Nombre de rama git sugerido (ej: "feature/sl-101-models")
+   - subtasks: Pasos técnicos detallados [{"id": "1", "title": "Crear tabla", "completed": false}]
+3. Estima el tamaño en horas para cada subtarea.
+4. Suma el total de horas en total_estimated_hours.
+5. Devuelve la salida ESTRICTAMENTE en formato JSON.
 
 Debes responder ÚNICAMENTE con un objeto JSON válido con esta estructura exacta:
 {{
@@ -1985,11 +1990,19 @@ Debes responder ÚNICAMENTE con un objeto JSON válido con esta estructura exact
       "id": "1",
       "title": "Configurar Backend",
       "objective": "Establecer la base de datos y la API.",
+      "epic": "Autenticación",
+      "sprint": "Sprint 1",
       "subtasks": [
         {{
           "id": "1.1",
           "title": "Modelos BD",
           "description": "Crear modelos con SQLAlchemy",
+          "type": "Feature",
+          "priority": "High",
+          "epic": "Autenticación",
+          "sprint": "Sprint 1",
+          "branch_name": "feature/sl-101-user-model",
+          "subtasks": [{"id": "1.1.1", "title": "Definir tabla User", "completed": false}],
           "estimated_hours": 2.5,
           "dependencies": []
         }}

@@ -42,15 +42,37 @@ export default function PlanningStudioTab() {
     try {
       for (const pkg of wbsData.work_packages || []) {
         for (const task of pkg.subtasks || []) {
+          const rawSubtasks = (task as any).subtasks || [];
+          const normalizedSubtasks = rawSubtasks.map((st: any, idx: number) => {
+            if (typeof st === 'string') {
+              return { id: String(idx + 1), title: st, completed: false };
+            }
+            return {
+              id: st.id || String(idx + 1),
+              title: st.title || String(st),
+              completed: Boolean(st.completed)
+            };
+          });
+
+          const epicName = (task as any).epic || pkg.epic || pkg.title;
+          const sprintName = (task as any).sprint || pkg.sprint || "Sprint 1";
+          const ticketType = (task as any).type || "Feature";
+          const ticketPriority = (task as any).priority || "Medium";
+          const branchName = (task as any).branch_name || undefined;
+
           await createKanbanTicket(activeProjectId, {
-            title: `[${pkg.title}] ${task.title}`,
-            type: "Feature",
-            priority: "Medium",
-            description: task.description || "",
+            title: task.title,
+            type: ticketType as any,
+            priority: ticketPriority as any,
+            description: task.description || pkg.objective || "",
+            epic: epicName,
+            sprint: sprintName,
+            branch_name: branchName,
+            subtasks: normalizedSubtasks,
           });
         }
       }
-      useTabsStore.getState().addTab({ id: 'kanban', title: 'Kanban Board', type: 'kanban', data: { projectId: activeProjectId } });
+      useTabsStore.getState().addTab({ id: 'kanban', title: 'Sprint Center', type: 'kanban', data: { projectId: activeProjectId } });
     } catch (e) {
       console.error("Failed to export to kanban", e);
     } finally {
@@ -239,7 +261,7 @@ export default function PlanningStudioTab() {
                   disabled={isExporting}
                 >
                   {isExporting ? <Loader2 className="w-3 h-3 mr-2 animate-spin" /> : null}
-                  Export to Kanban
+                  Exportar a Sprint Center
                 </Button>
               </div>
             </div>

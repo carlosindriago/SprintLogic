@@ -216,13 +216,24 @@ export function AIReportViewer({ projectId, reportId, markdown: initialMarkdown 
 
     try {
       for (const pkg of data.work_packages) {
-        const epicBadge = `[📦 ${pkg.title}]`;
+        const epicName = (pkg as any).epic || pkg.title;
+        const sprintName = (pkg as any).sprint || "Sprint 1";
         for (const sub of pkg.subtasks) {
+          const rawSubtasks = (sub as any).subtasks || [];
+          const normalizedSubtasks = rawSubtasks.map((st: any, idx: number) => {
+            if (typeof st === 'string') return { id: String(idx + 1), title: st, completed: false };
+            return { id: st.id || String(idx + 1), title: st.title || String(st), completed: Boolean(st.completed) };
+          });
+
           const ticket = await createKanbanTicket(projectId, {
-            title: `${epicBadge} ${sub.title}`,
-            type: "Feature",
-            priority: "Medium",
-            description: sub.description + `\n\nEstimated: ${sub.estimated_hours}h`,
+            title: sub.title,
+            type: ((sub as any).type as any) || "Feature",
+            priority: ((sub as any).priority as any) || "Medium",
+            description: sub.description ? `${sub.description}\n\nEstimated: ${sub.estimated_hours}h` : pkg.objective || "",
+            epic: (sub as any).epic || epicName,
+            sprint: (sub as any).sprint || sprintName,
+            branch_name: (sub as any).branch_name || undefined,
+            subtasks: normalizedSubtasks,
             report_id: reportId,
             affected_nodes: [],
           });
@@ -230,7 +241,7 @@ export function AIReportViewer({ projectId, reportId, markdown: initialMarkdown 
           createdCount++;
         }
       }
-      toast.success(`Se crearon ${createdCount} tickets de WBS en el Kanban`);
+      toast.success(`Se crearon ${createdCount} tickets de WBS en Sprint Center`);
     } catch (err) {
       toast.error("Error guardando tareas WBS. Ejecutando rollback...", { description: err instanceof Error ? err.message : String(err) });
       
@@ -343,7 +354,7 @@ export function AIReportViewer({ projectId, reportId, markdown: initialMarkdown 
           <div className="mt-12 pt-8 border-t border-[#27272a]">
             <div className="flex items-center gap-2 mb-6">
               <Kanban className="w-6 h-6 text-blue-400" />
-              <h2 className="text-2xl font-bold text-zinc-100">Tareas Accionables (Kanban)</h2>
+              <h2 className="text-2xl font-bold text-zinc-100">Tareas Accionables (Sprint Center)</h2>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

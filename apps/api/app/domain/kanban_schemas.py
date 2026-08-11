@@ -21,6 +21,10 @@ class KanbanTicketCreate(BaseModel):
     description: str
     report_id: UUID | None = None
     affected_nodes: list[TicketNodeLink] = []
+    branch_name: str | None = None
+    epic: str | None = None
+    sprint: str | None = None
+    subtasks: list[dict] = []
 
 
 class KanbanTicketUpdate(BaseModel):
@@ -29,6 +33,10 @@ class KanbanTicketUpdate(BaseModel):
     status: TicketStatus | None = None
     priority: TicketPriority | None = None
     description: str | None = None
+    branch_name: str | None = None
+    epic: str | None = None
+    sprint: str | None = None
+    subtasks: list[dict] | None = None
 
 
 class KanbanTicketResponse(BaseModel):
@@ -43,7 +51,11 @@ class KanbanTicketResponse(BaseModel):
     branch_name: str | None = None
     epic: str | None = None
     sprint: str | None = None
+<<<<<<< Updated upstream
     subtasks: list['KanbanTicketResponse'] = []
+=======
+    subtasks: list[dict] = []
+>>>>>>> Stashed changes
     created_at: datetime
     updated_at: datetime
     affected_nodes: list[TicketNodeLink] = []

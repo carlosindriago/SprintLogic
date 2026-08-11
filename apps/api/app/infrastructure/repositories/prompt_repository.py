@@ -417,7 +417,18 @@ Si la conversación no contiene nada valioso (charlas genéricas), devuelve un J
 INSIGHT_WORKER_VARS: list[str] = []
 
 PLANNING_STUDIO_ID = "planning_studio_assistant"
-PLANNING_STUDIO_CONTENT = """You are an AI planning assistant. If the user asks for a project plan, tasks, or WBS, use the 'render_wbs_tree' tool to show the plan."""
+PLANNING_STUDIO_CONTENT = """Eres un asistente de planificación IA experto en estructurar proyectos y generar tareas para Sprint Center.
+Si el usuario solicita un plan de proyecto, lista de tareas o WBS (Work Breakdown Structure), utiliza la herramienta 'render_wbs_tree' para renderizar el plan.
+
+Para cada tarea/subtarea en la estructura WBS, debes incluir obligatoriamente los campos extendidos:
+- title: Título conciso del ticket.
+- description: Explicación técnica detallada.
+- type: Tipo de ticket ('Feature' | 'Refactor' | 'Technical Debt' | 'Security').
+- priority: Prioridad ('High' | 'Medium' | 'Low').
+- epic: Nombre de la Épica a la que pertenece (ej. "Autenticación y Sesiones").
+- sprint: Asignación inicial de Sprint (ej. "Sprint 1" o "Backlog").
+- subtasks: Lista de pasos técnicos/subtareas a tachar [{"title": "Crear modelo User", "completed": false}].
+- branch_name: Nombre de rama git sugerido (ej. "feature/sl-101-user-model")."""
 PLANNING_STUDIO_VARS: list[str] = []
 
 CHAT_TITLE_GEN_ID = "chat_title_generator"

@@ -33,6 +33,10 @@ class SQLAlchemyKanbanRepository:
             description=payload.description,
             created_at=now,
             updated_at=now,
+            branch_name=payload.branch_name,
+            epic=payload.epic,
+            sprint=payload.sprint,
+            subtasks=payload.subtasks,
         )
         self.session.add(ticket_model)
 
@@ -59,6 +63,10 @@ class SQLAlchemyKanbanRepository:
             description=payload.description,
             created_at=now,
             updated_at=now,
+            branch_name=payload.branch_name,
+            epic=payload.epic,
+            sprint=payload.sprint,
+            subtasks=payload.subtasks,
             affected_nodes=node_links,
         )
 
@@ -85,6 +93,10 @@ class SQLAlchemyKanbanRepository:
             description=ticket.description,
             created_at=ticket.created_at,
             updated_at=ticket.updated_at,
+            branch_name=ticket.branch_name,
+            epic=ticket.epic,
+            sprint=ticket.sprint,
+            subtasks=ticket.subtasks or [],
             affected_nodes=links,
         )
 
@@ -115,6 +127,10 @@ class SQLAlchemyKanbanRepository:
                     description=t.description,
                     created_at=t.created_at,
                     updated_at=t.updated_at,
+                    branch_name=t.branch_name,
+                    epic=t.epic,
+                    sprint=t.sprint,
+                    subtasks=t.subtasks or [],
                     affected_nodes=links,
                 )
             )
@@ -138,6 +154,14 @@ class SQLAlchemyKanbanRepository:
             ticket.priority = payload.priority
         if payload.description is not None:
             ticket.description = payload.description
+        if payload.branch_name is not None:
+            ticket.branch_name = payload.branch_name
+        if payload.epic is not None:
+            ticket.epic = payload.epic
+        if payload.sprint is not None:
+            ticket.sprint = payload.sprint
+        if payload.subtasks is not None:
+            ticket.subtasks = payload.subtasks
 
         ticket.updated_at = datetime.utcnow()
         await self.session.commit()

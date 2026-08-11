@@ -13,6 +13,8 @@ import {
   BlastRadiusResponse,
 } from '../types';
 
+export type { KanbanTicket, KanbanTicketCreate, KanbanTicketUpdate };
+
 export interface TestDiscoveryItem {
   file_path: string;
   has_test: boolean;
@@ -277,13 +279,14 @@ export const getGitDashboard = (projectId: string) => api.get<GitDashboard>(`/pr
 export const stageFile = (projectId: string, filePath: string) => api.post(`/projects/${projectId}/git/stage`, { file_path: filePath });
 export const unstageFile = (projectId: string, filePath: string) => api.post(`/projects/${projectId}/git/unstage`, { file_path: filePath });
 export const commitChanges = (projectId: string, message: string) => api.post(`/projects/${projectId}/git/commit`, { message });
+export const createGitBranch = (projectId: string, name: string) => api.post(`/projects/${projectId}/git/branches`, { name });
 
 // --- Kanban & Tasks ---
 export interface KanbanColumn {
   id: string;
   title: string;
   color: string;
-  rule?: 'manual' | 'auto-on-test-fail' | 'auto-on-test-pass';
+  rule?: 'manual' | 'auto-on-test-fail' | 'auto-on-test-pass' | 'create_ephemeral_branch' | 'prompt_commit_push' | 'require_pull_request';
 }
 
 export interface WBSSubtask {
