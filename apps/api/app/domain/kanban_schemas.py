@@ -1,5 +1,6 @@
 from datetime import datetime
 from uuid import UUID
+from typing import List
 
 from pydantic import BaseModel, ConfigDict
 
@@ -39,6 +40,10 @@ class KanbanTicketResponse(BaseModel):
     status: TicketStatus
     priority: TicketPriority
     description: str
+    branch_name: str | None = None
+    epic: str | None = None
+    sprint: str | None = None
+    subtasks: list['KanbanTicketResponse'] = []
     created_at: datetime
     updated_at: datetime
     affected_nodes: list[TicketNodeLink] = []

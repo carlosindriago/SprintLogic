@@ -274,6 +274,24 @@ class KanbanTicketModel(Base):
         SQLAlchemyEnum(TicketPriority), nullable=False, default=TicketPriority.MEDIUM
     )
     description: Mapped[str] = mapped_column(Text, nullable=False)
+    branch_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    epic: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    sprint: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    subtasks: Mapped[list["KanbanTicketModel"]] = relationship(
+        "KanbanTicketModel", 
+        back_populates="parent",
+        remote_side=[id],
+        nullable=True
+    )
+    parent_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("kanban_tickets.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    parent: Mapped["KanbanTicketModel"] = relationship(
+        "KanbanTicketModel",
+        back_populates="subtasks",
+        remote_side=[id],
+        nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=datetime.utcnow
     )

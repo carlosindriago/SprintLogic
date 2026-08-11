@@ -292,6 +292,9 @@ export interface WBSSubtask {
   description: string;
   estimated_hours: number;
   dependencies: string[];
+  branch_name?: string;
+  epic?: string;
+  sprint?: string;
 }
 
 export interface WorkPackage {
@@ -484,6 +487,10 @@ export const createKanbanTicket = async (projectId: string, payload: KanbanTicke
 
 export const updateKanbanTicket = async (ticketId: string, payload: KanbanTicketUpdate): Promise<KanbanTicket> => {
   return await api.patch<KanbanTicket>(`/kanban/tickets/${ticketId}`, payload);
+};
+
+export const createGitBranch = async (projectId: string, branchName: string): Promise<void> => {
+  return await api.post(`/projects/${projectId}/git/branches`, { branch_name: branchName });
 };
 
 export const deleteKanbanTicket = async (ticketId: string): Promise<void> => {

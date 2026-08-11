@@ -142,6 +142,10 @@ export interface KanbanTicket {
   status: TicketStatus;
   priority: TicketPriority;
   description: string;
+  branch_name?: string;
+  epic?: string;
+  sprint?: string;
+  subtasks?: KanbanTicket[];
   created_at: string;
   updated_at: string;
   affected_nodes: TicketNodeLink[];

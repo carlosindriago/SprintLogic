@@ -147,6 +147,32 @@ class SQLAlchemyKanbanRepository:
         nodes = nodes_res.scalars().all()
         links = [TicketNodeLink(node_id=n.node_id, file_path=n.file_path) for n in nodes]
 
+        # Get subtasks for this ticket
+        subtask_query = select(KanbanTicketModel).where(KanbanTicketModel.parent_id == ticket.id)
+        subtasks_res = await self.session.execute(subtask_query)
+        subtasks = subtasks_res.scalars().all()
+        
+        # Convert subtasks to KanbanTicketResponse (simplified for now)
+        subtask_responses = [
+            KanbanTicketResponse(
+                id=subtask.id,
+                project_id=subtask.project_id,
+                report_id=subtask.report_id,
+                title=subtask.title,
+                type=subtask.type,
+                status=subtask.status,
+                priority=subtask.priority,
+                description=subtask.description,
+                branch_name=subtask.branch_name,
+                epic=subtask.epic,
+                sprint=subtask.sprint,
+                subtasks=[],  # Nested subtasks not handled in this recursion
+                created_at=subtask.created_at,
+                updated_at=subtask.updated_at,
+                affected_nodes=[],  # Will need to be populated if needed
+            ) for subtask in subtasks
+        ]
+
         return KanbanTicketResponse(
             id=ticket.id,
             project_id=ticket.project_id,
@@ -156,6 +182,10 @@ class SQLAlchemyKanbanRepository:
             status=ticket.status,
             priority=ticket.priority,
             description=ticket.description,
+            branch_name=ticket.branch_name,
+            epic=ticket.epic,
+            sprint=ticket.sprint,
+            subtasks=subtask_responses,
             created_at=ticket.created_at,
             updated_at=ticket.updated_at,
             affected_nodes=links,
