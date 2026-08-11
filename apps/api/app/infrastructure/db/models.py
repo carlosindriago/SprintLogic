@@ -276,7 +276,6 @@ class KanbanTicketModel(Base):
     description: Mapped[str] = mapped_column(Text, nullable=False)
     branch_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     epic: Mapped[str | None] = mapped_column(String(255), nullable=True)
-<<<<<<< Updated upstream
     sprint: Mapped[str | None] = mapped_column(String(100), nullable=True)
     subtasks: Mapped[list["KanbanTicketModel"]] = relationship(
         "KanbanTicketModel", 
@@ -293,10 +292,6 @@ class KanbanTicketModel(Base):
         remote_side=[id],
         nullable=True
     )
-=======
-    sprint: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    subtasks: Mapped[list | dict | None] = mapped_column(JSON, nullable=True, default=list)
->>>>>>> Stashed changes
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=datetime.utcnow
     )
