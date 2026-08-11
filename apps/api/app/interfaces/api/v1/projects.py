@@ -1786,7 +1786,7 @@ async def get_project_sticky_notes(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    json_path = os.path.join(project.path, f"{project_id}.json")
+    json_path = resolve_project_path(project.path, f"{project_id}.json")
 
     notes = []
     if await async_exists(json_path):
@@ -1815,7 +1815,7 @@ async def update_project_sticky_notes(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    json_path = os.path.join(project.path, f"{project_id}.json")
+    json_path = resolve_project_path(project.path, f"{project_id}.json")
 
     data = {}
     if await async_exists(json_path):
