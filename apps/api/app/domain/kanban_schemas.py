@@ -51,11 +51,7 @@ class KanbanTicketResponse(BaseModel):
     branch_name: str | None = None
     epic: str | None = None
     sprint: str | None = None
-<<<<<<< Updated upstream
     subtasks: list['KanbanTicketResponse'] = []
-=======
-    subtasks: list[dict] = []
->>>>>>> Stashed changes
     created_at: datetime
     updated_at: datetime
     affected_nodes: list[TicketNodeLink] = []

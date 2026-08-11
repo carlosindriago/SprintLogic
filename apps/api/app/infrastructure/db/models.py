@@ -280,8 +280,7 @@ class KanbanTicketModel(Base):
     subtasks: Mapped[list["KanbanTicketModel"]] = relationship(
         "KanbanTicketModel", 
         back_populates="parent",
-        remote_side=[id],
-        nullable=True
+        remote_side=[id]
     )
     parent_id: Mapped[UUID | None] = mapped_column(
         ForeignKey("kanban_tickets.id", ondelete="CASCADE"), nullable=True, index=True
@@ -289,8 +288,7 @@ class KanbanTicketModel(Base):
     parent: Mapped["KanbanTicketModel"] = relationship(
         "KanbanTicketModel",
         back_populates="subtasks",
-        remote_side=[id],
-        nullable=True
+        remote_side=[id]
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=datetime.utcnow
