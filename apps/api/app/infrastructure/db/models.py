@@ -8,7 +8,13 @@ from sqlalchemy import Enum as SQLAlchemyEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.domain.graph_models import EdgeType, NodeLabel
-from app.domain.kanban_models import TicketPriority, TicketStatus, TicketType
+from app.domain.kanban_models import (
+    EpicStatus,
+    SprintStatus,
+    TicketPriority,
+    TicketStatus,
+    TicketType,
+)
 from app.infrastructure.db.database import Base
 
 
@@ -253,6 +259,49 @@ class DaemonLockModel(Base):
     last_fired_at: Mapped[str] = mapped_column(String, nullable=False)
 
 
+class EpicModel(Base):
+    __tablename__ = "epics"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    project_id: Mapped[UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    color: Mapped[str] = mapped_column(String(50), nullable=False, default="bg-blue-500")
+    status: Mapped[EpicStatus] = mapped_column(
+        SQLAlchemyEnum(EpicStatus), nullable=False, default=EpicStatus.ACTIVE
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=datetime.utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+
+class SprintModel(Base):
+    __tablename__ = "sprints"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    project_id: Mapped[UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    goal: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    start_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    end_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    status: Mapped[SprintStatus] = mapped_column(
+        SQLAlchemyEnum(SprintStatus), nullable=False, default=SprintStatus.PLANNED
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=datetime.utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+
 class KanbanTicketModel(Base):
     __tablename__ = "kanban_tickets"
 
@@ -275,8 +324,12 @@ class KanbanTicketModel(Base):
     )
     description: Mapped[str] = mapped_column(Text, nullable=False)
     branch_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    epic: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    sprint: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    epic_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("epics.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    sprint_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("sprints.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     subtasks: Mapped[list | dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=datetime.utcnow

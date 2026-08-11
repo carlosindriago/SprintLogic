@@ -8,10 +8,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.patch_engine import apply_patch
 from app.domain.kanban_schemas import (
+    EpicCreate,
+    EpicResponse,
+    EpicUpdate,
     KanbanTicketCreate,
     KanbanTicketPatch,
     KanbanTicketResponse,
     KanbanTicketUpdate,
+    SprintCreate,
+    SprintResponse,
+    SprintUpdate,
 )
 from app.infrastructure.db.database import get_db_session
 from app.infrastructure.db.models import GraphNodeModel
@@ -186,3 +192,117 @@ async def apply_ticket_patch(
     except Exception as e:
         logger.error("Failed to apply patch: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="An internal error occurred")
+
+@router.get("/projects/{project_id}/epics", response_model=list[EpicResponse])
+async def get_project_epics(
+    project_id: str,
+    include_archived: bool = False,
+    session: AsyncSession = Depends(get_db_session),
+):
+    try:
+        project_uuid = UUID(project_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid project ID format")
+    repo = SQLAlchemyKanbanRepository(session)
+    return await repo.get_epics_by_project(project_uuid, include_archived)
+
+@router.post("/projects/{project_id}/epics", response_model=EpicResponse, status_code=status.HTTP_201_CREATED)
+async def create_project_epic(
+    project_id: str,
+    payload: EpicCreate,
+    session: AsyncSession = Depends(get_db_session),
+):
+    try:
+        project_uuid = UUID(project_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid project ID format")
+    repo = SQLAlchemyKanbanRepository(session)
+    return await repo.create_epic(project_uuid, payload)
+
+@router.patch("/epics/{epic_id}", response_model=EpicResponse)
+async def update_epic_endpoint(
+    epic_id: str,
+    payload: EpicUpdate,
+    session: AsyncSession = Depends(get_db_session),
+):
+    try:
+        epic_uuid = UUID(epic_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid epic ID format")
+    repo = SQLAlchemyKanbanRepository(session)
+    updated = await repo.update_epic(epic_uuid, payload)
+    if not updated:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Epic not found")
+    return updated
+
+@router.post("/epics/{epic_id}/archive", status_code=status.HTTP_204_NO_CONTENT)
+async def archive_epic_endpoint(
+    epic_id: str,
+    session: AsyncSession = Depends(get_db_session),
+):
+    try:
+        epic_uuid = UUID(epic_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid epic ID format")
+    repo = SQLAlchemyKanbanRepository(session)
+    archived = await repo.archive_epic(epic_uuid)
+    if not archived:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Epic not found")
+    return None
+
+@router.get("/projects/{project_id}/sprints", response_model=list[SprintResponse])
+async def get_project_sprints(
+    project_id: str,
+    include_archived: bool = False,
+    session: AsyncSession = Depends(get_db_session),
+):
+    try:
+        project_uuid = UUID(project_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid project ID format")
+    repo = SQLAlchemyKanbanRepository(session)
+    return await repo.get_sprints_by_project(project_uuid, include_archived)
+
+@router.post("/projects/{project_id}/sprints", response_model=SprintResponse, status_code=status.HTTP_201_CREATED)
+async def create_project_sprint(
+    project_id: str,
+    payload: SprintCreate,
+    session: AsyncSession = Depends(get_db_session),
+):
+    try:
+        project_uuid = UUID(project_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid project ID format")
+    repo = SQLAlchemyKanbanRepository(session)
+    return await repo.create_sprint(project_uuid, payload)
+
+@router.patch("/sprints/{sprint_id}", response_model=SprintResponse)
+async def update_sprint_endpoint(
+    sprint_id: str,
+    payload: SprintUpdate,
+    session: AsyncSession = Depends(get_db_session),
+):
+    try:
+        sprint_uuid = UUID(sprint_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid sprint ID format")
+    repo = SQLAlchemyKanbanRepository(session)
+    updated = await repo.update_sprint(sprint_uuid, payload)
+    if not updated:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sprint not found")
+    return updated
+
+@router.post("/sprints/{sprint_id}/archive", status_code=status.HTTP_204_NO_CONTENT)
+async def archive_sprint_endpoint(
+    sprint_id: str,
+    session: AsyncSession = Depends(get_db_session),
+):
+    try:
+        sprint_uuid = UUID(sprint_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid sprint ID format")
+    repo = SQLAlchemyKanbanRepository(session)
+    archived = await repo.archive_sprint(sprint_uuid)
+    if not archived:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sprint not found")
+    return None

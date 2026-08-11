@@ -7,12 +7,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.kanban_models import TicketStatus
 from app.domain.kanban_schemas import (
+    EpicCreate,
+    EpicResponse,
+    EpicUpdate,
     KanbanTicketCreate,
     KanbanTicketResponse,
     KanbanTicketUpdate,
+    SprintCreate,
+    SprintResponse,
+    SprintUpdate,
     TicketNodeLink,
 )
-from app.infrastructure.db.models import KanbanTicketModel, KanbanTicketNodeModel
+from app.infrastructure.db.models import (
+    EpicModel,
+    KanbanTicketModel,
+    KanbanTicketNodeModel,
+    SprintModel,
+)
 
 
 class SQLAlchemyKanbanRepository:
@@ -34,8 +45,8 @@ class SQLAlchemyKanbanRepository:
             created_at=now,
             updated_at=now,
             branch_name=payload.branch_name,
-            epic=payload.epic,
-            sprint=payload.sprint,
+            epic_id=payload.epic_id,
+            sprint_id=payload.sprint_id,
             subtasks=payload.subtasks,
         )
         self.session.add(ticket_model)
@@ -64,8 +75,8 @@ class SQLAlchemyKanbanRepository:
             created_at=now,
             updated_at=now,
             branch_name=payload.branch_name,
-            epic=payload.epic,
-            sprint=payload.sprint,
+            epic_id=payload.epic_id,
+            sprint_id=payload.sprint_id,
             subtasks=payload.subtasks,
             affected_nodes=node_links,
         )
@@ -94,8 +105,8 @@ class SQLAlchemyKanbanRepository:
             created_at=ticket.created_at,
             updated_at=ticket.updated_at,
             branch_name=ticket.branch_name,
-            epic=ticket.epic,
-            sprint=ticket.sprint,
+            epic_id=ticket.epic_id,
+            sprint_id=ticket.sprint_id,
             subtasks=ticket.subtasks or [],
             affected_nodes=links,
         )
@@ -128,8 +139,8 @@ class SQLAlchemyKanbanRepository:
                     created_at=t.created_at,
                     updated_at=t.updated_at,
                     branch_name=t.branch_name,
-                    epic=t.epic,
-                    sprint=t.sprint,
+                    epic_id=t.epic_id,
+                    sprint_id=t.sprint_id,
                     subtasks=t.subtasks or [],
                     affected_nodes=links,
                 )
@@ -156,10 +167,10 @@ class SQLAlchemyKanbanRepository:
             ticket.description = payload.description
         if payload.branch_name is not None:
             ticket.branch_name = payload.branch_name
-        if payload.epic is not None:
-            ticket.epic = payload.epic
-        if payload.sprint is not None:
-            ticket.sprint = payload.sprint
+        if hasattr(payload, "epic_id") and payload.epic_id is not None:
+            ticket.epic_id = payload.epic_id
+        if hasattr(payload, "sprint_id") and payload.sprint_id is not None:
+            ticket.sprint_id = payload.sprint_id
         if payload.subtasks is not None:
             ticket.subtasks = payload.subtasks
 
@@ -181,8 +192,8 @@ class SQLAlchemyKanbanRepository:
             priority=ticket.priority,
             description=ticket.description,
             branch_name=ticket.branch_name,
-            epic=ticket.epic,
-            sprint=ticket.sprint,
+            epic_id=ticket.epic_id,
+            sprint_id=ticket.sprint_id,
             subtasks=ticket.subtasks or [],
             created_at=ticket.created_at,
             updated_at=ticket.updated_at,
@@ -198,5 +209,126 @@ class SQLAlchemyKanbanRepository:
 
         await self.session.execute(delete(KanbanTicketNodeModel).where(KanbanTicketNodeModel.ticket_id == ticket_id))
         await self.session.execute(delete(KanbanTicketModel).where(KanbanTicketModel.id == ticket_id))
+        await self.session.commit()
+        return True
+
+    # --- Epics ---
+    async def create_epic(self, project_id: UUID, payload: EpicCreate) -> EpicResponse:
+        epic_id = uuid.uuid4()
+        now = datetime.utcnow()
+        epic_model = EpicModel(
+            id=epic_id,
+            project_id=project_id,
+            name=payload.name,
+            description=payload.description,
+            color=payload.color,
+            created_at=now,
+            updated_at=now,
+        )
+        self.session.add(epic_model)
+        await self.session.commit()
+        return EpicResponse.model_validate(epic_model)
+
+    async def get_epics_by_project(self, project_id: UUID, include_archived: bool = False) -> list[EpicResponse]:
+        from app.domain.kanban_models import EpicStatus
+        query = select(EpicModel).where(EpicModel.project_id == project_id)
+        if not include_archived:
+            query = query.where(EpicModel.status != EpicStatus.ARCHIVED)
+        query = query.order_by(EpicModel.created_at.desc())
+
+        result = await self.session.execute(query)
+        epics = result.scalars().all()
+        return [EpicResponse.model_validate(e) for e in epics]
+
+    async def update_epic(self, epic_id: UUID, payload: EpicUpdate) -> EpicResponse | None:
+        query = select(EpicModel).where(EpicModel.id == epic_id)
+        result = await self.session.execute(query)
+        epic = result.scalar_one_or_none()
+        if not epic:
+            return None
+
+        if payload.name is not None:
+            epic.name = payload.name
+        if payload.description is not None:
+            epic.description = payload.description
+        if payload.color is not None:
+            epic.color = payload.color
+
+        epic.updated_at = datetime.utcnow()
+        await self.session.commit()
+        return EpicResponse.model_validate(epic)
+
+    async def archive_epic(self, epic_id: UUID) -> bool:
+        from app.domain.kanban_models import EpicStatus
+        query = select(EpicModel).where(EpicModel.id == epic_id)
+        result = await self.session.execute(query)
+        epic = result.scalar_one_or_none()
+        if not epic:
+            return False
+
+        epic.status = EpicStatus.ARCHIVED
+        epic.updated_at = datetime.utcnow()
+        await self.session.commit()
+        return True
+
+    # --- Sprints ---
+    async def create_sprint(self, project_id: UUID, payload: SprintCreate) -> SprintResponse:
+        sprint_id = uuid.uuid4()
+        now = datetime.utcnow()
+        sprint_model = SprintModel(
+            id=sprint_id,
+            project_id=project_id,
+            name=payload.name,
+            goal=payload.goal,
+            start_date=payload.start_date,
+            end_date=payload.end_date,
+            created_at=now,
+            updated_at=now,
+        )
+        self.session.add(sprint_model)
+        await self.session.commit()
+        return SprintResponse.model_validate(sprint_model)
+
+    async def get_sprints_by_project(self, project_id: UUID, include_archived: bool = False) -> list[SprintResponse]:
+        from app.domain.kanban_models import SprintStatus
+        query = select(SprintModel).where(SprintModel.project_id == project_id)
+        if not include_archived:
+            query = query.where(SprintModel.status != SprintStatus.ARCHIVED)
+        query = query.order_by(SprintModel.created_at.desc())
+
+        result = await self.session.execute(query)
+        sprints = result.scalars().all()
+        return [SprintResponse.model_validate(s) for s in sprints]
+
+    async def update_sprint(self, sprint_id: UUID, payload: SprintUpdate) -> SprintResponse | None:
+        query = select(SprintModel).where(SprintModel.id == sprint_id)
+        result = await self.session.execute(query)
+        sprint = result.scalar_one_or_none()
+        if not sprint:
+            return None
+
+        if payload.name is not None:
+            sprint.name = payload.name
+        if payload.goal is not None:
+            sprint.goal = payload.goal
+        if payload.start_date is not None:
+            sprint.start_date = payload.start_date
+        if payload.end_date is not None:
+            sprint.end_date = payload.end_date
+
+        sprint.updated_at = datetime.utcnow()
+        await self.session.commit()
+        return SprintResponse.model_validate(sprint)
+
+    async def archive_sprint(self, sprint_id: UUID) -> bool:
+        from app.domain.kanban_models import SprintStatus
+        query = select(SprintModel).where(SprintModel.id == sprint_id)
+        result = await self.session.execute(query)
+        sprint = result.scalar_one_or_none()
+        if not sprint:
+            return False
+
+        sprint.status = SprintStatus.ARCHIVED
+        sprint.updated_at = datetime.utcnow()
         await self.session.commit()
         return True
