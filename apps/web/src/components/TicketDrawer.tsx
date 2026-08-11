@@ -70,6 +70,7 @@ export default function TicketDrawer({ ticket, allSprints, allEpics, onClose, on
       };
       const updatedTicket = await updateKanbanTicket(ticket.id, updatePayload);
       onUpdate(updatedTicket);
+      onClose();
     } catch (error) {
       console.error('Failed to save ticket', error);
     } finally {
@@ -81,7 +82,8 @@ export default function TicketDrawer({ ticket, allSprints, allEpics, onClose, on
     setIsDeleting(true);
     try {
       await deleteKanbanTicket(ticket.id);
-      onUpdate(ticket); // This triggers fetchTasks and closes the drawer
+      onUpdate(ticket); // This triggers fetchTasks
+      onClose(); // Explicitly close the drawer
     } catch (error) {
       console.error('Failed to delete ticket', error);
       setIsDeleting(false);

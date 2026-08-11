@@ -853,7 +853,6 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
           onClose={() => setActiveDrawerTicketId(null)}
           onUpdate={(updated) => {
             fetchTasks();
-            setActiveDrawerTicketId(null);
           }}
         />
       )}
