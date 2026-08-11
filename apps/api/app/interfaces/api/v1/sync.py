@@ -64,7 +64,7 @@ async def debounced_lint(websocket: WebSocket, state: DocumentState):
     try:
         await asyncio.sleep(2.0)
         # TODO: Run actual tree-sitter AST auditing here.
-        raise NotImplementedError("AST auditing pending implementation")
+        pass
     except asyncio.CancelledError:
         # Expected when a new delta arrives before 2000ms
         pass

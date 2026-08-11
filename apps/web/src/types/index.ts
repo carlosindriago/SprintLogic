@@ -142,17 +142,10 @@ export interface KanbanTicket {
   status: TicketStatus;
   priority: TicketPriority;
   description: string;
-<<<<<<< Updated upstream
-  branch_name?: string;
-  epic?: string;
-  sprint?: string;
-  subtasks?: KanbanTicket[];
-=======
   branch_name?: string | null;
   epic?: string | null;
   sprint?: string | null;
   subtasks?: { id: string; title: string; completed: boolean }[];
->>>>>>> Stashed changes
   created_at: string;
   updated_at: string;
   affected_nodes: TicketNodeLink[];

@@ -492,10 +492,6 @@ export const updateKanbanTicket = async (ticketId: string, payload: KanbanTicket
   return await api.patch<KanbanTicket>(`/kanban/tickets/${ticketId}`, payload);
 };
 
-export const createGitBranch = async (projectId: string, branchName: string): Promise<void> => {
-  return await api.post(`/projects/${projectId}/git/branches`, { branch_name: branchName });
-};
-
 export const deleteKanbanTicket = async (ticketId: string): Promise<void> => {
   return await api.delete<void>(`/kanban/tickets/${ticketId}`);
 };

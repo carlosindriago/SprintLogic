@@ -877,8 +877,9 @@ class AIAgent:
                 from app.infrastructure.security.credential_manager import CredentialManager
                 api_key = CredentialManager.get_api_key("gemini")
                 if api_key:
+                    from app.infrastructure.config import DEFAULT_EMBEDDING_MODEL
                     embed_resp = await litellm.aembedding(
-                        model="gemini/text-embedding-004",
+                        model=DEFAULT_EMBEDDING_MODEL,
                         input=[user_query],
                         api_key=api_key
                     )

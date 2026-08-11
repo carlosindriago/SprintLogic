@@ -54,8 +54,8 @@ export default function PlanningStudioTab() {
             };
           });
 
-          const epicName = (task as any).epic || pkg.epic || pkg.title;
-          const sprintName = (task as any).sprint || pkg.sprint || "Sprint 1";
+          const epicName = (task as any).epic || (pkg as any).epic || pkg.title;
+          const sprintName = (task as any).sprint || (pkg as any).sprint || "Sprint 1";
           const ticketType = (task as any).type || "Feature";
           const ticketPriority = (task as any).priority || "Medium";
           const branchName = (task as any).branch_name || undefined;

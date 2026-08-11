@@ -218,7 +218,6 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
   const [newColRule, setNewColRule] = useState<'manual' | 'auto-on-test-fail' | 'auto-on-test-pass'>('manual');
   const [colError, setColError] = useState<string | null>(null);
 
-<<<<<<< Updated upstream
   // WBS Planner States
   const [showWbsModal, setShowWbsModal] = useState(false);
   const [wbsRequirements, setWbsRequirements] = useState("");
@@ -1030,7 +1029,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
               <button 
                 onClick={async () => {
                   try {
-                    await createGitBranch(projectId, branchPrompt.ticketId);
+                    await createGitBranch(projectId, `${branchPrompt.type.toLowerCase()}/${branchPrompt.ticketId.substring(0,6).toUpperCase()}-${branchPrompt.title.toLowerCase().replace(/\\s+/g, '-')}`);
                     toast.success("Rama creada exitosamente");
                   } catch (e) {
                     toast.error("Error al crear rama");

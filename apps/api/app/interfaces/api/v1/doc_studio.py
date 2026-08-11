@@ -121,7 +121,9 @@ async def chat_with_docs(
     if is_truncated:
         rag_context += "\\n\\n[...Documentación truncada por límites de contexto...]"
 
-    llm = LiteLLMGateway()
+    from app.infrastructure.repositories.tool_model_repository import resolve_tool_model
+    tool_provider, tool_model, fallbacks = await resolve_tool_model(session, "doc_studio")
+    llm = LiteLLMGateway(model_name=f"{tool_provider}/{tool_model}")
 
     prompt = prompt_repository.DOC_RAG_PROMPT_CONTENT.format(
         user_query=request.query,
@@ -132,7 +134,8 @@ async def chat_with_docs(
     try:
         response = await llm.generate_completion(
             prompt=prompt,
-            lang_code="en"
+            lang_code="en",
+            fallbacks=fallbacks
         )
     except Exception as e:
         logger.error(f"Error in Light RAG LLM: {e}")
@@ -172,7 +175,9 @@ async def generate_docblock(
         logger.error(f"Error reading file {request.file_path}: {e}")
         raise HTTPException(status_code=500, detail="Could not read source file")
 
-    llm = LiteLLMGateway()
+    from app.infrastructure.repositories.tool_model_repository import resolve_tool_model
+    tool_provider, tool_model, fallbacks = await resolve_tool_model(session, "doc_studio")
+    llm = LiteLLMGateway(model_name=f"{tool_provider}/{tool_model}")
 
     prompt = prompt_repository.AUTO_DOC_PROMPT_CONTENT.format(
         file_path=request.file_path,
@@ -183,7 +188,8 @@ async def generate_docblock(
     try:
         response = await llm.generate_completion(
             prompt=prompt,
-            lang_code="en"
+            lang_code="en",
+            fallbacks=fallbacks
         )
     except Exception as e:
         logger.error(f"Error generating Auto-Doc: {e}")

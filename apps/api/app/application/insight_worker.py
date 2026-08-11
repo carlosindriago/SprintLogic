@@ -145,8 +145,10 @@ async def _extract_and_save_insight(session: AsyncSession, conv: ConversationMod
         if not gemini_api_key:
             return
 
+        from app.infrastructure.config import DEFAULT_EMBEDDING_MODEL
+
         embed_resp = await litellm.aembedding(
-            model="gemini/text-embedding-004",
+            model=DEFAULT_EMBEDDING_MODEL,
             input=[embed_text],
             api_key=gemini_api_key
         )

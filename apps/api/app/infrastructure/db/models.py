@@ -5,7 +5,7 @@ from uuid import UUID
 
 from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, LargeBinary, String, Text
 from sqlalchemy import Enum as SQLAlchemyEnum
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 
 from app.domain.graph_models import EdgeType, NodeLabel
 from app.domain.kanban_models import TicketPriority, TicketStatus, TicketType
@@ -277,19 +277,7 @@ class KanbanTicketModel(Base):
     branch_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     epic: Mapped[str | None] = mapped_column(String(255), nullable=True)
     sprint: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    subtasks: Mapped[list["KanbanTicketModel"]] = relationship(
-        "KanbanTicketModel", 
-        back_populates="parent",
-        remote_side=[id]
-    )
-    parent_id: Mapped[UUID | None] = mapped_column(
-        ForeignKey("kanban_tickets.id", ondelete="CASCADE"), nullable=True, index=True
-    )
-    parent: Mapped["KanbanTicketModel"] = relationship(
-        "KanbanTicketModel",
-        back_populates="subtasks",
-        remote_side=[id]
-    )
+    subtasks: Mapped[list | dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=datetime.utcnow
     )
