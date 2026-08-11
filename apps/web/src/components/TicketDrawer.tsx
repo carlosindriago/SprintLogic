@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { X, Plus, Trash2, CheckCircle2, Circle, Bot } from 'lucide-react';
 import { updateKanbanTicket, deleteKanbanTicket } from '@/lib/api';
-import { KanbanTicket, KanbanTicketUpdate } from '@/types';
+import { KanbanTicket, KanbanTicketUpdate, Epic, Sprint } from '@/types';
 import { useTabsStore } from '@/store/tabsStore';
 import { useChatStore } from '@/store/chatStore';
+import { createEpic, createSprint } from '@/lib/api';
 
 export interface SubtaskItem {
   id: string;
@@ -13,10 +14,117 @@ export interface SubtaskItem {
 
 interface TicketDrawerProps {
   ticket: KanbanTicket;
-  allSprints: string[];
-  allEpics: string[];
+  allSprints: Sprint[];
+  allEpics: Epic[];
   onClose: () => void;
   onUpdate: (ticket: KanbanTicket) => void;
+}
+
+function CreatableCombobox({
+  items,
+  value,
+  onChange,
+  onCreate,
+  placeholder,
+  emptyLabel
+}: {
+  items: { id: string; name: string }[];
+  value: string;
+  onChange: (id: string) => void;
+  onCreate: (name: string) => Promise<string>;
+  placeholder: string;
+  emptyLabel: string;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
+  const wrapperRef = React.useRef<HTMLDivElement>(null);
+
+  const selectedItem = items.find(i => i.id === value);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setSearch(selectedItem ? selectedItem.name : '');
+    }
+  }, [isOpen, selectedItem]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const filtered = items.filter(i => i.name.toLowerCase().includes(search.toLowerCase()));
+  const exactMatch = items.find(i => i.name.toLowerCase() === search.trim().toLowerCase());
+  const showCreate = search.trim() !== '' && !exactMatch;
+
+  const handleCreate = async () => {
+    if (!search.trim() || isCreating) return;
+    setIsCreating(true);
+    try {
+      const newId = await onCreate(search.trim());
+      onChange(newId);
+      setIsOpen(false);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  return (
+    <div ref={wrapperRef} className="relative w-full">
+      <input
+        type="text"
+        className="w-full bg-[#131315] border border-[#27272a] rounded-md px-3 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+        placeholder={placeholder}
+        value={isOpen ? search : (selectedItem ? selectedItem.name : '')}
+        onChange={(e) => {
+          setSearch(e.target.value);
+          if (!isOpen) setIsOpen(true);
+          if (e.target.value === '') onChange('');
+        }}
+        onClick={() => setIsOpen(true)}
+      />
+      
+      {isOpen && (
+        <div className="absolute z-50 w-full mt-1 bg-[#18181b] border border-[#27272a] rounded-md shadow-lg max-h-48 overflow-y-auto">
+          {emptyLabel && !search && (
+            <div 
+              className="px-3 py-2 text-sm text-zinc-400 hover:bg-[#27272a] cursor-pointer"
+              onClick={() => { onChange(''); setIsOpen(false); }}
+            >
+              {emptyLabel}
+            </div>
+          )}
+          {filtered.map(item => (
+            <div
+              key={item.id}
+              className={`px-3 py-2 text-sm cursor-pointer ${value === item.id ? 'bg-blue-500/20 text-blue-400' : 'text-zinc-100 hover:bg-[#27272a]'}`}
+              onClick={() => { onChange(item.id); setIsOpen(false); }}
+            >
+              {item.name}
+            </div>
+          ))}
+          {showCreate && (
+            <div
+              className="px-3 py-2 text-sm text-blue-400 hover:bg-[#27272a] cursor-pointer font-medium flex items-center gap-2"
+              onClick={handleCreate}
+            >
+              {isCreating ? 'Creando...' : `Crear "${search.trim()}"...`}
+            </div>
+          )}
+          {!showCreate && filtered.length === 0 && search && (
+            <div className="px-3 py-2 text-sm text-zinc-500">No hay resultados</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function TicketDrawer({ ticket, allSprints, allEpics, onClose, onUpdate }: TicketDrawerProps) {
@@ -25,8 +133,8 @@ export default function TicketDrawer({ ticket, allSprints, allEpics, onClose, on
   const [type, setType] = useState(ticket.type);
   const [priority, setPriority] = useState(ticket.priority);
   const [branchName, setBranchName] = useState(ticket.branch_name || '');
-  const [epic, setEpic] = useState(ticket.epic || '');
-  const [sprint, setSprint] = useState(ticket.sprint || '');
+  const [epicId, setEpicId] = useState(ticket.epic_id || '');
+  const [sprintId, setSprintId] = useState(ticket.sprint_id || '');
   const [subtasks, setSubtasks] = useState<SubtaskItem[]>(ticket.subtasks || []);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -39,10 +147,37 @@ export default function TicketDrawer({ ticket, allSprints, allEpics, onClose, on
     setType(ticket.type);
     setPriority(ticket.priority);
     setBranchName(ticket.branch_name || '');
-    setEpic(ticket.epic || '');
-    setSprint(ticket.sprint || '');
+    setEpicId(ticket.epic_id || '');
+    setSprintId(ticket.sprint_id || '');
     setSubtasks(ticket.subtasks || []);
   }, [ticket]);
+
+  const [localEpics, setLocalEpics] = useState<Epic[]>(allEpics);
+  const [localSprints, setLocalSprints] = useState<Sprint[]>(allSprints);
+
+  useEffect(() => { setLocalEpics(allEpics); }, [allEpics]);
+  useEffect(() => { setLocalSprints(allSprints); }, [allSprints]);
+
+  const handleCreateEpic = async (name: string) => {
+    const newEpic = await createEpic(ticket.project_id, { name, color: 'bg-blue-500' });
+    setLocalEpics(prev => [newEpic, ...prev]);
+    return newEpic.id;
+  };
+
+  const handleCreateSprint = async (name: string) => {
+    const now = new Date();
+    const end = new Date();
+    end.setDate(now.getDate() + 14);
+    
+    const newSprint = await createSprint(ticket.project_id, { 
+      name, 
+      start_date: now.toISOString(), 
+      end_date: end.toISOString(),
+      goal: ''
+    });
+    setLocalSprints(prev => [newSprint, ...prev]);
+    return newSprint.id;
+  };
 
   const addTab = useTabsStore(s => s.addTab);
   const setPendingQuery = useChatStore(s => s.setPendingQuery);
@@ -64,8 +199,8 @@ export default function TicketDrawer({ ticket, allSprints, allEpics, onClose, on
         type,
         priority,
         branch_name: branchName.trim() || null,
-        epic: epic.trim() || null,
-        sprint: sprint.trim() || null,
+        epic_id: epicId.trim() || null,
+        sprint_id: sprintId.trim() || null,
         subtasks
       };
       const updatedTicket = await updateKanbanTicket(ticket.id, updatePayload);
@@ -228,34 +363,26 @@ export default function TicketDrawer({ ticket, allSprints, allEpics, onClose, on
 
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-zinc-500">Sprint</label>
-              <input 
-                type="text" 
-                list="sprints-list"
-                value={sprint}
-                onChange={e => setSprint(e.target.value)}
-                placeholder="Seleccionar o crear..."
-                style={{ colorScheme: 'dark' }}
-                className="w-full bg-[#131315] border border-[#27272a] rounded-md px-3 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              <CreatableCombobox
+                items={localSprints}
+                value={sprintId}
+                onChange={setSprintId}
+                onCreate={handleCreateSprint}
+                placeholder="Buscar o crear sprint..."
+                emptyLabel="Sin Sprint"
               />
-              <datalist id="sprints-list">
-                {allSprints.map(s => <option key={s} value={s} />)}
-              </datalist>
             </div>
 
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-zinc-500">Épica</label>
-              <input 
-                type="text" 
-                list="epics-list"
-                value={epic}
-                onChange={e => setEpic(e.target.value)}
-                placeholder="Seleccionar o crear..."
-                style={{ colorScheme: 'dark' }}
-                className="w-full bg-[#131315] border border-[#27272a] rounded-md px-3 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              <CreatableCombobox
+                items={localEpics}
+                value={epicId}
+                onChange={setEpicId}
+                onCreate={handleCreateEpic}
+                placeholder="Buscar o crear épica..."
+                emptyLabel="Sin Épica"
               />
-              <datalist id="epics-list">
-                {allEpics.map(e => <option key={e} value={e} />)}
-              </datalist>
             </div>
           </div>
 

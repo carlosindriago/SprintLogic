@@ -14,7 +14,7 @@ import { MarkdownLink } from "./MarkdownLink";
 import { Copy, Check, Download, Kanban, AlertTriangle, Plus, Network } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { WBSPlannerModal } from "./WBSPlannerModal";
-import { generateWBS, WBSHierarchicalResponse } from "../lib/api";
+import { generateWBS, WBSHierarchicalResponse, importWBSTickets, WBSImportTicket } from "../lib/api";
 import { useTabsStore } from "@/store/tabsStore";
 
 interface AIReportViewerProps {
@@ -211,13 +211,13 @@ export function AIReportViewer({ projectId, reportId, markdown: initialMarkdown 
   const handleSaveWbs = async (data: WBSHierarchicalResponse) => {
     if (!projectId) return;
 
-    const createdTicketIds: string[] = [];
-    let createdCount = 0;
-
     try {
+      const ticketsToImport: WBSImportTicket[] = [];
+
       for (const pkg of data.work_packages) {
         const epicName = (pkg as any).epic || pkg.title;
         const sprintName = (pkg as any).sprint || "Sprint 1";
+        
         for (const sub of pkg.subtasks) {
           const rawSubtasks = (sub as any).subtasks || [];
           const normalizedSubtasks = rawSubtasks.map((st: any, idx: number) => {
@@ -225,41 +225,26 @@ export function AIReportViewer({ projectId, reportId, markdown: initialMarkdown 
             return { id: st.id || String(idx + 1), title: st.title || String(st), completed: Boolean(st.completed) };
           });
 
-          const ticket = await createKanbanTicket(projectId, {
+          ticketsToImport.push({
             title: sub.title,
             type: ((sub as any).type as any) || "Feature",
             priority: ((sub as any).priority as any) || "Medium",
             description: sub.description ? `${sub.description}\n\nEstimated: ${sub.estimated_hours}h` : pkg.objective || "",
-            epic: (sub as any).epic || epicName,
-            sprint: (sub as any).sprint || sprintName,
             branch_name: (sub as any).branch_name || undefined,
             subtasks: normalizedSubtasks,
             report_id: reportId,
             affected_nodes: [],
+            epic: epicName,
+            sprint: sprintName
           });
-          createdTicketIds.push(ticket.id);
-          createdCount++;
         }
       }
-      toast.success(`Se crearon ${createdCount} tickets de WBS en Sprint Center`);
+
+      const result = await importWBSTickets(projectId, ticketsToImport);
+      toast.success(`Se crearon ${result.imported_count} tickets de WBS en Sprint Center`);
+      setWbsModalOpen(false);
     } catch (err) {
-      toast.error("Error guardando tareas WBS. Ejecutando rollback...", { description: err instanceof Error ? err.message : String(err) });
-      
-      let rollbackErrors = 0;
-      for (const id of createdTicketIds) {
-        try {
-          await deleteKanbanTicket(id);
-        } catch (rollbackErr) {
-          console.error(`Rollback failed for ticket ${id}`, rollbackErr);
-          rollbackErrors++;
-        }
-      }
-      
-      if (rollbackErrors > 0) {
-        toast.error(`Atención: El rollback falló para ${rollbackErrors} tickets.`);
-      } else if (createdTicketIds.length > 0) {
-        toast.success("Rollback completado: los tickets parciales fueron eliminados.");
-      }
+      toast.error("Error guardando tareas WBS", { description: err instanceof Error ? err.message : String(err) });
     }
   };
 

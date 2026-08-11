@@ -6,12 +6,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useTabsStore } from '../store/tabsStore';
 
-import { sendPlanningMessage, PlanningMessagePayload, createKanbanTicket, WBSHierarchicalResponse } from '../lib/api';
+import { sendPlanningMessage, PlanningMessagePayload, importWBSTickets, WBSHierarchicalResponse, WBSImportTicket } from '../lib/api';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Send, Loader2, Play } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { toast } from 'sonner';
 import { WBSPlannerModal } from './WBSPlannerModal'; // We can reuse the tree UI from here but modified, or just extract it.
 import { usePlanningStore } from '../store/planningStore';
 
@@ -40,6 +41,8 @@ export default function PlanningStudioTab() {
     if (!wbsData || !activeProjectId) return;
     setIsExporting(true);
     try {
+      const ticketsToImport: WBSImportTicket[] = [];
+
       for (const pkg of wbsData.work_packages || []) {
         for (const task of pkg.subtasks || []) {
           const rawSubtasks = (task as any).subtasks || [];
@@ -60,21 +63,29 @@ export default function PlanningStudioTab() {
           const ticketPriority = (task as any).priority || "Medium";
           const branchName = (task as any).branch_name || undefined;
 
-          await createKanbanTicket(activeProjectId, {
+          ticketsToImport.push({
             title: task.title,
-            type: ticketType as any,
-            priority: ticketPriority as any,
+            type: ticketType,
+            priority: ticketPriority,
             description: task.description || pkg.objective || "",
-            epic: epicName,
-            sprint: sprintName,
             branch_name: branchName,
             subtasks: normalizedSubtasks,
+            epic: epicName,
+            sprint: sprintName
           });
         }
       }
+
+      await importWBSTickets(activeProjectId, ticketsToImport);
+      toast.success("Importación Exitosa", { description: "Los tickets se han sincronizado en el Sprint Center." });
+      
+      // Clean up state if necessary, but we might want to keep it visible
+      // setWbsData(null);
+      
       useTabsStore.getState().addTab({ id: 'kanban', title: 'Sprint Center', type: 'kanban', data: { projectId: activeProjectId } });
     } catch (e) {
       console.error("Failed to export to kanban", e);
+      toast.error("Error al importar", { description: "Ocurrió un error al sincronizar los tickets." });
     } finally {
       setIsExporting(false);
     }

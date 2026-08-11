@@ -8,9 +8,10 @@ import { CSS } from "@dnd-kit/utilities";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import ReactMarkdown from "react-markdown";
-import { getProjectTasks, saveProjectTasks, getKanbanConfig, saveKanbanConfig, syncKanbanCommits, KanbanColumn, fetchProjectTickets, updateKanbanTicket, deleteKanbanTicket, createKanbanTicket, createGitBranch, commitChanges } from '@/lib/api';
-import { KanbanTicket } from '@/types';
+import { getProjectTasks, saveProjectTasks, getKanbanConfig, saveKanbanConfig, syncKanbanCommits, KanbanColumn, fetchProjectTickets, updateKanbanTicket, deleteKanbanTicket, createKanbanTicket, createGitBranch, commitChanges, fetchEpics, fetchSprints } from '@/lib/api';
+import { KanbanTicket, Epic, Sprint } from '@/types';
 import TicketDrawer from "./TicketDrawer";
+import { SprintEpicManagerModal } from "./SprintEpicManagerModal";
 import { toast } from "sonner";
 import { useLLMConfigStore } from '@/store/llmConfigStore';
 import { useTabsStore } from '@/store/tabsStore';
@@ -222,6 +223,11 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
   const [sprintFilter, setSprintFilter] = useState("Todas");
   const [epicFilter, setEpicFilter] = useState("Todas");
 
+  // Data
+  const [epics, setEpics] = useState<Epic[]>([]);
+  const [sprints, setSprints] = useState<Sprint[]>([]);
+  const [showManagerModal, setShowManagerModal] = useState(false);
+
   // Ticket Drawer State
   const [rawTickets, setRawTickets] = useState<KanbanTicket[]>([]);
   const [activeDrawerTicketId, setActiveDrawerTicketId] = useState<string | null>(null);
@@ -243,6 +249,20 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
       setEditingColumns(config.columns);
     } catch (e) {
       console.error("Failed to fetch kanban config", e);
+    }
+  }, [projectId]);
+
+  const fetchReferenceData = useCallback(async () => {
+    if (!projectId) return;
+    try {
+      const [epicsData, sprintsData] = await Promise.all([
+        fetchEpics(projectId),
+        fetchSprints(projectId)
+      ]);
+      setEpics(epicsData);
+      setSprints(sprintsData);
+    } catch (e) {
+      console.error("Failed to fetch epics/sprints", e);
     }
   }, [projectId]);
 
@@ -295,6 +315,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
 
     const loadData = async () => {
       await fetchConfig();
+      await fetchReferenceData();
       await fetchTasks();
       try {
         if (projectId) await syncKanbanCommits(projectId);
@@ -313,6 +334,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
       const data = JSON.parse(event.data);
       if (data.type === "kanban_update" && active) {
         fetchConfig();
+        fetchReferenceData();
         fetchTasks();
       }
     };
@@ -482,13 +504,13 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
     if (sprintFilter !== "Todas") {
       filtered = filtered.filter(t => {
         const raw = rawTickets.find(r => r.id === t.id);
-        return raw?.sprint === sprintFilter;
+        return raw?.sprint_id === sprintFilter;
       });
     }
     if (epicFilter !== "Todas") {
       filtered = filtered.filter(t => {
         const raw = rawTickets.find(r => r.id === t.id);
-        return raw?.epic === epicFilter;
+        return raw?.epic_id === epicFilter;
       });
     }
     return filtered;
@@ -508,12 +530,12 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
   }, [filteredTasks]);
 
   const uniqueSprints = useMemo(() => {
-    return Array.from(new Set(rawTickets.map(t => t.sprint).filter(Boolean))) as string[];
-  }, [rawTickets]);
+    return sprints.map(s => s.id);
+  }, [sprints]);
 
   const uniqueEpics = useMemo(() => {
-    return Array.from(new Set(rawTickets.map(t => t.epic).filter(Boolean))) as string[];
-  }, [rawTickets]);
+    return epics.map(e => e.id);
+  }, [epics]);
 
   if (!projectId) {
     return <div className="h-full flex items-center justify-center text-zinc-500">Selecciona un proyecto para ver el Sprint Center.</div>;
@@ -537,10 +559,10 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
                 value={sprintFilter} 
                 onChange={e => setSprintFilter(e.target.value)}
                 style={{ colorScheme: 'dark' }}
-                className="bg-[#18181b] text-zinc-100 text-xs px-2.5 py-1 rounded-md border border-[#3f3f46] hover:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-sm"
+                className="bg-[#18181b] text-zinc-100 text-xs px-2.5 py-1 rounded-md border border-[#3f3f46] hover:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-sm max-w-[120px] truncate"
               >
                 <option value="Todas" className="bg-[#18181b] text-zinc-100">Todos</option>
-                {uniqueSprints.map(s => <option key={s} value={s} className="bg-[#18181b] text-zinc-100">{s}</option>)}
+                {sprints.map(s => <option key={s.id} value={s.id} className="bg-[#18181b] text-zinc-100">{s.name}</option>)}
               </select>
             </div>
             <div className="flex items-center gap-1.5">
@@ -549,13 +571,20 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
                 value={epicFilter} 
                 onChange={e => setEpicFilter(e.target.value)}
                 style={{ colorScheme: 'dark' }}
-                className="bg-[#18181b] text-zinc-100 text-xs px-2.5 py-1 rounded-md border border-[#3f3f46] hover:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-sm"
+                className="bg-[#18181b] text-zinc-100 text-xs px-2.5 py-1 rounded-md border border-[#3f3f46] hover:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-sm max-w-[120px] truncate"
               >
                 <option value="Todas" className="bg-[#18181b] text-zinc-100">Todas</option>
-                {uniqueEpics.map(e => <option key={e} value={e} className="bg-[#18181b] text-zinc-100">{e}</option>)}
+                {epics.map(e => <option key={e.id} value={e.id} className="bg-[#18181b] text-zinc-100">{e.name}</option>)}
               </select>
             </div>
           </div>
+          <button 
+            onClick={() => setShowManagerModal(true)}
+            className="flex items-center gap-1.5 text-xs text-indigo-300 hover:text-white px-3 py-1.5 rounded bg-indigo-950/60 hover:bg-indigo-900/80 transition-colors border border-indigo-800/60 shadow-sm font-medium"
+          >
+            <Tag className="w-3.5 h-3.5 text-indigo-400" />
+            Manage Epics & Sprints
+          </button>
           <button 
             onClick={() => {
               useTabsStore.getState().addTab({
@@ -848,14 +877,22 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
       {activeDrawerTicketId && (
         <TicketDrawer 
           ticket={rawTickets.find(r => r.id === activeDrawerTicketId)!}
-          allSprints={uniqueSprints}
-          allEpics={uniqueEpics}
+          allSprints={sprints}
+          allEpics={epics}
           onClose={() => setActiveDrawerTicketId(null)}
           onUpdate={(updated) => {
             fetchTasks();
           }}
         />
       )}
+
+      {/* Sprint & Epic Manager Modal */}
+      <SprintEpicManagerModal
+        projectId={projectId}
+        isOpen={showManagerModal}
+        onClose={() => setShowManagerModal(false)}
+        onDataChanged={() => fetchReferenceData()}
+      />
 
       {/* Ephemeral Branch Prompt */}
       {branchPrompt && projectId && (

@@ -18,6 +18,7 @@ from app.domain.kanban_schemas import (
     SprintCreate,
     SprintResponse,
     SprintUpdate,
+    WBSImportTicket,
 )
 from app.infrastructure.db.database import get_db_session
 from app.infrastructure.db.models import GraphNodeModel
@@ -81,6 +82,23 @@ async def create_project_ticket(
         asyncio.create_task(create_git_branch_for_ticket(project.path, ticket))
 
     return ticket
+
+
+@router.post("/projects/{project_id}/kanban/wbs-import", response_model=dict, status_code=status.HTTP_201_CREATED)
+async def import_wbs_tickets(
+    project_id: str,
+    payload: list[WBSImportTicket],
+    session: AsyncSession = Depends(get_db_session),
+):
+    try:
+        project_uuid = UUID(project_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid project ID format")
+
+    repo = SQLAlchemyKanbanRepository(session)
+    count = await repo.bulk_import_wbs(project_uuid, payload)
+
+    return {"success": True, "imported_count": count}
 
 
 @router.patch("/kanban/tickets/{ticket_id}", response_model=KanbanTicketResponse)

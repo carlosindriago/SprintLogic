@@ -64,6 +64,19 @@ class KanbanTicketResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class WBSImportTicket(BaseModel):
+    title: str
+    type: TicketType = TicketType.TECHNICAL_DEBT
+    priority: TicketPriority = TicketPriority.MEDIUM
+    description: str
+    report_id: UUID | None = None
+    affected_nodes: list[TicketNodeLink] = []
+    branch_name: str | None = None
+    epic: str | None = None
+    sprint: str | None = None
+    subtasks: list[dict] = []
+
+
 class KanbanTicketPatch(BaseModel):
     file_path: str
     search_content: str

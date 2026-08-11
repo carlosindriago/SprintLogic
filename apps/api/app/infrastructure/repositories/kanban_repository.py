@@ -17,6 +17,7 @@ from app.domain.kanban_schemas import (
     SprintResponse,
     SprintUpdate,
     TicketNodeLink,
+    WBSImportTicket,
 )
 from app.infrastructure.db.models import (
     EpicModel,
@@ -29,6 +30,105 @@ from app.infrastructure.db.models import (
 class SQLAlchemyKanbanRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
+
+    async def bulk_import_wbs(self, project_id: UUID, tickets: list[WBSImportTicket]) -> int:
+        now = datetime.utcnow()
+        import datetime as dt
+
+        epic_names = {t.epic.strip() for t in tickets if t.epic and t.epic.strip()}
+        sprint_names = {t.sprint.strip() for t in tickets if t.sprint and t.sprint.strip()}
+
+        # Map name to UUID
+        epic_map: dict[str, UUID] = {}
+        sprint_map: dict[str, UUID] = {}
+
+        # Epics
+        if epic_names:
+            from sqlalchemy import func
+            query = select(EpicModel).where(EpicModel.project_id == project_id, func.lower(EpicModel.name).in_([n.lower() for n in epic_names]))
+            res = await self.session.execute(query)
+            existing_epics = res.scalars().all()
+            for e in existing_epics:
+                epic_map[e.name.lower()] = e.id
+
+            for name in epic_names:
+                if name.lower() not in epic_map:
+                    new_epic_id = uuid.uuid4()
+                    new_epic = EpicModel(
+                        id=new_epic_id,
+                        project_id=project_id,
+                        name=name,
+                        description="",
+                        color="bg-blue-500",
+                        created_at=now,
+                        updated_at=now
+                    )
+                    self.session.add(new_epic)
+                    epic_map[name.lower()] = new_epic_id
+
+        # Sprints
+        if sprint_names:
+            from sqlalchemy import func
+            query = select(SprintModel).where(SprintModel.project_id == project_id, func.lower(SprintModel.name).in_([n.lower() for n in sprint_names]))
+            res = await self.session.execute(query)
+            existing_sprints = res.scalars().all()
+            for s in existing_sprints:
+                sprint_map[s.name.lower()] = s.id
+
+            for name in sprint_names:
+                if name.lower() not in sprint_map:
+                    new_sprint_id = uuid.uuid4()
+                    new_sprint = SprintModel(
+                        id=new_sprint_id,
+                        project_id=project_id,
+                        name=name,
+                        goal="",
+                        start_date=now,
+                        end_date=now + dt.timedelta(days=14),
+                        created_at=now,
+                        updated_at=now
+                    )
+                    self.session.add(new_sprint)
+                    sprint_map[name.lower()] = new_sprint_id
+
+        ticket_models = []
+        node_models = []
+
+        for payload in tickets:
+            ticket_id = uuid.uuid4()
+            eid = epic_map.get(payload.epic.strip().lower()) if payload.epic and payload.epic.strip() else None
+            sid = sprint_map.get(payload.sprint.strip().lower()) if payload.sprint and payload.sprint.strip() else None
+
+            ticket_model = KanbanTicketModel(
+                id=ticket_id,
+                project_id=project_id,
+                report_id=payload.report_id,
+                title=payload.title,
+                type=payload.type,
+                status=TicketStatus.TODO,
+                priority=payload.priority,
+                description=payload.description,
+                created_at=now,
+                updated_at=now,
+                branch_name=payload.branch_name,
+                epic_id=eid,
+                sprint_id=sid,
+                subtasks=payload.subtasks,
+            )
+            ticket_models.append(ticket_model)
+
+            for node_link in payload.affected_nodes:
+                node_models.append(KanbanTicketNodeModel(
+                    ticket_id=ticket_id,
+                    node_id=node_link.node_id,
+                    file_path=node_link.file_path,
+                ))
+
+        self.session.add_all(ticket_models)
+        self.session.add_all(node_models)
+        await self.session.commit()
+
+        return len(ticket_models)
 
     async def create_ticket(self, project_id: UUID, payload: KanbanTicketCreate) -> KanbanTicketResponse:
         ticket_id = uuid.uuid4()

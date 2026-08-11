@@ -143,8 +143,8 @@ export interface KanbanTicket {
   priority: TicketPriority;
   description: string;
   branch_name?: string | null;
-  epic?: string | null;
-  sprint?: string | null;
+  epic_id?: string | null;
+  sprint_id?: string | null;
   subtasks?: { id: string; title: string; completed: boolean }[];
   created_at: string;
   updated_at: string;
@@ -159,8 +159,8 @@ export interface KanbanTicketCreate {
   report_id?: string;
   affected_nodes?: TicketNodeLink[];
   branch_name?: string | null;
-  epic?: string | null;
-  sprint?: string | null;
+  epic_id?: string | null;
+  sprint_id?: string | null;
   subtasks?: { id: string; title: string; completed: boolean }[];
 }
 
@@ -171,8 +171,8 @@ export interface KanbanTicketUpdate {
   priority?: TicketPriority;
   description?: string;
   branch_name?: string | null;
-  epic?: string | null;
-  sprint?: string | null;
+  epic_id?: string | null;
+  sprint_id?: string | null;
   subtasks?: { id: string; title: string; completed: boolean }[];
 }
 
@@ -192,4 +192,56 @@ export interface BlastRadiusResponse {
   total_affected_files: number;
   items: BlastRadiusItem[];
   grouped_by_depth: Record<number, BlastRadiusItem[]>;
+}
+
+export type EpicStatus = "active" | "archived";
+export type SprintStatus = "planned" | "active" | "completed" | "archived";
+
+export interface Epic {
+  id: string;
+  project_id: string;
+  name: string;
+  description: string;
+  color: string;
+  status: EpicStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EpicCreate {
+  name: string;
+  description?: string;
+  color?: string;
+}
+
+export interface EpicUpdate {
+  name?: string;
+  description?: string;
+  color?: string;
+}
+
+export interface Sprint {
+  id: string;
+  project_id: string;
+  name: string;
+  goal: string;
+  start_date: string;
+  end_date: string;
+  status: SprintStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SprintCreate {
+  name: string;
+  goal?: string;
+  start_date: string;
+  end_date: string;
+}
+
+export interface SprintUpdate {
+  name?: string;
+  goal?: string;
+  start_date?: string;
+  end_date?: string;
 }

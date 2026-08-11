@@ -11,9 +11,28 @@ import {
   KanbanTicketCreate,
   KanbanTicketUpdate,
   BlastRadiusResponse,
+  Epic,
+  EpicCreate,
+  EpicUpdate,
+  Sprint,
+  SprintCreate,
+  SprintUpdate,
 } from '../types';
 
 export type { KanbanTicket, KanbanTicketCreate, KanbanTicketUpdate };
+
+export interface WBSImportTicket {
+  title: string;
+  type?: string;
+  priority?: string;
+  description: string;
+  report_id?: string;
+  affected_nodes?: any[];
+  branch_name?: string;
+  epic?: string;
+  sprint?: string;
+  subtasks?: any[];
+}
 
 export interface TestDiscoveryItem {
   file_path: string;
@@ -494,6 +513,36 @@ export const updateKanbanTicket = async (ticketId: string, payload: KanbanTicket
 
 export const deleteKanbanTicket = async (ticketId: string): Promise<void> => {
   return await api.delete<void>(`/kanban/tickets/${ticketId}`);
+};
+
+export const importWBSTickets = async (projectId: string, tickets: WBSImportTicket[]): Promise<{ success: boolean; imported_count: number }> => {
+  return await api.post<{ success: boolean; imported_count: number }>(`/projects/${projectId}/kanban/wbs-import`, tickets);
+};
+
+export const fetchEpics = async (projectId: string, includeArchived = false): Promise<Epic[]> => {
+  return await api.get<Epic[]>(`/projects/${projectId}/epics?include_archived=${includeArchived}`);
+};
+export const createEpic = async (projectId: string, payload: EpicCreate): Promise<Epic> => {
+  return await api.post<Epic>(`/projects/${projectId}/epics`, payload);
+};
+export const updateEpic = async (epicId: string, payload: EpicUpdate): Promise<Epic> => {
+  return await api.patch<Epic>(`/epics/${epicId}`, payload);
+};
+export const archiveEpic = async (epicId: string): Promise<void> => {
+  return await api.post<void>(`/epics/${epicId}/archive`);
+};
+
+export const fetchSprints = async (projectId: string, includeArchived = false): Promise<Sprint[]> => {
+  return await api.get<Sprint[]>(`/projects/${projectId}/sprints?include_archived=${includeArchived}`);
+};
+export const createSprint = async (projectId: string, payload: SprintCreate): Promise<Sprint> => {
+  return await api.post<Sprint>(`/projects/${projectId}/sprints`, payload);
+};
+export const updateSprint = async (sprintId: string, payload: SprintUpdate): Promise<Sprint> => {
+  return await api.patch<Sprint>(`/sprints/${sprintId}`, payload);
+};
+export const archiveSprint = async (sprintId: string): Promise<void> => {
+  return await api.post<void>(`/sprints/${sprintId}/archive`);
 };
 
 export const fetchBlastRadius = async (
