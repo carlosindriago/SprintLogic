@@ -448,6 +448,27 @@ class AIAgent:
             },
         ]
 
+        from app.application.tools.graph_tools import BlastRadiusArgs
+        from app.application.tools.telemetry_tools import FlowStateArgs
+
+        self.tools.append({
+            "type": "function",
+            "function": {
+                "name": "get_file_blast_radius",
+                "description": "Calculates the blast radius of a file by finding its in-degree, out-degree, and a list of files that directly import it.",
+                "parameters": BlastRadiusArgs.model_json_schema(),
+            }
+        })
+
+        self.tools.append({
+            "type": "function",
+            "function": {
+                "name": "get_developer_flow_state",
+                "description": "Fetches the developer's current flow state based on the last 30 minutes of telemetry pings (active time, idle ratio, friction level).",
+                "parameters": FlowStateArgs.model_json_schema(),
+            }
+        })
+
         self._project_root: str | None = None
         self._pending_proposals: list[dict[str, Any]] = []
 
@@ -498,15 +519,26 @@ class AIAgent:
                     if not edges:
                         return "No dependencies found."
                     return json.dumps([
-                        {
-                            "source": e["source_file_path"],
-                            "target": e["target_id"],
-                            "type": e["edge_type"]
-                        } for e in edges
+                        {"type": e["edge_type"], "source": e["source_id"], "target": e["target_id"]}
+                        for e in edges
                     ])
                 except Exception as e:
-                    logger.warning("Unhandled exception: %s", e, exc_info=True)
-                    return f"Error retrieving dependencies: {str(e)}"
+                    return f"Error al buscar dependencias: {str(e)}"
+
+            elif name == "get_file_blast_radius":
+                from app.application.tools.graph_tools import get_file_blast_radius
+                file_path = args.get("file_path", "")
+                if not self.project_id or not file_path:
+                    return "Error: project_id and file_path are required."
+                result = await get_file_blast_radius(session, self.project_id, file_path)
+                return json.dumps(result)
+
+            elif name == "get_developer_flow_state":
+                from app.application.tools.telemetry_tools import get_developer_flow_state
+                if not self.project_id:
+                    return "Error: project_id is required."
+                result = await get_developer_flow_state(session, self.project_id)
+                return json.dumps(result)
 
             elif name == "get_project_context_summary":
                 if not self.project_id:
