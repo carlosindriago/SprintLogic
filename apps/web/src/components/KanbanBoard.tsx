@@ -8,13 +8,9 @@ import { CSS } from "@dnd-kit/utilities";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import ReactMarkdown from "react-markdown";
-<<<<<<< Updated upstream
-import { getProjectTasks, saveProjectTasks, getKanbanConfig, saveKanbanConfig, syncKanbanCommits, generateWBS, WBSHierarchicalResponse, KanbanColumn, fetchProjectTickets, updateKanbanTicket, deleteKanbanTicket } from '@/lib/api';
-=======
-import { getProjectTasks, saveProjectTasks, getKanbanConfig, saveKanbanConfig, syncKanbanCommits, KanbanColumn, fetchProjectTickets, updateKanbanTicket, deleteKanbanTicket, createKanbanTicket, createGitBranch, commitChanges } from '@/lib/api';
+import { getProjectTasks, saveProjectTasks, getKanbanConfig, saveKanbanConfig, syncKanbanCommits, generateWBS, WBSHierarchicalResponse, KanbanColumn, fetchProjectTickets, updateKanbanTicket, deleteKanbanTicket, createKanbanTicket, createGitBranch, commitChanges } from '@/lib/api';
 import { KanbanTicket } from '@/types';
 import TicketDrawer from "./TicketDrawer";
->>>>>>> Stashed changes
 import { toast } from "sonner";
 import { useLLMConfigStore } from '@/store/llmConfigStore';
 import { useTabsStore } from '@/store/tabsStore';
@@ -230,7 +226,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
   const [isWbsGenerating, setIsWbsGenerating] = useState(false);
   const wbsModel = useLLMConfigStore((s) => s.defaultModel);
   const [wbsError, setWbsError] = useState<string | null>(null);
-=======
+
   // Filters State
   const [sprintFilter, setSprintFilter] = useState("Todas");
   const [epicFilter, setEpicFilter] = useState("Todas");
@@ -247,7 +243,6 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
   // Quick Add State
   const [quickAddText, setQuickAddText] = useState("");
   const [isQuickAdding, setIsQuickAdding] = useState(false);
->>>>>>> Stashed changes
 
   const handleGenerateWbs = async () => {
     if (!projectId || !wbsRequirements.trim()) return;
