@@ -162,13 +162,39 @@ export default function ExecutionRoomTab({ data }: ExecutionRoomTabProps) {
   const copyStructuredPrompt = () => {
     if (!ticket) return;
     const t = ticket as any;
-    let subtasksStr = "";
-    if (t.subtasks && t.subtasks.length > 0) {
-      subtasksStr = `\n\n## Subtareas\n${t.subtasks.map((st: any) => `- [ ] ${st.title}`).join('\n')}`;
-    }
-    const instruction = `\n\n---\n**Instrucción para el LLM:** Actúa como un Tech Lead Senior. Analiza este requerimiento y dame un plan de ejecución paso a paso ultra-detallado para realizar los cambios manualmente en el código. Enumera cada paso claramente con bloques de código si aplica.`;
-    const prompt = `Contexto del Ticket: ${t.title}\nRama: ${t.branch_name || 'N/A'}\nDescripción:\n${t.description}${subtasksStr}${instruction}`;
-    navigator.clipboard.writeText(prompt);
+    const ticketTitle = t.title;
+    const branchName = t.branch_name || 'N/A';
+    const ticketDescription = t.description;
+    const subtasks = t.subtasks && t.subtasks.length > 0 
+      ? t.subtasks.map((st: any) => `- [ ] ${st.title}`).join('\n')
+      : "No hay subtareas definidas.";
+
+    const promptText = `Contexto del Ticket: ${ticketTitle}
+Rama: ${branchName}
+
+## Descripción:
+${ticketDescription}
+
+## Subtareas:
+${subtasks}
+
+---
+**INSTRUCCIÓN DEL SISTEMA (PERFECT ATOMIC PROMPT):**
+Actúa como un Staff Engineer y Tech Lead Senior. Tu objetivo es diseñar un Plan de Ejecución Quirúrgica paso a paso para que un desarrollador implemente este requerimiento manualmente.
+
+Debes adherirte a los siguientes estándares de ingeniería:
+1. **Excelencia Técnica:** Aplica principios SOLID, Clean Code y patrones de diseño adecuados. Cero hardcoding y cero deuda técnica.
+2. **Seguridad y Robustez:** Incluye manejo de errores, validaciones de tipos y ten en cuenta la seguridad y el rendimiento.
+3. **Claridad Pedagógica:** Explica brevemente el *por qué* de cada decisión arquitectónica para que el desarrollador entienda el propósito.
+
+**FORMATO DE SALIDA ESPERADO:**
+Genera tu respuesta estrictamente estructurada de la siguiente manera:
+
+- **Análisis de Impacto:** Breve resumen de los componentes o servicios que se verán afectados.
+- **Plan de Ejecución:** Una lista de tareas enumeradas usando checkboxes (ej. \`- [ ] Paso 1: ...\`). Cada paso debe indicar claramente la ruta del archivo a modificar, seguido del bloque de código exacto (listo para copiar y pegar), y las instrucciones precisas de dónde insertarlo.
+- **Validación:** Qué pruebas o comprobaciones debe realizar el desarrollador para asegurar que el código funciona correctamente.`;
+
+    navigator.clipboard.writeText(promptText);
     toast.success("Prompt copiado al portapapeles");
   };
 
