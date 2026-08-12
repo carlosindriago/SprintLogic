@@ -97,6 +97,7 @@ export default function ExecutionRoomTab({ data }: ExecutionRoomTabProps) {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
   const [showOpenFileModal, setShowOpenFileModal] = useState(false);
   const [newFilePathInput, setNewFilePathInput] = useState("");
+  const [projectContextMd, setProjectContextMd] = useState<string>("");
 
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -136,6 +137,23 @@ export default function ExecutionRoomTab({ data }: ExecutionRoomTabProps) {
     loadTicket();
   }, [projectId, ticketId]);
 
+  // Fetch codebase context
+  useEffect(() => {
+    if (!projectId) return;
+    const loadContext = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/projects/${projectId}/graph/export/md`);
+        if (res.ok) {
+          const txt = await res.text();
+          setProjectContextMd(txt);
+        }
+      } catch (err) {
+        console.error("Failed to load project context", err);
+      }
+    };
+    loadContext();
+  }, [projectId]);
+
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
@@ -169,30 +187,39 @@ export default function ExecutionRoomTab({ data }: ExecutionRoomTabProps) {
       ? t.subtasks.map((st: any) => `- [ ] ${st.title}`).join('\n')
       : "No hay subtareas definidas.";
 
-    const promptText = `Contexto del Ticket: ${ticketTitle}
-Rama: ${branchName}
+    const promptText = `# CONTEXTO GLOBAL DEL PROYECTO
+A continuación se detalla la arquitectura, estructura de directorios y mapa de dependencias de nuestro proyecto actual:
+\`\`\`markdown
+${projectContextMd}
+\`\`\`
 
-## Descripción:
+---
+
+# CONTEXTO DE LA TAREA (TICKET)
+**Ticket:** ${ticketTitle}
+**Rama de trabajo:** ${branchName}
+
+## Descripción del requerimiento:
 ${ticketDescription}
 
-## Subtareas:
+## Subtareas a cumplir:
 ${subtasks}
 
 ---
-**INSTRUCCIÓN DEL SISTEMA (PERFECT ATOMIC PROMPT):**
-Actúa como un Staff Engineer y Tech Lead Senior. Tu objetivo es diseñar un Plan de Ejecución Quirúrgica paso a paso para que un desarrollador implemente este requerimiento manualmente.
+
+# INSTRUCCIÓN DEL SISTEMA (PERFECT ATOMIC PROMPT)
+Actúa como un Staff Engineer y Tech Lead Senior. Tu objetivo es leer el "Contexto Global del Proyecto" para entender nuestra arquitectura y dependencias, y luego diseñar un Plan de Ejecución Quirúrgica paso a paso para resolver el "Contexto de la Tarea".
 
 Debes adherirte a los siguientes estándares de ingeniería:
-1. **Excelencia Técnica:** Aplica principios SOLID, Clean Code y patrones de diseño adecuados. Cero hardcoding y cero deuda técnica.
-2. **Seguridad y Robustez:** Incluye manejo de errores, validaciones de tipos y ten en cuenta la seguridad y el rendimiento.
-3. **Claridad Pedagógica:** Explica brevemente el *por qué* de cada decisión arquitectónica para que el desarrollador entienda el propósito.
+1. **Excelencia Técnica:** Aplica principios SOLID, Clean Code y respeta la arquitectura existente del proyecto (usa los repositorios, servicios y utilidades que ya existen en el mapa). Cero hardcoding.
+2. **Seguridad y Robustez:** Incluye manejo de errores y validaciones de tipos.
+3. **Claridad Pedagógica:** Explica brevemente el *por qué* de cada decisión para que el desarrollador entienda el propósito.
 
 **FORMATO DE SALIDA ESPERADO:**
 Genera tu respuesta estrictamente estructurada de la siguiente manera:
-
-- **Análisis de Impacto:** Breve resumen de los componentes o servicios que se verán afectados.
-- **Plan de Ejecución:** Una lista de tareas enumeradas usando checkboxes (ej. \`- [ ] Paso 1: ...\`). Cada paso debe indicar claramente la ruta del archivo a modificar, seguido del bloque de código exacto (listo para copiar y pegar), y las instrucciones precisas de dónde insertarlo.
-- **Validación:** Qué pruebas o comprobaciones debe realizar el desarrollador para asegurar que el código funciona correctamente.`;
+- **Análisis de Impacto:** Qué componentes del mapa topológico se verán afectados.
+- **Plan de Ejecución:** Una lista de tareas enumeradas usando checkboxes (ej. \`- [ ] Paso 1: ...\`). Cada paso debe indicar claramente la ruta ABSOLUTA del archivo a modificar (basada en el mapa proporcionado), seguido del bloque de código exacto y las instrucciones precisas de dónde insertarlo.
+- **Validación:** Qué pruebas realizar para asegurar que el código funciona.`;
 
     navigator.clipboard.writeText(promptText);
     toast.success("Prompt copiado al portapapeles");
@@ -385,10 +412,15 @@ Genera tu respuesta estrictamente estructurada de la siguiente manera:
                 <div className="p-3 bg-zinc-900/50 border-b border-zinc-800 flex flex-wrap gap-2">
                   <button
                     onClick={copyStructuredPrompt}
-                    className="flex-1 flex items-center justify-center gap-1.5 text-xs px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-md border border-zinc-700 transition-colors"
+                    disabled={!projectContextMd}
+                    className={`flex-1 flex items-center justify-center gap-1.5 text-xs px-3 py-1.5 rounded-md border transition-colors ${
+                      projectContextMd 
+                        ? 'bg-zinc-800 hover:bg-zinc-700 border-zinc-700' 
+                        : 'bg-zinc-900 border-zinc-800 text-zinc-500 cursor-not-allowed'
+                    }`}
                   >
                     <ClipboardCopy className="w-3.5 h-3.5" />
-                    Copiar Prompt con Contexto
+                    {projectContextMd ? "Copiar Prompt con Contexto" : "Cargando contexto del proyecto..."}
                   </button>
                   <button
                     onClick={() => setShowPlanInput(true)}
