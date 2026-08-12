@@ -177,7 +177,7 @@ function SortableTask({
                 className="w-full flex items-center justify-center gap-1.5 text-[10px] py-1.5 bg-yellow-950/40 text-yellow-500 hover:bg-yellow-900/60 rounded border border-yellow-900/50 transition-colors"
               >
                 <Zap className="w-3 h-3" />
-                Resolver con IA
+                Entrar al Quirófano
               </button>
             </div>
           )}
