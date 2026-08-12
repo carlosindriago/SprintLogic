@@ -322,7 +322,7 @@ export default function TicketDrawer({ ticket, allSprints, allEpics, columns, on
               <label className="text-xs font-medium text-zinc-500">Estado</label>
               <select 
                 value={status}
-                onChange={e => setStatus(e.target.value)}
+                onChange={e => setStatus(e.target.value as any)}
                 style={{ colorScheme: 'dark' }}
                 className="w-full bg-[#131315] border border-[#27272a] rounded-md px-3 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 cursor-pointer"
               >
