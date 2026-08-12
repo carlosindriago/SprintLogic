@@ -507,6 +507,10 @@ export const createKanbanTicket = async (projectId: string, payload: KanbanTicke
   return await api.post<KanbanTicket>(`/projects/${projectId}/kanban/tickets`, payload);
 };
 
+export const getKanbanTicket = async (ticketId: string): Promise<KanbanTicket> => {
+  return await api.get<KanbanTicket>(`/kanban/tickets/${ticketId}`);
+};
+
 export const updateKanbanTicket = async (ticketId: string, payload: KanbanTicketUpdate): Promise<KanbanTicket> => {
   return await api.patch<KanbanTicket>(`/kanban/tickets/${ticketId}`, payload);
 };

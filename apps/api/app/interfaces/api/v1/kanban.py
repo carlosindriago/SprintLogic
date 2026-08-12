@@ -101,6 +101,22 @@ async def import_wbs_tickets(
     return {"success": True, "imported_count": count}
 
 
+@router.get("/kanban/tickets/{ticket_id}", response_model=KanbanTicketResponse)
+async def get_ticket(
+    ticket_id: str,
+    session: AsyncSession = Depends(get_db_session)
+):
+    try:
+        ticket_uuid = UUID(ticket_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid ticket ID format")
+
+    repo = SQLAlchemyKanbanRepository(session)
+    ticket = await repo.get_ticket(ticket_uuid)
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    return ticket
+
 @router.patch("/kanban/tickets/{ticket_id}", response_model=KanbanTicketResponse)
 async def update_ticket(
     ticket_id: str,

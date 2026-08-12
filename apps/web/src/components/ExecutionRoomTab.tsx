@@ -1,11 +1,11 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import { Send, Download, Play, Zap, GraduationCap, Layout, Settings2, CheckCircle2 } from "lucide-react";
+import { Send, Download, Play, Zap, GraduationCap, Layout, Settings2, CheckCircle2, ClipboardCopy, FileInput } from "lucide-react";
 import { DiffEditor } from "@monaco-editor/react";
 import { useProjectStore } from "@/store/projectStore";
 import ReactMarkdown from "react-markdown";
-import { applyPatch, getProjectTasks, API_BASE_URL } from "@/lib/api";
+import { applyPatch, getProjectTasks, getKanbanTicket, API_BASE_URL } from "@/lib/api";
 import { toast } from "sonner";
 import { Task } from "@/types";
 
@@ -82,6 +82,8 @@ export default function ExecutionRoomTab({ data }: ExecutionRoomTabProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [diffBlocks, setDiffBlocks] = useState<DiffBlock[]>([]);
   const [activeDiff, setActiveDiff] = useState<string | null>(null);
+  const [showPlanInput, setShowPlanInput] = useState(false);
+  const [externalPlan, setExternalPlan] = useState("");
 
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -90,14 +92,17 @@ export default function ExecutionRoomTab({ data }: ExecutionRoomTabProps) {
     const loadTicket = async () => {
       try {
         if (!ticketId) return;
-        const res = await getProjectTasks(projectId);
-        const task = res.tasks.find((t) => t.id === ticketId);
+        const task = await getKanbanTicket(ticketId) as any;
         if (task) {
           setTicket(task);
+          let subtasksStr = "";
+          if (task.subtasks && task.subtasks.length > 0) {
+            subtasksStr = `\n\n**Subtareas:**\n${task.subtasks.map((st: any) => `- [ ] ${st.title}`).join('\n')}`;
+          }
           setMessages([
             {
               role: "assistant",
-              content: `👋 **Bienvenido al Quirófano de SprintLogic**\n\nResolviendo ticket **[${task.id}]**: ${task.content}\n\nSeleccioná un modo de asistencia arriba para comenzar.`,
+              content: `👋 **Bienvenido al Quirófano de SprintLogic**\n\n🎯 **Ejecutando Ticket:** ${task.title} (Rama: ${task.branch_name || 'N/A'})\n\n**Descripción:**\n${task.description}${subtasksStr}\n\nSeleccioná un modo de asistencia arriba para comenzar.`,
             },
           ]);
         }
@@ -111,6 +116,22 @@ export default function ExecutionRoomTab({ data }: ExecutionRoomTabProps) {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  const copyStructuredPrompt = () => {
+    if (!ticket) return;
+    const t = ticket as any;
+    let subtasksStr = "";
+    if (t.subtasks && t.subtasks.length > 0) {
+      subtasksStr = `\n\n## Subtareas\n${t.subtasks.map((st: any) => `- [ ] ${st.title}`).join('\n')}`;
+    }
+    const prompt = `Contexto del Ticket: ${t.title}
+Rama: ${t.branch_name || 'N/A'}
+Descripción:
+${t.description}
+${subtasksStr}`;
+    navigator.clipboard.writeText(prompt);
+    toast.success("Prompt copiado al portapapeles");
+  };
 
   const extractDiffBlocks = (text: string) => {
     const blocks: DiffBlock[] = [];
@@ -218,8 +239,27 @@ export default function ExecutionRoomTab({ data }: ExecutionRoomTabProps) {
           )}
         </div>
 
-        {/* Triage Mode Selector Indicator */}
-        <div className="flex items-center gap-2">
+        {/* Actions & Triage */}
+        <div className="flex items-center gap-3">
+          {executionMode === "exec_mode_whiteboard" && (
+            <button
+              onClick={copyStructuredPrompt}
+              className="flex items-center gap-1.5 text-xs px-3 py-1 bg-zinc-800 hover:bg-zinc-700 rounded-md border border-zinc-700 transition-colors"
+            >
+              <ClipboardCopy className="w-3.5 h-3.5" />
+              Copiar Prompt con Contexto
+            </button>
+          )}
+          <button
+            onClick={() => setShowPlanInput(true)}
+            className="flex items-center gap-1.5 text-xs px-3 py-1 bg-zinc-800 hover:bg-zinc-700 rounded-md border border-zinc-700 transition-colors"
+          >
+            <FileInput className="w-3.5 h-3.5" />
+            Inyectar Plan Externo
+          </button>
+
+          <div className="h-4 w-px bg-zinc-700 mx-1" />
+
           <span className="text-xs text-zinc-500 font-medium">Modo Activo:</span>
           <button
             onClick={() => setShowTriageModal(true)}
@@ -407,6 +447,46 @@ export default function ExecutionRoomTab({ data }: ExecutionRoomTabProps) {
                 className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-5 py-2 rounded-md transition-colors"
               >
                 Comenzar con {MODES.find((m) => m.id === executionMode)?.title}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Inyectar Plan Modal */}
+      {showPlanInput && (
+        <div className="absolute inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-6">
+          <div className="bg-[#18181b] border border-[#3f3f46] w-full max-w-2xl rounded-xl shadow-2xl overflow-hidden flex flex-col">
+            <div className="p-4 border-b border-zinc-800">
+              <h3 className="text-lg font-bold text-zinc-100">Inyectar Plan Externo</h3>
+            </div>
+            <div className="p-4 flex-1">
+              <textarea
+                className="w-full h-64 bg-zinc-900 border border-zinc-800 text-sm text-zinc-200 p-3 rounded custom-scrollbar focus:outline-none focus:border-blue-500"
+                placeholder="Pega aquí la respuesta de Claude / ChatGPT..."
+                value={externalPlan}
+                onChange={(e) => setExternalPlan(e.target.value)}
+              />
+            </div>
+            <div className="p-4 bg-zinc-900/80 border-t border-zinc-800 flex justify-end gap-2">
+              <button
+                onClick={() => setShowPlanInput(false)}
+                className="text-zinc-400 hover:text-white px-4 py-2 rounded text-xs font-semibold"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  if (externalPlan.trim()) {
+                    setMessages(prev => [...prev, { role: "assistant", content: `**[Plan Inyectado]**\n\n${externalPlan}` }]);
+                    setShowPlanInput(false);
+                    setExternalPlan("");
+                    toast.success("Plan inyectado al contexto local");
+                  }
+                }}
+                className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-4 py-2 rounded transition-colors"
+              >
+                Inyectar y Guardar
               </button>
             </div>
           </div>
