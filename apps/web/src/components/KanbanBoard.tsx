@@ -2,7 +2,7 @@
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { DndContext, closestCenter, DragEndEvent, DragOverlay, DragStartEvent, useSensor, useSensors, PointerSensor } from "@dnd-kit/core";
+import { DndContext, closestCenter, DragEndEvent, DragOverlay, DragStartEvent, useSensor, useSensors, PointerSensor, useDroppable } from "@dnd-kit/core";
 import { arrayMove, SortableContext, verticalListSortingStrategy, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Card, CardContent } from "@/components/ui/card";
@@ -184,6 +184,15 @@ function SortableTask({
 
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+function DroppableColumn({ id, children }: { id: string, children: React.ReactNode }) {
+  const { setNodeRef } = useDroppable({ id });
+  return (
+    <div ref={setNodeRef} id={id} className="min-h-[300px]">
+      {children}
     </div>
   );
 }
@@ -374,7 +383,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
     const activeIndex = tasks.findIndex((t) => t.id === activeIdStr);
     if (activeIndex === -1) return;
 
-    const newTasks = [...tasks];
+    let newTasks = [...tasks];
     const activeTask = { ...newTasks[activeIndex] };
     let newStatus = activeTask.status;
 
@@ -386,6 +395,11 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
         activeTask.category = targetCol.title;
       }
       newTasks[activeIndex] = activeTask;
+      
+      const lastIndex = newTasks.map(t => t.status).lastIndexOf(newStatus);
+      if (lastIndex !== -1 && lastIndex !== activeIndex) {
+        newTasks = arrayMove(newTasks, activeIndex, lastIndex);
+      }
     } else {
       const overIndex = tasks.findIndex((t) => t.id === overIdStr);
       if (overIndex !== -1) {
@@ -396,6 +410,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
           activeTask.category = overTask.category;
           newTasks[activeIndex] = activeTask;
         }
+        newTasks = arrayMove(newTasks, activeIndex, overIndex);
       }
     }
 
@@ -667,7 +682,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
                 )}
                 <ScrollArea className="flex-1 p-3">
                   <SortableContext items={columnTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
-                    <div id={col.id} className="min-h-[300px]">
+                    <DroppableColumn id={col.id}>
                       {columnTasks.map(task => (
                         <SortableTask
                           key={task.id}
@@ -693,7 +708,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
                           }}
                         />
                       ))}
-                    </div>
+                    </DroppableColumn>
                   </SortableContext>
                 </ScrollArea>
               </div>
@@ -875,10 +890,11 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
 
       {/* Ticket Drawer */}
       {activeDrawerTicketId && (
-        <TicketDrawer 
+        <TicketDrawer
           ticket={rawTickets.find(r => r.id === activeDrawerTicketId)!}
           allSprints={sprints}
           allEpics={epics}
+          columns={columns}
           onClose={() => setActiveDrawerTicketId(null)}
           onUpdate={(updated) => {
             fetchTasks();

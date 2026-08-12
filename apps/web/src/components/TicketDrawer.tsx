@@ -4,7 +4,7 @@ import { updateKanbanTicket, deleteKanbanTicket } from '@/lib/api';
 import { KanbanTicket, KanbanTicketUpdate, Epic, Sprint } from '@/types';
 import { useTabsStore } from '@/store/tabsStore';
 import { useChatStore } from '@/store/chatStore';
-import { createEpic, createSprint } from '@/lib/api';
+import { createEpic, createSprint, KanbanColumn } from '@/lib/api';
 
 export interface SubtaskItem {
   id: string;
@@ -16,6 +16,7 @@ interface TicketDrawerProps {
   ticket: KanbanTicket;
   allSprints: Sprint[];
   allEpics: Epic[];
+  columns: KanbanColumn[];
   onClose: () => void;
   onUpdate: (ticket: KanbanTicket) => void;
 }
@@ -127,10 +128,11 @@ function CreatableCombobox({
   );
 }
 
-export default function TicketDrawer({ ticket, allSprints, allEpics, onClose, onUpdate }: TicketDrawerProps) {
+export default function TicketDrawer({ ticket, allSprints, allEpics, columns, onClose, onUpdate }: TicketDrawerProps) {
   const [title, setTitle] = useState(ticket.title);
   const [description, setDescription] = useState(ticket.description);
   const [type, setType] = useState(ticket.type);
+  const [status, setStatus] = useState(ticket.status);
   const [priority, setPriority] = useState(ticket.priority);
   const [branchName, setBranchName] = useState(ticket.branch_name || '');
   const [epicId, setEpicId] = useState(ticket.epic_id || '');
@@ -145,6 +147,7 @@ export default function TicketDrawer({ ticket, allSprints, allEpics, onClose, on
     setTitle(ticket.title);
     setDescription(ticket.description);
     setType(ticket.type);
+    setStatus(ticket.status);
     setPriority(ticket.priority);
     setBranchName(ticket.branch_name || '');
     setEpicId(ticket.epic_id || '');
@@ -197,6 +200,7 @@ export default function TicketDrawer({ ticket, allSprints, allEpics, onClose, on
         title,
         description,
         type,
+        status: status as any,
         priority,
         branch_name: branchName.trim() || null,
         epic_id: epicId.trim() || null,
@@ -316,9 +320,18 @@ export default function TicketDrawer({ ticket, allSprints, allEpics, onClose, on
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-zinc-500">Estado</label>
-              <div className="text-sm text-zinc-300 bg-[#27272a] px-3 py-1.5 rounded-md capitalize">
-                {ticket.status.replace('_', ' ')}
-              </div>
+              <select 
+                value={status}
+                onChange={e => setStatus(e.target.value)}
+                style={{ colorScheme: 'dark' }}
+                className="w-full bg-[#131315] border border-[#27272a] rounded-md px-3 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 cursor-pointer"
+              >
+                {columns.map(c => (
+                  <option key={c.id} value={c.id} className="bg-[#18181b] text-zinc-100">
+                    {c.title}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div className="space-y-1.5">
