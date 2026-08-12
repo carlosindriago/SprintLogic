@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, useEffect } from "react";
+import { useCallback, useRef, useState, useEffect, useMemo } from "react";
 import type { NodeObject, LinkObject } from "react-force-graph-2d";
 import { ForceNode, ForceLink } from "../types";
 import { getSafeTime, drawRoundedSquare, drawDiamond, drawTriangle, drawFile } from "../utils";
@@ -79,13 +79,17 @@ export function useGraphCanvas({
       iconImages.current[ext] = img;
     });
   }, []);
+  const activeFocusNeighbors = useMemo(() => {
+    const active = focusNode || hoverNode;
+    return active ? neighbors.get(active) : undefined;
+  }, [focusNode, hoverNode, neighbors]);
 
   const isFaded = useCallback((nodeId: string) => {
     const activeFocus = focusNode || hoverNode;
     if (!activeFocus) return false;
     if (nodeId === activeFocus) return false;
-    return !neighbors.get(activeFocus)?.has(nodeId);
-  }, [focusNode, hoverNode, neighbors]);
+    return !activeFocusNeighbors?.has(nodeId);
+  }, [focusNode, hoverNode, activeFocusNeighbors]);
 
   const paintBackground = useCallback((ctx: CanvasRenderingContext2D, globalScale: number) => {
     if (!displayGraphData || !displayGraphData.nodes || displayGraphData.nodes.length === 0) return;
