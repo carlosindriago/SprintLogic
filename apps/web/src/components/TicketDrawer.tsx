@@ -186,10 +186,12 @@ export default function TicketDrawer({ ticket, allSprints, allEpics, columns, on
   const setPendingQuery = useChatStore(s => s.setPendingQuery);
 
   const handleAIMentorClick = () => {
-    const prompt = `Mentor, necesito resolver el ticket ${ticket.type.toUpperCase()}-SL-${ticket.id.substring(0,6).toUpperCase()}: '${ticket.title}'. Por favor, usa tus herramientas para revisar mi estado de flujo actual y analiza el blast radius de los archivos que crees que deberíamos tocar. Dame un plan de ataque paso a paso.`;
-    setPendingQuery(prompt);
-    
-    addTab({ id: 'ai-history', title: 'SprintLogic AI', type: 'ai-history' });
+    addTab({ 
+      id: `execution-${ticket.id}`, 
+      title: `Quirófano: SL-${ticket.id.substring(0,6).toUpperCase()}`, 
+      type: 'execution-room',
+      data: { ticketId: ticket.id }
+    });
     onClose();
   };
 

@@ -107,7 +107,7 @@ export interface ProjectFlowInsights {
 export interface ProjectRepoInsights {
   tasks_by_state: {
     todo: number;
-    "in-progress": number;
+    "in_progress": number;
     done: number;
   };
   language_distribution: LanguageDistributionItem[];

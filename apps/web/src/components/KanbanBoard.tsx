@@ -162,7 +162,7 @@ function SortableTask({
             </div>
           )}
 
-          {task.status === "in-progress" && (
+          {task.status === "in_progress" && (
             <div className="mt-2 border-t border-zinc-700/30 pt-2">
               <button
                 onClick={(e) => {
