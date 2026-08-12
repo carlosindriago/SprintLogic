@@ -1,11 +1,12 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import { Send, Download, Play, Zap, GraduationCap, Layout, Settings2, CheckCircle2, ClipboardCopy, FileInput } from "lucide-react";
-import { DiffEditor } from "@monaco-editor/react";
+import { Send, Download, Play, Zap, GraduationCap, Layout, Settings2, CheckCircle2, ClipboardCopy, FileInput, Save, FileCode2, Plus } from "lucide-react";
+import Editor, { DiffEditor } from "@monaco-editor/react";
+import { Panel, Group, Separator } from "react-resizable-panels";
 import { useProjectStore } from "@/store/projectStore";
 import ReactMarkdown from "react-markdown";
-import { applyPatch, getProjectTasks, getKanbanTicket, API_BASE_URL } from "@/lib/api";
+import { getKanbanTicket, API_BASE_URL, getFileContent, saveFileContent } from "@/lib/api";
 import { toast } from "sonner";
 import { Task } from "@/types";
 
@@ -72,18 +73,30 @@ export default function ExecutionRoomTab({ data }: ExecutionRoomTabProps) {
   const ticketId = data?.ticketId;
   const projectId = useProjectStore((s) => s.projectId);
 
-  const [ticket, setTicket] = useState<Task | null>(null);
+  const [ticket, setTicket] = useState<Task | any>(null);
   const [executionMode, setExecutionMode] = useState<ExecutionMode>(
     (data?.executionMode as ExecutionMode) || "exec_mode_surgeon"
   );
   const [showTriageModal, setShowTriageModal] = useState<boolean>(!data?.executionMode);
+  
+  // Left Panel State
   const [messages, setMessages] = useState<{ role: string; content: string }[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [diffBlocks, setDiffBlocks] = useState<DiffBlock[]>([]);
-  const [activeDiff, setActiveDiff] = useState<string | null>(null);
   const [showPlanInput, setShowPlanInput] = useState(false);
   const [externalPlan, setExternalPlan] = useState("");
+  
+  // Right Panel State (Editor)
+  const [openFiles, setOpenFiles] = useState<string[]>([]);
+  const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
+  const [fileContent, setFileContent] = useState<string>("");
+  const [originalContent, setOriginalContent] = useState<string>("");
+  const [isDiffMode, setIsDiffMode] = useState<boolean>(false);
+  const [diffOriginal, setDiffOriginal] = useState<string>("");
+  const [diffModified, setDiffModified] = useState<string>("");
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
+  const [showOpenFileModal, setShowOpenFileModal] = useState(false);
+  const [newFilePathInput, setNewFilePathInput] = useState("");
 
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -95,6 +108,16 @@ export default function ExecutionRoomTab({ data }: ExecutionRoomTabProps) {
         const task = await getKanbanTicket(ticketId) as any;
         if (task) {
           setTicket(task);
+          
+          // Pre-carguen como pestañas los archivos listados en affected_nodes
+          if (task.affected_nodes && task.affected_nodes.length > 0) {
+            const files = task.affected_nodes.map((n: any) => n.file_path || n.node_id || n);
+            setOpenFiles(files);
+            if (files.length > 0) {
+              setActiveFilePath(files[0]);
+            }
+          }
+
           let subtasksStr = "";
           if (task.subtasks && task.subtasks.length > 0) {
             subtasksStr = `\n\n**Subtareas:**\n${task.subtasks.map((st: any) => `- [ ] ${st.title}`).join('\n')}`;
@@ -117,6 +140,25 @@ export default function ExecutionRoomTab({ data }: ExecutionRoomTabProps) {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Handle active file loading
+  useEffect(() => {
+    const loadFile = async () => {
+      if (!projectId || !activeFilePath) return;
+      try {
+        const contentResponse = await getFileContent(projectId, activeFilePath);
+        const code = contentResponse.content;
+        setFileContent(code);
+        setOriginalContent(code);
+        setHasUnsavedChanges(false);
+        setIsDiffMode(false);
+      } catch (err) {
+        console.error("Failed to load file content", err);
+        toast.error("Error al cargar el archivo");
+      }
+    };
+    loadFile();
+  }, [projectId, activeFilePath]);
+
   const copyStructuredPrompt = () => {
     if (!ticket) return;
     const t = ticket as any;
@@ -124,28 +166,9 @@ export default function ExecutionRoomTab({ data }: ExecutionRoomTabProps) {
     if (t.subtasks && t.subtasks.length > 0) {
       subtasksStr = `\n\n## Subtareas\n${t.subtasks.map((st: any) => `- [ ] ${st.title}`).join('\n')}`;
     }
-    const prompt = `Contexto del Ticket: ${t.title}
-Rama: ${t.branch_name || 'N/A'}
-Descripción:
-${t.description}
-${subtasksStr}`;
+    const prompt = `Contexto del Ticket: ${t.title}\nRama: ${t.branch_name || 'N/A'}\nDescripción:\n${t.description}\n${subtasksStr}`;
     navigator.clipboard.writeText(prompt);
     toast.success("Prompt copiado al portapapeles");
-  };
-
-  const extractDiffBlocks = (text: string) => {
-    const blocks: DiffBlock[] = [];
-    const regex = /<<<<([\s\S]*?)====([\s\S]*?)>>>>/g;
-    let match;
-    let index = 0;
-    while ((match = regex.exec(text)) !== null) {
-      blocks.push({
-        id: `diff-${Date.now()}-${index++}`,
-        original: match[1].replace(/^\n/, ""),
-        modified: match[2].replace(/^\n/, ""),
-      });
-    }
-    return blocks;
   };
 
   const handleSend = async () => {
@@ -169,9 +192,7 @@ ${subtasksStr}`;
         }),
       });
 
-      if (!res.ok) {
-        throw new Error("Error en la llamada al endpoint de ejecución");
-      }
+      if (!res.ok) throw new Error("Error en la llamada al endpoint de ejecución");
 
       const reader = res.body?.getReader();
       const decoder = new TextDecoder();
@@ -192,12 +213,6 @@ ${subtasksStr}`;
           });
         }
       }
-
-      const blocks = extractDiffBlocks(assistantMsg);
-      if (blocks.length > 0) {
-        setDiffBlocks((prev) => [...prev, ...blocks]);
-        setActiveDiff(blocks[0].id);
-      }
     } catch (err) {
       toast.error("Error al comunicarse con el agente de ejecución");
       console.error(err);
@@ -206,60 +221,118 @@ ${subtasksStr}`;
     }
   };
 
-  const handleApplyPatch = async (block: DiffBlock) => {
-    if (!projectId) return;
+  // Helper to extract a single patch for the IA button (from the last assistant message)
+  const applyIAPatchToEditor = () => {
+    if (!activeFilePath) {
+      toast.error("No hay ningún archivo activo para aplicar el parche");
+      return;
+    }
+    
+    // Find the last diff block in the chat history
+    let foundPatch: DiffBlock | null = null;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      if (msg.role === "assistant") {
+        const regex = /<<<<([\s\S]*?)====([\s\S]*?)>>>>/g;
+        let match;
+        let lastMatch = null;
+        while ((match = regex.exec(msg.content)) !== null) {
+          lastMatch = match;
+        }
+        if (lastMatch) {
+          foundPatch = {
+            id: `patch`,
+            original: lastMatch[1].replace(/^\n/, ""),
+            modified: lastMatch[2].replace(/^\n/, ""),
+          };
+          break;
+        }
+      }
+    }
+
+    if (!foundPatch) {
+      toast.error("No se encontró ningún parche en el último mensaje de la IA");
+      return;
+    }
+
+    // Apply patch logic to fileContent
     try {
-      const targetFile = ticket?.affected_nodes?.[0] || "unknown";
-      await applyPatch(projectId, targetFile, block.original, block.modified);
-      toast.success("Parche aplicado exitosamente");
-      setDiffBlocks((prev) => prev.filter((b) => b.id !== block.id));
-      if (activeDiff === block.id) setActiveDiff(null);
+      const newContent = fileContent.replace(foundPatch.original, foundPatch.modified);
+      if (newContent === fileContent) {
+        toast.error("El parche no coincide con el contenido actual del archivo");
+        return;
+      }
+      
+      // Enter diff mode
+      setDiffOriginal(fileContent);
+      setDiffModified(newContent);
+      setFileContent(newContent);
+      setIsDiffMode(true);
+      setHasUnsavedChanges(true);
+      toast.success("Parche aplicado. Revisa el diff y guarda los cambios.");
     } catch (err) {
-      toast.error("Fallo al aplicar el parche");
-      console.error(err);
+      toast.error("Error al aplicar el parche");
     }
   };
 
-  const currentDiff = useMemo(() => diffBlocks.find((b) => b.id === activeDiff), [diffBlocks, activeDiff]);
+  const handleSaveFile = async () => {
+    if (!projectId || !activeFilePath) return;
+    try {
+      await saveFileContent(projectId, activeFilePath, fileContent);
+      setOriginalContent(fileContent);
+      setHasUnsavedChanges(false);
+      setIsDiffMode(false);
+      toast.success("Archivo guardado exitosamente");
+    } catch (error) {
+      console.error(error);
+      toast.error("Error al guardar el archivo");
+    }
+  };
+
+  const handleEditorChange = (value: string | undefined) => {
+    if (value !== undefined) {
+      setFileContent(value);
+      setHasUnsavedChanges(value !== originalContent);
+    }
+  };
+
+  const openNewFile = () => {
+    if (newFilePathInput.trim()) {
+      const path = newFilePathInput.trim();
+      if (!openFiles.includes(path)) {
+        setOpenFiles([...openFiles, path]);
+      }
+      setActiveFilePath(path);
+      setShowOpenFileModal(false);
+      setNewFilePathInput("");
+    }
+  };
+
   const activeModeConfig = useMemo(() => MODES.find((m) => m.id === executionMode) || MODES[0], [executionMode]);
 
   return (
     <div className="flex flex-col h-full w-full bg-zinc-950 text-zinc-200 overflow-hidden font-sans relative">
       {/* Header / Sub-bar */}
-      <div className="h-12 bg-zinc-900 border-b border-zinc-800 flex items-center justify-between px-4 shrink-0">
+      <div className="h-12 bg-zinc-900 border-b border-zinc-800 flex items-center justify-between px-4 shrink-0 z-10">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
             <Zap className="w-4 h-4 text-yellow-400" />
             <span className="text-sm font-semibold text-zinc-200">Quirófano (Execution Room)</span>
           </div>
           {ticket && (
-            <span className="text-xs bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded border border-zinc-700 font-mono truncate max-w-xs">
-              {ticket.id}
-            </span>
+            <>
+              <span className="text-xs bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded border border-zinc-700 font-mono truncate max-w-xs">
+                🎯 {ticket.title}
+              </span>
+              <span className="text-xs text-emerald-400 px-2 py-0.5 rounded bg-emerald-950/30 border border-emerald-900/50">
+                🌿 Rama: {ticket.branch_name || 'main'}
+              </span>
+            </>
           )}
         </div>
 
         {/* Actions & Triage */}
         <div className="flex items-center gap-3">
-          {executionMode === "exec_mode_whiteboard" && (
-            <button
-              onClick={copyStructuredPrompt}
-              className="flex items-center gap-1.5 text-xs px-3 py-1 bg-zinc-800 hover:bg-zinc-700 rounded-md border border-zinc-700 transition-colors"
-            >
-              <ClipboardCopy className="w-3.5 h-3.5" />
-              Copiar Prompt con Contexto
-            </button>
-          )}
-          <button
-            onClick={() => setShowPlanInput(true)}
-            className="flex items-center gap-1.5 text-xs px-3 py-1 bg-zinc-800 hover:bg-zinc-700 rounded-md border border-zinc-700 transition-colors"
-          >
-            <FileInput className="w-3.5 h-3.5" />
-            Inyectar Plan Externo
-          </button>
-
-          <div className="h-4 w-px bg-zinc-700 mx-1" />
-
           <span className="text-xs text-zinc-500 font-medium">Modo Activo:</span>
           <button
             onClick={() => setShowTriageModal(true)}
@@ -272,132 +345,249 @@ ${subtasksStr}`;
         </div>
       </div>
 
-      {/* Main Workspace: Chat + Diff */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Chat Left Pane */}
-        <div className="w-1/3 min-w-[360px] border-r border-zinc-800 bg-[#121212] flex flex-col">
-          <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 custom-scrollbar">
-            {messages.map((msg, i) => (
-              <div
-                key={i}
-                className={`p-3 rounded-lg max-w-[92%] text-xs leading-relaxed ${
-                  msg.role === "user"
-                    ? "bg-blue-950/40 text-blue-100 border border-blue-800/50 self-end"
-                    : "bg-zinc-900 text-zinc-300 border border-zinc-800 self-start"
-                }`}
-              >
-                <div className="font-semibold text-[10px] mb-1 opacity-60 uppercase tracking-wider flex items-center justify-between">
-                  <span>{msg.role === "user" ? "Desarrollador" : "Agente Quirúrgico"}</span>
-                  {msg.role === "assistant" && (
-                    <span className={`text-[9px] px-1 rounded ${activeModeConfig.bgColor} ${activeModeConfig.color}`}>
-                      {activeModeConfig.title}
-                    </span>
-                  )}
-                </div>
-                <div className="prose prose-invert prose-xs max-w-none">
-                  <ReactMarkdown>{msg.content}</ReactMarkdown>
-                </div>
-              </div>
-            ))}
-            {isLoading && (
-              <div className="text-xs text-zinc-500 animate-pulse flex items-center gap-2 self-start p-3">
-                <Play className="w-3 h-3 animate-spin" /> Procesando instrucción...
-              </div>
-            )}
-            <div ref={chatEndRef} />
-          </div>
-
-          {/* Chat Input */}
-          <div className="p-3 bg-zinc-900 border-t border-zinc-800">
-            <div className="flex gap-2">
-              <input
-                type="text"
-                className="flex-1 bg-zinc-950 border border-zinc-700 rounded-md px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-blue-500"
-                placeholder={`Instrucción para ${activeModeConfig.title}...`}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSend();
-                  }
-                }}
-                disabled={isLoading}
-              />
-              <button
-                onClick={handleSend}
-                disabled={isLoading || !input.trim()}
-                className="bg-blue-600 hover:bg-blue-500 text-white p-2 rounded-md transition-colors disabled:opacity-40 focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-blue-500"
-                aria-label="Enviar instrucción"
-                title="Enviar instrucción"
-              >
-                <Send className="w-4 h-4" aria-hidden="true" />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Diff Right Pane */}
-        <div className="flex-1 bg-[#1e1e1e] flex flex-col overflow-hidden relative">
-          {diffBlocks.length === 0 ? (
-            <div className="flex-1 flex items-center justify-center text-zinc-500 flex-col gap-3 p-6 text-center">
-              <Zap className="w-10 h-10 opacity-30 text-yellow-500" />
-              <h4 className="text-sm font-semibold text-zinc-400">Sin Parches Pendientes</h4>
-              <p className="text-xs max-w-sm text-zinc-500">
-                Los cambios de código propuestos por el Agente Quirúrgico aparecerán en esta área como Diffs ejecutables.
-              </p>
-            </div>
-          ) : (
-            <>
-              {/* Diff Tabs */}
-              <div className="h-10 bg-zinc-900 border-b border-zinc-800 flex items-center justify-between px-4 shrink-0">
-                <div className="flex gap-2 overflow-x-auto custom-scrollbar">
-                  {diffBlocks.map((b, idx) => (
-                    <button
-                      key={b.id}
-                      onClick={() => setActiveDiff(b.id)}
-                      className={`px-3 py-1 text-xs rounded border transition-colors ${
-                        activeDiff === b.id
-                          ? "bg-zinc-800 text-white border-zinc-600"
-                          : "bg-zinc-950 text-zinc-500 border-zinc-800 hover:text-zinc-300"
-                      }`}
-                    >
-                      Parche #{idx + 1}
-                    </button>
-                  ))}
-                </div>
-                {currentDiff && (
+      {/* Main Workspace: Split View */}
+      <div className="flex-1 overflow-hidden">
+        <Group orientation="horizontal">
+          
+          {/* Left Panel: Instruments / AI Chat */}
+          <Panel defaultSize={35} minSize={25}>
+            <div className="h-full bg-[#121212] flex flex-col border-r border-zinc-800">
+              
+              {/* Whiteboard Actions Top Bar */}
+              {executionMode === "exec_mode_whiteboard" && (
+                <div className="p-3 bg-zinc-900/50 border-b border-zinc-800 flex flex-wrap gap-2">
                   <button
-                    onClick={() => handleApplyPatch(currentDiff)}
-                    className="flex items-center gap-1.5 px-3 py-1 bg-emerald-950/60 text-emerald-400 hover:bg-emerald-900/80 border border-emerald-800/60 rounded text-xs font-semibold transition-colors"
+                    onClick={copyStructuredPrompt}
+                    className="flex-1 flex items-center justify-center gap-1.5 text-xs px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-md border border-zinc-700 transition-colors"
                   >
-                    <Download className="w-3.5 h-3.5" />
-                    Aplicar Parche
+                    <ClipboardCopy className="w-3.5 h-3.5" />
+                    Copiar Prompt con Contexto
                   </button>
+                  <button
+                    onClick={() => setShowPlanInput(true)}
+                    className="flex-1 flex items-center justify-center gap-1.5 text-xs px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-md border border-zinc-700 transition-colors"
+                  >
+                    <FileInput className="w-3.5 h-3.5" />
+                    Inyectar Plan Externo
+                  </button>
+                </div>
+              )}
+
+              {/* Chat Area */}
+              <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 custom-scrollbar">
+                {messages.map((msg, i) => (
+                  <div
+                    key={i}
+                    className={`p-3 rounded-lg max-w-[95%] text-xs leading-relaxed ${
+                      msg.role === "user"
+                        ? "bg-blue-950/40 text-blue-100 border border-blue-800/50 self-end"
+                        : "bg-zinc-900 text-zinc-300 border border-zinc-800 self-start"
+                    }`}
+                  >
+                    <div className="font-semibold text-[10px] mb-1 opacity-60 uppercase tracking-wider flex items-center justify-between">
+                      <span>{msg.role === "user" ? "Desarrollador" : "Agente Quirúrgico"}</span>
+                      {msg.role === "assistant" && (
+                        <span className={`text-[9px] px-1 rounded ${activeModeConfig.bgColor} ${activeModeConfig.color}`}>
+                          {activeModeConfig.title}
+                        </span>
+                      )}
+                    </div>
+                    <div className="prose prose-invert prose-xs max-w-none">
+                      <ReactMarkdown>{msg.content}</ReactMarkdown>
+                    </div>
+                  </div>
+                ))}
+                {isLoading && (
+                  <div className="text-xs text-zinc-500 animate-pulse flex items-center gap-2 self-start p-3">
+                    <Play className="w-3 h-3 animate-spin" /> Procesando instrucción...
+                  </div>
                 )}
+                <div ref={chatEndRef} />
               </div>
 
-              {/* Monaco Diff Editor */}
+              {/* Chat Input */}
+              <div className="p-3 bg-zinc-900 border-t border-zinc-800 shrink-0">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    className="flex-1 bg-zinc-950 border border-zinc-700 rounded-md px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-blue-500"
+                    placeholder={`Consulta rápida a la IA...`}
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSend();
+                      }
+                    }}
+                    disabled={isLoading}
+                  />
+                  <button
+                    onClick={handleSend}
+                    disabled={isLoading || !input.trim()}
+                    className="bg-blue-600 hover:bg-blue-500 text-white p-2 rounded-md transition-colors disabled:opacity-40 focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-blue-500"
+                    aria-label="Enviar instrucción"
+                  >
+                    <Send className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </Panel>
+          
+          <Separator className="w-1 bg-zinc-800 hover:bg-blue-500 transition-colors cursor-col-resize" />
+          
+          {/* Right Panel: Code Editor */}
+          <Panel defaultSize={65} minSize={30}>
+            <div className="h-full flex flex-col bg-[#1e1e1e]">
+              
+              {/* Tabs Bar */}
+              <div className="flex items-center bg-zinc-900 border-b border-zinc-800 overflow-x-auto custom-scrollbar shrink-0">
+                {openFiles.map((file) => (
+                  <button
+                    key={file}
+                    onClick={() => setActiveFilePath(file)}
+                    className={`flex items-center gap-2 px-4 py-2 text-xs border-r border-zinc-800 transition-colors ${
+                      activeFilePath === file
+                        ? "bg-[#1e1e1e] text-blue-400 border-t-2 border-t-blue-500"
+                        : "bg-zinc-900 text-zinc-500 hover:bg-zinc-800 border-t-2 border-t-transparent"
+                    }`}
+                  >
+                    <FileCode2 className="w-3.5 h-3.5" />
+                    <span className="truncate max-w-[200px]">{file.split('/').pop()}</span>
+                    {hasUnsavedChanges && activeFilePath === file && (
+                      <span className="w-2 h-2 rounded-full bg-yellow-500"></span>
+                    )}
+                  </button>
+                ))}
+                <button
+                  onClick={() => setShowOpenFileModal(true)}
+                  className="flex items-center gap-1 px-3 py-2 text-xs text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Abrir Archivo
+                </button>
+              </div>
+
+              {/* Editor Workspace */}
               <div className="flex-1 relative">
-                {currentDiff && (
+                {!activeFilePath ? (
+                  <div className="absolute inset-0 flex items-center justify-center text-zinc-500 flex-col gap-3 p-6 text-center">
+                    <FileCode2 className="w-10 h-10 opacity-30" />
+                    <p className="text-xs">Selecciona o abre un archivo para comenzar a editar.</p>
+                  </div>
+                ) : isDiffMode ? (
                   <DiffEditor
-                    original={currentDiff.original}
-                    modified={currentDiff.modified}
+                    original={diffOriginal}
+                    modified={diffModified}
                     theme="vs-dark"
                     options={{
-                      readOnly: true,
                       renderSideBySide: true,
                       minimap: { enabled: false },
                       wordWrap: "on",
+                      readOnly: true,
+                    }}
+                  />
+                ) : (
+                  <Editor
+                    path={activeFilePath}
+                    value={fileContent}
+                    theme="vs-dark"
+                    onChange={handleEditorChange}
+                    options={{
+                      minimap: { enabled: false },
+                      wordWrap: "on",
                       scrollBeyondLastLine: false,
+                      fontSize: 13,
                     }}
                   />
                 )}
               </div>
-            </>
-          )}
-        </div>
+
+              {/* Editor Actions Bottom Bar */}
+              <div className="h-12 bg-zinc-900 border-t border-zinc-800 flex items-center justify-between px-4 shrink-0">
+                <div className="text-xs text-zinc-500 font-mono truncate max-w-md">
+                  {activeFilePath || "Ningún archivo activo"}
+                </div>
+                
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      if (isDiffMode) {
+                        setIsDiffMode(false);
+                      } else {
+                        setDiffOriginal(originalContent);
+                        setDiffModified(fileContent);
+                        setIsDiffMode(true);
+                      }
+                    }}
+                    disabled={!activeFilePath}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-zinc-300 rounded border border-zinc-700 text-xs font-semibold transition-colors"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    {isDiffMode ? "Ocultar Diff" : "Ver Diff"}
+                  </button>
+                  
+                  <button
+                    onClick={applyIAPatchToEditor}
+                    disabled={!activeFilePath}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-yellow-950/60 hover:bg-yellow-900/80 text-yellow-400 disabled:opacity-50 rounded border border-yellow-800/60 text-xs font-semibold transition-colors"
+                  >
+                    <Zap className="w-3.5 h-3.5" />
+                    Aplicar Parche IA
+                  </button>
+
+                  <button
+                    onClick={handleSaveFile}
+                    disabled={!hasUnsavedChanges || !activeFilePath}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-900/50 disabled:text-blue-400/50 text-white rounded text-xs font-semibold transition-colors"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    Guardar
+                  </button>
+                </div>
+              </div>
+
+            </div>
+          </Panel>
+        </Group>
       </div>
+
+      {/* Open File Modal */}
+      {showOpenFileModal && (
+        <div className="absolute inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-6">
+          <div className="bg-[#18181b] border border-[#3f3f46] w-full max-w-md rounded-xl shadow-2xl overflow-hidden flex flex-col">
+            <div className="p-4 border-b border-zinc-800">
+              <h3 className="text-lg font-bold text-zinc-100">Abrir Archivo</h3>
+            </div>
+            <div className="p-4 flex-1">
+              <input
+                type="text"
+                autoFocus
+                className="w-full bg-zinc-900 border border-zinc-800 text-sm text-zinc-200 p-3 rounded focus:outline-none focus:border-blue-500"
+                placeholder="Ruta del archivo (ej. src/main.tsx)..."
+                value={newFilePathInput}
+                onChange={(e) => setNewFilePathInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && openNewFile()}
+              />
+            </div>
+            <div className="p-4 bg-zinc-900/80 border-t border-zinc-800 flex justify-end gap-2">
+              <button
+                onClick={() => setShowOpenFileModal(false)}
+                className="text-zinc-400 hover:text-white px-4 py-2 rounded text-xs font-semibold"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={openNewFile}
+                disabled={!newFilePathInput.trim()}
+                className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-semibold px-4 py-2 rounded transition-colors"
+              >
+                Abrir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Triage UX Selector Modal */}
       {showTriageModal && (
