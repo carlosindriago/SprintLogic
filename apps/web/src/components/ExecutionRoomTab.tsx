@@ -166,7 +166,8 @@ export default function ExecutionRoomTab({ data }: ExecutionRoomTabProps) {
     if (t.subtasks && t.subtasks.length > 0) {
       subtasksStr = `\n\n## Subtareas\n${t.subtasks.map((st: any) => `- [ ] ${st.title}`).join('\n')}`;
     }
-    const prompt = `Contexto del Ticket: ${t.title}\nRama: ${t.branch_name || 'N/A'}\nDescripción:\n${t.description}\n${subtasksStr}`;
+    const instruction = `\n\n---\n**Instrucción para el LLM:** Actúa como un Tech Lead Senior. Analiza este requerimiento y dame un plan de ejecución paso a paso ultra-detallado para realizar los cambios manualmente en el código. Enumera cada paso claramente con bloques de código si aplica.`;
+    const prompt = `Contexto del Ticket: ${t.title}\nRama: ${t.branch_name || 'N/A'}\nDescripción:\n${t.description}${subtasksStr}${instruction}`;
     navigator.clipboard.writeText(prompt);
     toast.success("Prompt copiado al portapapeles");
   };
