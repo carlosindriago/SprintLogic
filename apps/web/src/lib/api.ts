@@ -337,6 +337,7 @@ export interface WBSHierarchicalResponse {
 export const getProjectTasks = (projectId: string) => api.get<{ tasks: Task[] }>(`/projects/${projectId}/tasks`);
 export const saveProjectTasks = (projectId: string, tasks: Task[]) => api.post<{ status: string }>(`/projects/${projectId}/tasks`, { tasks });
 export const getKanbanConfig = (projectId: string) => api.get<{ columns: KanbanColumn[] }>(`/projects/${projectId}/kanban/config`);
+export const saveKanbanConfig = (projectId: string, columns: KanbanColumn[]) => api.post<{ status: string }>(`/projects/${projectId}/kanban/config`, { columns });
 export const syncKanbanCommits = (projectId: string) => 
   api.post<{ status: string; tests_passing?: boolean; updated_tasks?: string[]; message?: string }>(`/projects/${projectId}/tasks/sync-commits`);
 export const generateWBS = (projectId: string, requirements: string, model?: string) => 
