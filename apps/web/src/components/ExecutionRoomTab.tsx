@@ -271,7 +271,7 @@ Debes adherirte a los siguientes estándares de ingeniería:
 **FORMATO DE SALIDA ESPERADO:**
 Genera tu respuesta estrictamente estructurada de la siguiente manera:
 - **Análisis de Impacto:** Qué componentes del mapa topológico se verán afectados.
-- **Plan de Ejecución:** Una lista de tareas enumeradas usando checkboxes (ej. \`- [ ] Paso 1: ...\`). Cada paso debe indicar claramente la ruta ABSOLUTA del archivo a modificar (basada en el mapa proporcionado), seguido del bloque de código exacto y las instrucciones precisas de dónde insertarlo.
+- **Plan de Ejecución:** Una lista de tareas enumeradas usando checkboxes (ej. \`- [ ] Paso 1: ...\`). Cada paso debe indicar claramente la ruta ABSOLUTA del archivo a modificar, envolviendo la ruta obligatoriamente en backticks (ejemplo: \`app/Models/User.php\`), seguido del bloque de código exacto y las instrucciones precisas de dónde insertarlo.
 - **Validación:** Qué pruebas realizar para asegurar que el código funciona.`;
 
     navigator.clipboard.writeText(promptText);
@@ -403,6 +403,13 @@ Genera tu respuesta estrictamente estructurada de la siguiente manera:
     }
   };
 
+  const handleOpenFile = (path: string) => {
+    if (!openFiles.includes(path)) {
+      setOpenFiles((prev) => [...prev, path]);
+    }
+    setActiveFilePath(path);
+  };
+
   const openNewFile = () => {
     if (newFilePathInput.trim()) {
       const path = newFilePathInput.trim();
@@ -505,7 +512,30 @@ Genera tu respuesta estrictamente estructurada de la siguiente manera:
                       )}
                     </div>
                     <div className="prose prose-invert prose-xs max-w-none">
-                      <ReactMarkdown>{msg.content}</ReactMarkdown>
+                      <ReactMarkdown
+                        components={{
+                          code({className, children, ...props}: any) {
+                            const match = /language-(\w+)/.exec(className || "");
+                            const content = String(children).replace(/\n$/, "");
+                            if (!match) {
+                              const isFilePath = /\/[\w.-]+/i.test(content) && /\.(ts|tsx|js|jsx|py|php|html|css|json|md)$/i.test(content);
+                              if (isFilePath) {
+                                return (
+                                  <button
+                                    onClick={() => handleOpenFile(content)}
+                                    className="bg-blue-900/30 text-blue-400 hover:text-blue-300 hover:underline px-1 rounded mx-0.5 inline-flex items-center gap-1 font-mono text-[10px] cursor-pointer"
+                                  >
+                                    📂 {content}
+                                  </button>
+                                );
+                              }
+                            }
+                            return <code className={className} {...props}>{children}</code>;
+                          }
+                        }}
+                      >
+                        {msg.content}
+                      </ReactMarkdown>
                     </div>
                   </div>
                 ))}
