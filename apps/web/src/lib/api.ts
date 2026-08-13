@@ -298,8 +298,11 @@ export const getGitDashboard = (projectId: string) => api.get<GitDashboard>(`/pr
 export const stageFile = (projectId: string, filePath: string) => api.post(`/projects/${projectId}/git/stage`, { file_path: filePath });
 export const unstageFile = (projectId: string, filePath: string) => api.post(`/projects/${projectId}/git/unstage`, { file_path: filePath });
 export const commitChanges = (projectId: string, message: string) => api.post(`/projects/${projectId}/git/commit`, { message });
+export const commitAndSwitchGitBranch = (projectId: string, message: string, target_branch: string = 'main') => 
+  api.post<{ status: string; message: string; branch: string; commit_output?: string }>(`/projects/${projectId}/git/commit-and-switch`, { message, target_branch });
 export const createGitBranch = (projectId: string, name: string) => api.post(`/projects/${projectId}/git/branches`, { name });
-export const discardGitChanges = (projectId: string) => api.post(`/projects/${projectId}/git/discard-changes`);
+export const discardGitChanges = (projectId: string, target_branch?: string) => 
+  api.post<{ status: string; action: string }>(`/projects/${projectId}/git/discard-changes`, target_branch ? { target_branch } : {});
 export const checkoutGitBranch = (projectId: string, branch_name: string) => api.post(`/projects/${projectId}/git/checkout`, { branch_name });
 export const deleteGitBranch = (projectId: string, branchName: string, force: boolean = false) => api.delete(`/projects/${projectId}/git/branches/${encodeURIComponent(branchName)}?force=${force}`);
 

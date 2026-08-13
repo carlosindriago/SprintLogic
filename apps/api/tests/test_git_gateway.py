@@ -159,3 +159,43 @@ async def test_stage_files_empty_list_raises(gateway):
 async def test_unknown_action_raises(gateway):
     with pytest.raises(ValueError, match="Unknown action"):
         await gateway.execute_action("/fake/path", "rebase", confirm=True)
+
+
+@pytest.mark.asyncio
+@patch("app.infrastructure.git.git_gateway.asyncio.create_subprocess_exec")
+async def test_commit_and_switch(mock_exec, gateway):
+    mock_process = AsyncMock()
+    mock_process.communicate.return_value = (b"[main abc1234] save: WIP\n", b"")
+    mock_process.returncode = 0
+    mock_exec.return_value = mock_process
+
+    result = await gateway.commit_and_switch("/fake/path", "save: WIP", "main")
+    assert result["status"] == "success"
+    assert result["message"] == "save: WIP"
+    assert result["branch"] == "main"
+
+
+@pytest.mark.asyncio
+@patch("app.infrastructure.git.git_gateway.asyncio.create_subprocess_exec")
+async def test_get_status_with_files(mock_exec, gateway):
+    status_output = b" M apps/web/src/App.tsx\n?? new_file.txt\n"
+
+    def side_effect(*args, **kwargs):
+        proc = AsyncMock()
+        if "branch" in args:
+            proc.communicate.return_value = (b"feature/test\n", b"")
+        else:
+            proc.communicate.return_value = (status_output, b"")
+        proc.returncode = 0
+        return proc
+
+    mock_exec.side_effect = side_effect
+
+    result = await gateway.get_status("/fake/path")
+    assert result["branch"] == "feature/test"
+    assert result["modified"] == 1
+    assert result["untracked"] == 1
+    assert result["is_dirty"] is True
+    assert "apps/web/src/App.tsx" in result["modified_files"]
+    assert "new_file.txt" in result["untracked_files"]
+

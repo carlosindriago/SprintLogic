@@ -733,9 +733,17 @@ async def checkout_branch(
 
     return result
 
-@router.post("/{project_id}/git/discard-changes")
-async def discard_all_changes(
+class DiscardChangesRequest(BaseModel):
+    target_branch: str | None = None
+
+class CommitAndSwitchRequest(BaseModel):
+    message: str
+    target_branch: str = "main"
+
+@router.post("/{project_id}/git/commit-and-switch")
+async def commit_and_switch(
     project_id: str,
+    request: CommitAndSwitchRequest,
     session: AsyncSession = Depends(get_db_session),
 ):
     try:
@@ -746,7 +754,31 @@ async def discard_all_changes(
         raise HTTPException(status_code=404, detail="Project not found")
 
     try:
-        result = await git_gateway.discard_changes(project.path)
+        result = await git_gateway.commit_and_switch(
+            project.path, request.message, request.target_branch
+        )
+    except Exception as e:
+        logger.error("Git commit and switch failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return result
+
+@router.post("/{project_id}/git/discard-changes")
+async def discard_all_changes(
+    project_id: str,
+    request: DiscardChangesRequest | None = None,
+    session: AsyncSession = Depends(get_db_session),
+):
+    try:
+        project = await SQLAlchemyProjectRepository(session).get_project(UUID(project_id))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID")
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    target_branch = request.target_branch if request else None
+    try:
+        result = await git_gateway.discard_changes(project.path, target_branch=target_branch)
     except Exception as e:
         logger.error("Git discard changes failed: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="An internal error occurred")

@@ -4,10 +4,19 @@ export interface Project {
   path: string;
 }
 
+export interface GitFileStatus {
+  path: string;
+  status: 'modified' | 'untracked' | 'staged' | 'deleted' | 'renamed' | 'added';
+}
+
 export interface GitStatus {
   branch: string;
   modified: number;
   untracked: number;
+  is_dirty?: boolean;
+  modified_files?: string[];
+  untracked_files?: string[];
+  files?: GitFileStatus[];
   raw_output?: string;
   error?: string;
 }

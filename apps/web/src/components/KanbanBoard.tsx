@@ -8,7 +8,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import ReactMarkdown from "react-markdown";
-import { getProjectTasks, saveProjectTasks, getKanbanConfig, saveKanbanConfig, syncKanbanCommits, KanbanColumn, fetchProjectTickets, updateKanbanTicket, deleteKanbanTicket, createKanbanTicket, createGitBranch, commitChanges, fetchEpics, fetchSprints, getGitStatus, discardGitChanges, checkoutGitBranch, deleteGitBranch } from '@/lib/api';
+import { getProjectTasks, saveProjectTasks, getKanbanConfig, saveKanbanConfig, syncKanbanCommits, KanbanColumn, fetchProjectTickets, updateKanbanTicket, deleteKanbanTicket, createKanbanTicket, createGitBranch, commitChanges, commitAndSwitchGitBranch, fetchEpics, fetchSprints, getGitStatus, discardGitChanges, checkoutGitBranch, deleteGitBranch } from '@/lib/api';
 import { KanbanTicket, Epic, Sprint } from '@/types';
 import TicketDrawer from "./TicketDrawer";
 import { SprintEpicManagerModal } from "./SprintEpicManagerModal";
@@ -33,7 +33,11 @@ import {
   GitBranch,
   X,
   GraduationCap,
-  Zap
+  Zap,
+  Loader2,
+  GitCommit,
+  FileCode,
+  Trash2
 } from "lucide-react";
 import TicketMentorDrawer from "./TicketMentorDrawer";
 import { useRouter } from "next/navigation";
@@ -261,12 +265,17 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
   // Unsaved Changes Modal State
   const [unsavedChangesModal, setUnsavedChangesModal] = useState<{
     ticketId: string,
+    ticketTitle: string,
     branchName: string,
+    modifiedFiles: string[],
+    untrackedFiles: string[],
     activeTask: Task,
     newStatus: string,
     newTasks: Task[],
     prevTasksState: Task[]
   } | null>(null);
+  const [unsavedCommitMsg, setUnsavedCommitMsg] = useState("");
+  const [isProcessingUnsavedAction, setIsProcessingUnsavedAction] = useState(false);
 
   // Delete Clean Branch Modal State
   const [deleteCleanBranchModal, setDeleteCleanBranchModal] = useState<{
@@ -468,12 +477,17 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
             const isTicketBranch = gitStatus.branch === raw.branch_name || gitStatus.branch.includes(ticketIdPrefix);
 
             if (isTicketBranch) {
-              const isDirty = gitStatus.modified > 0 || gitStatus.untracked > 0;
+              const isDirty = gitStatus.modified > 0 || gitStatus.untracked > 0 || !!gitStatus.is_dirty;
               if (isDirty) {
+                const rawTitle = raw.title || (activeTask.content ? activeTask.content.split("\n")[0] : "Tarea");
+                setUnsavedCommitMsg(`save: WIP para ticket SL-${raw.id.substring(0, 6).toUpperCase()} - ${rawTitle}`);
                 // Abort optimistic update, show modal
                 setUnsavedChangesModal({
                   ticketId: activeIdStr,
+                  ticketTitle: rawTitle,
                   branchName: gitStatus.branch,
+                  modifiedFiles: gitStatus.modified_files || [],
+                  untrackedFiles: gitStatus.untracked_files || [],
                   activeTask,
                   newStatus,
                   newTasks,
@@ -1087,61 +1101,172 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
 
       {/* Unsaved Changes Modal */}
       {unsavedChangesModal && projectId && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#18181b] border border-zinc-700 p-6 rounded-lg max-w-md w-full shadow-2xl">
-            <h3 className="text-zinc-100 font-bold mb-2 flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-red-500" />
-              Tienes cambios sin guardar
-            </h3>
-            <p className="text-zinc-400 text-sm mb-6">
-              Detectamos que tienes archivos sin hacer commit en esta tarea (rama <strong>{unsavedChangesModal.branchName}</strong>). ¿Qué deseas hacer?
-            </p>
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#18181b] border border-zinc-700/80 p-6 rounded-xl max-w-lg w-full shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-start gap-3 mb-4">
+              <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 mt-0.5 shrink-0">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-zinc-100 font-bold text-base flex items-center gap-2">
+                  Cambios pendientes en rama efímera
+                </h3>
+                <p className="text-zinc-400 text-xs mt-1 leading-relaxed">
+                  Detectamos archivos sin confirmar en la rama <span className="font-mono text-zinc-200 bg-zinc-800 px-1.5 py-0.5 rounded border border-zinc-700">{unsavedChangesModal.branchName}</span>. Elige una acción antes de mover el ticket a <strong>To Do</strong>:
+                </p>
+              </div>
+            </div>
 
-            <div className="flex flex-col gap-3">
+            {/* Listado de Archivos Afectados (TAREA 1) */}
+            <div className="mb-4">
+              <div className="flex items-center justify-between text-xs text-zinc-400 mb-2 font-medium">
+                <span className="flex items-center gap-1.5 text-zinc-300">
+                  <FileCode className="w-3.5 h-3.5 text-zinc-400" />
+                  Archivos con cambios pendientes:
+                </span>
+                <span className="text-[11px] px-2 py-0.5 rounded-full bg-zinc-800 border border-zinc-700 text-zinc-400 font-mono">
+                  {unsavedChangesModal.modifiedFiles.length + unsavedChangesModal.untrackedFiles.length} archivo(s)
+                </span>
+              </div>
+
+              <div className="bg-zinc-950/80 border border-zinc-800 rounded-lg p-2.5 max-h-36 overflow-y-auto space-y-1.5 font-mono text-xs select-text">
+                {unsavedChangesModal.modifiedFiles.length === 0 && unsavedChangesModal.untrackedFiles.length === 0 ? (
+                  <p className="text-zinc-500 text-xs italic py-1 px-1">Existen modificaciones en el árbol de trabajo.</p>
+                ) : (
+                  <>
+                    {unsavedChangesModal.modifiedFiles.map((file, idx) => (
+                      <div key={`mod-${idx}`} className="flex items-center gap-2 text-zinc-300 hover:text-zinc-100 py-0.5 px-1 rounded hover:bg-zinc-900/50 transition-colors">
+                        <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 shrink-0">
+                          MOD
+                        </span>
+                        <span className="truncate text-zinc-300 text-[11px]" title={file}>
+                          {file}
+                        </span>
+                      </div>
+                    ))}
+                    {unsavedChangesModal.untrackedFiles.map((file, idx) => (
+                      <div key={`unt-${idx}`} className="flex items-center gap-2 text-zinc-300 hover:text-zinc-100 py-0.5 px-1 rounded hover:bg-zinc-900/50 transition-colors">
+                        <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shrink-0">
+                          NEW
+                        </span>
+                        <span className="truncate text-zinc-300 text-[11px]" title={file}>
+                          {file}
+                        </span>
+                      </div>
+                    ))}
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Input de Mensaje de Commit */}
+            <div className="mb-5">
+              <label className="block text-xs font-medium text-zinc-300 mb-1.5">
+                Mensaje de commit para guardar el progreso:
+              </label>
+              <input
+                type="text"
+                value={unsavedCommitMsg}
+                onChange={(e) => setUnsavedCommitMsg(e.target.value)}
+                disabled={isProcessingUnsavedAction}
+                placeholder="save: WIP para ticket..."
+                className="w-full bg-zinc-900 border border-zinc-700/80 rounded-lg px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none font-mono disabled:opacity-50 transition-all"
+              />
+            </div>
+
+            {/* Botones de Acción (TAREA 2) */}
+            <div className="flex flex-col gap-2">
+              {/* Botón 1: Commit y Guardar (Recomendado) */}
               <button
-                onClick={() => {
-                  const m = unsavedChangesModal;
-                  setUnsavedChangesModal(null);
-                  addTab({
-                    id: `ExecutionRoom-${m.ticketId}`,
-                    type: "execution-room",
-                    title: `Quirófano: ${m.ticketId.substring(0, 8)}`,
-                    data: { ticketId: m.ticketId, executionMode: "exec_mode_surgeon" }
-                  });
-                }}
-                className="w-full px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-500 text-sm font-semibold transition-colors"
-              >
-                Ir al Quirófano a Guardar
-              </button>
-              
-              <button
+                type="button"
+                disabled={isProcessingUnsavedAction || !unsavedCommitMsg.trim()}
                 onClick={async () => {
                   const m = unsavedChangesModal;
-                  setUnsavedChangesModal(null);
+                  setIsProcessingUnsavedAction(true);
                   try {
-                    await discardGitChanges(projectId);
-                    await checkoutGitBranch(projectId, "main");
-                    toast.success("Cambios descartados y rama cambiada a main");
-                    
-                    // Proceed with the drag drop action
+                    const commitMsg = unsavedCommitMsg.trim() || `save: WIP para ticket ${m.ticketId.substring(0, 6)}`;
+                    await commitAndSwitchGitBranch(projectId, commitMsg, "main");
+                    toast.success("Progreso guardado y rama cambiada a main", {
+                      description: "Se confirmó todo el trabajo en Git y el ticket volvió a To Do."
+                    });
+
                     setTasks(m.newTasks);
                     await updateKanbanTicket(m.ticketId, { status: m.newStatus as TicketStatus });
-                  } catch (e) {
-                    toast.error("Error al descartar cambios", {
-                      description: "Revisa la consola para más detalles."
+                    setUnsavedChangesModal(null);
+                  } catch (e: unknown) {
+                    const errMsg = e instanceof Error ? e.message : "Revisa la consola para más detalles.";
+                    toast.error("Error al guardar y cambiar de rama", {
+                      description: errMsg
                     });
+                  } finally {
+                    setIsProcessingUnsavedAction(false);
                   }
                 }}
-                className="w-full px-4 py-2 rounded bg-red-950/40 text-red-400 border border-red-900/50 hover:bg-red-900/60 text-sm font-semibold transition-colors"
+                className="w-full px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-md hover:shadow-blue-500/20 disabled:opacity-50 cursor-pointer"
               >
-                Descartar Todo y Abandonar
+                {isProcessingUnsavedAction ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    Guardando cambios en Git...
+                  </>
+                ) : (
+                  <>
+                    <GitCommit className="w-4 h-4" />
+                    💾 Commit y Guardar Progreso (Recomendado)
+                  </>
+                )}
               </button>
 
+              {/* Botón 2: Descartar Todos los Cambios (Peligro) */}
               <button
-                onClick={() => setUnsavedChangesModal(null)}
-                className="w-full px-4 py-2 rounded bg-zinc-800 text-zinc-300 hover:bg-zinc-700 text-sm font-semibold transition-colors mt-2"
+                type="button"
+                disabled={isProcessingUnsavedAction}
+                onClick={async () => {
+                  const m = unsavedChangesModal;
+                  setIsProcessingUnsavedAction(true);
+                  try {
+                    await discardGitChanges(projectId, "main");
+                    toast.success("Cambios descartados y rama cambiada a main", {
+                      description: "El espacio de trabajo quedó completamente limpio."
+                    });
+
+                    setTasks(m.newTasks);
+                    await updateKanbanTicket(m.ticketId, { status: m.newStatus as TicketStatus });
+                    setUnsavedChangesModal(null);
+                  } catch (e: unknown) {
+                    const errMsg = e instanceof Error ? e.message : "Revisa la consola para más detalles.";
+                    toast.error("Error al descartar cambios", {
+                      description: errMsg
+                    });
+                  } finally {
+                    setIsProcessingUnsavedAction(false);
+                  }
+                }}
+                className="w-full px-4 py-2 rounded-lg bg-red-950/40 hover:bg-red-900/60 text-red-300 border border-red-900/60 text-xs font-semibold flex items-center justify-center gap-2 transition-colors disabled:opacity-50 cursor-pointer"
               >
-                Cancelar
+                {isProcessingUnsavedAction ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-red-400" />
+                    Descartando cambios...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                    🗑️ Descartar Todos los Cambios (Peligro)
+                  </>
+                )}
+              </button>
+
+              {/* Botón 3: Cancelar (Abortar) */}
+              <button
+                type="button"
+                disabled={isProcessingUnsavedAction}
+                onClick={() => {
+                  setUnsavedChangesModal(null);
+                }}
+                className="w-full px-4 py-2 rounded-lg bg-zinc-800/80 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 text-xs font-medium transition-colors disabled:opacity-50 mt-1 cursor-pointer"
+              >
+                ❌ Cancelar
               </button>
             </div>
           </div>
