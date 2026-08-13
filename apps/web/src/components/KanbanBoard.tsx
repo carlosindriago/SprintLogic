@@ -210,10 +210,22 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
     if (!projectId) return;
     setIsSyncing(true);
     try {
-      await syncKanbanCommits(projectId);
+      const res = await syncKanbanCommits(projectId);
       await fetchTasks();
+      if (res && res.updated_tasks && res.updated_tasks.length > 0) {
+        toast.success(`Sincronización exitosa: ${res.updated_tasks.length} tarea(s) actualizada(s)`, {
+          description: `Tickets sincronizados: ${res.updated_tasks.join(", ")}${res.tests_passing !== undefined && res.tests_passing !== null ? (res.tests_passing ? " • Tests pasaron ✅" : " • Tests fallaron ❌") : ""}`,
+        });
+      } else {
+        toast.info("Sincronización finalizada", {
+          description: res?.message || "No se detectaron nuevos commits asociados a tickets pendientes.",
+        });
+      }
     } catch (e) {
       console.error("Manual commit sync failed", e);
+      toast.error("Error al sincronizar commits", {
+        description: e instanceof Error ? e.message : "Ocurrió un error al consultar el repositorio Git.",
+      });
     } finally {
       setIsSyncing(false);
     }

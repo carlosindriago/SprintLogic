@@ -17,18 +17,19 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.domain.kanban_models import TicketStatus
+from app.domain.kanban_schemas import KanbanTicketUpdate
 from app.infrastructure.db.database import get_db_session
 from app.infrastructure.db.models import GraphNodeModel
 from app.infrastructure.db.project_repository import SQLAlchemyProjectRepository
 from app.infrastructure.git.git_gateway import LocalGitGateway
+from app.infrastructure.repositories.kanban_repository import SQLAlchemyKanbanRepository
 from app.infrastructure.repositories.tool_model_repository import (
     resolve_tool_model,
     tool_model_label,
 )
 from app.interfaces.api.v1.wbs_schemas import WBSHierarchicalResponse
-from app.utils.async_io import (
-    async_exists,
-)
+from app.utils.async_io import async_exists
 
 from .memory import _dump_json_file, _load_json_file
 from .ws import project_event_queues
@@ -259,12 +260,20 @@ async def sync_project_commits(project_id: str, session: AsyncSession = Depends(
     if not commits:
         return {
             "status": "success",
-            "message": "No commits found or git not initialized",
+            "message": "No se encontraron commits recientes en el repositorio Git.",
             "updated_tasks": [],
+            "tests_passing": None,
         }
 
     tasks = await asyncio.to_thread(kanban_sync.read_tasks, project.path)
     config = await asyncio.to_thread(kanban_sync.get_config, project.path)
+
+    db_repo = SQLAlchemyKanbanRepository(session)
+    try:
+        db_tickets = await db_repo.get_tickets_by_project(project_uuid)
+    except Exception:
+        logger.warning("Failed to load db tickets for commit sync", exc_info=True)
+        db_tickets = []
 
     # Identify target columns by rule
     done_col = next(
@@ -284,10 +293,10 @@ async def sync_project_commits(project_id: str, session: AsyncSession = Depends(
     tests_passing = await run_workspace_tests(project.path)
 
     for commit in commits:
-        match = re.search(r"\[(SPRT-\d+)\]", commit.get("message", ""))
-        if not match:
-            match = re.search(r"\b(SPRT-\d+)\b", commit.get("message", ""))
+        c_msg = commit.get("message", "")
 
+        # 1. Match file-based tasks (e.g. SPRT-1)
+        match = re.search(r"\[(SPRT-\d+)\]", c_msg) or re.search(r"\b(SPRT-\d+)\b", c_msg)
         if match:
             task_id = match.group(1)
             if task_id in task_map:
@@ -310,8 +319,27 @@ async def sync_project_commits(project_id: str, session: AsyncSession = Depends(
                     if task_id not in updated_tasks:
                         updated_tasks.append(task_id)
 
+        # 2. Match database tickets (e.g. SL-XXXXXX, UUID prefix, branch name, or [Title])
+        for t in db_tickets:
+            short_id = str(t.id)[:8].lower()
+            sl_tag = f"SL-{str(t.id)[:6].upper()}".lower()
+            branch_name = (t.branch_name or "").lower()
+
+            branch_match = bool(branch_name and (branch_name in c_msg.lower()))
+            id_match = short_id in c_msg.lower() or sl_tag in c_msg.lower()
+
+            if branch_match or id_match:
+                target_db_status = TicketStatus.DONE if tests_passing else TicketStatus.IN_PROGRESS
+                if t.status != target_db_status:
+                    await db_repo.update_ticket(t.id, KanbanTicketUpdate(status=target_db_status))
+                    ticket_label = f"SL-{str(t.id)[:6].upper()}"
+                    if ticket_label not in updated_tasks:
+                        updated_tasks.append(ticket_label)
+                    updated = True
+
     if updated:
-        await asyncio.to_thread(kanban_sync.write_tasks, project.path, tasks)
+        if tasks:
+            await asyncio.to_thread(kanban_sync.write_tasks, project.path, tasks)
         # Notify active clients via SSE
         if project_id in project_event_queues:
             for q in project_event_queues[project_id]:
@@ -322,7 +350,17 @@ async def sync_project_commits(project_id: str, session: AsyncSession = Depends(
                     }
                 )
 
-    return {"status": "success", "tests_passing": tests_passing, "updated_tasks": updated_tasks}
+    sync_msg = (
+        f"Se sincronizaron {len(updated_tasks)} tarea(s) con los commits recientes."
+        if updated_tasks
+        else "Todos los tickets y tareas están al día con los commits recientes de Git."
+    )
+    return {
+        "status": "success",
+        "tests_passing": tests_passing,
+        "updated_tasks": updated_tasks,
+        "message": sync_msg,
+    }
 
 class WBSRequest(BaseModel):
     requirements: str
