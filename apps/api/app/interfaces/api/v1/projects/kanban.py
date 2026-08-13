@@ -393,15 +393,20 @@ Debes responder ÚNICAMENTE con un objeto JSON válido con esta estructura exact
     from app.infrastructure.ai.llm_gateway import LiteLLMGateway
 
     # BD source of truth: planning_studio tool override (or global default).
-    wbs_provider, wbs_model, _ = await resolve_tool_model(session, "planning_studio")
+    wbs_provider, wbs_model, fallback_models = await resolve_tool_model(session, "planning_studio")
     actual_model = tool_model_label(wbs_provider, wbs_model)
     llm_gateway = LiteLLMGateway()
 
+    kwargs = {"response_format": {"type": "json_object"}}
+    if fallback_models:
+        kwargs["fallbacks"] = fallback_models
+    kwargs["timeout"] = 15.0
+
     try:
-        response_text = llm_gateway.generate_completion(
+        response_text = await llm_gateway.async_generate_completion(
             prompt=prompt,
             model=actual_model,
-            response_format={"type": "json_object"}
+            **kwargs
         )
 
         clean_res = response_text.strip()
@@ -494,18 +499,23 @@ Plan Propuesto:
 Evalúa brevemente (máx 3-4 líneas) si el plan aborda correctamente el ticket. Si ves inconsistencias notorias o alucinaciones (ej. usar un framework distinto, tocar archivos irrelevantes), indícalo claramente. Si el plan parece sólido, responde: "El plan es congruente con la tarea."
 """
         from app.infrastructure.ai.llm_gateway import LiteLLMGateway
-        provider, model, _ = await resolve_tool_model(session, "planning_studio")
+        provider, model, fallback_models = await resolve_tool_model(session, "planning_studio")
         actual_model = tool_model_label(provider, model)
         llm_gateway = LiteLLMGateway()
 
+        kwargs = {}
+        if fallback_models:
+            kwargs["fallbacks"] = fallback_models
+        kwargs["timeout"] = 5.0  # litellm per-request timeout
+
         try:
             response_text = await asyncio.wait_for(
-                asyncio.to_thread(
-                    llm_gateway.generate_completion,
+                llm_gateway.async_generate_completion(
                     prompt=prompt,
-                    model=actual_model
+                    model=actual_model,
+                    **kwargs
                 ),
-                timeout=5.0
+                timeout=15.0  # overall timeout including fallbacks
             )
             plan_observations = response_text.strip()
         except Exception as e:

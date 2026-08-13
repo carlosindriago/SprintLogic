@@ -67,3 +67,33 @@ class LiteLLMGateway:
         )
 
         return str(response.choices[0].message.content)
+
+    async def async_generate_completion(self, prompt: str, model: str, lang_code: str = "en", **kwargs) -> str:
+        """
+        Asynchronously sends a prompt to the specified model.
+        Retrieves the API key securely from the credential manager based on provider.
+        Accepts additional kwargs like response_format.
+        """
+        provider, api_key, base_url = self._resolve_key(model)
+
+        if not api_key and provider != "openrouter" and "ollama" not in model.lower():
+            raise ValueError(f"AI API Key for {provider} not found in the secure keyring.")
+
+        prompt += self._build_language_clause(lang_code)
+        messages = [{"role": "user", "content": prompt}]
+
+        adapted = ProviderAdapter.adapt(model, api_key)
+
+        call_kwargs = adapted["kwargs"].copy()
+        call_kwargs.update(kwargs)
+        if base_url:
+            call_kwargs["api_base"] = base_url
+
+        response = await litellm.acompletion(
+            model=adapted["model"],
+            messages=messages,
+            api_key=adapted["api_key"],
+            **call_kwargs,
+        )
+
+        return str(response.choices[0].message.content)
