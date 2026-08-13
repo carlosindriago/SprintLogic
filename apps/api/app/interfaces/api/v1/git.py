@@ -248,6 +248,7 @@ async def get_commit_diff(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
+    resolve_project_path(project.path, path)
     modified = await git_gateway.get_file_at_commit(project.path, hash, path)
     original = await git_gateway.get_file_at_commit(project.path, f"{hash}^", path)
 
