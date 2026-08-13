@@ -496,11 +496,19 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
     }, {} as Record<string, Task[]>);
   }, [tasks]);
 
+  const tasksById = useMemo(() => {
+    const map = new Map<string, Task>();
+    for (const t of tasks) {
+      map.set(t.id, t);
+    }
+    return map;
+  }, [tasks]);
+
   if (!projectId) {
     return <div className="h-full flex items-center justify-center text-zinc-500">Selecciona un proyecto para ver el Kanban.</div>;
   }
 
-  const activeTask = activeId ? tasks.find(t => t.id === activeId) : null;
+  const activeTask = activeId ? (tasksById.get(activeId as string) || null) : null;
 
   return (
     <div className="h-full bg-[#1e1e1e] flex flex-col relative overflow-hidden">
