@@ -25,7 +25,13 @@ class ScanCodebaseUseCase:
 
         # 2. NetworkX Anomalies
         # Normalize keys for graph_metrics
-        nx_edges = [{"source": e.get("source_id", e.get("source")), "target": e.get("target_id", e.get("target"))} for e in all_edges]
+        nx_edges = [
+            {
+                "source": e.get("source_id", e.get("source")),
+                "target": e.get("target_id", e.get("target")),
+            }
+            for e in all_edges
+        ]
         metrics = await asyncio.to_thread(_compute_graph_metrics_cpu_bound, all_nodes, nx_edges)
 
         # 3. Lazy Fetching (Gathering Skeletons only for anomalies)
@@ -42,16 +48,13 @@ class ScanCodebaseUseCase:
             problematic_files.add(god["node"])
 
         # Clean the "file:" prefix to get relative paths
-        relative_paths = [f.replace("file:", "") for f in problematic_files if f.startswith("file:")]
+        relative_paths = [
+            f.replace("file:", "") for f in problematic_files if f.startswith("file:")
+        ]
 
         skeletons = {}
         for strategy in compatible_strategies:
             strat_skeletons = await strategy.parse_skeletons(path, relative_paths)
             skeletons.update(strat_skeletons)
 
-        return {
-            "metrics": metrics,
-            "skeletons": skeletons,
-            "nodes": all_nodes,
-            "edges": all_edges
-        }
+        return {"metrics": metrics, "skeletons": skeletons, "nodes": all_nodes, "edges": all_edges}

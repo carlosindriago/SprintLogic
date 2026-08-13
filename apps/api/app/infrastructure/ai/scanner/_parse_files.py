@@ -4,10 +4,26 @@ import os
 
 logger = logging.getLogger(__name__)
 
+
 def parse_project_files(project_path: str) -> tuple[int, set[str]]:
     """Walks the directory and parses files to detect technologies."""
     total_files = 0
-    ignore_dirs = {".git", "node_modules", ".venv", "venv", "test_env", "dist", "build", "__pycache__", "target", ".gradle", ".idea", "vendor", "coverage", "out"}
+    ignore_dirs = {
+        ".git",
+        "node_modules",
+        ".venv",
+        "venv",
+        "test_env",
+        "dist",
+        "build",
+        "__pycache__",
+        "target",
+        ".gradle",
+        ".idea",
+        "vendor",
+        "coverage",
+        "out",
+    }
     core_tech = set()
 
     for dirpath, dirnames, filenames in os.walk(project_path):
@@ -43,7 +59,9 @@ def parse_project_files(project_path: str) -> tuple[int, set[str]]:
                 core_tech.add("Python")
                 if "pyproject.toml" in filenames:
                     try:
-                        with open(os.path.join(dirpath, "pyproject.toml"), encoding="utf-8") as toml:
+                        with open(
+                            os.path.join(dirpath, "pyproject.toml"), encoding="utf-8"
+                        ) as toml:
                             content = toml.read()
                             if "fastapi" in content:
                                 core_tech.add("FastAPI")

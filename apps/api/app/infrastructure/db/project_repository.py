@@ -4,6 +4,7 @@ Adapter (Infrastructure): SQLAlchemy implementation of ProjectRepository port.
 This class is the ONLY place in the codebase that knows about ProjectModel.
 The rest of the application speaks the domain's language: Project objects.
 """
+
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -102,9 +103,7 @@ class SQLAlchemyProjectRepository(ProjectRepository):
         return _to_domain(model) if model else None
 
     async def get_by_path(self, path: str) -> Project | None:
-        result = await self.session.execute(
-            select(ProjectModel).where(ProjectModel.path == path)
-        )
+        result = await self.session.execute(select(ProjectModel).where(ProjectModel.path == path))
         model = result.scalars().first()
         return _to_domain(model) if model else None
 

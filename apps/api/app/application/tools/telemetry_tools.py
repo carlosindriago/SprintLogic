@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 class FlowStateArgs(BaseModel):
     pass  # No arguments needed, it fetches the current project state
 
+
 async def get_developer_flow_state(session: AsyncSession, project_id: UUID) -> dict:
     """
     Fetches the developer's current flow state based on the last 30 minutes of telemetry pings.
@@ -23,7 +24,7 @@ async def get_developer_flow_state(session: AsyncSession, project_id: UUID) -> d
             WHERE timestamp >= datetime('now', '-30 minutes')
             AND project_id = :pid
         """),
-        {"pid": str(project_id)}
+        {"pid": str(project_id)},
     )
     row = result.fetchone()
 
@@ -49,5 +50,5 @@ async def get_developer_flow_state(session: AsyncSession, project_id: UUID) -> d
         "total_pings": ping_count,
         "idle_pings": idle_pings,
         "idle_ratio_percent": round(idle_ratio, 2),
-        "estimated_friction_level": friction_level
+        "estimated_friction_level": friction_level,
     }

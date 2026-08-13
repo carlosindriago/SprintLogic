@@ -71,8 +71,17 @@ def extract_schema_from_sql(sql_content: str, dialect: str = "postgres") -> list
 
                     ref = expr.find(exp.Reference)
                     target_table = fk_map.get(col_name)
-                    if not target_table and ref and hasattr(ref, "this") and hasattr(ref.this, "this"):
-                        target_table = ref.this.this.name if hasattr(ref.this.this, "name") else str(ref.this.this)
+                    if (
+                        not target_table
+                        and ref
+                        and hasattr(ref, "this")
+                        and hasattr(ref.this, "this")
+                    ):
+                        target_table = (
+                            ref.this.this.name
+                            if hasattr(ref.this.this, "name")
+                            else str(ref.this.this)
+                        )
 
                     is_fk = bool(target_table)
 
@@ -94,7 +103,9 @@ def extract_schema_from_sql(sql_content: str, dialect: str = "postgres") -> list
                 tables_map[table_name] = TableIR(name=table_name, columns=columns, indexes=[])
 
         # Handle CREATE INDEX
-        elif kind == "INDEX" or (isinstance(stmt.this, exp.Table) and "INDEX" in stmt.sql().upper()):
+        elif kind == "INDEX" or (
+            isinstance(stmt.this, exp.Table) and "INDEX" in stmt.sql().upper()
+        ):
             table_expr = stmt.find(exp.Table)
             if table_expr and hasattr(table_expr, "name") and table_expr.name in tables_map:
                 idx_sql = stmt.sql()

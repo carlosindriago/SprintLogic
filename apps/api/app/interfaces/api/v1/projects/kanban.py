@@ -69,8 +69,10 @@ async def get_project_tasks(project_id: str, session: AsyncSession = Depends(get
     tasks = await asyncio.to_thread(kanban_sync.read_tasks, project.path)
     return {"tasks": tasks}
 
+
 class SaveTasksRequest(BaseModel):
     tasks: list[dict[str, Any]]
+
 
 @router.post("/projects/{project_id}/tasks")
 async def save_project_tasks(
@@ -89,8 +91,10 @@ async def save_project_tasks(
     await asyncio.to_thread(kanban_sync.write_tasks, project.path, request.tasks)
     return {"status": "success"}
 
+
 class SaveKanbanConfigRequest(BaseModel):
     columns: list[dict[str, Any]]
+
 
 class StickyNote(BaseModel):
     id: str
@@ -100,8 +104,10 @@ class StickyNote(BaseModel):
     y: float
     timestamp: float
 
+
 class UpdateStickyNotesRequest(BaseModel):
     notes: list[StickyNote]
+
 
 class PathValidationResult(BaseModel):
     original_path: str
@@ -109,14 +115,17 @@ class PathValidationResult(BaseModel):
     suggested_path: str | None = None
     confidence: float | None = None
 
+
 class ValidatePlanResponse(BaseModel):
     validated_paths: list[PathValidationResult]
     plan_observations: str | None = None
+
 
 class ValidatePlanRequest(BaseModel):
     paths: list[str]
     ticket_description: str | None = None
     plan_text: str | None = None
+
 
 @router.get("/projects/{project_id}/kanban/config")
 async def get_kanban_config(project_id: str, session: AsyncSession = Depends(get_db_session)):
@@ -132,6 +141,7 @@ async def get_kanban_config(project_id: str, session: AsyncSession = Depends(get
 
     config = await asyncio.to_thread(kanban_sync.get_config, project.path)
     return config
+
 
 @router.post("/projects/{project_id}/kanban/config")
 async def save_kanban_config(
@@ -158,6 +168,7 @@ async def save_kanban_config(
 
     return {"status": "success"}
 
+
 @router.get("/projects/{project_id}/notes")
 async def get_project_sticky_notes(
     project_id: str, session: AsyncSession = Depends(get_db_session)
@@ -183,6 +194,7 @@ async def get_project_sticky_notes(
             logger.warning("Unhandled exception", exc_info=True)
 
     return {"notes": notes}
+
 
 @router.put("/projects/{project_id}/notes")
 async def update_project_sticky_notes(
@@ -219,6 +231,7 @@ async def update_project_sticky_notes(
 
     return {"status": "success"}
 
+
 async def run_workspace_tests(repo_path: str) -> bool:
     if os.path.exists(os.path.join(repo_path, "package.json")):
         cmd = ["npm", "test"]
@@ -238,6 +251,7 @@ async def run_workspace_tests(repo_path: str) -> bool:
     except Exception:
         logger.warning("Unhandled exception", exc_info=True)
         return True  # Fallback if command fails
+
 
 @router.post("/projects/{project_id}/tasks/sync-commits")
 async def sync_project_commits(project_id: str, session: AsyncSession = Depends(get_db_session)):
@@ -363,13 +377,18 @@ async def sync_project_commits(project_id: str, session: AsyncSession = Depends(
         "message": sync_msg,
     }
 
+
 class WBSRequest(BaseModel):
     requirements: str
     model: str | None = None
 
+
 @router.post("/projects/{project_id}/kanban/wbs", response_model=WBSHierarchicalResponse)
 async def generate_wbs(
-    req: Request, project_id: str, request: WBSRequest, session: AsyncSession = Depends(get_db_session)
+    req: Request,
+    project_id: str,
+    request: WBSRequest,
+    session: AsyncSession = Depends(get_db_session),
 ):
 
     try:
@@ -443,9 +462,7 @@ Debes responder ÚNICAMENTE con un objeto JSON válido con esta estructura exact
 
     try:
         response_text = await llm_gateway.async_generate_completion(
-            prompt=prompt,
-            model=actual_model,
-            **kwargs
+            prompt=prompt, model=actual_model, **kwargs
         )
 
         clean_res = response_text.strip()
@@ -465,11 +482,12 @@ Debes responder ÚNICAMENTE con un objeto JSON válido con esta estructura exact
         logger.error("WBS AI planning failed: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="An internal error occurred")
 
-@router.post("/projects/{project_id}/kanban/validate-plan-paths", response_model=ValidatePlanResponse)
+
+@router.post(
+    "/projects/{project_id}/kanban/validate-plan-paths", response_model=ValidatePlanResponse
+)
 async def validate_plan_paths(
-    project_id: str,
-    request: ValidatePlanRequest,
-    session: AsyncSession = Depends(get_db_session)
+    project_id: str, request: ValidatePlanRequest, session: AsyncSession = Depends(get_db_session)
 ):
     try:
         project_uuid = UUID(project_id)
@@ -498,23 +516,27 @@ async def validate_plan_paths(
         if p in all_paths:
             # Map back to absolute path for suggested_path
             idx = all_paths.index(p)
-            validated_paths.append(PathValidationResult(
-                original_path=p,
-                exists=True,
-                suggested_path=all_absolute_paths[idx],
-                confidence=1.0
-            ))
+            validated_paths.append(
+                PathValidationResult(
+                    original_path=p,
+                    exists=True,
+                    suggested_path=all_absolute_paths[idx],
+                    confidence=1.0,
+                )
+            )
         else:
             # Check if p is a suffix of any relative path (e.g. resources/views/...)
             suffix_matches = [i for i, ap in enumerate(all_paths) if ap.endswith(p)]
             if suffix_matches:
                 idx = suffix_matches[0]
-                validated_paths.append(PathValidationResult(
-                    original_path=p,
-                    exists=True, # It exists as a suffix
-                    suggested_path=all_absolute_paths[idx],
-                    confidence=1.0
-                ))
+                validated_paths.append(
+                    PathValidationResult(
+                        original_path=p,
+                        exists=True,  # It exists as a suffix
+                        suggested_path=all_absolute_paths[idx],
+                        confidence=1.0,
+                    )
+                )
             else:
                 matches = difflib.get_close_matches(p, all_paths, n=1, cutoff=0.3)
                 if matches:
@@ -522,34 +544,39 @@ async def validate_plan_paths(
                     idx = all_paths.index(suggested_rel)
                     suggested_abs = all_absolute_paths[idx]
                     ratio = difflib.SequenceMatcher(None, p, suggested_rel).ratio()
-                    validated_paths.append(PathValidationResult(
-                        original_path=p,
-                        exists=False,
-                        suggested_path=suggested_abs,
-                        confidence=ratio
-                    ))
+                    validated_paths.append(
+                        PathValidationResult(
+                            original_path=p,
+                            exists=False,
+                            suggested_path=suggested_abs,
+                            confidence=ratio,
+                        )
+                    )
                 else:
                     # Try matching just the basename
                     basename = p.split("/")[-1]
-                    basename_matches = [i for i, ap in enumerate(all_paths) if ap.endswith(basename)]
+                    basename_matches = [
+                        i for i, ap in enumerate(all_paths) if ap.endswith(basename)
+                    ]
                     if basename_matches:
                         idx = basename_matches[0]
                         suggested_rel = all_paths[idx]
                         suggested_abs = all_absolute_paths[idx]
                         ratio = difflib.SequenceMatcher(None, p, suggested_rel).ratio()
-                        validated_paths.append(PathValidationResult(
-                            original_path=p,
-                            exists=False,
-                            suggested_path=suggested_abs,
-                            confidence=ratio
-                        ))
+                        validated_paths.append(
+                            PathValidationResult(
+                                original_path=p,
+                                exists=False,
+                                suggested_path=suggested_abs,
+                                confidence=ratio,
+                            )
+                        )
                     else:
-                        validated_paths.append(PathValidationResult(
-                            original_path=p,
-                            exists=False,
-                            suggested_path=None,
-                            confidence=0.0
-                        ))
+                        validated_paths.append(
+                            PathValidationResult(
+                                original_path=p, exists=False, suggested_path=None, confidence=0.0
+                            )
+                        )
 
     plan_observations = None
     if request.plan_text and request.ticket_description:
@@ -562,6 +589,7 @@ Plan Propuesto:
 Evalúa brevemente (máx 3-4 líneas) si el plan aborda correctamente el ticket. Si ves inconsistencias notorias o alucinaciones (ej. usar un framework distinto, tocar archivos irrelevantes), indícalo claramente. Si el plan parece sólido, responde: "El plan es congruente con la tarea."
 """
         from app.infrastructure.ai.llm_gateway import LiteLLMGateway
+
         provider, model, fallback_models = await resolve_tool_model(session, "planning_studio")
         actual_model = tool_model_label(provider, model)
         llm_gateway = LiteLLMGateway()
@@ -573,12 +601,8 @@ Evalúa brevemente (máx 3-4 líneas) si el plan aborda correctamente el ticket.
 
         try:
             response_text = await asyncio.wait_for(
-                llm_gateway.async_generate_completion(
-                    prompt=prompt,
-                    model=actual_model,
-                    **kwargs
-                ),
-                timeout=15.0  # overall timeout including fallbacks
+                llm_gateway.async_generate_completion(prompt=prompt, model=actual_model, **kwargs),
+                timeout=15.0,  # overall timeout including fallbacks
             )
             plan_observations = response_text.strip()
         except Exception as e:
@@ -586,6 +610,5 @@ Evalúa brevemente (máx 3-4 líneas) si el plan aborda correctamente el ticket.
             plan_observations = None
 
     return ValidatePlanResponse(
-        validated_paths=validated_paths,
-        plan_observations=plan_observations
+        validated_paths=validated_paths, plan_observations=plan_observations
     )

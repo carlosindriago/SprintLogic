@@ -32,7 +32,9 @@ def _scan_blocking(project_path: str, topological_map_md: str = "") -> str:
     # from .scanner._analyze_metrics import analyze_project_metrics
     # metrics = analyze_project_metrics({})
 
-    return build_awareness_xml(project_path, project_type, core_tech, total_files, topological_map_md)
+    return build_awareness_xml(
+        project_path, project_type, core_tech, total_files, topological_map_md
+    )
 
 
 from uuid import UUID
@@ -41,9 +43,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 
 async def get_project_awareness_xml(
-    project_path: str | None,
-    project_id: UUID | None = None,
-    session: AsyncSession | None = None
+    project_path: str | None, project_id: UUID | None = None, session: AsyncSession | None = None
 ) -> str:
     """
     Returns an XML block summarizing the project structure and tech stack.
@@ -66,11 +66,9 @@ async def get_project_awareness_xml(
     if project_id:
         try:
             from app.application.graph_exporter import generate_codebase_map_md
+
             topological_map_md = await generate_codebase_map_md(
-                project_id=project_id,
-                session=session,
-                max_files=100,
-                project_path=project_path
+                project_id=project_id, session=session, max_files=100, project_path=project_path
             )
         except Exception as e:
             logger.warning(f"Failed to generate topological map for AI: {e}")

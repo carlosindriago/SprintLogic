@@ -106,9 +106,7 @@ class TelemetryDaemon:
 
             if row and row[0]:
                 check = await session.execute(
-                    text(
-                        "SELECT datetime(:last) < datetime('now', :cooldown)"
-                    ),
+                    text("SELECT datetime(:last) < datetime('now', :cooldown)"),
                     {
                         "last": row[0],
                         "cooldown": f"-{COOLDOWN_SECONDS} seconds",
@@ -181,8 +179,11 @@ class TelemetryDaemon:
         try:
             from app.infrastructure.db.database import get_sessionmaker
             from app.infrastructure.repositories.tool_model_repository import resolve_tool_model
+
             async with get_sessionmaker()() as session:
-                provider_id, model_name, fallbacks = await resolve_tool_model(session, "telemetry_daemon")
+                provider_id, model_name, fallbacks = await resolve_tool_model(
+                    session, "telemetry_daemon"
+                )
 
             api_key = CredentialManager.get_api_key(provider_id)
             if not api_key:
@@ -212,8 +213,10 @@ class TelemetryDaemon:
                 )
 
             from app.infrastructure.ai.provider_adapter import ProviderAdapter
+
             adapted = ProviderAdapter.adapt(model_name, api_key)
             from app.infrastructure.llm.litellm_gateway import LiteLLMGateway
+
             gateway = LiteLLMGateway()
 
             response = await litellm.acompletion(
@@ -222,7 +225,7 @@ class TelemetryDaemon:
                 api_key=adapted.get("api_key", api_key),
                 max_tokens=120,
                 fallbacks=gateway.build_fallback_params(fallbacks),
-                **adapted.get("kwargs", {})
+                **adapted.get("kwargs", {}),
             )
             text = response.choices[0].message.content
             return text.strip() if text else None

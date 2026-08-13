@@ -54,6 +54,7 @@ async def file_watcher_callback(project_id: str, change: Change, filepath: str):
         for q in project_event_queues[project_id]:
             await q.put(event)
 
+
 @router.get("/projects/{project_id}/events")
 async def project_events(project_id: str, session: AsyncSession = Depends(get_db_session)):
     try:
@@ -88,6 +89,7 @@ async def project_events(project_id: str, session: AsyncSession = Depends(get_db
                 await file_watcher.stop_watching(project_id)
 
     return EventSourceResponse(event_generator())
+
 
 @router.get("/projects/{project_id}/session/stream")
 async def session_stream(
@@ -124,6 +126,7 @@ async def session_stream(
                 await daemon.stop_monitoring(project_id)
 
     return EventSourceResponse(event_generator())
+
 
 @router.websocket("/projects/{project_id}/ws")
 async def project_ws(websocket: WebSocket, project_id: str):

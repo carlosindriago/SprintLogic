@@ -9,12 +9,14 @@ Design rules:
   - Output DTOs (Response) control exactly what fields are exposed.
   - Domain objects are never returned raw from endpoints.
 """
+
 from datetime import datetime
 from uuid import UUID
 
 from pydantic import BaseModel, Field
 
 # ── Input DTOs ────────────────────────────────────────────────────────────────
+
 
 class ScanProjectRequest(BaseModel):
     path: str = Field(..., min_length=1, description="Absolute path to the local repository")
@@ -27,8 +29,10 @@ class UpdateProjectRequest(BaseModel):
 
 # ── Output DTOs ───────────────────────────────────────────────────────────────
 
+
 class ProjectResponse(BaseModel):
     """Public representation of a Project. Never exposes internal DB fields."""
+
     id: UUID
     name: str
     path: str

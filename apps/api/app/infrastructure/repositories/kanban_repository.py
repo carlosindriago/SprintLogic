@@ -45,7 +45,11 @@ class SQLAlchemyKanbanRepository:
         # Epics
         if epic_names:
             from sqlalchemy import func
-            query = select(EpicModel).where(EpicModel.project_id == project_id, func.lower(EpicModel.name).in_([n.lower() for n in epic_names]))
+
+            query = select(EpicModel).where(
+                EpicModel.project_id == project_id,
+                func.lower(EpicModel.name).in_([n.lower() for n in epic_names]),
+            )
             res = await self.session.execute(query)
             existing_epics = res.scalars().all()
             for e in existing_epics:
@@ -61,7 +65,7 @@ class SQLAlchemyKanbanRepository:
                         description="",
                         color="bg-blue-500",
                         created_at=now,
-                        updated_at=now
+                        updated_at=now,
                     )
                     self.session.add(new_epic)
                     epic_map[name.lower()] = new_epic_id
@@ -69,7 +73,11 @@ class SQLAlchemyKanbanRepository:
         # Sprints
         if sprint_names:
             from sqlalchemy import func
-            query = select(SprintModel).where(SprintModel.project_id == project_id, func.lower(SprintModel.name).in_([n.lower() for n in sprint_names]))
+
+            query = select(SprintModel).where(
+                SprintModel.project_id == project_id,
+                func.lower(SprintModel.name).in_([n.lower() for n in sprint_names]),
+            )
             res = await self.session.execute(query)
             existing_sprints = res.scalars().all()
             for s in existing_sprints:
@@ -86,7 +94,7 @@ class SQLAlchemyKanbanRepository:
                         start_date=now,
                         end_date=now + dt.timedelta(days=14),
                         created_at=now,
-                        updated_at=now
+                        updated_at=now,
                     )
                     self.session.add(new_sprint)
                     sprint_map[name.lower()] = new_sprint_id
@@ -96,8 +104,16 @@ class SQLAlchemyKanbanRepository:
 
         for payload in tickets:
             ticket_id = uuid.uuid4()
-            eid = epic_map.get(payload.epic.strip().lower()) if payload.epic and payload.epic.strip() else None
-            sid = sprint_map.get(payload.sprint.strip().lower()) if payload.sprint and payload.sprint.strip() else None
+            eid = (
+                epic_map.get(payload.epic.strip().lower())
+                if payload.epic and payload.epic.strip()
+                else None
+            )
+            sid = (
+                sprint_map.get(payload.sprint.strip().lower())
+                if payload.sprint and payload.sprint.strip()
+                else None
+            )
 
             ticket_model = KanbanTicketModel(
                 id=ticket_id,
@@ -118,11 +134,13 @@ class SQLAlchemyKanbanRepository:
             ticket_models.append(ticket_model)
 
             for node_link in payload.affected_nodes:
-                node_models.append(KanbanTicketNodeModel(
-                    ticket_id=ticket_id,
-                    node_id=node_link.node_id,
-                    file_path=node_link.file_path,
-                ))
+                node_models.append(
+                    KanbanTicketNodeModel(
+                        ticket_id=ticket_id,
+                        node_id=node_link.node_id,
+                        file_path=node_link.file_path,
+                    )
+                )
 
         self.session.add_all(ticket_models)
         self.session.add_all(node_models)
@@ -130,7 +148,9 @@ class SQLAlchemyKanbanRepository:
 
         return len(ticket_models)
 
-    async def create_ticket(self, project_id: UUID, payload: KanbanTicketCreate) -> KanbanTicketResponse:
+    async def create_ticket(
+        self, project_id: UUID, payload: KanbanTicketCreate
+    ) -> KanbanTicketResponse:
         ticket_id = uuid.uuid4()
         now = datetime.utcnow()
         ticket_model = KanbanTicketModel(
@@ -188,7 +208,9 @@ class SQLAlchemyKanbanRepository:
         if not ticket:
             return None
 
-        node_query = select(KanbanTicketNodeModel).where(KanbanTicketNodeModel.ticket_id == ticket.id)
+        node_query = select(KanbanTicketNodeModel).where(
+            KanbanTicketNodeModel.ticket_id == ticket.id
+        )
         nodes_res = await self.session.execute(node_query)
         nodes = nodes_res.scalars().all()
         links = [TicketNodeLink(node_id=n.node_id, file_path=n.file_path) for n in nodes]
@@ -222,7 +244,9 @@ class SQLAlchemyKanbanRepository:
 
         response_list: list[KanbanTicketResponse] = []
         for t in tickets:
-            node_query = select(KanbanTicketNodeModel).where(KanbanTicketNodeModel.ticket_id == t.id)
+            node_query = select(KanbanTicketNodeModel).where(
+                KanbanTicketNodeModel.ticket_id == t.id
+            )
             nodes_res = await self.session.execute(node_query)
             nodes = nodes_res.scalars().all()
             links = [TicketNodeLink(node_id=n.node_id, file_path=n.file_path) for n in nodes]
@@ -248,7 +272,9 @@ class SQLAlchemyKanbanRepository:
 
         return response_list
 
-    async def update_ticket(self, ticket_id: UUID, payload: KanbanTicketUpdate) -> KanbanTicketResponse | None:
+    async def update_ticket(
+        self, ticket_id: UUID, payload: KanbanTicketUpdate
+    ) -> KanbanTicketResponse | None:
         query = select(KanbanTicketModel).where(KanbanTicketModel.id == ticket_id)
         result = await self.session.execute(query)
         ticket = result.scalar_one_or_none()
@@ -277,7 +303,9 @@ class SQLAlchemyKanbanRepository:
         ticket.updated_at = datetime.utcnow()
         await self.session.commit()
 
-        node_query = select(KanbanTicketNodeModel).where(KanbanTicketNodeModel.ticket_id == ticket.id)
+        node_query = select(KanbanTicketNodeModel).where(
+            KanbanTicketNodeModel.ticket_id == ticket.id
+        )
         nodes_res = await self.session.execute(node_query)
         nodes = nodes_res.scalars().all()
         links = [TicketNodeLink(node_id=n.node_id, file_path=n.file_path) for n in nodes]
@@ -307,8 +335,12 @@ class SQLAlchemyKanbanRepository:
         if not ticket:
             return False
 
-        await self.session.execute(delete(KanbanTicketNodeModel).where(KanbanTicketNodeModel.ticket_id == ticket_id))
-        await self.session.execute(delete(KanbanTicketModel).where(KanbanTicketModel.id == ticket_id))
+        await self.session.execute(
+            delete(KanbanTicketNodeModel).where(KanbanTicketNodeModel.ticket_id == ticket_id)
+        )
+        await self.session.execute(
+            delete(KanbanTicketModel).where(KanbanTicketModel.id == ticket_id)
+        )
         await self.session.commit()
         return True
 
@@ -329,8 +361,11 @@ class SQLAlchemyKanbanRepository:
         await self.session.commit()
         return EpicResponse.model_validate(epic_model)
 
-    async def get_epics_by_project(self, project_id: UUID, include_archived: bool = False) -> list[EpicResponse]:
+    async def get_epics_by_project(
+        self, project_id: UUID, include_archived: bool = False
+    ) -> list[EpicResponse]:
         from app.domain.kanban_models import EpicStatus
+
         query = select(EpicModel).where(EpicModel.project_id == project_id)
         if not include_archived:
             query = query.where(EpicModel.status != EpicStatus.ARCHIVED)
@@ -360,6 +395,7 @@ class SQLAlchemyKanbanRepository:
 
     async def archive_epic(self, epic_id: UUID) -> bool:
         from app.domain.kanban_models import EpicStatus
+
         query = select(EpicModel).where(EpicModel.id == epic_id)
         result = await self.session.execute(query)
         epic = result.scalar_one_or_none()
@@ -389,8 +425,11 @@ class SQLAlchemyKanbanRepository:
         await self.session.commit()
         return SprintResponse.model_validate(sprint_model)
 
-    async def get_sprints_by_project(self, project_id: UUID, include_archived: bool = False) -> list[SprintResponse]:
+    async def get_sprints_by_project(
+        self, project_id: UUID, include_archived: bool = False
+    ) -> list[SprintResponse]:
         from app.domain.kanban_models import SprintStatus
+
         query = select(SprintModel).where(SprintModel.project_id == project_id)
         if not include_archived:
             query = query.where(SprintModel.status != SprintStatus.ARCHIVED)
@@ -422,6 +461,7 @@ class SQLAlchemyKanbanRepository:
 
     async def archive_sprint(self, sprint_id: UUID) -> bool:
         from app.domain.kanban_models import SprintStatus
+
         query = select(SprintModel).where(SprintModel.id == sprint_id)
         result = await self.session.execute(query)
         sprint = result.scalar_one_or_none()

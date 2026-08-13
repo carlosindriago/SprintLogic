@@ -47,6 +47,7 @@ class FileWatcherService:
                 with open(filepath, encoding="utf-8") as f:
                     code = f.read()
                 import os
+
                 ext = os.path.splitext(filepath)[1]
                 nodes, _, _ = parser.parse_code(code.encode("utf-8"), filepath, ext)
                 parsed_data[filepath] = {n.fqn: n for n in nodes}
@@ -166,7 +167,7 @@ class FileWatcherService:
         class IgnoreVendorFilter(DefaultFilter):
             def __init__(self, **kwargs):
                 super().__init__(**kwargs)
-                self.ignore_dirs = self.ignore_dirs + ('vendor', '.next', 'dist', 'build')
+                self.ignore_dirs = self.ignore_dirs + ("vendor", ".next", "dist", "build")
 
         try:
             async for changes in awatch(path, step=500, watch_filter=IgnoreVendorFilter()):

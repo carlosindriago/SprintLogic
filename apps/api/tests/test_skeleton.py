@@ -15,11 +15,21 @@ def get_skeleton(code: bytes, lang: Language) -> str:
     def traverse(node):
         # Identify declaration nodes
         if node.type in [
-            'function_declaration', 'method_declaration', 'class_declaration', 'type_declaration',
-            'function_definition', 'class_definition' # python
+            "function_declaration",
+            "method_declaration",
+            "class_declaration",
+            "type_declaration",
+            "function_definition",
+            "class_definition",  # python
         ]:
             # find block-like child
-            block_types = ['block', 'class_body', 'compound_statement', 'declaration_list', 'statement_block']
+            block_types = [
+                "block",
+                "class_body",
+                "compound_statement",
+                "declaration_list",
+                "statement_block",
+            ]
             block_node = None
             for child in node.children:
                 if child.type in block_types:
@@ -27,11 +37,11 @@ def get_skeleton(code: bytes, lang: Language) -> str:
                     break
 
             if block_node:
-                sig = code[node.start_byte:block_node.start_byte].decode('utf8').strip()
+                sig = code[node.start_byte : block_node.start_byte].decode("utf8").strip()
                 skeletons.append(sig + " { ... }")
                 traverse(block_node)
             else:
-                skeletons.append(node.text.decode('utf8'))
+                skeletons.append(node.text.decode("utf8"))
         else:
             if lang.name == "php":
                 print(f"PHP NODE: {node.type}")
@@ -40,6 +50,7 @@ def get_skeleton(code: bytes, lang: Language) -> str:
 
     traverse(tree.root_node)
     return "\n".join(skeletons)
+
 
 php_code = b"""<?php
 class UserController extends BaseController {

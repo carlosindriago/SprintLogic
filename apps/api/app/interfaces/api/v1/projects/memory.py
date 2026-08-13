@@ -41,6 +41,7 @@ IGNORE_DIRS = {
 SOURCE_EXTENSIONS = {".ts", ".tsx", ".js", ".jsx", ".py", ".rs", ".go", ".java", ".php"}
 MAX_FILE_BYTES = 500_000
 
+
 def _count_tech_stack(project_root: Path) -> tuple[dict[str, int], int]:
     """Count file extensions and total files. Blocking — run inside a thread."""
     tech_stack: dict[str, int] = {}
@@ -55,15 +56,18 @@ def _count_tech_stack(project_root: Path) -> tuple[dict[str, int], int]:
             total_files += 1
     return tech_stack, total_files
 
+
 def _load_json_file(path: str) -> dict[str, Any]:
     """Load a JSON file into a dict. Blocking — run inside a thread."""
     with open(path, encoding="utf-8") as f:
         return json.load(f)
 
+
 def _dump_json_file(path: str, data: dict[str, Any]) -> None:
     """Write a dict to a JSON file. Blocking — run inside a thread."""
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
+
 
 def _collect_search_index_entries(
     root: Path,
@@ -98,6 +102,7 @@ def _collect_search_index_entries(
             )
     return inserts, symbol_inserts
 
+
 async def build_search_index(project_root: str, session: AsyncSession | None = None) -> int:
     """Rebuild the FTS5 search index for a project directory.
 
@@ -114,9 +119,7 @@ async def build_search_index(project_root: str, session: AsyncSession | None = N
         root = Path(project_root).resolve()
         await session.execute(text("DELETE FROM search_index"))
 
-        inserts, symbol_inserts = await asyncio.to_thread(
-            _collect_search_index_entries, root
-        )
+        inserts, symbol_inserts = await asyncio.to_thread(_collect_search_index_entries, root)
 
         if inserts:
             await session.execute(
@@ -138,6 +141,7 @@ async def build_search_index(project_root: str, session: AsyncSession | None = N
         if own_session and session:
             await session.close()
 
+
 @router.post("/projects/{project_id}/analyze")
 async def analyze_project(project_id: str, session: AsyncSession = Depends(get_db_session)):
     try:
@@ -158,9 +162,7 @@ async def analyze_project(project_id: str, session: AsyncSession = Depends(get_d
     await build_search_index(str(project_root), session)
 
     # ── Tech stack counting ────────────────────────────────────────────
-    tech_stack, total_files = await asyncio.to_thread(
-        _count_tech_stack, project_root
-    )
+    tech_stack, total_files = await asyncio.to_thread(_count_tech_stack, project_root)
 
     # ── Run language scanners ──────────────────────────────────────────
     from app.infrastructure.scanners.python_scanner import PythonScanner
@@ -180,6 +182,7 @@ async def analyze_project(project_id: str, session: AsyncSession = Depends(get_d
         "total_files": total_files,
         "global_markers": global_markers,
     }
+
 
 @router.get("/search")
 async def search_everywhere(
@@ -215,10 +218,12 @@ async def search_everywhere(
         logger.warning("Unhandled exception", exc_info=True)
         return {"results": []}
 
+
 class MemorySaveRequest(BaseModel):
     agent_name: str
     context_type: str  # architectural_decision, bug_fix, chat_summary
     memory_content: str
+
 
 @router.post("/projects/{project_id}/memory")
 async def save_project_memory(
@@ -238,6 +243,7 @@ async def save_project_memory(
     )
     await session.commit()
     return {"status": "saved"}
+
 
 @router.get("/projects/{project_id}/memory/search")
 async def search_project_memory(
@@ -270,8 +276,10 @@ async def search_project_memory(
         logger.warning("Unhandled exception", exc_info=True)
         return {"results": []}
 
+
 class ProposalAction(BaseModel):
     action: str  # "apply" | "reject"
+
 
 @router.post("/projects/{project_id}/proposals/{proposal_id}/apply")
 async def apply_proposal(project_id: str, proposal_id: str):
@@ -311,6 +319,7 @@ async def apply_proposal(project_id: str, proposal_id: str):
     except Exception as e:
         logger.error("Failed to apply proposal: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="An internal error occurred")
+
 
 @router.post("/projects/{project_id}/proposals/{proposal_id}/reject")
 async def reject_proposal(project_id: str, proposal_id: str):

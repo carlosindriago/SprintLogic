@@ -44,18 +44,21 @@ def run_pre_commit():
     is_valid, errors = validator.validate_task_from_memory(active_task, files_in_memory)
 
     if not is_valid:
-        print("\n" + "="*50)
+        print("\n" + "=" * 50)
         print("❌ SPRINTLOGIC TDD GUARD: COMMIT RECHAZADO")
-        print("="*50)
+        print("=" * 50)
         print(f"No se detectó cumplimiento del contrato para: {active_task}")
         for err in errors:
             print(f"  - {err}")
-        print("Solución: Asegúrate de que el test con '@sprintlogic-spec' tenga un 'expect/assert'.")
-        print("="*50 + "\n")
+        print(
+            "Solución: Asegúrate de que el test con '@sprintlogic-spec' tenga un 'expect/assert'."
+        )
+        print("=" * 50 + "\n")
         sys.exit(1)
 
     print(f"✅ SprintLogic TDD Guard: Contrato verificado para {active_task}.")
     sys.exit(0)
+
 
 def inject_git_hook(project_root: Path):
     """
@@ -98,6 +101,7 @@ fi
     # Hacer el script ejecutable (chmod +x)
     st = os.stat(pre_commit_path)
     os.chmod(pre_commit_path, st.st_mode | stat.S_IEXEC)
+
 
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "tdd-guard":

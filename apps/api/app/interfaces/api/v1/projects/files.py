@@ -53,16 +53,20 @@ IGNORE_DIRS = {
 SOURCE_EXTENSIONS = {".ts", ".tsx", ".js", ".jsx", ".py", ".rs", ".go", ".java", ".php"}
 MAX_FILE_BYTES = 500_000
 
+
 class FileContentUpdate(BaseModel):
     content: str
     base_hash: str | None = None
+
 
 class RenameRequest(BaseModel):
     path: str
     new_name: str
 
+
 class FileOperationRequest(BaseModel):
     path: str
+
 
 @router.get("/projects/{project_id}/files")
 async def get_project_files(
@@ -106,6 +110,7 @@ async def get_project_files(
     background_tasks.add_task(build_search_index, project.path)
     return tree
 
+
 @router.get("/projects/{project_id}/files/ast-folds")
 async def get_ast_folds(
     project_id: str,
@@ -117,14 +122,12 @@ async def get_ast_folds(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid project ID format")
 
-
-
     from app.domain.graph_models import NodeLabel
 
     stmt = select(GraphNodeModel).where(
         GraphNodeModel.project_id == project_uuid,
         GraphNodeModel.file_path == file_path,
-        GraphNodeModel.label.in_([NodeLabel.FUNCTION, NodeLabel.CLASS])
+        GraphNodeModel.label.in_([NodeLabel.FUNCTION, NodeLabel.CLASS]),
     )
     result = await session.execute(stmt)
     nodes = result.scalars().all()
@@ -137,15 +140,12 @@ async def get_ast_folds(
                 start = meta.get("start_line")
                 end = meta.get("end_line")
                 if start and end:
-                    folds.append({
-                        "start_line": start,
-                        "end_line": end,
-                        "type": str(node.label)
-                    })
+                    folds.append({"start_line": start, "end_line": end, "type": str(node.label)})
             except json.JSONDecodeError:
                 pass
 
     return {"folds": folds}
+
 
 @router.get("/projects/{project_id}/file/content")
 async def get_project_file_content(
@@ -176,6 +176,7 @@ async def get_project_file_content(
     except Exception as e:
         logger.error("Failed to read file failed: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="An internal error occurred")
+
 
 @router.put("/projects/{project_id}/file/content")
 async def update_project_file_content(
@@ -223,6 +224,7 @@ async def update_project_file_content(
         logger.error("Failed to write file failed: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="An internal error occurred")
 
+
 @router.post("/projects/{project_id}/file/create")
 async def create_project_file(
     project_id: str,
@@ -248,10 +250,14 @@ async def create_project_file(
     try:
         await async_mkdir_parents(candidate)
         await async_write_text(candidate, payload.content)
-        return {"status": "created", "path": str(candidate.relative_to(Path(project.path).resolve()))}
+        return {
+            "status": "created",
+            "path": str(candidate.relative_to(Path(project.path).resolve())),
+        }
     except Exception as e:
         logger.error("Failed to create file failed: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="An internal error occurred")
+
 
 @router.post("/projects/{project_id}/file/rename")
 async def rename_project_file(
@@ -294,6 +300,7 @@ async def rename_project_file(
         logger.error("Failed to rename file failed: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="An internal error occurred")
 
+
 @router.post("/projects/{project_id}/file/duplicate")
 async def duplicate_project_file(
     project_id: str,
@@ -331,6 +338,7 @@ async def duplicate_project_file(
     except Exception as e:
         logger.error("Failed to duplicate file failed: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="An internal error occurred")
+
 
 @router.delete("/projects/{project_id}/file/delete")
 async def delete_project_file(

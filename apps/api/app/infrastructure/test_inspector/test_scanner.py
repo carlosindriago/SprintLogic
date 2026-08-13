@@ -8,7 +8,19 @@ class TestDiscoveryItem(TypedDict):
     has_test: bool
     test_file_path: str | None
 
-GLOBAL_IGNORED_DIRS = {"vendor", "node_modules", ".venv", "bin", "obj", "target", ".git", "build", "dist"}
+
+GLOBAL_IGNORED_DIRS = {
+    "vendor",
+    "node_modules",
+    ".venv",
+    "bin",
+    "obj",
+    "target",
+    ".git",
+    "build",
+    "dist",
+}
+
 
 def scan_project_tests(project_path: str) -> list[TestDiscoveryItem]:
     """
@@ -48,10 +60,18 @@ def scan_project_tests(project_path: str) -> list[TestDiscoveryItem]:
             continue
 
         # Evitar procesar archivos que en sí mismos ya son tests para no contarlos como fuentes sin test
-        if name.endswith("Test.php") or name.endswith("Test.java") or name.endswith("_test.go") or \
-           name.startswith("test_") or name.endswith(".spec.ts") or name.endswith(".test.js") or \
-           name.endswith(".test.ts") or name.endswith(".spec.js") or name.endswith("Tests.cs") or \
-           name.endswith("_test.dart"):
+        if (
+            name.endswith("Test.php")
+            or name.endswith("Test.java")
+            or name.endswith("_test.go")
+            or name.startswith("test_")
+            or name.endswith(".spec.ts")
+            or name.endswith(".test.js")
+            or name.endswith(".test.ts")
+            or name.endswith(".spec.js")
+            or name.endswith("Tests.cs")
+            or name.endswith("_test.dart")
+        ):
             continue
 
         test_path: str | None = None
@@ -70,7 +90,13 @@ def scan_project_tests(project_path: str) -> list[TestDiscoveryItem]:
                     break
 
         # Java (Spring Boot): src/main/java/ -> src/test/java/**/*Test.java
-        elif ext == ".java" and len(parts) >= 3 and parts[0] == "src" and parts[1] == "main" and parts[2] == "java":
+        elif (
+            ext == ".java"
+            and len(parts) >= 3
+            and parts[0] == "src"
+            and parts[1] == "main"
+            and parts[2] == "java"
+        ):
             is_source = True
             expected_test_name = path_obj.stem + "Test.java"
             for t_file in test_files_set:
@@ -107,7 +133,9 @@ def scan_project_tests(project_path: str) -> list[TestDiscoveryItem]:
                 is_source = True
                 expected_test_name = "test_" + name
                 for t_file in test_files_set:
-                    if ("tests/" in t_file or "test/" in t_file) and t_file.endswith("/" + expected_test_name):
+                    if ("tests/" in t_file or "test/" in t_file) and t_file.endswith(
+                        "/" + expected_test_name
+                    ):
                         test_path = t_file
                         break
 
@@ -118,8 +146,14 @@ def scan_project_tests(project_path: str) -> list[TestDiscoveryItem]:
                 stem = path_obj.stem
                 # Check for .test or .spec with same extension
                 for t_file in test_files_set:
-                    if t_file.endswith(f"/{stem}.test{ext}") or t_file.endswith(f"/{stem}.spec{ext}") or \
-                       (len(Path(t_file).parts) == 1 and (t_file == f"{stem}.test{ext}" or t_file == f"{stem}.spec{ext}")):
+                    if (
+                        t_file.endswith(f"/{stem}.test{ext}")
+                        or t_file.endswith(f"/{stem}.spec{ext}")
+                        or (
+                            len(Path(t_file).parts) == 1
+                            and (t_file == f"{stem}.test{ext}" or t_file == f"{stem}.spec{ext}")
+                        )
+                    ):
                         test_path = t_file
                         break
 
@@ -142,11 +176,13 @@ def scan_project_tests(project_path: str) -> list[TestDiscoveryItem]:
                     break
 
         if is_source:
-            results.append({
-                "file_path": rel_file,
-                "has_test": test_path is not None,
-                "test_file_path": test_path
-            })
+            results.append(
+                {
+                    "file_path": rel_file,
+                    "has_test": test_path is not None,
+                    "test_file_path": test_path,
+                }
+            )
 
     # Sort results by tested first, then alphabetically
     results.sort(key=lambda x: (not x["has_test"], x["file_path"]))

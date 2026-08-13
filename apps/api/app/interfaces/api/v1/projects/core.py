@@ -51,6 +51,7 @@ IGNORE_DIRS = {
 SOURCE_EXTENSIONS = {".ts", ".tsx", ".js", ".jsx", ".py", ".rs", ".go", ".java", ".php"}
 MAX_FILE_BYTES = 500_000
 
+
 @router.get("/projects", response_model=ProjectListResponse)
 async def get_projects(session: AsyncSession = Depends(get_db_session)) -> ProjectListResponse:
     repo = SQLAlchemyProjectRepository(session)
@@ -58,6 +59,7 @@ async def get_projects(session: AsyncSession = Depends(get_db_session)) -> Proje
     return ProjectListResponse(
         projects=[ProjectResponse.model_validate(p, from_attributes=True) for p in projects]
     )
+
 
 @router.post("/projects/scan", status_code=202, response_model=ScanStartedResponse)
 async def scan_project(
@@ -102,13 +104,16 @@ async def scan_project(
     cancel_token = asyncio.Event()
     active_scans[str(saved_project.id)] = cancel_token
 
-    background_tasks.add_task(scan_codebase_usecase.execute, saved_project.id, cancel_token, saved_project.path)
+    background_tasks.add_task(
+        scan_codebase_usecase.execute, saved_project.id, cancel_token, saved_project.path
+    )
 
     return ScanStartedResponse(
         status="scanning started",
         project_id=saved_project.id,
         message="The AST parsing is running in the background.",
     )
+
 
 @router.get("/projects/{project_id}/scan/stream")
 async def stream_scan_progress(project_id: str):
@@ -125,6 +130,7 @@ async def stream_scan_progress(project_id: str):
 
     return EventSourceResponse(event_generator())
 
+
 async def _run_background_scan(project_uuid: UUID, project_path: str, cancel_token: asyncio.Event):
     try:
         async_session = get_sessionmaker()
@@ -137,9 +143,12 @@ async def _run_background_scan(project_uuid: UUID, project_path: str, cancel_tok
                 await usecase.execute(project_uuid, cancel_token, project_path)
             except Exception as e:
                 logger.error(f"Background scan failed for {project_uuid}: {e}", exc_info=True)
-                await global_event_bus.publish(f"scan:{project_uuid}", {"type": "failed", "error": str(e)})
+                await global_event_bus.publish(
+                    f"scan:{project_uuid}", {"type": "failed", "error": str(e)}
+                )
     finally:
         active_scans.pop(str(project_uuid), None)
+
 
 @router.post("/projects/{project_id}/rescan", status_code=202)
 async def rescan_project(
@@ -161,7 +170,7 @@ async def rescan_project(
         # Cancel the existing scan
         old_token = active_scans.pop(project_id)
         old_token.set()
-        await asyncio.sleep(0.5) # Give it a moment to gracefully shutdown
+        await asyncio.sleep(0.5)  # Give it a moment to gracefully shutdown
 
     graph_repo = SQLAlchemyGraphRepository(session)
     await graph_repo.clear_by_project(project_uuid)
@@ -176,15 +185,14 @@ async def rescan_project(
     # Limpiar estado previo para que SSE no lea un "completed" del escaneo anterior
     global_event_bus.clear_latest(f"scan:{project_uuid}")
 
-    background_tasks.add_task(
-        _run_background_scan, project_uuid, project.path, cancel_token
-    )
+    background_tasks.add_task(_run_background_scan, project_uuid, project.path, cancel_token)
 
     return {
         "status": "rescanning started",
         "project_id": str(project_uuid),
         "message": "AST parsing is running in the background with fresh git birth dates.",
     }
+
 
 @router.put("/projects/{project_id}", response_model=ProjectResponse)
 async def update_project(
@@ -205,6 +213,7 @@ async def update_project(
     await session.commit()
 
     return ProjectResponse.model_validate(project, from_attributes=True)
+
 
 @router.delete("/projects/{project_id}", response_model=ProjectDeletedResponse)
 async def delete_project(

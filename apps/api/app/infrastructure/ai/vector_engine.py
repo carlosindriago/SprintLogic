@@ -16,7 +16,9 @@ class VectorEngine:
         self.tokenizer_path = model_dir / "tokenizer.json"
 
         if not self.model_path.exists() or not self.tokenizer_path.exists():
-            raise RuntimeError(f"Model files not found in {model_dir}. Offline-First strict mode requires model.onnx and tokenizer.json to be bundled.")
+            raise RuntimeError(
+                f"Model files not found in {model_dir}. Offline-First strict mode requires model.onnx and tokenizer.json to be bundled."
+            )
 
         # Regla del Sensei #3: Prevención de Canibalismo de Hilos (Thrashing)
         # Capamos ONNX para que no intente usar todos los núcleos del servidor en una sola petición.
@@ -27,9 +29,7 @@ class VectorEngine:
         # Regla del Sensei #1: Lifespan Singleton
         # Cargamos el modelo una sola vez y lo mantenemos en RAM.
         self.session = ort.InferenceSession(
-            str(self.model_path),
-            sess_options=opts,
-            providers=["CPUExecutionProvider"]
+            str(self.model_path), sess_options=opts, providers=["CPUExecutionProvider"]
         )
 
         # Cargar Tokenizer
@@ -46,7 +46,9 @@ class VectorEngine:
     @classmethod
     def get_instance(cls) -> "VectorEngine":
         if cls._instance is None:
-            raise RuntimeError("VectorEngine no inicializado. Llama a initialize() en el lifespan de FastAPI.")
+            raise RuntimeError(
+                "VectorEngine no inicializado. Llama a initialize() en el lifespan de FastAPI."
+            )
         return cls._instance
 
     def _generate_embedding_sync(self, text: str) -> list[float]:
@@ -61,15 +63,15 @@ class VectorEngine:
         inputs = {
             "input_ids": input_ids,
             "attention_mask": attention_mask,
-            "token_type_ids": token_type_ids
+            "token_type_ids": token_type_ids,
         }
 
         # Ejecutar modelo
         outputs = self.session.run(None, inputs)
 
         # Mean Pooling usando la máscara de atención
-        token_embeddings = outputs[0][0] # (seq_len, hidden_size)
-        mask = attention_mask[0] # (seq_len,)
+        token_embeddings = outputs[0][0]  # (seq_len, hidden_size)
+        mask = attention_mask[0]  # (seq_len,)
 
         # Filtramos los embeddings que no son de padding
         valid_embeddings = token_embeddings[mask == 1]

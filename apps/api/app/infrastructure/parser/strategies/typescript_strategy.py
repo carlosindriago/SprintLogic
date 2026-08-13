@@ -18,6 +18,7 @@ class TypeScriptAnalyzerStrategy(LanguageAnalyzerStrategy):
     def __init__(self) -> None:
         import tree_sitter_typescript
         from tree_sitter import Language, Parser
+
         self.ts_language = Language(tree_sitter_typescript.language_typescript())
         self.parser = Parser(self.ts_language)
 
@@ -32,7 +33,9 @@ class TypeScriptAnalyzerStrategy(LanguageAnalyzerStrategy):
         Calls the Node.js ts_parser.js script securely using asyncio to prevent Event Loop blocking.
         """
         # Ruta al micro-script empaquetado (asumiendo que está en la carpeta scripts)
-        script_path = Path(__file__).resolve().parent.parent.parent.parent.parent / "scripts" / "ts_parser.js"
+        script_path = (
+            Path(__file__).resolve().parent.parent.parent.parent.parent / "scripts" / "ts_parser.js"
+        )
 
         if not script_path.exists():
             raise FileNotFoundError(f"No se encontró el parser de Node en: {script_path}")
@@ -43,26 +46,32 @@ class TypeScriptAnalyzerStrategy(LanguageAnalyzerStrategy):
             # CEDEMOS EL CONTROL AL EVENT LOOP
             # stdin=asyncio.subprocess.DEVNULL evita que el subproceso se cuelgue esperando entrada
             process = await asyncio.create_subprocess_exec(
-                "node", str(script_path), str(project_path),
+                "node",
+                str(script_path),
+                str(project_path),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                stdin=asyncio.subprocess.DEVNULL
+                stdin=asyncio.subprocess.DEVNULL,
             )
 
             # COMMUNICATE: La única forma segura de evitar Deadlocks por buffers llenos
             stdout_bytes, stderr_bytes = await process.communicate()
 
             if process.returncode != 0:
-                error_msg = stderr_bytes.decode('utf-8', errors='replace').strip()
-                logger.error(f"El parser de Node.js falló (Código {process.returncode}): {error_msg}")
+                error_msg = stderr_bytes.decode("utf-8", errors="replace").strip()
+                logger.error(
+                    f"El parser de Node.js falló (Código {process.returncode}): {error_msg}"
+                )
                 raise RuntimeError(f"Fallo al analizar TypeScript: {error_msg}")
 
             # Decodificamos la respuesta JSON del STDOUT
-            output_str = stdout_bytes.decode('utf-8')
+            output_str = stdout_bytes.decode("utf-8")
             return json.loads(output_str)
 
         except json.JSONDecodeError as e:
-            logger.error("Node.js no devolvió un JSON válido. Revisa los console.log errantes en ts_parser.js.")
+            logger.error(
+                "Node.js no devolvió un JSON válido. Revisa los console.log errantes en ts_parser.js."
+            )
             raise RuntimeError("Respuesta inválida del parser de TypeScript.") from e
         except Exception as e:
             logger.error(f"Error crítico ejecutando el subproceso de TypeScript: {str(e)}")

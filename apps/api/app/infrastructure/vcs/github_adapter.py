@@ -18,7 +18,7 @@ class GitHubAdapter(VCSProvider):
                 "author": "sprintlogic",
                 "state": "open",
                 "url": "https://github.com/fake/repo/pull/42",
-                "created_at": "2026-07-31T12:00:00Z"
+                "created_at": "2026-07-31T12:00:00Z",
             },
             {
                 "id": "2",
@@ -27,11 +27,13 @@ class GitHubAdapter(VCSProvider):
                 "author": "carlos",
                 "state": "open",
                 "url": "https://github.com/fake/repo/pull/43",
-                "created_at": "2026-07-30T10:30:00Z"
-            }
+                "created_at": "2026-07-30T10:30:00Z",
+            },
         ]
 
-    async def create_pull_request(self, project_path: str, title: str, head: str, base: str, body: str) -> dict[str, Any]:
+    async def create_pull_request(
+        self, project_path: str, title: str, head: str, base: str, body: str
+    ) -> dict[str, Any]:
         return {"status": "success", "url": "https://github.com/fake/repo/pull/44"}
 
     async def get_ci_status(self, project_path: str, ref: str) -> dict[str, Any]:

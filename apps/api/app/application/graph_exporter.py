@@ -16,7 +16,7 @@ def _compute_metrics_and_format(
     nodes: Sequence[GraphNodeModel],
     edges: Sequence[GraphEdgeModel],
     project_path: str,
-    max_files: int | None = None
+    max_files: int | None = None,
 ) -> str:
     G: nx.DiGraph = nx.DiGraph()
     # Add nodes
@@ -48,13 +48,15 @@ def _compute_metrics_and_format(
         impact_score = node_in + node_out + (100 if has_cycle else 0)
 
         path = G.nodes[node_id].get("path", "")
-        scored_files.append({
-            "path": path,
-            "in": node_in,
-            "out": node_out,
-            "cycle": has_cycle,
-            "score": impact_score
-        })
+        scored_files.append(
+            {
+                "path": path,
+                "in": node_in,
+                "out": node_out,
+                "cycle": has_cycle,
+                "score": impact_score,
+            }
+        )
 
     # Sort
     scored_files.sort(key=lambda x: x["score"], reverse=True)
@@ -83,7 +85,9 @@ def _compute_metrics_and_format(
     lines.append("")
 
     lines.append("## All Files Table (Sorted by Impact)")
-    lines.append("| File Path | In-Degree (Dependents) | Out-Degree (Dependencies) | In Cycle? | Impact Score |")
+    lines.append(
+        "| File Path | In-Degree (Dependents) | Out-Degree (Dependencies) | In Cycle? | Impact Score |"
+    )
     lines.append("|---|---|---|---|---|")
 
     for f in scored_files:
@@ -101,7 +105,7 @@ async def generate_codebase_map_md(
     project_id: UUID,
     session: AsyncSession | None = None,
     max_files: int | None = None,
-    project_path: str = ""
+    project_path: str = "",
 ) -> str:
     async def fetch_graph(db: AsyncSession):
         repo = SQLAlchemyGraphRepository(db)

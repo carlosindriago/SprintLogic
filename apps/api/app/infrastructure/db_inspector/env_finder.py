@@ -22,7 +22,9 @@ def parse_env_file(file_path: Path) -> dict[str, str]:
             key = key.strip()
             val = val.strip()
             # Remove wrapping quotes if any
-            if (val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'")):
+            if (val.startswith('"') and val.endswith('"')) or (
+                val.startswith("'") and val.endswith("'")
+            ):
                 val = val[1:-1]
             env_vars[key] = val
     except Exception as e:

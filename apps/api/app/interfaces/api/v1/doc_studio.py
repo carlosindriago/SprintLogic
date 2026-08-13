@@ -19,23 +19,25 @@ from app.utils.security import resolve_project_path
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(
-    prefix="/projects/{project_id}/docs",
-    tags=["Document Studio"]
-)
+router = APIRouter(prefix="/projects/{project_id}/docs", tags=["Document Studio"])
+
 
 class DocChatRequest(BaseModel):
     query: str
 
+
 class AutoDocRequest(BaseModel):
     file_path: str
+
 
 class AuditDocRequest(BaseModel):
     file_path: str
 
+
 class SaveDocRequest(BaseModel):
     file_path: str
     content: str
+
 
 class CreateBookmarkRequest(BaseModel):
     file_path: str
@@ -44,10 +46,10 @@ class CreateBookmarkRequest(BaseModel):
     start_line: int | None = None
     end_line: int | None = None
 
+
 @router.get("/tree")
 async def discover_docs(
-    project_id: str,
-    session: AsyncSession = Depends(get_db_session)
+    project_id: str, session: AsyncSession = Depends(get_db_session)
 ) -> dict[str, Any]:
     try:
         pid = UUID(project_id)
@@ -63,16 +65,12 @@ async def discover_docs(
     markdown_files = scan_markdown_docs(project.path)
     undocumented_code = scan_undocumented_code(project.path)
 
-    return {
-        "markdown_files": markdown_files,
-        "undocumented_code": undocumented_code
-    }
+    return {"markdown_files": markdown_files, "undocumented_code": undocumented_code}
+
 
 @router.post("/chat")
 async def chat_with_docs(
-    project_id: str,
-    request: DocChatRequest,
-    session: AsyncSession = Depends(get_db_session)
+    project_id: str, request: DocChatRequest, session: AsyncSession = Depends(get_db_session)
 ) -> dict[str, Any]:
     try:
         pid = UUID(project_id)
@@ -122,35 +120,26 @@ async def chat_with_docs(
         rag_context += "\\n\\n[...Documentación truncada por límites de contexto...]"
 
     from app.infrastructure.repositories.tool_model_repository import resolve_tool_model
+
     tool_provider, tool_model, fallbacks = await resolve_tool_model(session, "doc_studio")
     llm = LiteLLMGateway(model_name=f"{tool_provider}/{tool_model}")
 
     prompt = prompt_repository.DOC_RAG_PROMPT_CONTENT.format(
-        user_query=request.query,
-        rag_context=rag_context
+        user_query=request.query, rag_context=rag_context
     )
 
-
     try:
-        response = await llm.generate_completion(
-            prompt=prompt,
-            lang_code="en",
-            fallbacks=fallbacks
-        )
+        response = await llm.generate_completion(prompt=prompt, lang_code="en", fallbacks=fallbacks)
     except Exception as e:
         logger.error(f"Error in Light RAG LLM: {e}")
         raise HTTPException(status_code=500, detail="Error generating answer from LLM")
 
-    return {
-        "reply": response,
-        "context_truncated": is_truncated
-    }
+    return {"reply": response, "context_truncated": is_truncated}
+
 
 @router.post("/generate-docblock")
 async def generate_docblock(
-    project_id: str,
-    request: AutoDocRequest,
-    session: AsyncSession = Depends(get_db_session)
+    project_id: str, request: AutoDocRequest, session: AsyncSession = Depends(get_db_session)
 ) -> dict[str, Any]:
     try:
         pid = UUID(project_id)
@@ -176,34 +165,26 @@ async def generate_docblock(
         raise HTTPException(status_code=500, detail="Could not read source file")
 
     from app.infrastructure.repositories.tool_model_repository import resolve_tool_model
+
     tool_provider, tool_model, fallbacks = await resolve_tool_model(session, "doc_studio")
     llm = LiteLLMGateway(model_name=f"{tool_provider}/{tool_model}")
 
     prompt = prompt_repository.AUTO_DOC_PROMPT_CONTENT.format(
-        file_path=request.file_path,
-        source_code=source_code
+        file_path=request.file_path, source_code=source_code
     )
 
-
     try:
-        response = await llm.generate_completion(
-            prompt=prompt,
-            lang_code="en",
-            fallbacks=fallbacks
-        )
+        response = await llm.generate_completion(prompt=prompt, lang_code="en", fallbacks=fallbacks)
     except Exception as e:
         logger.error(f"Error generating Auto-Doc: {e}")
         raise HTTPException(status_code=500, detail="Error generating Auto-Doc from LLM")
 
-    return {
-        "documented_code": response
-    }
+    return {"documented_code": response}
+
 
 @router.post("/audit")
 async def audit_doc(
-    project_id: str,
-    request: AuditDocRequest,
-    session: AsyncSession = Depends(get_db_session)
+    project_id: str, request: AuditDocRequest, session: AsyncSession = Depends(get_db_session)
 ) -> dict[str, Any]:
     try:
         pid = UUID(project_id)
@@ -280,6 +261,7 @@ async def audit_doc(
             logger.warning("Unhandled exception", exc_info=True)
 
     from app.infrastructure.repositories.tool_model_repository import resolve_tool_model
+
     tool_provider, tool_model, fallbacks = await resolve_tool_model(session, "document_studio")
 
     llm = LiteLLMGateway(model_name=f"{tool_provider}/{tool_model}")
@@ -289,30 +271,23 @@ async def audit_doc(
         project_manifests=manifests_content,
         rag_context=rag_context,
         file_path=request.file_path,
-        doc_content=doc_content
+        doc_content=doc_content,
     )
 
     try:
-        response = await llm.generate_completion(
-            prompt=prompt,
-            lang_code="es",
-            fallbacks=fallbacks
-        )
+        response = await llm.generate_completion(prompt=prompt, lang_code="es", fallbacks=fallbacks)
     except Exception as e:
         logger.error(f"Error generating Audit: {e}")
         if isinstance(e, HTTPException):
             raise e
         raise HTTPException(status_code=500, detail="Error generating Audit from LLM")
 
-    return {
-        "report": response
-    }
+    return {"report": response}
+
 
 @router.put("/file")
 async def save_doc_file(
-    project_id: str,
-    request: SaveDocRequest,
-    session: AsyncSession = Depends(get_db_session)
+    project_id: str, request: SaveDocRequest, session: AsyncSession = Depends(get_db_session)
 ) -> dict[str, Any]:
     try:
         pid = UUID(project_id)
@@ -339,17 +314,23 @@ async def save_doc_file(
 
     return {"status": "ok", "file_path": request.file_path}
 
+
 @router.get("/bookmarks")
 async def get_bookmarks(
-    project_id: str,
-    session: AsyncSession = Depends(get_db_session)
+    project_id: str, session: AsyncSession = Depends(get_db_session)
 ) -> list[dict[str, Any]]:
     try:
         pid = UUID(project_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid project_id format")
 
-    stmt = select(UniversalBookmarkModel).where(UniversalBookmarkModel.project_id == pid, UniversalBookmarkModel.item_type == "document").order_by(UniversalBookmarkModel.created_at.desc())
+    stmt = (
+        select(UniversalBookmarkModel)
+        .where(
+            UniversalBookmarkModel.project_id == pid, UniversalBookmarkModel.item_type == "document"
+        )
+        .order_by(UniversalBookmarkModel.created_at.desc())
+    )
     result = await session.execute(stmt)
     bookmarks = result.scalars().all()
 
@@ -361,15 +342,15 @@ async def get_bookmarks(
             "note": b.note,
             "start_line": b.start_line,
             "end_line": b.end_line,
-            "created_at": b.created_at.isoformat()
-        } for b in bookmarks
+            "created_at": b.created_at.isoformat(),
+        }
+        for b in bookmarks
     ]
+
 
 @router.post("/bookmarks")
 async def create_bookmark(
-    project_id: str,
-    request: CreateBookmarkRequest,
-    session: AsyncSession = Depends(get_db_session)
+    project_id: str, request: CreateBookmarkRequest, session: AsyncSession = Depends(get_db_session)
 ) -> dict[str, Any]:
     try:
         pid = UUID(project_id)
@@ -384,7 +365,7 @@ async def create_bookmark(
         note=request.note,
         item_type="document",
         start_line=request.start_line,
-        end_line=request.end_line
+        end_line=request.end_line,
     )
 
     session.add(new_bookmark)
@@ -395,5 +376,5 @@ async def create_bookmark(
         "file_path": new_bookmark.file_path,
         "selected_text": new_bookmark.selected_text,
         "note": new_bookmark.note,
-        "created_at": new_bookmark.created_at.isoformat()
+        "created_at": new_bookmark.created_at.isoformat(),
     }

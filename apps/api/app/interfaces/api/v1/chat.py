@@ -129,7 +129,9 @@ async def _generate_conversation_title(conversation_id: int, first_message: str)
             title_model_id = tool_model_label(title_provider, title_model)
 
             provider = title_provider
-            api_key = CredentialManager.get_api_key(f"sprintlogic_{provider}") or CredentialManager.get_api_key(provider)
+            api_key = CredentialManager.get_api_key(
+                f"sprintlogic_{provider}"
+            ) or CredentialManager.get_api_key(provider)
             if not api_key:
                 api_key = CredentialManager.get_api_key("sprintlogic_openrouter")
                 if not api_key:
@@ -147,11 +149,8 @@ async def _generate_conversation_title(conversation_id: int, first_message: str)
             response = await litellm.acompletion(
                 model=title_model_id,
                 messages=[
-                    {
-                        "role": "system",
-                        "content": system_content
-                    },
-                    {"role": "user", "content": first_message}
+                    {"role": "system", "content": system_content},
+                    {"role": "user", "content": first_message},
                 ],
                 api_key=api_key,
             )
@@ -186,6 +185,7 @@ async def chat_with_ai(
     is_new_conversation = False
     if not conversation_id and request.project_id:
         import uuid
+
         try:
             project_uuid = uuid.UUID(request.project_id)
             conv = ConversationModel(project_id=project_uuid)
@@ -208,11 +208,7 @@ async def chat_with_ai(
             break
 
     if conversation_id and user_content:
-        user_msg = MessageModel(
-            conversation_id=conversation_id,
-            role="user",
-            content=user_content
-        )
+        user_msg = MessageModel(conversation_id=conversation_id, role="user", content=user_content)
         session.add(user_msg)
         await session.commit()
 
@@ -221,7 +217,6 @@ async def chat_with_ai(
 
     if request.is_sensei:
         injected_system = SENSEI_SYSTEM_PROMPT_TEMPLATE
-
 
         ctx = request.editor_context
         # Context decoupling: Only inject the <EDITOR_CONTEXT> block if we actually have code.
@@ -259,11 +254,10 @@ async def chat_with_ai(
             # Save the final AI response to DB
             if conversation_id and full_response:
                 from app.infrastructure.db.database import get_sessionmaker
+
                 async with get_sessionmaker()() as bg_session:
                     ai_msg = MessageModel(
-                        conversation_id=conversation_id,
-                        role="assistant",
-                        content=full_response
+                        conversation_id=conversation_id, role="assistant", content=full_response
                     )
                     bg_session.add(ai_msg)
                     await bg_session.commit()
@@ -289,6 +283,7 @@ async def chat_with_ai(
 async def get_conversations(project_id: str, session: AsyncSession = Depends(get_db_session)):
     """Fetch chat threads for a project."""
     import uuid
+
     try:
         project_uuid = uuid.UUID(project_id)
     except Exception:
@@ -301,11 +296,16 @@ async def get_conversations(project_id: str, session: AsyncSession = Depends(get
         .order_by(desc(ConversationModel.created_at))
     )
     conversations = result.scalars().all()
-    return [{"id": c.id, "title": c.title or "Nuevo Chat", "created_at": c.created_at} for c in conversations]
+    return [
+        {"id": c.id, "title": c.title or "Nuevo Chat", "created_at": c.created_at}
+        for c in conversations
+    ]
 
 
 @router.get("/conversations/messages/{conversation_id}")
-async def get_conversation_messages(conversation_id: int, session: AsyncSession = Depends(get_db_session)):
+async def get_conversation_messages(
+    conversation_id: int, session: AsyncSession = Depends(get_db_session)
+):
     """Fetch messages for a given thread."""
     result = await session.execute(
         select(MessageModel)
@@ -313,11 +313,16 @@ async def get_conversation_messages(conversation_id: int, session: AsyncSession 
         .order_by(MessageModel.id)
     )
     messages = result.scalars().all()
-    return [{"id": m.id, "role": m.role, "content": m.content, "created_at": m.created_at} for m in messages]
+    return [
+        {"id": m.id, "role": m.role, "content": m.content, "created_at": m.created_at}
+        for m in messages
+    ]
 
 
 @router.delete("/conversations/{conversation_id}")
-async def delete_conversation(conversation_id: int, session: AsyncSession = Depends(get_db_session)):
+async def delete_conversation(
+    conversation_id: int, session: AsyncSession = Depends(get_db_session)
+):
     """Delete a conversation and all its messages."""
     conv = await session.get(ConversationModel, conversation_id)
     if not conv:
@@ -375,7 +380,9 @@ async def mentor_sensei(
     actual_model = tool_model_label(sensei_provider, sensei_model)
 
     provider = sensei_provider
-    api_key = CredentialManager.get_api_key(f"sprintlogic_{provider}") or CredentialManager.get_api_key(provider)
+    api_key = CredentialManager.get_api_key(
+        f"sprintlogic_{provider}"
+    ) or CredentialManager.get_api_key(provider)
     if not api_key:
         api_key = CredentialManager.get_api_key("sprintlogic_openrouter")
         if not api_key:
@@ -479,11 +486,13 @@ class TicketMentorRequest(BaseModel):
     user_query: str
     tech_stack: dict[str, Any] = {}
 
+
 class AutoFixRequest(BaseModel):
     ticket_id: str
     node_id: str
     instruction: str
     project_id: str
+
 
 @router.post("/ticket-mentor")
 async def ticket_mentor(
@@ -492,12 +501,14 @@ async def ticket_mentor(
     _rate_limit: None = Depends(require_rate_limit(limit=15, window_seconds=60, scope="chat")),
 ):
     import uuid
+
     try:
         proj_uuid = uuid.UUID(request.project_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid project ID")
 
     from app.infrastructure.db.project_repository import SQLAlchemyProjectRepository
+
     proj_repo = SQLAlchemyProjectRepository(session)
     project = await proj_repo.get_project(proj_uuid)
     if not project:
@@ -520,10 +531,14 @@ async def ticket_mentor(
         file_content = f"Error reading file {target_path}"
 
     from app.infrastructure.repositories.graph_repository import SQLAlchemyGraphRepository
+
     graph_repo = SQLAlchemyGraphRepository(session)
     try:
         raw_items = await graph_repo.get_blast_radius(proj_uuid, request.node_id, 3)
-        topology = [f"{row['source_file_path']} -> {row['target_id']} ({row['edge_type']})" for row in raw_items]
+        topology = [
+            f"{row['source_file_path']} -> {row['target_id']} ({row['edge_type']})"
+            for row in raw_items
+        ]
         topology_str = "\n".join(topology)
     except Exception as e:
         logging.warning("Unhandled exception: %s", e, exc_info=True)
@@ -533,7 +548,9 @@ async def ticket_mentor(
     tm_provider, tm_model, _ = await resolve_tool_model(session, "ticket_mentor")
     tm_model_id = tool_model_label(tm_provider, tm_model)
     provider = tm_provider
-    api_key = CredentialManager.get_api_key(f"sprintlogic_{provider}") or CredentialManager.get_api_key(provider)
+    api_key = CredentialManager.get_api_key(
+        f"sprintlogic_{provider}"
+    ) or CredentialManager.get_api_key(provider)
     if not api_key:
         api_key = CredentialManager.get_api_key("sprintlogic_openrouter")
         if not api_key:
@@ -590,12 +607,14 @@ async def auto_fix(
     _rate_limit: None = Depends(require_rate_limit(limit=15, window_seconds=60, scope="chat")),
 ):
     import uuid
+
     try:
         proj_uuid = uuid.UUID(request.project_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid project ID")
 
     from app.infrastructure.db.project_repository import SQLAlchemyProjectRepository
+
     proj_repo = SQLAlchemyProjectRepository(session)
     project = await proj_repo.get_project(proj_uuid)
     if not project:
@@ -621,7 +640,9 @@ async def auto_fix(
     af_provider, af_model, _ = await resolve_tool_model(session, "auto_fix")
     af_model_id = tool_model_label(af_provider, af_model)
     provider = af_provider
-    api_key = CredentialManager.get_api_key(f"sprintlogic_{provider}") or CredentialManager.get_api_key(provider)
+    api_key = CredentialManager.get_api_key(
+        f"sprintlogic_{provider}"
+    ) or CredentialManager.get_api_key(provider)
     if not api_key:
         api_key = CredentialManager.get_api_key("sprintlogic_openrouter")
         if not api_key:

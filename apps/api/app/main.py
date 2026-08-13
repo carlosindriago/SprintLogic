@@ -71,9 +71,7 @@ async def lifespan(app: FastAPI):
 
     sessionmaker = get_sessionmaker()
     async with sessionmaker() as session:
-
         await initialize_prompts(session)
-
 
     try:
         app.state.process_pool = ProcessPoolExecutor(max_workers=2)
@@ -86,10 +84,12 @@ async def lifespan(app: FastAPI):
 
         # Iniciar REM Sleep / Insight Worker
         import asyncio
+
         app.state.insight_worker_task = asyncio.create_task(run_insight_worker_loop())
     except Exception as e:
         logging.warning("Unhandled exception: %s", e, exc_info=True)
         import traceback
+
         traceback.print_exc(file=sys.stderr)
         raise e
 
@@ -99,6 +99,7 @@ async def lifespan(app: FastAPI):
     import asyncio
 
     from app.application.insight_worker import signal_shutdown
+
     signal_shutdown()
 
     try:

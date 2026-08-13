@@ -29,7 +29,7 @@ def collapse_graph_by_density(nodes, links, max_density=15, expanded_folders=Non
                     added_parents = True
         all_folders.update(parents)
 
-    sorted_folders = sorted(list(all_folders), key=lambda x: x.count('/'), reverse=True)
+    sorted_folders = sorted(list(all_folders), key=lambda x: x.count("/"), reverse=True)
     if "/" in sorted_folders:
         sorted_folders.remove("/")
         sorted_folders.append("/")
@@ -43,7 +43,9 @@ def collapse_graph_by_density(nodes, links, max_density=15, expanded_folders=Non
     for folder in sorted_folders:
         items = folder_items[folder]
 
-        is_expanded = folder in expanded_folders or any(ef.startswith(folder + "/") for ef in expanded_folders)
+        is_expanded = folder in expanded_folders or any(
+            ef.startswith(folder + "/") for ef in expanded_folders
+        )
 
         if len(items) > max_density and folder != "/":
             mod_id = f"module:{folder}"
@@ -56,7 +58,7 @@ def collapse_graph_by_density(nodes, links, max_density=15, expanded_folders=Non
                 "size": 3000 + len(items) * 100,
                 "in_degree": 0,
                 "out_degree": 0,
-                "children_count": len(items)
+                "children_count": len(items),
             }
 
             def redirect_all(item, target_id):
@@ -85,13 +87,15 @@ def collapse_graph_by_density(nodes, links, max_density=15, expanded_folders=Non
                     if item.get("label") != "Module":
                         node_redirect[item["id"]] = item["id"]
                     # Add strong internal link to the parent module
-                    internal_links.append({
-                        "source": item["id"],
-                        "target": mod_id,
-                        "type": "internal_cluster",
-                        "is_cycle": False,
-                        "weight": 10  # High weight to keep them close
-                    })
+                    internal_links.append(
+                        {
+                            "source": item["id"],
+                            "target": mod_id,
+                            "type": "internal_cluster",
+                            "is_cycle": False,
+                            "weight": 10,  # High weight to keep them close
+                        }
+                    )
                 # The module node itself doesn't need to be bubbled up to the parent folder's items,
                 # because the items themselves will bubble up or remain.
                 # Wait, if we don't bubble the module up, it's just a floating node connected to its children.
@@ -114,7 +118,7 @@ def collapse_graph_by_density(nodes, links, max_density=15, expanded_folders=Non
                     "target": tgt,
                     "type": "depends_on",
                     "is_cycle": False,
-                    "weight": 1
+                    "weight": 1,
                 }
             else:
                 final_links[edge_id]["weight"] += 1
@@ -126,10 +130,12 @@ def collapse_graph_by_density(nodes, links, max_density=15, expanded_folders=Non
 
     for edge in final_links.values():
         if edge["source"] in final_nodes:
-            final_nodes[edge["source"]]["out_degree"] = final_nodes[edge["source"]].get("out_degree", 0) + edge["weight"]
+            final_nodes[edge["source"]]["out_degree"] = (
+                final_nodes[edge["source"]].get("out_degree", 0) + edge["weight"]
+            )
         if edge["target"] in final_nodes:
-            final_nodes[edge["target"]]["in_degree"] = final_nodes[edge["target"]].get("in_degree", 0) + edge["weight"]
+            final_nodes[edge["target"]]["in_degree"] = (
+                final_nodes[edge["target"]].get("in_degree", 0) + edge["weight"]
+            )
 
     return {"nodes": list(final_nodes.values()), "links": list(final_links.values())}
-
-

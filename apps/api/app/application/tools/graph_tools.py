@@ -9,7 +9,9 @@ from app.infrastructure.db.models import GraphEdgeModel, GraphNodeModel
 
 
 class BlastRadiusArgs(BaseModel):
-    file_path: str = Field(..., description="La ruta relativa del archivo en el repositorio (ej. 'src/main.ts').")
+    file_path: str = Field(
+        ..., description="La ruta relativa del archivo en el repositorio (ej. 'src/main.ts')."
+    )
 
 
 async def get_file_blast_radius(session: AsyncSession, project_id: UUID, file_path: str) -> dict:
@@ -19,8 +21,7 @@ async def get_file_blast_radius(session: AsyncSession, project_id: UUID, file_pa
     """
     # Find the node
     node_stmt = select(GraphNodeModel).where(
-        GraphNodeModel.project_id == project_id,
-        GraphNodeModel.file_path == file_path
+        GraphNodeModel.project_id == project_id, GraphNodeModel.file_path == file_path
     )
     result = await session.execute(node_stmt)
     node = result.scalars().first()
@@ -32,27 +33,23 @@ async def get_file_blast_radius(session: AsyncSession, project_id: UUID, file_pa
 
     # In-degree (files that import this node)
     in_degree_stmt = select(func.count(GraphEdgeModel.target_id)).where(
-        GraphEdgeModel.project_id == project_id,
-        GraphEdgeModel.target_id == node_id
+        GraphEdgeModel.project_id == project_id, GraphEdgeModel.target_id == node_id
     )
     in_result = await session.execute(in_degree_stmt)
     in_degree = in_result.scalar() or 0
 
     # Out-degree (files that this node imports)
     out_degree_stmt = select(func.count(GraphEdgeModel.source_id)).where(
-        GraphEdgeModel.project_id == project_id,
-        GraphEdgeModel.source_id == node_id
+        GraphEdgeModel.project_id == project_id, GraphEdgeModel.source_id == node_id
     )
     out_result = await session.execute(out_degree_stmt)
     out_degree = out_result.scalar() or 0
 
     # Find who imports this (target_id = node_id, we want the source files)
-    importers_stmt = select(GraphNodeModel.file_path).join(
-        GraphEdgeModel,
-        GraphEdgeModel.source_id == GraphNodeModel.id
-    ).where(
-        GraphEdgeModel.project_id == project_id,
-        GraphEdgeModel.target_id == node_id
+    importers_stmt = (
+        select(GraphNodeModel.file_path)
+        .join(GraphEdgeModel, GraphEdgeModel.source_id == GraphNodeModel.id)
+        .where(GraphEdgeModel.project_id == project_id, GraphEdgeModel.target_id == node_id)
     )
     importers_result = await session.execute(importers_stmt)
     importers = importers_result.scalars().all()
@@ -61,5 +58,5 @@ async def get_file_blast_radius(session: AsyncSession, project_id: UUID, file_pa
         "file_path": file_path,
         "in_degree": in_degree,
         "out_degree": out_degree,
-        "importers": list(importers)
+        "importers": list(importers),
     }

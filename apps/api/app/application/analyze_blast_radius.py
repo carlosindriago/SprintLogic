@@ -77,19 +77,19 @@ class AnalyzeBlastRadiusUseCase:
             layer = layers[depth]
 
             if layer["direct_impact"]:
-                xml_lines.append('    <direct_impact>')
+                xml_lines.append("    <direct_impact>")
                 for impact in sorted(layer["direct_impact"]):
-                    xml_lines.append(f'      {impact}')
-                xml_lines.append('    </direct_impact>')
+                    xml_lines.append(f"      {impact}")
+                xml_lines.append("    </direct_impact>")
 
             if layer["api_impact"]:
-                xml_lines.append('    <api_impact>')
+                xml_lines.append("    <api_impact>")
                 for impact in sorted(layer["api_impact"]):
-                    xml_lines.append(f'      {impact}')
-                xml_lines.append('    </api_impact>')
+                    xml_lines.append(f"      {impact}")
+                xml_lines.append("    </api_impact>")
 
-            xml_lines.append('  </impact_layer>')
+            xml_lines.append("  </impact_layer>")
 
-        xml_lines.append('</blast_radius>')
+        xml_lines.append("</blast_radius>")
 
         return "\n".join(xml_lines)

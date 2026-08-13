@@ -14,9 +14,10 @@ class SQLAlchemyGraphRepository(GraphRepository):
 
     async def save_nodes(self, nodes: list[GraphNode]) -> None:
         import asyncio
+
         batch_size = 5000
         for i in range(0, len(nodes), batch_size):
-            batch = nodes[i:i + batch_size]
+            batch = nodes[i : i + batch_size]
             for node in batch:
                 node_model = GraphNodeModel(
                     id=node.id,
@@ -34,9 +35,10 @@ class SQLAlchemyGraphRepository(GraphRepository):
 
     async def save_edges(self, edges: list[GraphEdge]) -> None:
         import asyncio
+
         batch_size = 5000
         for i in range(0, len(edges), batch_size):
-            batch = edges[i:i + batch_size]
+            batch = edges[i : i + batch_size]
             for edge in batch:
                 edge_model = GraphEdgeModel(
                     project_id=edge.project_id,
@@ -64,9 +66,14 @@ class SQLAlchemyGraphRepository(GraphRepository):
         models = result.scalars().all()
         return [
             GraphNode(
-                id=m.id, project_id=m.project_id, label=m.label, name=m.name,
-                file_path=m.file_path, meta_data=m.meta_data or "{}",
-                file_size=m.file_size, loc=m.loc,
+                id=m.id,
+                project_id=m.project_id,
+                label=m.label,
+                name=m.name,
+                file_path=m.file_path,
+                meta_data=m.meta_data or "{}",
+                file_size=m.file_size,
+                loc=m.loc,
             )
             for m in models
         ]
@@ -112,7 +119,7 @@ class SQLAlchemyGraphRepository(GraphRepository):
                 "initial_node_id": target_node_id,
                 "project_id": str(project_id),
                 "max_depth": max_depth,
-            }
+            },
         )
 
         rows = result.fetchall()

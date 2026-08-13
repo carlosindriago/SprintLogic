@@ -52,6 +52,7 @@ class ScanLocalRepository:
         saved_project = await self.repository.save_project(project)
         return saved_project
 
+
 from uuid import UUID
 
 from app.infrastructure.repositories.graph_repository import SQLAlchemyGraphRepository
@@ -62,13 +63,22 @@ class ScanCodebaseUseCase:
     Refactorizado: El Caso de Uso ahora es 100% agnóstico del File System.
     La Inyección de Dependencias elimina el acoplamiento con la infraestructura local.
     """
-    def __init__(self, provider: CodebaseProvider, parser: ASTParserService, event_bus: EventBus, graph_repo: SQLAlchemyGraphRepository):
+
+    def __init__(
+        self,
+        provider: CodebaseProvider,
+        parser: ASTParserService,
+        event_bus: EventBus,
+        graph_repo: SQLAlchemyGraphRepository,
+    ):
         self.provider = provider
         self.parser = parser
         self.event_bus = event_bus
         self.graph_repo = graph_repo
 
-    async def execute(self, project_id: UUID, cancel_token: asyncio.Event | None = None, project_path: str = ""):
+    async def execute(
+        self, project_id: UUID, cancel_token: asyncio.Event | None = None, project_path: str = ""
+    ):
         topic = f"scan:{project_id}"
 
         try:
@@ -78,18 +88,22 @@ class ScanCodebaseUseCase:
             file_imports: dict[str, set[str]] = {}
             file_endpoints: dict[str, set[str]] = {}
 
-            extension_filter = ['.ts', '.tsx', '.py', '.java', '.php', '.go']
+            extension_filter = [".ts", ".tsx", ".py", ".java", ".php", ".go"]
             discovered = self.provider.discover(extension_filter)
             total_files = len(discovered)
 
-            await self.event_bus.publish(topic, {
-                "type": "discovering",
-                "total": total_files,
-            })
+            await self.event_bus.publish(
+                topic,
+                {
+                    "type": "discovering",
+                    "total": total_files,
+                },
+            )
 
             birth_dates: dict[str, int] = {}
             if project_path:
                 from app.infrastructure.parser.ast_parser import fetch_git_birth_dates
+
                 birth_dates = await fetch_git_birth_dates(project_path)
 
             async for logical_path, content in self.provider.get_source_files(extension_filter):
@@ -103,7 +117,7 @@ class ScanCodebaseUseCase:
 
                 try:
                     nodes, edges, imports, api_endpoints = extract_nodes_from_code(
-                        project_id, logical_path, content.encode('utf-8'), ext, birth_dates
+                        project_id, logical_path, content.encode("utf-8"), ext, birth_dates
                     )
                     all_nodes.extend(nodes)
                     all_edges.extend(edges)
@@ -120,9 +134,9 @@ class ScanCodebaseUseCase:
                         "type": "progress",
                         "parsed": parsed_count,
                         "total": total_files,
-                        "file": logical_path
+                        "file": logical_path,
                     },
-                    throttle_ms=100
+                    throttle_ms=100,
                 )
 
                 # Force yield to the event loop to keep SSE connection alive
@@ -139,9 +153,8 @@ class ScanCodebaseUseCase:
             all_edges.extend(resolved_edges)
 
             from app.infrastructure.parser.ast_parser import resolve_api_edges
-            api_edges = await asyncio.to_thread(
-                resolve_api_edges, project_id, file_endpoints
-            )
+
+            api_edges = await asyncio.to_thread(resolve_api_edges, project_id, file_endpoints)
             all_edges.extend(api_edges)
 
             deduped_edges = await asyncio.to_thread(dedupe_edges, all_edges)
@@ -164,13 +177,11 @@ class ScanCodebaseUseCase:
                     "type": "completed",
                     "parsed": parsed_count,
                     "total": total_files,
-                    "project_id": str(project_id)
-                }
+                    "project_id": str(project_id),
+                },
             )
         except Exception as e:
             _logger.error(f"Scan failed for project {project_id} with error: {e}", exc_info=True)
-            await self.event_bus.publish(topic, {
-                "type": "error",
-                "message": f"Scan failed: {str(e)}"
-            })
-
+            await self.event_bus.publish(
+                topic, {"type": "error", "message": f"Scan failed: {str(e)}"}
+            )

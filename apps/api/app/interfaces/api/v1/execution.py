@@ -61,7 +61,9 @@ async def execute_agent(
     provider, model_name, _ = await resolve_tool_model(session, "chat")
     actual_model = tool_model_label(provider, model_name)
 
-    api_key = CredentialManager.get_api_key(f"sprintlogic_{provider}") or CredentialManager.get_api_key(provider)
+    api_key = CredentialManager.get_api_key(
+        f"sprintlogic_{provider}"
+    ) or CredentialManager.get_api_key(provider)
     if not api_key:
         api_key = CredentialManager.get_api_key("sprintlogic_openrouter")
         if not api_key:

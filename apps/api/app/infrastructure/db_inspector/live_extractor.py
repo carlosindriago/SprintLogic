@@ -85,7 +85,9 @@ def extract_schema_from_live_db(db_url: str) -> SchemaIR:
                     raw_cols_list = idx.get("column_names") or []
                     idx_cols = ", ".join([str(c) for c in raw_cols_list if c is not None])
                     unique_str = "UNIQUE " if idx.get("unique") else ""
-                    indexes_list.append(f"CREATE {unique_str}INDEX {idx_name} ON {table_name} ({idx_cols})")
+                    indexes_list.append(
+                        f"CREATE {unique_str}INDEX {idx_name} ON {table_name} ({idx_cols})"
+                    )
 
                 tables_list.append(
                     TableIR(

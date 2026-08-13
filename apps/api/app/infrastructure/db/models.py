@@ -69,7 +69,9 @@ class ProjectModel(Base):
     )
     cached_schema: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     schema_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    schema_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    schema_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
 
 class SchemaDraftModel(Base):
@@ -88,6 +90,7 @@ class SchemaDraftModel(Base):
         DateTime(timezone=True), nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
     )
 
+
 class AIMemoryModel(Base):
     __tablename__ = "ai_memories"
 
@@ -103,6 +106,7 @@ class AIMemoryModel(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow, index=True
     )
+
 
 class OmniNoteModel(Base):
     __tablename__ = "omni_notes"
@@ -129,6 +133,7 @@ class ContextSnippetModel(Base):
     # The actual vectors will be stored in a raw sqlite-vec virtual table `vec_context_snippets`
     # linked by rowid = ContextSnippetModel.id
 
+
 class DeveloperInsightModel(Base):
     __tablename__ = "developer_insights"
 
@@ -138,6 +143,7 @@ class DeveloperInsightModel(Base):
     solucion: Mapped[str] = mapped_column(String, nullable=False)
     snippet_corregido: Mapped[str | None] = mapped_column(String, nullable=True)
     embedding_blob: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+
 
 class ASTNodeMapModel(Base):
     __tablename__ = "ast_node_map"
@@ -150,13 +156,13 @@ class ASTNodeMapModel(Base):
     fqn: Mapped[str] = mapped_column(String(1024), nullable=False, index=True)
     node_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
 
+
 class ASTVectorModel(Base):
     __tablename__ = "vec_ast_nodes"
 
     node_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
     content: Mapped[str] = mapped_column(String, nullable=False)
     embedding: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
-
 
 
 class ConversationModel(Base):
@@ -170,6 +176,7 @@ class ConversationModel(Base):
     is_active: Mapped[bool] = mapped_column(default=True)
     insight_extracted: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
 
 class MessageModel(Base):
     __tablename__ = "messages"
@@ -200,7 +207,10 @@ class AnalysisReportModel(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=datetime.utcnow
     )
-    is_deleted: Mapped[bool] = mapped_column(Boolean, server_default="0", default=False, nullable=False)
+    is_deleted: Mapped[bool] = mapped_column(
+        Boolean, server_default="0", default=False, nullable=False
+    )
+
 
 from sqlalchemy import BigInteger
 
@@ -216,7 +226,6 @@ class SearchIndexModel(Base):
     line: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
-
 class ProjectMemoryModel(Base):
     __tablename__ = "project_memories"
 
@@ -227,7 +236,6 @@ class ProjectMemoryModel(Base):
     memory_content: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
-
 class AdrChunkModel(Base):
     __tablename__ = "adr_chunks"
 
@@ -236,7 +244,6 @@ class AdrChunkModel(Base):
     file_hash: Mapped[str] = mapped_column(String, nullable=False)
     chunk_text: Mapped[str] = mapped_column(String, nullable=False)
     breadcrumbs: Mapped[str | None] = mapped_column(String, nullable=True)
-
 
 
 class TelemetryPingModel(Base):
@@ -250,6 +257,7 @@ class TelemetryPingModel(Base):
     thinking_ms: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     coding_ms: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     testing_ms: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+
 
 class DaemonLockModel(Base):
     __tablename__ = "daemon_locks"
@@ -375,6 +383,7 @@ class CustomLLMProviderModel(Base):
     keyring_service_id: Mapped[str] = mapped_column(String(255), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 
+
 class ToolModelMappingModel(Base):
     __tablename__ = "tool_model_mappings"
 
@@ -384,6 +393,7 @@ class ToolModelMappingModel(Base):
     model_name: Mapped[str] = mapped_column(String(255), nullable=False)
     fallback_models: Mapped[list | dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
 
 class UniversalBookmarkModel(Base):
     __tablename__ = "universal_bookmarks"

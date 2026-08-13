@@ -1,4 +1,3 @@
-
 from typing import Any, cast
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -49,7 +48,13 @@ Nombre del proyecto: {project_name}
 
 {skeletons_xml}
 """
-IRON_PROMPT_V5_VARS = ["project_path", "project_name", "project_context_xml", "metrics_xml", "skeletons_xml"]
+IRON_PROMPT_V5_VARS = [
+    "project_path",
+    "project_name",
+    "project_context_xml",
+    "metrics_xml",
+    "skeletons_xml",
+]
 
 PHANTOM_EXTRACTOR_ID = "phantom_extractor"
 PHANTOM_EXTRACTOR_CONTENT = """Extract actionable Kanban tickets from the report below.
@@ -126,140 +131,141 @@ REGLAS ESTRICTAS PARA LA GENERACIÓN:
 """
 TEST_GENERATOR_VARS = ["framework", "file_path", "source_code"]
 
+
 async def initialize_prompts(session: AsyncSession):
     prompts_to_init: list[dict[str, Any]] = [
         {
             "id": IRON_PROMPT_V5_ID,
             "description": "Golden prompt for architectural onboarding (V5)",
             "content": IRON_PROMPT_V5_CONTENT,
-            "required_variables": IRON_PROMPT_V5_VARS
+            "required_variables": IRON_PROMPT_V5_VARS,
         },
         {
             "id": PHANTOM_EXTRACTOR_ID,
             "description": "Phantom Extractor for Kanban tickets",
             "content": PHANTOM_EXTRACTOR_CONTENT,
-            "required_variables": PHANTOM_EXTRACTOR_VARS
+            "required_variables": PHANTOM_EXTRACTOR_VARS,
         },
         {
             "id": CODE_COACH_ID,
             "description": "Code Coach for snippet evaluation",
             "content": CODE_COACH_CONTENT,
-            "required_variables": CODE_COACH_VARS
+            "required_variables": CODE_COACH_VARS,
         },
         {
             "id": AI_AGENT_BASE_ID,
             "description": "Base prompt for AI Agent (El Crisol)",
             "content": AI_AGENT_BASE_CONTENT,
-            "required_variables": AI_AGENT_BASE_VARS
+            "required_variables": AI_AGENT_BASE_VARS,
         },
         {
             "id": INSIGHT_WORKER_ID,
             "description": "Insight Worker prompt for memory consolidation",
             "content": INSIGHT_WORKER_CONTENT,
-            "required_variables": INSIGHT_WORKER_VARS
+            "required_variables": INSIGHT_WORKER_VARS,
         },
         {
             "id": PLANNING_STUDIO_ID,
             "description": "Planning Studio AI assistant prompt",
             "content": PLANNING_STUDIO_CONTENT,
-            "required_variables": PLANNING_STUDIO_VARS
+            "required_variables": PLANNING_STUDIO_VARS,
         },
         {
             "id": CHAT_TITLE_GEN_ID,
             "description": "Chat title generator prompt",
             "content": CHAT_TITLE_GEN_CONTENT,
-            "required_variables": CHAT_TITLE_GEN_VARS
+            "required_variables": CHAT_TITLE_GEN_VARS,
         },
         {
             "id": CHAT_SENSEI_ID,
             "description": "Chat Sensei mode architectural prompt",
             "content": CHAT_SENSEI_CONTENT,
-            "required_variables": CHAT_SENSEI_VARS
+            "required_variables": CHAT_SENSEI_VARS,
         },
         {
             "id": TICKET_MENTOR_ID,
             "description": "Ticket Mentor prompt",
             "content": TICKET_MENTOR_CONTENT,
-            "required_variables": TICKET_MENTOR_VARS
+            "required_variables": TICKET_MENTOR_VARS,
         },
         {
             "id": AUTO_FIX_ID,
             "description": "Auto fix refactor prompt",
             "content": AUTO_FIX_CONTENT,
-            "required_variables": AUTO_FIX_VARS
+            "required_variables": AUTO_FIX_VARS,
         },
         {
             "id": CONTEXTUAL_MENTOR_ID,
             "description": "Contextual mentor prompt for anti-patterns",
             "content": CONTEXTUAL_MENTOR_CONTENT,
-            "required_variables": CONTEXTUAL_MENTOR_VARS
+            "required_variables": CONTEXTUAL_MENTOR_VARS,
         },
         {
             "id": DB_ARCHITECT_AUDITOR_ID,
             "description": "Database Studio AI DB Architect Auditor",
             "content": DB_ARCHITECT_AUDITOR_CONTENT,
-            "required_variables": DB_ARCHITECT_AUDITOR_VARS
+            "required_variables": DB_ARCHITECT_AUDITOR_VARS,
         },
         {
             "id": ORM_SCHEMA_EXTRACTOR_ID,
             "description": "Database Studio ORM Schema Extractor",
             "content": ORM_SCHEMA_EXTRACTOR_CONTENT,
-            "required_variables": ORM_SCHEMA_EXTRACTOR_VARS
+            "required_variables": ORM_SCHEMA_EXTRACTOR_VARS,
         },
         {
             "id": TEST_GENERATOR_PROMPT_ID,
             "description": "Test Studio AI Test Generator",
             "content": TEST_GENERATOR_CONTENT,
-            "required_variables": TEST_GENERATOR_VARS
+            "required_variables": TEST_GENERATOR_VARS,
         },
         {
             "id": TEST_AUDIT_MENTOR_PROMPT_ID,
             "description": "Test Studio QA Mentor Prompt",
             "content": TEST_AUDIT_MENTOR_CONTENT,
-            "required_variables": TEST_AUDIT_MENTOR_VARS
+            "required_variables": TEST_AUDIT_MENTOR_VARS,
         },
         {
             "id": DOC_RAG_PROMPT_ID,
             "description": "Document Studio RAG Mentor",
             "content": DOC_RAG_PROMPT_CONTENT,
-            "required_variables": DOC_RAG_PROMPT_VARS
+            "required_variables": DOC_RAG_PROMPT_VARS,
         },
         {
             "id": AUTO_DOC_PROMPT_ID,
             "description": "Document Studio Auto-Doc Mentor",
             "content": AUTO_DOC_PROMPT_CONTENT,
-            "required_variables": AUTO_DOC_PROMPT_VARS
+            "required_variables": AUTO_DOC_PROMPT_VARS,
         },
         {
             "id": DOC_AUDIT_PROMPT_ID,
             "description": "Document Studio Audit Mentor",
             "content": DOC_AUDIT_PROMPT_CONTENT,
-            "required_variables": DOC_AUDIT_PROMPT_VARS
+            "required_variables": DOC_AUDIT_PROMPT_VARS,
         },
         {
             "id": EXEC_MODE_SURGEON_ID,
             "description": "Execution Room — Modo Cirujano",
             "content": EXEC_MODE_SURGEON_CONTENT,
-            "required_variables": EXEC_MODE_SURGEON_VARS
+            "required_variables": EXEC_MODE_SURGEON_VARS,
         },
         {
             "id": EXEC_MODE_PAIR_PROGRAMMING_ID,
             "description": "Execution Room — Modo Socrático (Pair Programming)",
             "content": EXEC_MODE_PAIR_PROGRAMMING_CONTENT,
-            "required_variables": EXEC_MODE_PAIR_PROGRAMMING_VARS
+            "required_variables": EXEC_MODE_PAIR_PROGRAMMING_VARS,
         },
         {
             "id": EXEC_MODE_WHITEBOARD_ID,
             "description": "Execution Room — Modo Pizarra",
             "content": EXEC_MODE_WHITEBOARD_CONTENT,
-            "required_variables": EXEC_MODE_WHITEBOARD_VARS
+            "required_variables": EXEC_MODE_WHITEBOARD_VARS,
         },
         {
             "id": GRAPH_NODE_INSIGHT_ID,
             "description": "Insight de Nodo del Grafo — Resumen ejecutivo de 3 líneas",
             "content": GRAPH_NODE_INSIGHT_CONTENT,
-            "required_variables": GRAPH_NODE_INSIGHT_VARS
-        }
+            "required_variables": GRAPH_NODE_INSIGHT_VARS,
+        },
     ]
 
     for p in prompts_to_init:
@@ -288,6 +294,7 @@ async def initialize_prompts(session: AsyncSession):
 
     await session.commit()
 
+
 async def get_prompt_async(session: AsyncSession, prompt_id: str) -> PromptRegistryModel | None:
     if prompt_id in _prompt_cache:
         return _prompt_cache[prompt_id]
@@ -298,11 +305,15 @@ async def get_prompt_async(session: AsyncSession, prompt_id: str) -> PromptRegis
         _prompt_cache[prompt_id] = prompt
     return prompt
 
+
 def get_prompt(session: AsyncSession | None, prompt_id: str) -> PromptRegistryModel | None:
     """Synchronous read for places without session"""
     return _prompt_cache.get(prompt_id)
 
-async def update_prompt(session: AsyncSession, prompt_id: str, new_content: str, required_variables: list) -> PromptRegistryModel:
+
+async def update_prompt(
+    session: AsyncSession, prompt_id: str, new_content: str, required_variables: list
+) -> PromptRegistryModel:
     result = await session.execute(select(PromptRegistryModel).filter_by(id=prompt_id))
     prompt = result.scalars().first()
     if not prompt:
@@ -315,9 +326,11 @@ async def update_prompt(session: AsyncSession, prompt_id: str, new_content: str,
     _prompt_cache[prompt_id] = prompt
     return prompt
 
+
 async def get_all_prompts(session: AsyncSession) -> list[PromptRegistryModel]:
     result = await session.execute(select(PromptRegistryModel))
     return list(result.scalars().all())
+
 
 async def restore_prompt(session: AsyncSession, prompt_id: str) -> PromptRegistryModel:
     result = await session.execute(select(PromptRegistryModel).filter_by(id=prompt_id))
@@ -379,6 +392,7 @@ async def restore_prompt(session: AsyncSession, prompt_id: str) -> PromptRegistr
     await session.refresh(prompt)
     _prompt_cache[prompt_id] = prompt
     return prompt
+
 
 # --- NEW PROMPTS ---
 
@@ -572,7 +586,13 @@ Contenido:
 4. Si encuentras inconsistencias o cosas que faltan, listalas claramente.
 5. Usa un tono directo, técnico, y constructivo. No halagues en exceso, ve al grano.
 """
-DOC_AUDIT_PROMPT_VARS = ["project_tree", "project_manifests", "rag_context", "file_path", "doc_content"]
+DOC_AUDIT_PROMPT_VARS = [
+    "project_tree",
+    "project_manifests",
+    "rag_context",
+    "file_path",
+    "doc_content",
+]
 
 TEST_AUDIT_MENTOR_PROMPT_ID = "test_audit_mentor_prompt"
 TEST_AUDIT_MENTOR_CONTENT = """Eres un Staff QA Engineer y un Mentor Técnico.
@@ -610,6 +630,6 @@ EXEC_MODE_WHITEBOARD_ID = "exec_mode_whiteboard"
 EXEC_MODE_WHITEBOARD_CONTENT = """Eres un Arquitecto Principal. Nuestra meta es planificar en una pizarra. No escribas código de producción. Devuelve diagramas de flujo (Mermaid), pseudocódigo y estructuras de alto nivel."""
 EXEC_MODE_WHITEBOARD_VARS: list[str] = []
 
+
 def init_doc_prompts():
     pass
-

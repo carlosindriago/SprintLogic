@@ -758,7 +758,9 @@ class LocalGitGateway:
         output = await self._run_command(repo_path, "commit", "-m", message)
         return {"status": "committed", "message": message, "output": output.strip()}
 
-    async def discard_changes(self, repo_path: str, target_branch: str | None = None) -> dict[str, str]:
+    async def discard_changes(
+        self, repo_path: str, target_branch: str | None = None
+    ) -> dict[str, str]:
         await self._run_command(repo_path, "reset", "--hard", "HEAD")
         await self._run_command(repo_path, "clean", "-fd")
         if target_branch:

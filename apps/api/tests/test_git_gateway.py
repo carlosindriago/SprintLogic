@@ -198,4 +198,3 @@ async def test_get_status_with_files(mock_exec, gateway):
     assert result["is_dirty"] is True
     assert "apps/web/src/App.tsx" in result["modified_files"]
     assert "new_file.txt" in result["untracked_files"]
-

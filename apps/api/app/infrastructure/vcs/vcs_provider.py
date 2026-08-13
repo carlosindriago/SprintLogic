@@ -13,7 +13,9 @@ class VCSProvider(ABC):
         pass
 
     @abstractmethod
-    async def create_pull_request(self, project_path: str, title: str, head: str, base: str, body: str) -> dict[str, Any]:
+    async def create_pull_request(
+        self, project_path: str, title: str, head: str, base: str, body: str
+    ) -> dict[str, Any]:
         """Create a new pull request."""
         pass
 

@@ -1,7 +1,9 @@
 from pathlib import Path
 
 
-def apply_patch(project_root: str, file_path: str, search_content: str, replace_content: str) -> bool:
+def apply_patch(
+    project_root: str, file_path: str, search_content: str, replace_content: str
+) -> bool:
     """
     Applies a patch to a file. Validates the path to prevent traversal.
     """
