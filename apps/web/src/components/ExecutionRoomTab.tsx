@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import { Send, Download, Play, Zap, GraduationCap, Layout, Settings2, CheckCircle2, ClipboardCopy, FileInput, Save, FileCode2, Plus } from "lucide-react";
+import { Send, Download, Play, Zap, GraduationCap, Layout, Settings2, CheckCircle2, ClipboardCopy, FileInput, Save, FileCode2, Plus, Trash2 } from "lucide-react";
 import Editor, { DiffEditor } from "@monaco-editor/react";
 import { EditorTab } from "@/components/editor/EditorTab";
 import type { GraphNode } from "@/types";
@@ -146,12 +146,19 @@ export default function ExecutionRoomTab({ data }: ExecutionRoomTabProps) {
           if (task.subtasks && task.subtasks.length > 0) {
             subtasksStr = `\n\n**Subtareas:**\n${task.subtasks.map((st: any) => `- [ ] ${st.title}`).join('\n')}`;
           }
-          setMessages([
-            {
-              role: "assistant",
-              content: `👋 **Bienvenido al Quirófano de SprintLogic**\n\n🎯 **Ejecutando Ticket:** ${task.title} (Rama: ${task.branch_name || 'N/A'})\n\n**Descripción:**\n${task.description}${subtasksStr}\n\nSeleccioná un modo de asistencia arriba para comenzar.`,
-            },
-          ]);
+          
+          const defaultWelcomeMsg = `👋 **Bienvenido al Quirófano de SprintLogic**\n\n🎯 **Ejecutando Ticket:** ${task.title} (Rama: ${task.branch_name || 'N/A'})\n\n**Descripción:**\n${task.description}${subtasksStr}\n\nSeleccioná un modo de asistencia arriba para comenzar.`;
+          
+          const storedMessages = localStorage.getItem(`sprintlogic_chat_${ticketId}`);
+          if (storedMessages) {
+            try {
+              setMessages(JSON.parse(storedMessages));
+            } catch (e) {
+              setMessages([{ role: "assistant", content: defaultWelcomeMsg }]);
+            }
+          } else {
+            setMessages([{ role: "assistant", content: defaultWelcomeMsg }]);
+          }
         }
       } catch (err) {
         console.error("Failed to load ticket", err);
@@ -159,6 +166,30 @@ export default function ExecutionRoomTab({ data }: ExecutionRoomTabProps) {
     };
     loadTicket();
   }, [projectId, ticketId]);
+
+  useEffect(() => {
+    if (ticketId && messages.length > 0) {
+      localStorage.setItem(`sprintlogic_chat_${ticketId}`, JSON.stringify(messages));
+    }
+  }, [messages, ticketId]);
+
+  const clearChatHistory = () => {
+    if (window.confirm("¿Seguro que deseas borrar el historial del chat?")) {
+      if (ticketId) {
+        localStorage.removeItem(`sprintlogic_chat_${ticketId}`);
+      }
+      
+      let subtasksStr = "";
+      if (ticket?.subtasks && ticket.subtasks.length > 0) {
+        subtasksStr = `\n\n**Subtareas:**\n${ticket.subtasks.map((st: any) => `- [ ] ${st.title}`).join('\n')}`;
+      }
+      
+      setMessages([{
+        role: "assistant",
+        content: `👋 **Bienvenido al Quirófano de SprintLogic**\n\n🎯 **Ejecutando Ticket:** ${ticket?.title || ''} (Rama: ${ticket?.branch_name || 'N/A'})\n\n**Descripción:**\n${ticket?.description || ''}${subtasksStr}\n\nSeleccioná un modo de asistencia arriba para comenzar.`
+      }]);
+    }
+  };
 
   // Fetch codebase context
   useEffect(() => {
@@ -527,11 +558,22 @@ Genera tu respuesta estrictamente estructurada de la siguiente manera:
                   >
                     <div className="font-semibold text-[10px] mb-1 opacity-60 uppercase tracking-wider flex items-center justify-between">
                       <span>{msg.role === "user" ? "Desarrollador" : "Agente Quirúrgico"}</span>
-                      {msg.role === "assistant" && (
-                        <span className={`text-[9px] px-1 rounded ${activeModeConfig.bgColor} ${activeModeConfig.color}`}>
-                          {activeModeConfig.title}
-                        </span>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {msg.role === "assistant" && (
+                          <button
+                            onClick={() => navigator.clipboard.writeText(msg.content)}
+                            className="hover:text-blue-400 transition-colors cursor-pointer"
+                            title="Copiar mensaje"
+                          >
+                            <ClipboardCopy className="w-3 h-3" />
+                          </button>
+                        )}
+                        {msg.role === "assistant" && (
+                          <span className={`text-[9px] px-1 rounded ${activeModeConfig.bgColor} ${activeModeConfig.color}`}>
+                            {activeModeConfig.title}
+                          </span>
+                        )}
+                      </div>
                     </div>
                     <div className="prose prose-invert prose-xs max-w-none break-words overflow-hidden">
                       <ReactMarkdown
@@ -628,6 +670,13 @@ Genera tu respuesta estrictamente estructurada de la siguiente manera:
                     aria-label="Enviar instrucción"
                   >
                     <Send className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={clearChatHistory}
+                    className="text-zinc-500 hover:text-red-400 p-2 rounded-md transition-colors border border-transparent hover:border-red-900/50 hover:bg-red-900/20 flex-shrink-0"
+                    title="Borrar historial del chat"
+                  >
+                    <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
               </div>
