@@ -3,6 +3,7 @@
 Each tool in the system can optionally override the global DEFAULT_LLM_MODEL.
 If no override is stored, the tool falls back to DEFAULT_LLM_MODEL.
 """
+
 import logging
 from typing import TypedDict
 
@@ -100,9 +101,7 @@ async def resolve_default_model(session: AsyncSession) -> tuple[str, str, list[s
     2. DEFAULT_LLM_MODEL env var
     """
     result = await session.execute(
-        select(ToolModelMappingModel).where(
-            ToolModelMappingModel.tool_name == "__default__"
-        )
+        select(ToolModelMappingModel).where(ToolModelMappingModel.tool_name == "__default__")
     )
     mapping = result.scalars().first()
     if mapping is not None:
@@ -133,9 +132,7 @@ async def get_tool_model(
     the global DEFAULT_LLM_MODEL (or its own fallback).
     """
     result = await session.execute(
-        select(ToolModelMappingModel).where(
-            ToolModelMappingModel.tool_name == tool_name
-        )
+        select(ToolModelMappingModel).where(ToolModelMappingModel.tool_name == tool_name)
     )
     mapping = result.scalars().first()
     if mapping is None:
@@ -184,7 +181,12 @@ async def list_tool_mappings(session: AsyncSession) -> dict:
     stored = result.scalars().all()
 
     stored_map: dict[str, tuple[str, str, list[str] | None]] = {
-        m.tool_name: (m.provider_id, m.model_name, m.fallback_models) for m in stored  # type: ignore
+        m.tool_name: (
+            m.provider_id,
+            m.model_name,
+            m.fallback_models if isinstance(m.fallback_models, list) else None,
+        )
+        for m in stored
     }
 
     default_provider, default_model_id, _ = await resolve_default_model(session)
@@ -196,19 +198,21 @@ async def list_tool_mappings(session: AsyncSession) -> dict:
             continue
 
         entry = stored_map.get(tool_name)
-        tools.append({
-            "tool_name": tool_name,
-            "display_name": tool_def["display_name"],
-            "description": tool_def["description"],
-            "provider_id": entry[0] if entry else None,
-            "model_name": entry[1] if entry else None,
-            "fallback_models": entry[2] if entry else None,
-            "is_overridden": entry is not None,
-            "default_provider": default_provider,
-            "default_model": default_model_id,
-            "effective_provider": entry[0] if entry else default_provider,
-            "effective_model": entry[1] if entry else default_model_id,
-        })
+        tools.append(
+            {
+                "tool_name": tool_name,
+                "display_name": tool_def["display_name"],
+                "description": tool_def["description"],
+                "provider_id": entry[0] if entry else None,
+                "model_name": entry[1] if entry else None,
+                "fallback_models": entry[2] if entry else None,
+                "is_overridden": entry is not None,
+                "default_provider": default_provider,
+                "default_model": default_model_id,
+                "effective_provider": entry[0] if entry else default_provider,
+                "effective_model": entry[1] if entry else default_model_id,
+            }
+        )
 
     return {
         "tools": tools,
@@ -232,9 +236,7 @@ async def upsert_tool_mapping(
     import uuid as _uuid
 
     result = await session.execute(
-        select(ToolModelMappingModel).where(
-            ToolModelMappingModel.tool_name == tool_name
-        )
+        select(ToolModelMappingModel).where(ToolModelMappingModel.tool_name == tool_name)
     )
     existing = result.scalars().first()
 
@@ -260,9 +262,7 @@ async def upsert_tool_mapping(
 async def delete_tool_mapping(session: AsyncSession, tool_name: str) -> bool:
     """Remove a tool override so it falls back to DEFAULT_LLM_MODEL. Returns True if deleted."""
     result = await session.execute(
-        select(ToolModelMappingModel).where(
-            ToolModelMappingModel.tool_name == tool_name
-        )
+        select(ToolModelMappingModel).where(ToolModelMappingModel.tool_name == tool_name)
     )
     mapping = result.scalars().first()
     if mapping is None:

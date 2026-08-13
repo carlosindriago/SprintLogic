@@ -11,14 +11,18 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.pool import NullPool
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite+aiosqlite:///sprintlogic.db")
+
 
 class Base(DeclarativeBase):
     pass
 
+
 _engine: AsyncEngine | None = None
 _sessionmaker: async_sessionmaker[AsyncSession] | None = None
+
 
 def get_engine() -> AsyncEngine:
     global _engine
@@ -26,7 +30,8 @@ def get_engine() -> AsyncEngine:
         _engine = create_async_engine(
             DATABASE_URL,
             echo=False,
-            connect_args={"timeout": 30.0} if "sqlite" in DATABASE_URL else {}
+            poolclass=NullPool if "sqlite" in DATABASE_URL else None,
+            connect_args={"timeout": 30.0} if "sqlite" in DATABASE_URL else {},
         )
 
         @event.listens_for(_engine.sync_engine, "connect")
@@ -37,7 +42,9 @@ def get_engine() -> AsyncEngine:
                 cursor.execute("PRAGMA synchronous=NORMAL")
                 cursor.execute("PRAGMA busy_timeout=30000")
                 cursor.close()
+
     return _engine
+
 
 def get_sessionmaker() -> async_sessionmaker[AsyncSession]:
     global _sessionmaker
@@ -48,9 +55,11 @@ def get_sessionmaker() -> async_sessionmaker[AsyncSession]:
         )
     return _sessionmaker
 
+
 async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
     sessionmaker = get_sessionmaker()
     async with sessionmaker() as session:
         yield session
+
 
 # init_fts5 has been removed. Migrations are now handled by Alembic.

@@ -4,6 +4,7 @@ Use Case: Analyze Project Graph
 Orchestrates graph extraction, context building, LLM streaming, and report persistence.
 Each private function has exactly one responsibility.
 """
+
 import asyncio
 import json
 import logging
@@ -34,6 +35,7 @@ _TOP_KEY_NODES = 2
 # Private: Graph-level helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _build_file_level_graph(
     filtered_nodes: list,
     filtered_edges: list,
@@ -45,9 +47,7 @@ def _build_file_level_graph(
         file_nodes_dict: abs_path → file node dict
         nx_edges: deduplicated list of {source, target, type} at file level
     """
-    node_file_paths: dict[str, str] = {
-        n.id: os.path.abspath(n.file_path) for n in filtered_nodes
-    }
+    node_file_paths: dict[str, str] = {n.id: os.path.abspath(n.file_path) for n in filtered_nodes}
 
     file_nodes_dict: dict[str, dict] = {}
     for n in filtered_nodes:
@@ -63,7 +63,8 @@ def _build_file_level_graph(
             }
 
     pruned_edges = [
-        e for e in filtered_edges
+        e
+        for e in filtered_edges
         if node_file_paths.get(e.source_id) != node_file_paths.get(e.target_id)
     ]
 
@@ -74,11 +75,13 @@ def _build_file_level_graph(
         tgt = node_file_paths.get(e.target_id)
         if src and tgt and src != tgt and (src, tgt) not in seen:
             seen.add((src, tgt))
-            nx_edges.append({
-                "source": src,
-                "target": tgt,
-                "type": e.type.value if hasattr(e.type, "value") else str(e.type),
-            })
+            nx_edges.append(
+                {
+                    "source": src,
+                    "target": tgt,
+                    "type": e.type.value if hasattr(e.type, "value") else str(e.type),
+                }
+            )
 
     return file_nodes_dict, nx_edges
 
@@ -87,8 +90,10 @@ def _build_file_level_graph(
 # Private: Directory tree helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class _DirNode:
     """Lightweight trie node for directory path decomposition."""
+
     __slots__ = ("children",)
 
     def __init__(self) -> None:
@@ -113,7 +118,9 @@ def _collapse_single_child_nodes(node: _DirNode, current_name: str = "") -> tupl
     return current_name, collapsed
 
 
-def _format_tree_lines(node: _DirNode, prefix: str = "", depth: int = 1, max_depth: int = 3) -> list[str]:
+def _format_tree_lines(
+    node: _DirNode, prefix: str = "", depth: int = 1, max_depth: int = 3
+) -> list[str]:
     """Renders a directory trie as indented text lines."""
     if depth > max_depth:
         return []
@@ -146,6 +153,7 @@ def _build_dir_structure(all_file_paths: set[str], project_path: str) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 # Private: XML context builders
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def _build_top_files_xml(metrics: dict) -> str:
     """Serializes god-object metrics (highest fan-in / fan-out) as XML."""
@@ -277,6 +285,7 @@ def _build_project_context_xml(
 # Private: Persistence helper
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 async def _persist_report(
     project_uuid: object,
     model_id: str,
@@ -300,6 +309,7 @@ async def _persist_report(
 # ─────────────────────────────────────────────────────────────────────────────
 # Use Case
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class AnalyzeProjectGraphUseCase:
     """
@@ -336,13 +346,11 @@ class AnalyzeProjectGraphUseCase:
             project_path = os.path.abspath(self.project.path)  # type: ignore[attr-defined]
 
             filtered_nodes = [
-                n for n in all_nodes
-                if os.path.abspath(n.file_path).startswith(project_path)
+                n for n in all_nodes if os.path.abspath(n.file_path).startswith(project_path)
             ]
             valid_ids = {n.id for n in filtered_nodes}
             filtered_edges = [
-                e for e in all_edges
-                if e.source_id in valid_ids and e.target_id in valid_ids
+                e for e in all_edges if e.source_id in valid_ids and e.target_id in valid_ids
             ]
 
             # 2. Collapse AST graph → file-level graph
@@ -373,8 +381,12 @@ class AnalyzeProjectGraphUseCase:
             )
 
             # 5. Resolve LLM models from DB (single source of truth)
-            resolved_provider, resolved_model, _ = await resolve_tool_model(self.session, "graph_analysis")
-            extractor_provider, extractor_model_id, _ = await resolve_tool_model(self.session, "phantom_extractor")
+            resolved_provider, resolved_model, _ = await resolve_tool_model(
+                self.session, "graph_analysis"
+            )
+            extractor_provider, extractor_model_id, _ = await resolve_tool_model(
+                self.session, "phantom_extractor"
+            )
 
             resolved_model_id = tool_model_label(resolved_provider, resolved_model)
             extractor_model = tool_model_label(extractor_provider, extractor_model_id)

@@ -64,7 +64,7 @@ export default function ActivityBar() {
         <button onClick={() => launchStudio('graph', 'Análisis Gráfico', 'graph')} aria-label="Análisis Gráfico" title="Análisis Gráfico" className="w-10 h-10 rounded-lg mx-auto flex items-center justify-center transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-blue-500 text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800/50">
           <Network className="w-5 h-5" aria-hidden="true" />
         </button>
-        <button onClick={() => launchStudio('kanban', 'Kanban', 'kanban')} aria-label="Kanban" title="Kanban" className="w-10 h-10 rounded-lg mx-auto flex items-center justify-center transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-blue-500 text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800/50">
+        <button onClick={() => launchStudio('kanban', 'Sprint Center', 'kanban')} aria-label="Sprint Center" title="Sprint Center" className="w-10 h-10 rounded-lg mx-auto flex items-center justify-center transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-blue-500 text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800/50">
           <Layout className="w-5 h-5" aria-hidden="true" />
         </button>
         <button onClick={() => launchStudio('git-graph', 'Git Studio', 'git-graph')} aria-label="Git Studio" title="Git Studio" className="w-10 h-10 rounded-lg mx-auto flex items-center justify-center transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-blue-500 text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800/50">

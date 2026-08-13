@@ -4,10 +4,19 @@ export interface Project {
   path: string;
 }
 
+export interface GitFileStatus {
+  path: string;
+  status: 'modified' | 'untracked' | 'staged' | 'deleted' | 'renamed' | 'added';
+}
+
 export interface GitStatus {
   branch: string;
   modified: number;
   untracked: number;
+  is_dirty?: boolean;
+  modified_files?: string[];
+  untracked_files?: string[];
+  files?: GitFileStatus[];
   raw_output?: string;
   error?: string;
 }
@@ -107,14 +116,16 @@ export interface ProjectFlowInsights {
 export interface ProjectRepoInsights {
   tasks_by_state: {
     todo: number;
-    "in-progress": number;
+    "in_progress": number;
     done: number;
   };
   language_distribution: LanguageDistributionItem[];
   total_commits: number;
   active_branches: number;
   velocity: number;
+  velocity_history: { day: string; commits: number }[];
   recent_commits: Commit[];
+  top_hotspots: { path: string; impact_score: number; friction: number }[];
 }
 
 export interface FileTreeNode {
@@ -142,6 +153,10 @@ export interface KanbanTicket {
   status: TicketStatus;
   priority: TicketPriority;
   description: string;
+  branch_name?: string | null;
+  epic_id?: string | null;
+  sprint_id?: string | null;
+  subtasks?: { id: string; title: string; completed: boolean }[];
   created_at: string;
   updated_at: string;
   affected_nodes: TicketNodeLink[];
@@ -154,6 +169,10 @@ export interface KanbanTicketCreate {
   description: string;
   report_id?: string;
   affected_nodes?: TicketNodeLink[];
+  branch_name?: string | null;
+  epic_id?: string | null;
+  sprint_id?: string | null;
+  subtasks?: { id: string; title: string; completed: boolean }[];
 }
 
 export interface KanbanTicketUpdate {
@@ -162,6 +181,10 @@ export interface KanbanTicketUpdate {
   status?: TicketStatus;
   priority?: TicketPriority;
   description?: string;
+  branch_name?: string | null;
+  epic_id?: string | null;
+  sprint_id?: string | null;
+  subtasks?: { id: string; title: string; completed: boolean }[];
 }
 
 export interface BlastRadiusItem {
@@ -180,4 +203,56 @@ export interface BlastRadiusResponse {
   total_affected_files: number;
   items: BlastRadiusItem[];
   grouped_by_depth: Record<number, BlastRadiusItem[]>;
+}
+
+export type EpicStatus = "active" | "archived";
+export type SprintStatus = "planned" | "active" | "completed" | "archived";
+
+export interface Epic {
+  id: string;
+  project_id: string;
+  name: string;
+  description: string;
+  color: string;
+  status: EpicStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EpicCreate {
+  name: string;
+  description?: string;
+  color?: string;
+}
+
+export interface EpicUpdate {
+  name?: string;
+  description?: string;
+  color?: string;
+}
+
+export interface Sprint {
+  id: string;
+  project_id: string;
+  name: string;
+  goal: string;
+  start_date: string;
+  end_date: string;
+  status: SprintStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SprintCreate {
+  name: string;
+  goal?: string;
+  start_date: string;
+  end_date: string;
+}
+
+export interface SprintUpdate {
+  name?: string;
+  goal?: string;
+  start_date?: string;
+  end_date?: string;
 }

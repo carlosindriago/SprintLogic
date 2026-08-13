@@ -18,9 +18,11 @@ logger = logging.getLogger(__name__)
 # Global event for graceful shutdown
 shutdown_event = asyncio.Event()
 
+
 def signal_shutdown():
     logger.info("Signaling Insight Worker to shutdown...")
     shutdown_event.set()
+
 
 async def run_insight_worker_loop():
     """
@@ -32,7 +34,7 @@ async def run_insight_worker_loop():
     while not shutdown_event.is_set():
         try:
             # Sleep in small increments to allow responsive shutdown
-            for _ in range(300): # 5 minutes = 300 seconds
+            for _ in range(300):  # 5 minutes = 300 seconds
                 if shutdown_event.is_set():
                     break
                 await asyncio.sleep(1)
@@ -54,7 +56,7 @@ async def run_insight_worker_loop():
 
                 for conv in unprocessed_convs:
                     if shutdown_event.is_set():
-                        break # Stop processing new ones, exit gracefully
+                        break  # Stop processing new ones, exit gracefully
 
                     msg_stmt = (
                         select(MessageModel)
@@ -65,7 +67,7 @@ async def run_insight_worker_loop():
                     messages = msgs_res.scalars().all()
 
                     if len(messages) < 2:
-                        continue # Not enough data
+                        continue  # Not enough data
 
                     # Consolidate memory!
                     await _extract_and_save_insight(session, conv, messages)
@@ -75,7 +77,10 @@ async def run_insight_worker_loop():
 
     logger.info("Insight Worker gracefully shutdown.")
 
-async def _extract_and_save_insight(session: AsyncSession, conv: ConversationModel, messages: list[MessageModel]):
+
+async def _extract_and_save_insight(
+    session: AsyncSession, conv: ConversationModel, messages: list[MessageModel]
+):
     try:
         # Build prompt for Gemini to extract "sintoma" and "solucion"
         chat_text = ""
@@ -104,6 +109,7 @@ async def _extract_and_save_insight(session: AsyncSession, conv: ConversationMod
 
         # 3-tier model resolution: DB override -> INSIGHT_WORKER_MODEL env -> DEFAULT_LLM_MODEL
         from app.infrastructure.repositories.tool_model_repository import resolve_tool_model
+
         provider_id, model_name, fallbacks = await resolve_tool_model(session, "insight_worker")
 
         api_key = CredentialManager.get_api_key(provider_id)
@@ -112,20 +118,21 @@ async def _extract_and_save_insight(session: AsyncSession, conv: ConversationMod
         adapted = ProviderAdapter.adapt(model_name, api_key)
 
         from app.infrastructure.llm.litellm_gateway import LiteLLMGateway
+
         gateway = LiteLLMGateway()
 
         response = await litellm.acompletion(
             model=adapted["model"],
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": chat_text}
+                {"role": "user", "content": chat_text},
             ],
             api_key=adapted.get("api_key", api_key),
             response_format={"type": "json_object"},
             fallbacks=gateway.build_fallback_params(fallbacks),
             num_retries=0,
             timeout=45,
-            **adapted.get("kwargs", {})
+            **adapted.get("kwargs", {}),
         )
 
         raw_content = response.choices[0].message.content
@@ -134,7 +141,7 @@ async def _extract_and_save_insight(session: AsyncSession, conv: ConversationMod
 
         data = json.loads(raw_content)
         if "sintoma" not in data or "solucion" not in data:
-            return # Empty or invalid JSON means no valuable insight
+            return  # Empty or invalid JSON means no valuable insight
 
         # Get embedding for semantic search
         # We concatenate the symptom and solution to create a strong semantic vector
@@ -145,10 +152,10 @@ async def _extract_and_save_insight(session: AsyncSession, conv: ConversationMod
         if not gemini_api_key:
             return
 
+        from app.infrastructure.config import DEFAULT_EMBEDDING_MODEL
+
         embed_resp = await litellm.aembedding(
-            model="gemini/text-embedding-004",
-            input=[embed_text],
-            api_key=gemini_api_key
+            model=DEFAULT_EMBEDDING_MODEL, input=[embed_text], api_key=gemini_api_key
         )
 
         embedding_vector = embed_resp.data[0]["embedding"]
@@ -162,7 +169,7 @@ async def _extract_and_save_insight(session: AsyncSession, conv: ConversationMod
             sintoma=data["sintoma"],
             solucion=data["solucion"],
             snippet_corregido=json.dumps(data.get("snippet_corregido", {})),
-            embedding_blob=vector_np.tobytes()
+            embedding_blob=vector_np.tobytes(),
         )
 
         session.add(insight)

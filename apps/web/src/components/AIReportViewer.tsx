@@ -14,7 +14,7 @@ import { MarkdownLink } from "./MarkdownLink";
 import { Copy, Check, Download, Kanban, AlertTriangle, Plus, Network } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { WBSPlannerModal } from "./WBSPlannerModal";
-import { generateWBS, WBSHierarchicalResponse } from "../lib/api";
+import { generateWBS, WBSHierarchicalResponse, importWBSTickets, WBSImportTicket } from "../lib/api";
 import { useTabsStore } from "@/store/tabsStore";
 
 interface AIReportViewerProps {
@@ -168,7 +168,7 @@ export function AIReportViewer({ projectId, reportId, markdown: initialMarkdown 
         report_id: reportId,
         affected_nodes: affectedNodes,
       });
-      toast.success("Ticket registrado en el Kanban", {
+      toast.success("Ticket registrado en Sprint Center", {
         description: `"${issue.title}" ha sido enviado a la columna TODO.`,
       });
     } catch (err) {
@@ -211,44 +211,40 @@ export function AIReportViewer({ projectId, reportId, markdown: initialMarkdown 
   const handleSaveWbs = async (data: WBSHierarchicalResponse) => {
     if (!projectId) return;
 
-    const createdTicketIds: string[] = [];
-    let createdCount = 0;
-
     try {
+      const ticketsToImport: WBSImportTicket[] = [];
+
       for (const pkg of data.work_packages) {
-        const epicBadge = `[📦 ${pkg.title}]`;
+        const epicName = (pkg as any).epic || pkg.title;
+        const sprintName = (pkg as any).sprint || "Sprint 1";
+        
         for (const sub of pkg.subtasks) {
-          const ticket = await createKanbanTicket(projectId, {
-            title: `${epicBadge} ${sub.title}`,
-            type: "Feature",
-            priority: "Medium",
-            description: sub.description + `\n\nEstimated: ${sub.estimated_hours}h`,
+          const rawSubtasks = (sub as any).subtasks || [];
+          const normalizedSubtasks = rawSubtasks.map((st: any, idx: number) => {
+            if (typeof st === 'string') return { id: String(idx + 1), title: st, completed: false };
+            return { id: st.id || String(idx + 1), title: st.title || String(st), completed: Boolean(st.completed) };
+          });
+
+          ticketsToImport.push({
+            title: sub.title,
+            type: ((sub as any).type as any) || "Feature",
+            priority: ((sub as any).priority as any) || "Medium",
+            description: sub.description ? `${sub.description}\n\nEstimated: ${sub.estimated_hours}h` : pkg.objective || "",
+            branch_name: (sub as any).branch_name || undefined,
+            subtasks: normalizedSubtasks,
             report_id: reportId,
             affected_nodes: [],
+            epic: epicName,
+            sprint: sprintName
           });
-          createdTicketIds.push(ticket.id);
-          createdCount++;
         }
       }
-      toast.success(`Se crearon ${createdCount} tickets de WBS en el Kanban`);
+
+      const result = await importWBSTickets(projectId, ticketsToImport);
+      toast.success(`Se crearon ${result.imported_count} tickets de WBS en Sprint Center`);
+      setWbsModalOpen(false);
     } catch (err) {
-      toast.error("Error guardando tareas WBS. Ejecutando rollback...", { description: err instanceof Error ? err.message : String(err) });
-      
-      let rollbackErrors = 0;
-      for (const id of createdTicketIds) {
-        try {
-          await deleteKanbanTicket(id);
-        } catch (rollbackErr) {
-          console.error(`Rollback failed for ticket ${id}`, rollbackErr);
-          rollbackErrors++;
-        }
-      }
-      
-      if (rollbackErrors > 0) {
-        toast.error(`Atención: El rollback falló para ${rollbackErrors} tickets.`);
-      } else if (createdTicketIds.length > 0) {
-        toast.success("Rollback completado: los tickets parciales fueron eliminados.");
-      }
+      toast.error("Error guardando tareas WBS", { description: err instanceof Error ? err.message : String(err) });
     }
   };
 
@@ -343,7 +339,7 @@ export function AIReportViewer({ projectId, reportId, markdown: initialMarkdown 
           <div className="mt-12 pt-8 border-t border-[#27272a]">
             <div className="flex items-center gap-2 mb-6">
               <Kanban className="w-6 h-6 text-blue-400" />
-              <h2 className="text-2xl font-bold text-zinc-100">Tareas Accionables (Kanban)</h2>
+              <h2 className="text-2xl font-bold text-zinc-100">Tareas Accionables (Sprint Center)</h2>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

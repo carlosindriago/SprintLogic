@@ -19,3 +19,15 @@ class TicketPriority(StrEnum):
     HIGH = "High"
     MEDIUM = "Medium"
     LOW = "Low"
+
+
+class EpicStatus(StrEnum):
+    ACTIVE = "active"
+    ARCHIVED = "archived"
+
+
+class SprintStatus(StrEnum):
+    PLANNED = "planned"
+    ACTIVE = "active"
+    COMPLETED = "completed"
+    ARCHIVED = "archived"

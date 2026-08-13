@@ -5,7 +5,7 @@ payload = {
     "file_content": "def test():\n  pass\n",
     "language": "python",
     "cursor_line": 1,
-    "model": "deepseek/deepseek-chat"
+    "model": "deepseek/deepseek-chat",
 }
 headers = {"Content-Type": "application/json"}
 

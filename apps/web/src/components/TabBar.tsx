@@ -207,6 +207,7 @@ function SortableTab({
   const isFixed = false;
   const isPinned = !!tab.pinned;
   const currentIndex = tabs.findIndex(t => t.id === tab.id);
+  const tabTitle = (tab.id === 'kanban' || tab.type === 'kanban') && (tab.title === 'Kanban' || !tab.title) ? 'Sprint Center' : tab.title;
 
   const handleClose = (ids: string[]) => {
     useTabsStore.getState().closeTabs(ids);
@@ -237,17 +238,17 @@ function SortableTab({
               setActiveTab(tab.id);
             }
           }}
-          title={isPinned ? tab.title : undefined}
+          title={isPinned ? tabTitle : undefined}
         >
           {IconComponent ? (
             <IconComponent className="w-4 h-4 shrink-0" />
           ) : (
-            <FileIcon fileName={tab.title} className="w-3.5 h-3.5 shrink-0" />
+            <FileIcon fileName={tabTitle} className="w-3.5 h-3.5 shrink-0" />
           )}
           
           {!isPinned && (
             <>
-              <span className="truncate flex-1" title={tab.title}>{tab.title}</span>
+              <span className="truncate flex-1" title={tabTitle}>{tabTitle}</span>
               {dirtyFiles[tab.id] && (
                 <div className="w-2 h-2 rounded-full bg-blue-400 shrink-0" title="Unsaved changes" />
               )}
@@ -256,7 +257,7 @@ function SortableTab({
               {!isFixed && (
                 <button
                   type="button"
-                  aria-label={`Cerrar pestaña ${tab.title}`}
+                  aria-label={`Cerrar pestaña ${tabTitle}`}
                   className={cn(
                     "rounded-sm hover:bg-zinc-700 p-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
                     activeTabId === tab.id ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"

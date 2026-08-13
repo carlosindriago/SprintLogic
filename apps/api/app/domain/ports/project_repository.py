@@ -4,6 +4,7 @@ Port (Interface): Abstract contract for any Project persistence mechanism.
 The Domain layer defines WHAT operations are needed.
 It must never know HOW they are implemented (SQLAlchemy, in-memory, HTTP, etc.).
 """
+
 from abc import ABC, abstractmethod
 from uuid import UUID
 

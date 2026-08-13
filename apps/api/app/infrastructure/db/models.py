@@ -8,7 +8,13 @@ from sqlalchemy import Enum as SQLAlchemyEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.domain.graph_models import EdgeType, NodeLabel
-from app.domain.kanban_models import TicketPriority, TicketStatus, TicketType
+from app.domain.kanban_models import (
+    EpicStatus,
+    SprintStatus,
+    TicketPriority,
+    TicketStatus,
+    TicketType,
+)
 from app.infrastructure.db.database import Base
 
 
@@ -63,7 +69,9 @@ class ProjectModel(Base):
     )
     cached_schema: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     schema_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    schema_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    schema_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
 
 class SchemaDraftModel(Base):
@@ -82,6 +90,7 @@ class SchemaDraftModel(Base):
         DateTime(timezone=True), nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
     )
 
+
 class AIMemoryModel(Base):
     __tablename__ = "ai_memories"
 
@@ -97,6 +106,7 @@ class AIMemoryModel(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow, index=True
     )
+
 
 class OmniNoteModel(Base):
     __tablename__ = "omni_notes"
@@ -123,6 +133,7 @@ class ContextSnippetModel(Base):
     # The actual vectors will be stored in a raw sqlite-vec virtual table `vec_context_snippets`
     # linked by rowid = ContextSnippetModel.id
 
+
 class DeveloperInsightModel(Base):
     __tablename__ = "developer_insights"
 
@@ -132,6 +143,7 @@ class DeveloperInsightModel(Base):
     solucion: Mapped[str] = mapped_column(String, nullable=False)
     snippet_corregido: Mapped[str | None] = mapped_column(String, nullable=True)
     embedding_blob: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+
 
 class ASTNodeMapModel(Base):
     __tablename__ = "ast_node_map"
@@ -144,13 +156,13 @@ class ASTNodeMapModel(Base):
     fqn: Mapped[str] = mapped_column(String(1024), nullable=False, index=True)
     node_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
 
+
 class ASTVectorModel(Base):
     __tablename__ = "vec_ast_nodes"
 
     node_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
     content: Mapped[str] = mapped_column(String, nullable=False)
     embedding: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
-
 
 
 class ConversationModel(Base):
@@ -164,6 +176,7 @@ class ConversationModel(Base):
     is_active: Mapped[bool] = mapped_column(default=True)
     insight_extracted: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
 
 class MessageModel(Base):
     __tablename__ = "messages"
@@ -194,7 +207,10 @@ class AnalysisReportModel(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=datetime.utcnow
     )
-    is_deleted: Mapped[bool] = mapped_column(Boolean, server_default="0", default=False, nullable=False)
+    is_deleted: Mapped[bool] = mapped_column(
+        Boolean, server_default="0", default=False, nullable=False
+    )
+
 
 from sqlalchemy import BigInteger
 
@@ -210,7 +226,6 @@ class SearchIndexModel(Base):
     line: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
-
 class ProjectMemoryModel(Base):
     __tablename__ = "project_memories"
 
@@ -221,7 +236,6 @@ class ProjectMemoryModel(Base):
     memory_content: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
-
 class AdrChunkModel(Base):
     __tablename__ = "adr_chunks"
 
@@ -230,7 +244,6 @@ class AdrChunkModel(Base):
     file_hash: Mapped[str] = mapped_column(String, nullable=False)
     chunk_text: Mapped[str] = mapped_column(String, nullable=False)
     breadcrumbs: Mapped[str | None] = mapped_column(String, nullable=True)
-
 
 
 class TelemetryPingModel(Base):
@@ -245,12 +258,56 @@ class TelemetryPingModel(Base):
     coding_ms: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     testing_ms: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
 
+
 class DaemonLockModel(Base):
     __tablename__ = "daemon_locks"
 
     project_id: Mapped[str] = mapped_column(String, primary_key=True)
     rule: Mapped[str] = mapped_column(String, primary_key=True)
     last_fired_at: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class EpicModel(Base):
+    __tablename__ = "epics"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    project_id: Mapped[UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    color: Mapped[str] = mapped_column(String(50), nullable=False, default="bg-blue-500")
+    status: Mapped[EpicStatus] = mapped_column(
+        SQLAlchemyEnum(EpicStatus), nullable=False, default=EpicStatus.ACTIVE
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=datetime.utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+
+class SprintModel(Base):
+    __tablename__ = "sprints"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    project_id: Mapped[UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    goal: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    start_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    end_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    status: Mapped[SprintStatus] = mapped_column(
+        SQLAlchemyEnum(SprintStatus), nullable=False, default=SprintStatus.PLANNED
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=datetime.utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
 
 class KanbanTicketModel(Base):
@@ -274,6 +331,14 @@ class KanbanTicketModel(Base):
         SQLAlchemyEnum(TicketPriority), nullable=False, default=TicketPriority.MEDIUM
     )
     description: Mapped[str] = mapped_column(Text, nullable=False)
+    branch_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    epic_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("epics.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    sprint_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("sprints.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    subtasks: Mapped[list | dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=datetime.utcnow
     )
@@ -318,6 +383,7 @@ class CustomLLMProviderModel(Base):
     keyring_service_id: Mapped[str] = mapped_column(String(255), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 
+
 class ToolModelMappingModel(Base):
     __tablename__ = "tool_model_mappings"
 
@@ -327,6 +393,7 @@ class ToolModelMappingModel(Base):
     model_name: Mapped[str] = mapped_column(String(255), nullable=False)
     fallback_models: Mapped[list | dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
 
 class UniversalBookmarkModel(Base):
     __tablename__ = "universal_bookmarks"

@@ -10,6 +10,7 @@ from app.infrastructure.parser.strategies.typescript_strategy import TypeScriptA
 
 class UnsupportedLanguageError(Exception):
     """Raised when no suitable language analyzer is found for the given project."""
+
     pass
 
 

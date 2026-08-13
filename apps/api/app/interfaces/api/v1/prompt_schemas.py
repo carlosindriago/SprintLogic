@@ -8,13 +8,16 @@ class PromptBase(BaseModel):
     content: str
     required_variables: list[str] | None = None
 
+
 class PromptCreate(PromptBase):
     id: str
+
 
 class PromptUpdate(BaseModel):
     content: str | None = None
     description: str | None = None
     required_variables: list[str] | None = None
+
 
 class PromptResponse(PromptBase):
     id: str
@@ -23,6 +26,7 @@ class PromptResponse(PromptBase):
 
     class Config:
         from_attributes = True
+
 
 class PromptPatchRequest(BaseModel):
     current_content: str

@@ -13,11 +13,12 @@ class FakeStrategy(LanguageAnalyzerStrategy):
     async def parse_dependencies(self, path: Path) -> dict:
         return {
             "nodes": [{"id": "node1", "label": "node1"}],
-            "edges": [{"source": "node1", "target": "node2"}]
+            "edges": [{"source": "node1", "target": "node2"}],
         }
 
     async def parse_skeletons(self, base_path: Path, files: list[str]) -> dict:
         return {"node1": "def fake_skeleton(): pass"}
+
 
 @pytest.mark.asyncio
 async def test_scan_codebase_orchestration():
@@ -30,4 +31,3 @@ async def test_scan_codebase_orchestration():
     assert "skeletons" in result
     assert result["nodes"] == [{"id": "node1", "label": "node1"}]
     assert result["edges"] == [{"source": "node1", "target": "node2"}]
-

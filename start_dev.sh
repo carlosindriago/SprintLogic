@@ -23,9 +23,9 @@ set -m
 CHILD_PIDS=()
 
 cleanup() {
-    # Remove traps FIRST to prevent infinite recursion when kill -$$
-    # delivers a signal back to this script.
-    trap - INT TERM EXIT
+    # Ignore signals to prevent this script from killing itself
+    # when it sends signals to its own process group.
+    trap '' INT TERM EXIT
 
     local signal_name="${1:-EXIT}"
     echo
@@ -41,12 +41,9 @@ cleanup() {
     # Wait briefly for graceful shutdown.
     sleep 1
     # Force-kill anything still alive.
+    echo "[start_dev] Sending SIGKILL to process group to ensure complete shutdown."
     kill -9 -- -"$$" 2>/dev/null || true
-    # Reap direct children to avoid zombies.
-    for pid in "${CHILD_PIDS[@]}"; do
-        wait "$pid" 2>/dev/null || true
-    done
-    echo "[start_dev] Cleanup complete."
+    # The script will be killed by the above command.
 }
 
 # Register the trap BEFORE starting any background process. EXIT covers

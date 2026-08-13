@@ -8,6 +8,7 @@ This test proves the two-pass fix: raw import intents collected during the
 per-file loop (Pass 1) are resolved against the full file universe once the
 scan is complete (Pass 2), producing IMPORTS edges that connect files.
 """
+
 import uuid
 from pathlib import Path
 from unittest.mock import AsyncMock
@@ -82,15 +83,21 @@ async def test_scan_codebase_no_imports_yields_no_import_edges(tmp_path: Path):
 def test_dedupe_edges_collapses_same_source_target_type():
     project_id = uuid.uuid4()
     edge_a = GraphEdge(
-        project_id=project_id, source_id="file:main.ts", target_id="file:utils.ts",
+        project_id=project_id,
+        source_id="file:main.ts",
+        target_id="file:utils.ts",
         type=EdgeType.IMPORTS,
     )
     edge_b = GraphEdge(
-        project_id=project_id, source_id="file:main.ts", target_id="file:utils.ts",
+        project_id=project_id,
+        source_id="file:main.ts",
+        target_id="file:utils.ts",
         type=EdgeType.IMPORTS,
     )
     edge_c = GraphEdge(
-        project_id=project_id, source_id="file:main.ts", target_id="file:other.ts",
+        project_id=project_id,
+        source_id="file:main.ts",
+        target_id="file:other.ts",
         type=EdgeType.IMPORTS,
     )
 

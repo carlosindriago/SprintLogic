@@ -40,10 +40,10 @@ class KanbanSyncService:
             "columns": [
                 {"id": "todo", "title": "To Do", "color": "border-zinc-500", "rule": "manual"},
                 {
-                    "id": "in-progress",
+                    "id": "in_progress",
                     "title": "In Progress",
                     "color": "border-blue-500",
-                    "rule": "pomodoro",
+                    "rule": "create_ephemeral_branch",
                 },
                 {
                     "id": "test",
@@ -187,7 +187,7 @@ class KanbanSyncService:
                 status_char = " "
                 if col_id == "done":
                     status_char = "x"
-                elif col_id == "in-progress":
+                elif col_id == "in_progress":
                     status_char = "/"
 
                 content = task["content"]

@@ -15,12 +15,17 @@ class AnalysisReportResponse(BaseModel):
     """
     DTO for a single AI analysis report.
     """
+
     id: UUID = Field(..., description="Unique identifier for the report")
     project_id: UUID = Field(..., description="The project this report belongs to")
-    type: str = Field("code_analysis", description="Type of report: db_audit, code_analysis, architecture")
+    type: str = Field(
+        "code_analysis", description="Type of report: db_audit, code_analysis, architecture"
+    )
     content: str = Field(..., description="The markdown content of the AI report")
     ai_model_version: str = Field(..., description="The AI model that generated this report")
-    structural_metrics: dict | None = Field(None, description="Deterministic graph metrics computed via NetworkX")
+    structural_metrics: dict | None = Field(
+        None, description="Deterministic graph metrics computed via NetworkX"
+    )
     created_at: datetime = Field(..., description="Timestamp when the report was created")
 
     class Config:
@@ -33,4 +38,5 @@ class AnalysisReportListResponse(BaseModel):
     Contains less data (e.g., omits full content or truncates it) if needed,
     but for now we return the full objects or a summary.
     """
+
     reports: list[AnalysisReportResponse]

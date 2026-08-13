@@ -21,7 +21,9 @@ class PythonAnalyzerStrategy(LanguageAnalyzerStrategy):
         """
         Compatible if it contains requirements.txt or pyproject.toml
         """
-        return (project_path / "requirements.txt").exists() or (project_path / "pyproject.toml").exists()
+        return (project_path / "requirements.txt").exists() or (
+            project_path / "pyproject.toml"
+        ).exists()
 
     async def parse_dependencies(self, project_path: Path) -> dict[str, Any]:
         """
@@ -44,13 +46,10 @@ class PythonAnalyzerStrategy(LanguageAnalyzerStrategy):
             nodes, edges = parser_service.parse_directory(dummy_project_id, str(project_path))
 
             # Convert GraphNode and GraphEdge models to dicts to match the Strategy contract
-            nodes_dict = [n.model_dump() if hasattr(n, 'model_dump') else n.__dict__ for n in nodes]
-            edges_dict = [e.model_dump() if hasattr(e, 'model_dump') else e.__dict__ for e in edges]
+            nodes_dict = [n.model_dump() if hasattr(n, "model_dump") else n.__dict__ for n in nodes]
+            edges_dict = [e.model_dump() if hasattr(e, "model_dump") else e.__dict__ for e in edges]
 
-            return {
-                "nodes": nodes_dict,
-                "edges": edges_dict
-            }
+            return {"nodes": nodes_dict, "edges": edges_dict}
         except Exception as e:
             logger.error(f"Error parseando proyecto Python: {e}")
             return {"nodes": [], "edges": []}
@@ -58,5 +57,6 @@ class PythonAnalyzerStrategy(LanguageAnalyzerStrategy):
     def __init__(self) -> None:
         import tree_sitter_python
         from tree_sitter import Language, Parser
+
         self.py_language = Language(tree_sitter_python.language())
         self.parser = Parser(self.py_language)

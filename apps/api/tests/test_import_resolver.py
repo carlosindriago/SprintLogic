@@ -1,4 +1,3 @@
-
 from app.infrastructure.parser.import_resolver import (
     TSConfigResolver,
     is_external_import,
@@ -8,12 +7,12 @@ from app.infrastructure.parser.import_resolver import (
 
 
 def test_strip_json_comments():
-    json_with_comments = '''{
+    json_with_comments = """{
         // this is a comment
         "compilerOptions": {
             "baseUrl": "." // inline comment not supported by simple regex, but full line comments are
         }
-    }'''
+    }"""
     # Nuestro regex actual remueve lineas que empiezan (con o sin espacios) por //
     stripped = strip_json_comments(json_with_comments)
     assert "// this is a comment" not in stripped
@@ -21,12 +20,7 @@ def test_strip_json_comments():
 
 
 def test_try_resolve_file():
-    file_set = {
-        "src/lib/api.ts",
-        "src/components/Button.tsx",
-        "src/store/index.ts",
-        "src/utils.js"
-    }
+    file_set = {"src/lib/api.ts", "src/components/Button.tsx", "src/store/index.ts", "src/utils.js"}
 
     # 1. Exact match
     assert try_resolve_file("src/lib/api.ts", file_set) == "src/lib/api.ts"
@@ -56,12 +50,12 @@ def test_is_external_import():
     # Externos
     assert is_external_import("react", alias_prefixes) is True
     assert is_external_import("lucide-react", alias_prefixes) is True
-    assert is_external_import("@org/shared", alias_prefixes) is True # if not in aliases
+    assert is_external_import("@org/shared", alias_prefixes) is True  # if not in aliases
 
 
 def test_tsconfig_resolver(tmp_path):
     # Simulate a project
-    tsconfig_content = '''{
+    tsconfig_content = """{
         "compilerOptions": {
             "baseUrl": ".",
             "paths": {
@@ -69,7 +63,7 @@ def test_tsconfig_resolver(tmp_path):
                 "@components/*": ["./src/components/*"]
             }
         }
-    }'''
+    }"""
 
     tsconfig_file = tmp_path / "tsconfig.json"
     tsconfig_file.write_text(tsconfig_content)
@@ -81,7 +75,7 @@ def test_tsconfig_resolver(tmp_path):
     file_paths = [
         str(tsconfig_file),
         str(tmp_path / "src/lib/api.ts"),
-        str(tmp_path / "src/components/Button.tsx")
+        str(tmp_path / "src/components/Button.tsx"),
     ]
 
     resolver = TSConfigResolver(file_paths)

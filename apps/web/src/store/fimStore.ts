@@ -34,7 +34,7 @@ export const useFimStore = create<FimState>()(
       groqApiKey: '',
       setGroqApiKey: (key) => set({ groqApiKey: key }),
       
-      fimModel: 'llama-3.1-8b-instant',
+      fimModel: process.env.NEXT_PUBLIC_DEFAULT_FIM_MODEL || '',
       setFimModel: (model) => set({ fimModel: model }),
     }),
     {

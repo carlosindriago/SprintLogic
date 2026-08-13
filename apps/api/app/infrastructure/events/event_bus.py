@@ -10,6 +10,7 @@ class EventBus:
     (por ejemplo, desktop-first local dev). Si se despliega con múltiples workers ASGI,
     las suscripciones quedarán huérfanas en diferentes procesos. Se requiere Redis Pub/Sub para Cloud.
     """
+
     def __init__(self):
         # Diccionario de colas: un topic -> lista de colas (una por suscriptor)
         self._subscribers: dict[str, list[asyncio.Queue[dict]]] = {}
@@ -86,5 +87,6 @@ class EventBus:
     def subscriber_count(self, topic: str) -> int:
         """Número de suscriptores activos en un topic."""
         return len(self._subscribers.get(topic, []))
+
 
 global_event_bus = EventBus()

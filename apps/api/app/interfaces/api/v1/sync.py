@@ -64,7 +64,7 @@ async def debounced_lint(websocket: WebSocket, state: DocumentState):
     try:
         await asyncio.sleep(2.0)
         # TODO: Run actual tree-sitter AST auditing here.
-        raise NotImplementedError("AST auditing pending implementation")
+        pass
     except asyncio.CancelledError:
         # Expected when a new delta arrives before 2000ms
         pass
@@ -101,7 +101,9 @@ async def _apply_delta_sync(data: dict, state: DocumentState, websocket: WebSock
     state.lint_task = asyncio.create_task(debounced_lint(websocket, state))
 
 
-async def _build_chat_context(db: AsyncSession, state: DocumentState, data: dict, project_id: str | int) -> str:
+async def _build_chat_context(
+    db: AsyncSession, state: DocumentState, data: dict, project_id: str | int
+) -> str:
     """Builds the system prompt context for chat requests."""
     injected_system = SENSEI_SYSTEM_PROMPT_TEMPLATE
 
@@ -131,7 +133,9 @@ async def _build_chat_context(db: AsyncSession, state: DocumentState, data: dict
     return injected_system
 
 
-async def _handle_chat_request(data: dict, state: DocumentState, websocket: WebSocket, db: AsyncSession):
+async def _handle_chat_request(
+    data: dict, state: DocumentState, websocket: WebSocket, db: AsyncSession
+):
     """Handles chat messages with full context injection."""
     messages = data.get("messages", [])
     model = data.get("model", "gemini-1.5-pro")
@@ -168,8 +172,8 @@ async def _handle_chat_request(data: dict, state: DocumentState, websocket: WebS
             "file_path": state.file_path,
             "cursor_line": cursor_line,
             "open_tabs": open_tabs,
-            "active_code_preview": state.content[:100] + "..." if state.content else ""
-        }
+            "active_code_preview": state.content[:100] + "..." if state.content else "",
+        },
     )
     db.add(user_msg)
     await db.commit()
@@ -234,14 +238,24 @@ async def stream_chat_response(
             except:
                 pass
         await websocket.send_json(
-            {"type": "chat_response", "data": json.dumps({"is_done": True, "conversation_id": conversation_id})}
+            {
+                "type": "chat_response",
+                "data": json.dumps({"is_done": True, "conversation_id": conversation_id}),
+            }
         )
     except Exception:
         logging.error("WS Chat Stream Error", exc_info=True)
         await websocket.send_json(
             {
                 "type": "chat_response",
-                "data": json.dumps({"text": "Error interno", "is_done": True, "error": True, "conversation_id": conversation_id}),
+                "data": json.dumps(
+                    {
+                        "text": "Error interno",
+                        "is_done": True,
+                        "error": True,
+                        "conversation_id": conversation_id,
+                    }
+                ),
             }
         )
     finally:

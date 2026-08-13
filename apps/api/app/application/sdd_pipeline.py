@@ -7,6 +7,7 @@ class SDDPipelineUseCase:
 
     def __init__(self, llm_gateway: LiteLLMGateway, model: str | None = None):
         from app.infrastructure.config import DEFAULT_LLM_MODEL
+
         self.llm_gateway = llm_gateway
         self.model = model or DEFAULT_LLM_MODEL
 

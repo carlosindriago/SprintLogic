@@ -5,7 +5,6 @@ from datetime import datetime, timezone
 import litellm
 from sqlalchemy import text
 
-from app.infrastructure.config import DEFAULT_LLM_MODEL
 from app.infrastructure.db.database import get_sessionmaker
 from app.infrastructure.events.event_bus import EventBus
 from app.infrastructure.security.credential_manager import CredentialManager
@@ -107,9 +106,7 @@ class TelemetryDaemon:
 
             if row and row[0]:
                 check = await session.execute(
-                    text(
-                        "SELECT datetime(:last) < datetime('now', :cooldown)"
-                    ),
+                    text("SELECT datetime(:last) < datetime('now', :cooldown)"),
                     {
                         "last": row[0],
                         "cooldown": f"-{COOLDOWN_SECONDS} seconds",
@@ -180,18 +177,26 @@ class TelemetryDaemon:
 
     async def _generate_insight(self, project_id: str, anomaly: dict) -> str | None:
         try:
-            api_key = CredentialManager.get_api_key("gemini")
+            from app.infrastructure.db.database import get_sessionmaker
+            from app.infrastructure.repositories.tool_model_repository import resolve_tool_model
+
+            async with get_sessionmaker()() as session:
+                provider_id, model_name, fallbacks = await resolve_tool_model(
+                    session, "telemetry_daemon"
+                )
+
+            api_key = CredentialManager.get_api_key(provider_id)
             if not api_key:
-                logger.warning("No Gemini API key configured, using fallback message")
+                logger.warning(f"No API key configured for {provider_id}, using fallback message")
                 return self._fallback_message(anomaly)
 
             rule = anomaly["rule"]
             if rule == "high_friction_low_flow":
                 prompt = (
                     "Eres SprintLogic Sensei, un mentor de productividad para desarrolladores. "
-                    "El desarrollador muestra signos de atasco:\n"
-                    f"- Actividad real en los últimos {anomaly['window_minutes']} min: {anomaly['total_activity_seconds']} segundos\n"
-                    f"- Pings inactivos: {anomaly['idle_pings']} ({anomaly['idle_ratio']}% del total)\n\n"
+                    "El desarrollador muestra signos de atasco:\\n"
+                    f"- Actividad real en los últimos {anomaly['window_minutes']} min: {anomaly['total_activity_seconds']} segundos\\n"
+                    f"- Pings inactivos: {anomaly['idle_pings']} ({anomaly['idle_ratio']}% del total)\\n\\n"
                     "Escribe UN mensaje corto (máximo 2 oraciones) en español, empático pero directo, "
                     "sugiriendo un descanso de 5 minutos, un cambio de enfoque, o preguntar al chat de IA "
                     "qué archivo está causando fricción. NO uses Markdown. Sé breve."
@@ -199,19 +204,28 @@ class TelemetryDaemon:
             else:
                 prompt = (
                     "Eres SprintLogic Sensei, un mentor de productividad para desarrolladores. "
-                    "El desarrollador muestra signos de distracción:\n"
-                    f"- Actividad real en los últimos {anomaly['window_minutes']} min: {anomaly['total_activity_seconds']} segundos\n"
-                    f"- Ratio de inactividad: {anomaly['idle_ratio']}%\n\n"
+                    "El desarrollador muestra signos de distracción:\\n"
+                    f"- Actividad real en los últimos {anomaly['window_minutes']} min: {anomaly['total_activity_seconds']} segundos\\n"
+                    f"- Ratio de inactividad: {anomaly['idle_ratio']}%\\n\\n"
                     "Escribe UN mensaje corto (máximo 2 oraciones) en español, empático pero directo, "
                     "sugiriendo retomar el foco o preguntar al chat qué sigue en el plan. "
                     "NO uses Markdown. Sé breve."
                 )
 
+            from app.infrastructure.ai.provider_adapter import ProviderAdapter
+
+            adapted = ProviderAdapter.adapt(model_name, api_key)
+            from app.infrastructure.llm.litellm_gateway import LiteLLMGateway
+
+            gateway = LiteLLMGateway()
+
             response = await litellm.acompletion(
-                model=DEFAULT_LLM_MODEL,
+                model=adapted["model"],
                 messages=[{"role": "user", "content": prompt}],
-                api_key=api_key,
+                api_key=adapted.get("api_key", api_key),
                 max_tokens=120,
+                fallbacks=gateway.build_fallback_params(fallbacks),
+                **adapted.get("kwargs", {}),
             )
             text = response.choices[0].message.content
             return text.strip() if text else None

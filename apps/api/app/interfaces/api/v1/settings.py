@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 llm_gateway = LiteLLMGateway()
 
+
 # Thread-safe TTL cache for provider model lists. 32 providers × 5min TTL.
 # Lives at module level but cachetools is process-local; acceptable for a
 # single-instance Tauri sidecar. Replaced the previous unbounded dict.
@@ -27,10 +28,13 @@ class ProviderModel(BaseModel):
     id: str
     name: str
 
+
 _model_cache: TTLCache[str, list[ProviderModel]] = TTLCache(maxsize=32, ttl=300)
+
 
 class APIKeyRequest(BaseModel):
     api_key: str
+
 
 class APIKeyStatus(BaseModel):
     is_configured: bool
@@ -72,7 +76,9 @@ async def fetch_provider_models(provider: str, api_key: str) -> list[ProviderMod
                     raise ProviderFetchError(f"Invalid Gemini Key: {res.text}")
                 data = res.json()
                 models = [
-                    ProviderModel(id=f"gemini/{m['name'].replace('models/', '')}", name=m["displayName"])
+                    ProviderModel(
+                        id=f"gemini/{m['name'].replace('models/', '')}", name=m["displayName"]
+                    )
                     for m in data.get("models", [])
                     if "generateContent" in m.get("supportedGenerationMethods", [])
                 ]
@@ -84,9 +90,16 @@ async def fetch_provider_models(provider: str, api_key: str) -> list[ProviderMod
                     raise ProviderFetchError("Invalid OpenAI Key")
                 data = res.json()
                 models = [
-                    ProviderModel(id=f"openai/{m['id']}" if not m["id"].startswith("openai/") else m["id"], name=m["id"])
+                    ProviderModel(
+                        id=f"openai/{m['id']}" if not m["id"].startswith("openai/") else m["id"],
+                        name=m["id"],
+                    )
                     for m in data.get("data", [])
-                    if "gpt" in m["id"] or "o1" in m["id"] or "o3" in m["id"] or "codex" in m["id"] or "ft:" in m["id"]
+                    if "gpt" in m["id"]
+                    or "o1" in m["id"]
+                    or "o3" in m["id"]
+                    or "codex" in m["id"]
+                    or "ft:" in m["id"]
                 ]
 
             elif provider == "anthropic":
@@ -96,7 +109,12 @@ async def fetch_provider_models(provider: str, api_key: str) -> list[ProviderMod
                 if res.status_code == 200:
                     data = res.json()
                     models = [
-                        ProviderModel(id=f"anthropic/{m['id']}" if not m["id"].startswith("anthropic/") else m["id"], name=m.get("display_name", m["id"]))
+                        ProviderModel(
+                            id=f"anthropic/{m['id']}"
+                            if not m["id"].startswith("anthropic/")
+                            else m["id"],
+                            name=m.get("display_name", m["id"]),
+                        )
                         for m in data.get("data", [])
                     ]
                 else:
@@ -114,7 +132,13 @@ async def fetch_provider_models(provider: str, api_key: str) -> list[ProviderMod
                     raise ProviderFetchError("Failed to fetch OpenRouter models")
                 data = res.json()
                 models = [
-                    ProviderModel(id=f"openrouter/{m['id']}" if not m["id"].startswith("openrouter/") else m["id"], name=m.get("name", m["id"])) for m in data.get("data", [])
+                    ProviderModel(
+                        id=f"openrouter/{m['id']}"
+                        if not m["id"].startswith("openrouter/")
+                        else m["id"],
+                        name=m.get("name", m["id"]),
+                    )
+                    for m in data.get("data", [])
                 ]
 
             elif provider == "opencode-zen":
@@ -123,7 +147,15 @@ async def fetch_provider_models(provider: str, api_key: str) -> list[ProviderMod
                 if res.status_code != 200:
                     raise ProviderFetchError("Invalid OpenCode Zen Key")
                 data = res.json()
-                models = [ProviderModel(id=f"opencode-zen/{m['id']}" if not m["id"].startswith("opencode-zen/") else m["id"], name=m["id"]) for m in data.get("data", [])]
+                models = [
+                    ProviderModel(
+                        id=f"opencode-zen/{m['id']}"
+                        if not m["id"].startswith("opencode-zen/")
+                        else m["id"],
+                        name=m["id"],
+                    )
+                    for m in data.get("data", [])
+                ]
 
             elif provider == "opencode-go":
                 headers["Authorization"] = f"Bearer {api_key}"
@@ -131,7 +163,15 @@ async def fetch_provider_models(provider: str, api_key: str) -> list[ProviderMod
                 if res.status_code != 200:
                     raise ProviderFetchError("Invalid OpenCode Go Key")
                 data = res.json()
-                models = [ProviderModel(id=f"opencode-go/{m['id']}" if not m["id"].startswith("opencode-go/") else m["id"], name=m["id"]) for m in data.get("data", [])]
+                models = [
+                    ProviderModel(
+                        id=f"opencode-go/{m['id']}"
+                        if not m["id"].startswith("opencode-go/")
+                        else m["id"],
+                        name=m["id"],
+                    )
+                    for m in data.get("data", [])
+                ]
 
             elif provider == "groq":
                 headers["Authorization"] = f"Bearer {api_key}"
@@ -139,7 +179,13 @@ async def fetch_provider_models(provider: str, api_key: str) -> list[ProviderMod
                 if res.status_code != 200:
                     raise ProviderFetchError("Invalid Groq Key")
                 data = res.json()
-                models = [ProviderModel(id=f"groq/{m['id']}" if not m["id"].startswith("groq/") else m["id"], name=m["id"]) for m in data.get("data", [])]
+                models = [
+                    ProviderModel(
+                        id=f"groq/{m['id']}" if not m["id"].startswith("groq/") else m["id"],
+                        name=m["id"],
+                    )
+                    for m in data.get("data", [])
+                ]
 
             elif provider == "ollama_cloud":
                 headers["Authorization"] = f"Bearer {api_key}"
@@ -147,7 +193,15 @@ async def fetch_provider_models(provider: str, api_key: str) -> list[ProviderMod
                 if res.status_code != 200:
                     raise ProviderFetchError("Invalid Ollama Cloud Key")
                 data = res.json()
-                models = [ProviderModel(id=f"ollama_cloud/{m['name']}" if not m['name'].startswith("ollama_cloud/") else m['name'], name=m["name"]) for m in data.get("models", [])]
+                models = [
+                    ProviderModel(
+                        id=f"ollama_cloud/{m['name']}"
+                        if not m["name"].startswith("ollama_cloud/")
+                        else m["name"],
+                        name=m["name"],
+                    )
+                    for m in data.get("models", [])
+                ]
 
             elif provider == "ollama":
                 # For ollama local, api_key is actually the Base URL
@@ -156,8 +210,15 @@ async def fetch_provider_models(provider: str, api_key: str) -> list[ProviderMod
                 if res.status_code != 200:
                     raise ProviderFetchError("Cannot reach Ollama")
                 data = res.json()
-                models = [ProviderModel(id=f"ollama/{m['name']}" if not m['name'].startswith("ollama/") else m['name'], name=m["name"]) for m in data.get("models", [])]
-
+                models = [
+                    ProviderModel(
+                        id=f"ollama/{m['name']}"
+                        if not m["name"].startswith("ollama/")
+                        else m["name"],
+                        name=m["name"],
+                    )
+                    for m in data.get("models", [])
+                ]
 
             elif provider == "nvidia":
                 headers["Authorization"] = f"Bearer {api_key}"
@@ -167,7 +228,15 @@ async def fetch_provider_models(provider: str, api_key: str) -> list[ProviderMod
                 if res.status_code != 200:
                     raise ProviderFetchError("Invalid Nvidia NIM Key")
                 data = res.json()
-                models = [ProviderModel(id=f"nvidia_nim/{m['id']}" if not m["id"].startswith("nvidia_nim/") else m["id"], name=m["id"]) for m in data.get("data", [])]
+                models = [
+                    ProviderModel(
+                        id=f"nvidia_nim/{m['id']}"
+                        if not m["id"].startswith("nvidia_nim/")
+                        else m["id"],
+                        name=m["id"],
+                    )
+                    for m in data.get("data", [])
+                ]
 
             else:
                 raise ProviderFetchError(f"Unsupported provider: {provider}")
@@ -194,7 +263,10 @@ async def get_provider_models(provider: str):
         return await fetch_provider_models(provider, api_key)
     except ProviderFetchError as exc:
         logger.error("Provider fetch error: %s", exc, exc_info=True)
-        raise HTTPException(status_code=exc.status_code, detail="An error occurred while communicating with the provider") from exc
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail="An error occurred while communicating with the provider",
+        ) from exc
 
 
 @router.post("/providers/{provider}/keys", response_model=list[ProviderModel])
@@ -212,7 +284,10 @@ async def save_and_verify_provider_key(provider: str, request: APIKeyRequest):
         models = await fetch_provider_models(provider, request.api_key.strip())
     except ProviderFetchError as exc:
         logger.error("Provider fetch error: %s", exc, exc_info=True)
-        raise HTTPException(status_code=exc.status_code, detail="An error occurred while communicating with the provider") from exc
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail="An error occurred while communicating with the provider",
+        ) from exc
 
     CredentialManager.save_api_key(provider, request.api_key.strip())
     return models
@@ -270,8 +345,12 @@ CURATED_MODELS = {
     "nvidia": [
         ProviderModel(id="nvidia_nim/meta/llama-3.1-70b-instruct", name="Llama 3.1 70B (NIM)"),
         ProviderModel(id="nvidia_nim/meta/llama-3.1-8b-instruct", name="Llama 3.1 8B (NIM)"),
-        ProviderModel(id="nvidia_nim/mistralai/mixtral-8x22b-instruct-v0.1", name="Mixtral 8x22B (NIM)"),
-        ProviderModel(id="nvidia_nim/nvidia/nemotron-4-340b-instruct", name="Nemotron 4 340B (NIM)"),
+        ProviderModel(
+            id="nvidia_nim/mistralai/mixtral-8x22b-instruct-v0.1", name="Mixtral 8x22B (NIM)"
+        ),
+        ProviderModel(
+            id="nvidia_nim/nvidia/nemotron-4-340b-instruct", name="Nemotron 4 340B (NIM)"
+        ),
     ],
 }
 

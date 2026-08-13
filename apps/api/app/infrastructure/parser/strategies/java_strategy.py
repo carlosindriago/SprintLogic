@@ -9,21 +9,25 @@ class JavaAnalyzerStrategy(LanguageAnalyzerStrategy):
     def __init__(self) -> None:
         import tree_sitter_java
         from tree_sitter import Language, Parser
+
         self.java_language = Language(tree_sitter_java.language())
         self.parser = Parser(self.java_language)
         self._compile_queries()
 
     def _compile_queries(self) -> None:
         from tree_sitter import Query
-        self.pass1_query = Query(self.java_language,
+
+        self.pass1_query = Query(
+            self.java_language,
             """
             (package_declaration (scoped_identifier) @file.package)
             (class_declaration name: (identifier) @class.name)
             (interface_declaration name: (identifier) @class.name)
             (enum_declaration name: (identifier) @class.name)
-            """
+            """,
         )
-        self.pass2_query = Query(self.java_language,
+        self.pass2_query = Query(
+            self.java_language,
             """
             (import_declaration (scoped_identifier) @import.name)
             (import_declaration (scoped_identifier) @import.name (asterisk) @import.wildcard)
@@ -34,11 +38,15 @@ class JavaAnalyzerStrategy(LanguageAnalyzerStrategy):
             (object_creation_expression type: (type_identifier) @instantiation.class)
 
             (method_invocation object: (identifier) @call.obj name: (identifier) @call.method)
-            """
+            """,
         )
 
     def is_compatible(self, project_path: Path) -> bool:
-        return (project_path / "pom.xml").exists() or (project_path / "build.gradle").exists() or any(project_path.glob("*.java"))
+        return (
+            (project_path / "pom.xml").exists()
+            or (project_path / "build.gradle").exists()
+            or any(project_path.glob("*.java"))
+        )
 
     async def parse_dependencies(self, project_path: Path) -> dict[str, list[dict[str, Any]]]:
         nodes: list[dict[str, Any]] = []
@@ -63,13 +71,15 @@ class JavaAnalyzerStrategy(LanguageAnalyzerStrategy):
         for filepath in java_files:
             rel_path = filepath.relative_to(project_path).as_posix()
 
-            nodes.append({
-                "id": f"file:{rel_path}",
-                "label": filepath.name,
-                "type": "file",
-                "language": "java",
-                "file_path": rel_path
-            })
+            nodes.append(
+                {
+                    "id": f"file:{rel_path}",
+                    "label": filepath.name,
+                    "type": "file",
+                    "language": "java",
+                    "file_path": rel_path,
+                }
+            )
 
             code = filepath.read_bytes()
             tree = self.parser.parse(code)
@@ -88,10 +98,10 @@ class JavaAnalyzerStrategy(LanguageAnalyzerStrategy):
                 if not node.text:
                     continue
                 if capture_name == "file.package":
-                    current_package = node.text.decode('utf8')
+                    current_package = node.text.decode("utf8")
                     file_packages[rel_path] = current_package
                 elif capture_name == "class.name":
-                    class_name = node.text.decode('utf8')
+                    class_name = node.text.decode("utf8")
                     if current_package:
                         fqn = f"{current_package}.{class_name}"
                         symbol_table[fqn] = f"file:{rel_path}"
@@ -122,11 +132,11 @@ class JavaAnalyzerStrategy(LanguageAnalyzerStrategy):
                 if not node.text:
                     continue
                 if capture_name == "import.name":
-                    import_fqn = node.text.decode('utf8')
+                    import_fqn = node.text.decode("utf8")
                     if pattern_index in pattern_has_wildcard:
                         wildcard_imports.append(import_fqn)
                     else:
-                        class_name = import_fqn.split('.')[-1]
+                        class_name = import_fqn.split(".")[-1]
                         explicit_imports[class_name] = import_fqn
 
             for capture_name, node, pattern_index in captures_pass2:
@@ -134,11 +144,20 @@ class JavaAnalyzerStrategy(LanguageAnalyzerStrategy):
                     continue
 
                 target_class = None
-                if capture_name in ("class.extends", "class.implements", "instantiation.class", "call.obj"):
-                    target_class = node.text.decode('utf8')
+                if capture_name in (
+                    "class.extends",
+                    "class.implements",
+                    "instantiation.class",
+                    "call.obj",
+                ):
+                    target_class = node.text.decode("utf8")
 
                     if capture_name == "call.obj":
-                        if target_class[0].islower() or target_class == "this" or target_class == "super":
+                        if (
+                            target_class[0].islower()
+                            or target_class == "this"
+                            or target_class == "super"
+                        ):
                             continue
 
                     target_fqn = None
@@ -154,15 +173,14 @@ class JavaAnalyzerStrategy(LanguageAnalyzerStrategy):
                     if target_fqn and target_fqn in symbol_table:
                         target_file = symbol_table[target_fqn]
                         if target_file != f"file:{rel_path}":
-                            edges.append({
-                                "source_id": f"file:{rel_path}",
-                                "target_id": target_file,
-                                "type": "depends_on"
-                            })
+                            edges.append(
+                                {
+                                    "source_id": f"file:{rel_path}",
+                                    "target_id": target_file,
+                                    "type": "depends_on",
+                                }
+                            )
 
         unique_edges = {f"{e['source_id']}->{e['target_id']}": e for e in edges}
 
-        return {
-            "nodes": nodes,
-            "edges": list(unique_edges.values())
-        }
+        return {"nodes": nodes, "edges": list(unique_edges.values())}

@@ -11,7 +11,28 @@ import {
   KanbanTicketCreate,
   KanbanTicketUpdate,
   BlastRadiusResponse,
+  Epic,
+  EpicCreate,
+  EpicUpdate,
+  Sprint,
+  SprintCreate,
+  SprintUpdate,
 } from '../types';
+
+export type { KanbanTicket, KanbanTicketCreate, KanbanTicketUpdate };
+
+export interface WBSImportTicket {
+  title: string;
+  type?: string;
+  priority?: string;
+  description: string;
+  report_id?: string;
+  affected_nodes?: any[];
+  branch_name?: string;
+  epic?: string;
+  sprint?: string;
+  subtasks?: any[];
+}
 
 export interface TestDiscoveryItem {
   file_path: string;
@@ -277,13 +298,20 @@ export const getGitDashboard = (projectId: string) => api.get<GitDashboard>(`/pr
 export const stageFile = (projectId: string, filePath: string) => api.post(`/projects/${projectId}/git/stage`, { file_path: filePath });
 export const unstageFile = (projectId: string, filePath: string) => api.post(`/projects/${projectId}/git/unstage`, { file_path: filePath });
 export const commitChanges = (projectId: string, message: string) => api.post(`/projects/${projectId}/git/commit`, { message });
+export const commitAndSwitchGitBranch = (projectId: string, message: string, target_branch: string = 'main') => 
+  api.post<{ status: string; message: string; branch: string; commit_output?: string }>(`/projects/${projectId}/git/commit-and-switch`, { message, target_branch });
+export const createGitBranch = (projectId: string, name: string) => api.post(`/projects/${projectId}/git/branches`, { name });
+export const discardGitChanges = (projectId: string, target_branch?: string) => 
+  api.post<{ status: string; action: string }>(`/projects/${projectId}/git/discard-changes`, target_branch ? { target_branch } : {});
+export const checkoutGitBranch = (projectId: string, branch_name: string) => api.post(`/projects/${projectId}/git/checkout`, { branch_name });
+export const deleteGitBranch = (projectId: string, branchName: string, force: boolean = false) => api.delete(`/projects/${projectId}/git/branches/${encodeURIComponent(branchName)}?force=${force}`);
 
 // --- Kanban & Tasks ---
 export interface KanbanColumn {
   id: string;
   title: string;
   color: string;
-  rule?: 'manual' | 'auto-on-test-fail' | 'auto-on-test-pass';
+  rule?: 'manual' | 'auto-on-test-fail' | 'auto-on-test-pass' | 'create_ephemeral_branch' | 'prompt_commit_push' | 'require_pull_request';
 }
 
 export interface WBSSubtask {
@@ -292,6 +320,9 @@ export interface WBSSubtask {
   description: string;
   estimated_hours: number;
   dependencies: string[];
+  branch_name?: string;
+  epic?: string;
+  sprint?: string;
 }
 
 export interface WorkPackage {
@@ -310,7 +341,8 @@ export const getProjectTasks = (projectId: string) => api.get<{ tasks: Task[] }>
 export const saveProjectTasks = (projectId: string, tasks: Task[]) => api.post<{ status: string }>(`/projects/${projectId}/tasks`, { tasks });
 export const getKanbanConfig = (projectId: string) => api.get<{ columns: KanbanColumn[] }>(`/projects/${projectId}/kanban/config`);
 export const saveKanbanConfig = (projectId: string, columns: KanbanColumn[]) => api.post<{ status: string }>(`/projects/${projectId}/kanban/config`, { columns });
-export const syncKanbanCommits = (projectId: string) => api.post<unknown>(`/projects/${projectId}/tasks/sync-commits`);
+export const syncKanbanCommits = (projectId: string) => 
+  api.post<{ status: string; tests_passing?: boolean; updated_tasks?: string[]; message?: string }>(`/projects/${projectId}/tasks/sync-commits`);
 export const generateWBS = (projectId: string, requirements: string, model?: string) => 
   api.post<WBSHierarchicalResponse>(`/projects/${projectId}/kanban/wbs`, model ? { requirements, model } : { requirements });
 
@@ -482,12 +514,46 @@ export const createKanbanTicket = async (projectId: string, payload: KanbanTicke
   return await api.post<KanbanTicket>(`/projects/${projectId}/kanban/tickets`, payload);
 };
 
+export const getKanbanTicket = async (ticketId: string): Promise<KanbanTicket> => {
+  return await api.get<KanbanTicket>(`/kanban/tickets/${ticketId}`);
+};
+
 export const updateKanbanTicket = async (ticketId: string, payload: KanbanTicketUpdate): Promise<KanbanTicket> => {
   return await api.patch<KanbanTicket>(`/kanban/tickets/${ticketId}`, payload);
 };
 
 export const deleteKanbanTicket = async (ticketId: string): Promise<void> => {
   return await api.delete<void>(`/kanban/tickets/${ticketId}`);
+};
+
+export const importWBSTickets = async (projectId: string, tickets: WBSImportTicket[]): Promise<{ success: boolean; imported_count: number }> => {
+  return await api.post<{ success: boolean; imported_count: number }>(`/projects/${projectId}/kanban/wbs-import`, tickets);
+};
+
+export const fetchEpics = async (projectId: string, includeArchived = false): Promise<Epic[]> => {
+  return await api.get<Epic[]>(`/projects/${projectId}/epics?include_archived=${includeArchived}`);
+};
+export const createEpic = async (projectId: string, payload: EpicCreate): Promise<Epic> => {
+  return await api.post<Epic>(`/projects/${projectId}/epics`, payload);
+};
+export const updateEpic = async (epicId: string, payload: EpicUpdate): Promise<Epic> => {
+  return await api.patch<Epic>(`/epics/${epicId}`, payload);
+};
+export const archiveEpic = async (epicId: string): Promise<void> => {
+  return await api.post<void>(`/epics/${epicId}/archive`);
+};
+
+export const fetchSprints = async (projectId: string, includeArchived = false): Promise<Sprint[]> => {
+  return await api.get<Sprint[]>(`/projects/${projectId}/sprints?include_archived=${includeArchived}`);
+};
+export const createSprint = async (projectId: string, payload: SprintCreate): Promise<Sprint> => {
+  return await api.post<Sprint>(`/projects/${projectId}/sprints`, payload);
+};
+export const updateSprint = async (sprintId: string, payload: SprintUpdate): Promise<Sprint> => {
+  return await api.patch<Sprint>(`/sprints/${sprintId}`, payload);
+};
+export const archiveSprint = async (sprintId: string): Promise<void> => {
+  return await api.post<void>(`/sprints/${sprintId}/archive`);
 };
 
 export const fetchBlastRadius = async (

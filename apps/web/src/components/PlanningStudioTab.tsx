@@ -6,12 +6,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useTabsStore } from '../store/tabsStore';
 
-import { sendPlanningMessage, PlanningMessagePayload, createKanbanTicket, WBSHierarchicalResponse } from '../lib/api';
+import { sendPlanningMessage, PlanningMessagePayload, importWBSTickets, WBSHierarchicalResponse, WBSImportTicket } from '../lib/api';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Send, Loader2, Play } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { toast } from 'sonner';
 import { WBSPlannerModal } from './WBSPlannerModal'; // We can reuse the tree UI from here but modified, or just extract it.
 import { usePlanningStore } from '../store/planningStore';
 
@@ -40,19 +41,51 @@ export default function PlanningStudioTab() {
     if (!wbsData || !activeProjectId) return;
     setIsExporting(true);
     try {
+      const ticketsToImport: WBSImportTicket[] = [];
+
       for (const pkg of wbsData.work_packages || []) {
         for (const task of pkg.subtasks || []) {
-          await createKanbanTicket(activeProjectId, {
-            title: `[${pkg.title}] ${task.title}`,
-            type: "Feature",
-            priority: "Medium",
-            description: task.description || "",
+          const rawSubtasks = (task as any).subtasks || [];
+          const normalizedSubtasks = rawSubtasks.map((st: any, idx: number) => {
+            if (typeof st === 'string') {
+              return { id: String(idx + 1), title: st, completed: false };
+            }
+            return {
+              id: st.id || String(idx + 1),
+              title: st.title || String(st),
+              completed: Boolean(st.completed)
+            };
+          });
+
+          const epicName = (task as any).epic || (pkg as any).epic || pkg.title;
+          const sprintName = (task as any).sprint || (pkg as any).sprint || "Sprint 1";
+          const ticketType = (task as any).type || "Feature";
+          const ticketPriority = (task as any).priority || "Medium";
+          const branchName = (task as any).branch_name || undefined;
+
+          ticketsToImport.push({
+            title: task.title,
+            type: ticketType,
+            priority: ticketPriority,
+            description: task.description || pkg.objective || "",
+            branch_name: branchName,
+            subtasks: normalizedSubtasks,
+            epic: epicName,
+            sprint: sprintName
           });
         }
       }
-      useTabsStore.getState().addTab({ id: 'kanban', title: 'Kanban Board', type: 'kanban', data: { projectId: activeProjectId } });
+
+      await importWBSTickets(activeProjectId, ticketsToImport);
+      toast.success("Importación Exitosa", { description: "Los tickets se han sincronizado en el Sprint Center." });
+      
+      // Clean up state if necessary, but we might want to keep it visible
+      // setWbsData(null);
+      
+      useTabsStore.getState().addTab({ id: 'kanban', title: 'Sprint Center', type: 'kanban', data: { projectId: activeProjectId } });
     } catch (e) {
       console.error("Failed to export to kanban", e);
+      toast.error("Error al importar", { description: "Ocurrió un error al sincronizar los tickets." });
     } finally {
       setIsExporting(false);
     }
@@ -239,7 +272,7 @@ export default function PlanningStudioTab() {
                   disabled={isExporting}
                 >
                   {isExporting ? <Loader2 className="w-3 h-3 mr-2 animate-spin" /> : null}
-                  Export to Kanban
+                  Exportar a Sprint Center
                 </Button>
               </div>
             </div>

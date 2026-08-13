@@ -6,7 +6,20 @@ import os
 from pathlib import Path
 from typing import Any
 
-GLOBAL_IGNORED_DIRS = {"vendor", "node_modules", ".venv", "bin", "obj", "target", ".git", "build", "dist", ".idea", ".vscode"}
+GLOBAL_IGNORED_DIRS = {
+    "vendor",
+    "node_modules",
+    ".venv",
+    "bin",
+    "obj",
+    "target",
+    ".git",
+    "build",
+    "dist",
+    ".idea",
+    ".vscode",
+}
+
 
 def scan_markdown_docs(project_path: str) -> list[dict[str, Any]]:
     """
@@ -26,9 +39,7 @@ def scan_markdown_docs(project_path: str) -> list[dict[str, Any]]:
             if ext in (".md", ".mdx", ".txt"):
                 full_path = Path(dirpath) / f
                 rel_path = full_path.relative_to(root).as_posix()
-                results.append({
-                    "file_path": rel_path
-                })
+                results.append({"file_path": rel_path})
 
     # Sort results placing README.md files first
     results.sort(key=lambda x: (not x["file_path"].lower().endswith("readme.md"), x["file_path"]))
@@ -67,13 +78,23 @@ def scan_undocumented_code(project_path: str) -> list[dict[str, Any]]:
                 if ext == ".dart" and (f.endswith(".g.dart") or f.endswith(".freezed.dart")):
                     continue
                 # Ignorar configuraciones python
-                if ext == ".py" and (f in ("setup.py", "conftest.py", "manage.py") or f.startswith("__")):
+                if ext == ".py" and (
+                    f in ("setup.py", "conftest.py", "manage.py") or f.startswith("__")
+                ):
                     continue
                 # Evitar que los archivos de tests se marquen como indocumentados
-                if f.endswith("Test.php") or f.endswith("Test.java") or f.endswith("_test.go") or \
-                   f.startswith("test_") or f.endswith(".spec.ts") or f.endswith(".test.js") or \
-                   f.endswith(".test.ts") or f.endswith(".spec.js") or f.endswith("Tests.cs") or \
-                   f.endswith("_test.dart"):
+                if (
+                    f.endswith("Test.php")
+                    or f.endswith("Test.java")
+                    or f.endswith("_test.go")
+                    or f.startswith("test_")
+                    or f.endswith(".spec.ts")
+                    or f.endswith(".test.js")
+                    or f.endswith(".test.ts")
+                    or f.endswith(".spec.js")
+                    or f.endswith("Tests.cs")
+                    or f.endswith("_test.dart")
+                ):
                     continue
 
                 full_path = Path(dirpath) / f
@@ -83,10 +104,7 @@ def scan_undocumented_code(project_path: str) -> list[dict[str, Any]]:
                     with open(full_path, encoding="utf-8") as file:
                         content = file.read()
                         if doc_signatures[ext] not in content:
-                            results.append({
-                                "file_path": rel_path,
-                                "is_documented": False
-                            })
+                            results.append({"file_path": rel_path, "is_documented": False})
                 except Exception:
                     logger.debug("Unhandled exception", exc_info=True)
 

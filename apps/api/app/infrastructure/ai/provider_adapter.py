@@ -69,6 +69,15 @@ class ProviderAdapter:
         if not model_id or model_id.lower() == "default":
             raise ValueError(f"Invalid or missing model name: {model}")
 
+        # Fix double prefixing issue (e.g. nvidia/nvidia_nim/...)
+        sub_provider, sub_model_id = cls._split_model(model_id)
+        if sub_provider and sub_provider == provider:
+            model_id = sub_model_id
+        elif sub_provider and provider == "nvidia" and sub_provider == "nvidia_nim":
+            # If outer is nvidia and inner is nvidia_nim, use inner completely
+            provider = "nvidia_nim"
+            model_id = sub_model_id
+
         internal_provider = "nvidia" if provider == "nvidia_nim" else provider
         config = cls.CUSTOM_PROVIDERS.get(internal_provider, {})
 
@@ -77,7 +86,7 @@ class ProviderAdapter:
         if config.get("litellm_provider"):
             litellm_model = f"{config['litellm_provider']}/{model_id}"
         else:
-            litellm_model = model if provider else model_id
+            litellm_model = f"{provider}/{model_id}" if provider else model_id
 
         if config.get("api_base"):
             kwargs["api_base"] = config["api_base"]

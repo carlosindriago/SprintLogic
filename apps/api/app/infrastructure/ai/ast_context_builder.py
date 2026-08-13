@@ -29,7 +29,7 @@ class ASTContextBuilder:
             .join(ASTVectorModel, ASTNodeMapModel.node_hash == ASTVectorModel.node_hash)
             .where(
                 ASTNodeMapModel.project_id == self.project_id,
-                ASTNodeMapModel.file_path == file_path
+                ASTNodeMapModel.file_path == file_path,
             )
         )
         results = (await self.session.execute(stmt)).all()
@@ -56,23 +56,27 @@ class ASTContextBuilder:
             # For this MVP, we just use 0 to group them hierarchically first.
             # A real implementation would store start_line in ASTNodeMapModel to sort properly.
 
-            nodes.append(ContextNode(
-                fqn=map_model.fqn,
-                content=vec_model.content,
-                node_type=node_type,
-                start_line=0,  # We would fetch this from DB
-                parent_fqn=parent_fqn
-            ))
+            nodes.append(
+                ContextNode(
+                    fqn=map_model.fqn,
+                    content=vec_model.content,
+                    node_type=node_type,
+                    start_line=0,  # We would fetch this from DB
+                    parent_fqn=parent_fqn,
+                )
+            )
         return nodes
 
     def _truncate_global_variable(self, content: str) -> str:
         """Global Variable Guillotine: Truncate massive static dictionaries."""
-        lines = content.split('\n')
+        lines = content.split("\n")
         if len(lines) <= 2:
             return content
         return f"{lines[0]} ... # (Truncated by SprintLogic Context Pruner)"
 
-    def build_xml_context(self, target_fqn: str, file_path: str, all_nodes: list[ContextNode]) -> str:
+    def build_xml_context(
+        self, target_fqn: str, file_path: str, all_nodes: list[ContextNode]
+    ) -> str:
         """
         Builds the XML using the Topological and Hierarchical Pruning Algorithm.
         """
@@ -81,18 +85,26 @@ class ASTContextBuilder:
             return ""
 
         # Ecosistema: Imports + Constants
-        ecosystem_nodes = [n for n in all_nodes if n.node_type in ('import', 'var') and n.parent_fqn == file_path]
+        ecosystem_nodes = [
+            n for n in all_nodes if n.node_type in ("import", "var") and n.parent_fqn == file_path
+        ]
 
         ecosystem_content = []
         for node in ecosystem_nodes:
-            if node.node_type == 'var':
+            if node.node_type == "var":
                 ecosystem_content.append(self._truncate_global_variable(node.content))
             else:
                 ecosystem_content.append(node.content)
 
         # Firmas Hermanas: Topological Pruning
         # 1. Filtro A: Familia Directa (Mismo parent)
-        candidates = [n for n in all_nodes if n.parent_fqn == target.parent_fqn and n.fqn != target.fqn and n.node_type in ('def', 'class')]
+        candidates = [
+            n
+            for n in all_nodes
+            if n.parent_fqn == target.parent_fqn
+            and n.fqn != target.fqn
+            and n.node_type in ("def", "class")
+        ]
 
         # 2. Filtro B: Localidad Espacial
         # Asumiendo que start_line está disponible (sort by distance)
@@ -114,8 +126,14 @@ class ASTContextBuilder:
         firmas_text = []
         for n in top_15:
             # Extraer solo la firma (las primeras líneas)
-            lines = n.content.split('\n')
-            signature = "\n".join([line for line in lines if not line.strip().startswith("#") and "def " in line or "class " in line])
+            lines = n.content.split("\n")
+            signature = "\n".join(
+                [
+                    line
+                    for line in lines
+                    if not line.strip().startswith("#") and "def " in line or "class " in line
+                ]
+            )
             firmas_text.append(signature + " ...")
         firmas.text = "\n".join(firmas_text)
 

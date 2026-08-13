@@ -87,20 +87,42 @@ class LocalGitGateway:
 
             modified = 0
             untracked = 0
+            modified_files: list[str] = []
+            untracked_files: list[str] = []
+            files: list[dict[str, str]] = []
 
             for line in status_output.split("\n"):
-                if not line:
+                if not line or len(line) < 3:
                     continue
                 code = line[:2]
+                file_path = line[2:].strip()
+                if " -> " in file_path:
+                    file_path = file_path.split(" -> ")[-1].strip()
+
                 if "??" in code:
                     untracked += 1
+                    untracked_files.append(file_path)
+                    files.append({"path": file_path, "status": "untracked"})
                 else:
                     modified += 1
+                    status_kind = "modified"
+                    if "A" in code:
+                        status_kind = "added"
+                    elif "D" in code:
+                        status_kind = "deleted"
+                    elif "R" in code:
+                        status_kind = "renamed"
+                    modified_files.append(file_path)
+                    files.append({"path": file_path, "status": status_kind})
 
             return {
                 "branch": branch.name,
                 "modified": modified,
                 "untracked": untracked,
+                "is_dirty": (modified > 0 or untracked > 0),
+                "modified_files": modified_files,
+                "untracked_files": untracked_files,
+                "files": files,
                 "raw_output": status_output,
             }
         except RuntimeError as e:
@@ -735,3 +757,39 @@ class LocalGitGateway:
     async def commit_changes(self, repo_path: str, message: str) -> dict[str, str]:
         output = await self._run_command(repo_path, "commit", "-m", message)
         return {"status": "committed", "message": message, "output": output.strip()}
+
+    async def discard_changes(
+        self, repo_path: str, target_branch: str | None = None
+    ) -> dict[str, str]:
+        await self._run_command(repo_path, "reset", "--hard", "HEAD")
+        await self._run_command(repo_path, "clean", "-fd")
+        if target_branch:
+            try:
+                await self._run_command(repo_path, "checkout", target_branch)
+            except RuntimeError:
+                if target_branch == "main":
+                    await self._run_command(repo_path, "checkout", "master")
+        return {"status": "discarded", "action": "reset_and_clean"}
+
+    async def commit_and_switch(
+        self, repo_path: str, message: str, target_branch: str = "main"
+    ) -> dict[str, Any]:
+        await self._run_command(repo_path, "add", "-A")
+        commit_output = await self._run_command(repo_path, "commit", "-m", message)
+
+        actual_target = target_branch
+        try:
+            await self._run_command(repo_path, "checkout", actual_target)
+        except RuntimeError:
+            if actual_target == "main":
+                actual_target = "master"
+                await self._run_command(repo_path, "checkout", actual_target)
+            else:
+                raise
+
+        return {
+            "status": "success",
+            "message": message,
+            "branch": actual_target,
+            "commit_output": commit_output.strip(),
+        }

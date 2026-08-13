@@ -107,9 +107,9 @@ export function CheatSheetModal({ isOpen, onClose }: CheatSheetModalProps) {
               </div>
             </div>
             
-            {/* Sección 4: Kanban */}
+            {/* Sección 4: Sprint Center */}
             <div className="space-y-4">
-              <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2">Kanban / Tareas</h3>
+              <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2">Sprint Center / Tareas</h3>
               <div className="space-y-1">
                 <ShortcutRow label="Nueva tarea" keys={["c"]} />
                 <ShortcutRow label="Sincronizar commits a tareas" keys={["s"]} />

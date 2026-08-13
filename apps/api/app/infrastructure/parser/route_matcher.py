@@ -7,12 +7,13 @@ def normalize_backend_route(route: str) -> str:
     Soporta {algo}, :algo
     """
     # Reemplaza los placeholders de tipo {id} o {variableName}
-    normalized = re.sub(r'\{[^}]+\}', '*', route)
+    normalized = re.sub(r"\{[^}]+\}", "*", route)
     # Reemplaza params de tipo :id
-    normalized = re.sub(r':[a-zA-Z0-9_]+', '*', normalized)
+    normalized = re.sub(r":[a-zA-Z0-9_]+", "*", normalized)
     # Limpia dobles slashes
-    normalized = re.sub(r'/+', '/', normalized)
-    return normalized.rstrip('/')
+    normalized = re.sub(r"/+", "/", normalized)
+    return normalized.rstrip("/")
+
 
 def normalize_frontend_route(route: str) -> str:
     """
@@ -21,11 +22,12 @@ def normalize_frontend_route(route: str) -> str:
     Las variables dinámicas ya deberían venir del AST como '*' o '${VAR}'
     """
     # Reemplaza cualquier interpolación explícita (ej ${userId}) por *
-    normalized = re.sub(r'\$\{[^}]+\}', '*', route)
+    normalized = re.sub(r"\$\{[^}]+\}", "*", route)
     # Limpia comodines seguidos ej ** -> *
-    normalized = re.sub(r'\*+', '*', normalized)
-    normalized = re.sub(r'/+', '/', normalized)
-    return normalized.rstrip('/')
+    normalized = re.sub(r"\*+", "*", normalized)
+    normalized = re.sub(r"/+", "/", normalized)
+    return normalized.rstrip("/")
+
 
 def do_routes_match(consumer_route: str, exposer_route: str) -> bool:
     """
@@ -48,7 +50,7 @@ def do_routes_match(consumer_route: str, exposer_route: str) -> bool:
     # Matching con comodines básicos:
     # c = */api/users/*
     # e = /api/users/*
-    e_regex = re.escape(e).replace('\\*', '.*')
+    e_regex = re.escape(e).replace("\\*", ".*")
 
     # Comprobar si el e_regex matchea el sufijo del consumer
     if re.search(f"{e_regex}$", c):

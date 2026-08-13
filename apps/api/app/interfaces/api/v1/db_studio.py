@@ -64,9 +64,7 @@ async def resolve_schema(
             except Exception as e:
                 logger.info("Live DB extraction failed: %s", e)
                 if mode == "live":
-                    raise HTTPException(
-                        status_code=400, detail="Could not connect to live DB"
-                    )
+                    raise HTTPException(status_code=400, detail="Could not connect to live DB")
 
     # 2. Level 2: ORM Parser (LLM)
     if mode in ("auto", "orm"):
@@ -170,7 +168,7 @@ async def get_project_database_schema(
         # Load from cache
         try:
             cached_ir = SchemaIR(**project.cached_schema)
-            cached_ir.is_outdated = (current_hash != project.schema_hash)
+            cached_ir.is_outdated = current_hash != project.schema_hash
             return cached_ir
         except Exception as e:
             logger.warning("Failed to parse cached schema, will recalculate: %s", e)
@@ -180,11 +178,12 @@ async def get_project_database_schema(
 
     # Save to DB
     from dataclasses import replace
+
     project = replace(
         project,
         cached_schema=schema.model_dump(),
         schema_hash=current_hash,
-        schema_updated_at=datetime.utcnow()
+        schema_updated_at=datetime.utcnow(),
     )
     await repo.save(project)
     await session.commit()
@@ -219,11 +218,12 @@ async def rescan_project_database_schema(
     schema = await resolve_schema(project.path, mode=mode, db_url=db_url, session=session)
 
     from dataclasses import replace
+
     project = replace(
         project,
         cached_schema=schema.model_dump(),
         schema_hash=current_hash,
-        schema_updated_at=datetime.utcnow()
+        schema_updated_at=datetime.utcnow(),
     )
     await repo.save(project)
     await session.commit()
@@ -260,7 +260,7 @@ async def export_project_database_schema_sql(
 
     return PlainTextResponse(
         content=sql_content,
-        headers={"Content-Disposition": f'attachment; filename="{project.name}_schema.sql"'}
+        headers={"Content-Disposition": f'attachment; filename="{project.name}_schema.sql"'},
     )
 
 
@@ -292,8 +292,9 @@ async def export_project_database_schema_markdown(
 
     return PlainTextResponse(
         content=md_content,
-        headers={"Content-Disposition": f'attachment; filename="{project.name}_schema.md"'}
+        headers={"Content-Disposition": f'attachment; filename="{project.name}_schema.md"'},
     )
+
 
 @router.post("/projects/{project_id}/database/audit", response_model=DBAuditResponse)
 async def audit_project_database_schema(
@@ -323,16 +324,16 @@ async def audit_project_database_schema(
             summary="No tables were found in the project repository or connected database.",
             score=100,
             alerts=[],
-            recommendations=["Connect to an active database or add .sql schema files to enable database architecture auditing."],
+            recommendations=[
+                "Connect to an active database or add .sql schema files to enable database architecture auditing."
+            ],
         )
 
     prompt_model = await prompt_repository.get_prompt_async(
         session, prompt_repository.DB_ARCHITECT_AUDITOR_ID
     )
     prompt_template = (
-        prompt_model.content
-        if prompt_model
-        else prompt_repository.DB_ARCHITECT_AUDITOR_CONTENT
+        prompt_model.content if prompt_model else prompt_repository.DB_ARCHITECT_AUDITOR_CONTENT
     )
 
     schema_json_str = schema.model_dump_json(indent=2)
@@ -402,9 +403,9 @@ async def audit_project_database_schema(
             structural_metrics={
                 "score": audit_res.score,
                 "alerts_count": len(audit_res.alerts),
-                "raw_audit": audit_res.model_dump()
+                "raw_audit": audit_res.model_dump(),
             },
-            created_at=now
+            created_at=now,
         )
         session.add(new_report)
         await session.commit()
@@ -413,10 +414,10 @@ async def audit_project_database_schema(
 
     return audit_res
 
+
 @router.get("/projects/{project_id}/database/audit/latest", response_model=DBAuditResponse)
 async def get_latest_database_audit(
-    project_id: str,
-    session: AsyncSession = Depends(get_db_session)
+    project_id: str, session: AsyncSession = Depends(get_db_session)
 ):
     try:
         project_uuid = UUID(project_id)
@@ -448,10 +449,7 @@ async def get_latest_database_audit(
 
 
 @router.post("/projects/{project_id}/database/preview")
-async def preview_project_database_schema(
-    project_id: str,
-    schema: SchemaIR
-):
+async def preview_project_database_schema(project_id: str, schema: SchemaIR):
     try:
         UUID(project_id)
     except ValueError:
@@ -460,27 +458,23 @@ async def preview_project_database_schema(
     from app.infrastructure.db_inspector.schema_exporter import export_to_sql
 
     sql_content = export_to_sql(schema)
-    return {
-        "sql": sql_content,
-        "orm": "-- ORM generation not yet implemented --\n"
-    }
+    return {"sql": sql_content, "orm": "-- ORM generation not yet implemented --\n"}
 
 
 @router.post("/projects/{project_id}/database/apply")
-async def apply_project_database_schema(
-    project_id: str,
-    schema: SchemaIR
-):
+async def apply_project_database_schema(project_id: str, schema: SchemaIR):
     try:
         UUID(project_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid project ID format")
 
     # Simulando escritura en disco
-    logger.info("🚀 Aplicando esquema al disco (Simulado) para proyecto %s. %d tablas detectadas.", project_id, len(schema.tables))
+    logger.info(
+        "🚀 Aplicando esquema al disco (Simulado) para proyecto %s. %d tablas detectadas.",
+        project_id,
+        len(schema.tables),
+    )
     return {"status": "success", "message": "Esquema sincronizado exitosamente (simulado)"}
-
-
 
 
 from pydantic import BaseModel
@@ -489,6 +483,7 @@ from pydantic import BaseModel
 class SchemaDraftCreate(BaseModel):
     name: str
 
+
 class SchemaDraftResponse(BaseModel):
     id: str
     project_id: str
@@ -496,11 +491,9 @@ class SchemaDraftResponse(BaseModel):
     created_at: str
     updated_at: str
 
+
 @router.get("/projects/{project_id}/database/drafts", response_model=list[SchemaDraftResponse])
-async def list_schema_drafts(
-    project_id: str,
-    session: AsyncSession = Depends(get_db_session)
-):
+async def list_schema_drafts(project_id: str, session: AsyncSession = Depends(get_db_session)):
     try:
         project_uuid = UUID(project_id)
     except ValueError:
@@ -524,15 +517,15 @@ async def list_schema_drafts(
             project_id=str(d.project_id),
             name=d.name,
             created_at=d.created_at.isoformat(),
-            updated_at=d.updated_at.isoformat()
-        ) for d in drafts
+            updated_at=d.updated_at.isoformat(),
+        )
+        for d in drafts
     ]
+
 
 @router.post("/projects/{project_id}/database/drafts", response_model=SchemaDraftResponse)
 async def create_schema_draft(
-    project_id: str,
-    payload: SchemaDraftCreate,
-    session: AsyncSession = Depends(get_db_session)
+    project_id: str, payload: SchemaDraftCreate, session: AsyncSession = Depends(get_db_session)
 ):
     try:
         project_uuid = UUID(project_id)
@@ -556,7 +549,7 @@ async def create_schema_draft(
         name=payload.name,
         schema_data=project.cached_schema,
         created_at=now,
-        updated_at=now
+        updated_at=now,
     )
     session.add(new_draft)
     await session.commit()
@@ -566,15 +559,16 @@ async def create_schema_draft(
         project_id=str(new_draft.project_id),
         name=new_draft.name,
         created_at=new_draft.created_at.isoformat(),
-        updated_at=new_draft.updated_at.isoformat()
+        updated_at=new_draft.updated_at.isoformat(),
     )
+
 
 @router.put("/projects/{project_id}/database/drafts/{draft_id}")
 async def update_schema_draft(
     project_id: str,
     draft_id: str,
     schema: SchemaIR,
-    session: AsyncSession = Depends(get_db_session)
+    session: AsyncSession = Depends(get_db_session),
 ):
     try:
         project_uuid = UUID(project_id)
@@ -588,7 +582,9 @@ async def update_schema_draft(
 
     from app.infrastructure.db.models import SchemaDraftModel
 
-    stmt = select(SchemaDraftModel).where(SchemaDraftModel.id == draft_uuid, SchemaDraftModel.project_id == project_uuid)
+    stmt = select(SchemaDraftModel).where(
+        SchemaDraftModel.id == draft_uuid, SchemaDraftModel.project_id == project_uuid
+    )
     result = await session.execute(stmt)
     draft = result.scalar_one_or_none()
 
@@ -601,11 +597,10 @@ async def update_schema_draft(
 
     return {"status": "success", "message": "Draft updated"}
 
+
 @router.delete("/projects/{project_id}/database/drafts/{draft_id}")
 async def delete_schema_draft(
-    project_id: str,
-    draft_id: str,
-    session: AsyncSession = Depends(get_db_session)
+    project_id: str, draft_id: str, session: AsyncSession = Depends(get_db_session)
 ):
     try:
         project_uuid = UUID(project_id)
@@ -617,7 +612,9 @@ async def delete_schema_draft(
 
     from app.infrastructure.db.models import SchemaDraftModel
 
-    stmt = select(SchemaDraftModel).where(SchemaDraftModel.id == draft_uuid, SchemaDraftModel.project_id == project_uuid)
+    stmt = select(SchemaDraftModel).where(
+        SchemaDraftModel.id == draft_uuid, SchemaDraftModel.project_id == project_uuid
+    )
     result = await session.execute(stmt)
     draft = result.scalar_one_or_none()
 
@@ -629,9 +626,10 @@ async def delete_schema_draft(
 
     return {"status": "success", "message": "Draft deleted"}
 
+
 def lightweight_schema_diff(main_schema: dict, draft_schema: dict) -> str:
-    main_tables = {t['name']: t for t in main_schema.get('tables', [])}
-    draft_tables = {t['name']: t for t in draft_schema.get('tables', [])}
+    main_tables = {t["name"]: t for t in main_schema.get("tables", [])}
+    draft_tables = {t["name"]: t for t in draft_schema.get("tables", [])}
 
     added_tables = []
     removed_tables = []
@@ -641,8 +639,8 @@ def lightweight_schema_diff(main_schema: dict, draft_schema: dict) -> str:
         if tname not in main_tables:
             added_tables.append(tname)
         else:
-            main_cols = {c['name']: c for c in main_tables[tname].get('columns', [])}
-            draft_cols = {c['name']: c for c in tdata.get('columns', [])}
+            main_cols = {c["name"]: c for c in main_tables[tname].get("columns", [])}
+            draft_cols = {c["name"]: c for c in tdata.get("columns", [])}
 
             added_cols = [c for c in draft_cols if c not in main_cols]
             removed_cols = [c for c in main_cols if c not in draft_cols]
@@ -670,11 +668,10 @@ def lightweight_schema_diff(main_schema: dict, draft_schema: dict) -> str:
 
     return "\n".join(lines) if lines else "No hay cambios estructurales."
 
+
 @router.post("/projects/{project_id}/database/drafts/{draft_id}/generate-plan")
 async def generate_migration_plan(
-    project_id: str,
-    draft_id: str,
-    session: AsyncSession = Depends(get_db_session)
+    project_id: str, draft_id: str, session: AsyncSession = Depends(get_db_session)
 ):
     try:
         project_uuid = UUID(project_id)
@@ -691,7 +688,9 @@ async def generate_migration_plan(
 
     from app.infrastructure.db.models import SchemaDraftModel
 
-    stmt = select(SchemaDraftModel).where(SchemaDraftModel.id == draft_uuid, SchemaDraftModel.project_id == project_uuid)
+    stmt = select(SchemaDraftModel).where(
+        SchemaDraftModel.id == draft_uuid, SchemaDraftModel.project_id == project_uuid
+    )
     result = await session.execute(stmt)
     draft = result.scalar_one_or_none()
 
@@ -699,7 +698,7 @@ async def generate_migration_plan(
         raise HTTPException(status_code=404, detail="Draft not found")
 
     diff_string = lightweight_schema_diff(project.cached_schema, draft.schema_data)
-    orm_type = project.cached_schema.get('detected_framework', 'SQL')
+    orm_type = project.cached_schema.get("detected_framework", "SQL")
 
     prompt = f"""
 Eres el COACH IA experto en arquitecturas de bases de datos y migraciones ({orm_type}).
@@ -723,7 +722,9 @@ INSTRUCCIONES:
         gateway = LiteLLMGateway()
 
     try:
-        raw_response = await gateway.generate_completion(prompt, fallbacks=fallbacks if 'fallbacks' in locals() else None)
+        raw_response = await gateway.generate_completion(
+            prompt, fallbacks=fallbacks if "fallbacks" in locals() else None
+        )
     except Exception as e:
         logger.error("LLM completion failed for migration plan: %s", e)
         raise HTTPException(status_code=500, detail="Failed to run AI migration plan")

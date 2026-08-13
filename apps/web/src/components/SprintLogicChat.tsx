@@ -101,7 +101,7 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
   const defaultModel = useLLMConfigStore((s) => s.defaultModel);
   const setDefaultModel = useLLMConfigStore((s) => s.setDefaultModel);
   const activeModel = useMemo(() => asValidModel(defaultModel), [defaultModel]);
-  const { isDraftMode, setDraftMode, draftPayload, clearDraftMode, activeConversationId, setActiveConversationId } = useChatStore();
+  const { isDraftMode, setDraftMode, draftPayload, clearDraftMode, activeConversationId, setActiveConversationId, pendingQuery, setPendingQuery } = useChatStore();
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
@@ -184,6 +184,13 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
       setMessages([{ role: "assistant", content: "Hola, soy SprintLogic AI. ¿En qué te ayudo hoy?" }]);
     }
   }, [activeConversationId, projectId]);
+
+  useEffect(() => {
+    if (pendingQuery && activeModel) {
+      sendMessage({ role: "user", content: pendingQuery });
+      setPendingQuery(null);
+    }
+  }, [pendingQuery, activeModel]);
 
   const handleNewChat = () => {
     setActiveConversationId(null);

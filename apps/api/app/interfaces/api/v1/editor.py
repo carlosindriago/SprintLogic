@@ -68,7 +68,7 @@ async def audit_code(request: AuditRequest):
         return []
 
     try:
-        results = ast_auditor.audit_code(request.code.encode('utf8'))
+        results = ast_auditor.audit_code(request.code.encode("utf8"))
         return [
             UndocumentedExportResponse(
                 name=r.name,
@@ -76,18 +76,22 @@ async def audit_code(request: AuditRequest):
                 start_line=r.start_line,
                 start_column=r.start_column,
                 end_line=r.end_line,
-                end_column=r.end_column
-            ) for r in results
+                end_column=r.end_column,
+            )
+            for r in results
         ]
     except Exception:
         logger.warning("Unhandled exception", exc_info=True)
         return []
 
+
 class GenerateDocRequest(BaseModel):
     signature: str
 
+
 class GenerateDocResponse(BaseModel):
     jsdoc: str
+
 
 @router.post("/generate_docs", response_model=GenerateDocResponse)
 async def generate_docs(request: GenerateDocRequest):
@@ -107,9 +111,12 @@ Solo devuelve el bloque JSDoc, sin bloques de código markdown, sin texto adicio
             doc_model_id = tool_model_label(doc_provider, doc_model)
             agent = AIAgent(session=session)
             response = ""
-            async for chunk_str in agent.chat_stream([{"role": "user", "content": prompt}], model=doc_model_id):
+            async for chunk_str in agent.chat_stream(
+                [{"role": "user", "content": prompt}], model=doc_model_id
+            ):
                 try:
                     import json
+
                     chunk = json.loads(chunk_str)
                     if chunk.get("type") == "message_chunk":
                         response += chunk.get("text", "")

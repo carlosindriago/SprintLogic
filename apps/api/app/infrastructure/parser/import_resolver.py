@@ -7,9 +7,11 @@ logger = logging.getLogger(__name__)
 
 CANDIDATE_EXTS = [".ts", ".tsx", ".js", ".jsx", ".mjs", ".json"]
 
+
 def strip_json_comments(text: str) -> str:
     """Remueve comentarios // de una línea (no dentro de strings)"""
-    return re.sub(r'^\s*//.*?$', '', text, flags=re.MULTILINE)
+    return re.sub(r"^\s*//.*?$", "", text, flags=re.MULTILINE)
+
 
 def try_resolve_file(base_path: str, file_set: set[str]) -> str | None:
     """Intenta resolver una ruta base a un archivo real probando extensiones y archivos index"""
@@ -31,6 +33,7 @@ def try_resolve_file(base_path: str, file_set: set[str]) -> str | None:
 
     return None
 
+
 def is_external_import(imp: str, alias_prefixes: list[str]) -> bool:
     """Determina si un import es a node_modules o es interno"""
     if imp.startswith("./") or imp.startswith("../"):
@@ -40,6 +43,7 @@ def is_external_import(imp: str, alias_prefixes: list[str]) -> bool:
             return False
     # If it's a bare import without known aliases, we consider it external (e.g. 'react', 'next')
     return True
+
 
 class TSConfigResolver:
     def __init__(self, file_paths: list[str]):
@@ -60,8 +64,8 @@ class TSConfigResolver:
                         content = f.read()
                         clean_content = strip_json_comments(content)
                         # También remover posibles trailing commas para evitar fallos en json.loads
-                        clean_content = re.sub(r',\s*}', '}', clean_content)
-                        clean_content = re.sub(r',\s*\]', ']', clean_content)
+                        clean_content = re.sub(r",\s*}", "}", clean_content)
+                        clean_content = re.sub(r",\s*\]", "]", clean_content)
 
                         config = json.loads(clean_content)
                         compiler_options = config.get("compilerOptions", {})
@@ -97,8 +101,8 @@ class TSConfigResolver:
         for prefix, targets in self.paths.items():
             if imp.startswith(prefix):
                 # Remover el alias del import
-                suffix = imp[len(prefix):]
-                target_base = targets[0] # Ej: './src/'
+                suffix = imp[len(prefix) :]
+                target_base = targets[0]  # Ej: './src/'
 
                 # Base de resolución: tsconfig_dir + baseUrl (si existe)
                 base_dir = Path(self.tsconfig_dir)

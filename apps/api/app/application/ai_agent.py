@@ -27,42 +27,45 @@ def _parse_dsml_tool_calls(buffer: str) -> list[dict[str, Any]]:
     Parses DeepSeek's raw XML tool calls (DSML) into standard OpenAI tool_call dictionaries.
     Sanitizes DSML tags into standard XML before using ElementTree.
     """
-    clean_xml = buffer.replace("<｜｜DSML｜｜tool_calls>", "<tool_calls>") \
-                      .replace("</｜｜DSML｜｜tool_calls>", "</tool_calls>") \
-                      .replace("<｜｜DSML｜｜invoke", "<invoke") \
-                      .replace("</｜｜DSML｜｜invoke>", "</invoke>") \
-                      .replace("<｜｜DSML｜｜parameter", "<parameter") \
-                      .replace("</｜｜DSML｜｜parameter>", "</parameter>")
+    clean_xml = (
+        buffer.replace("<｜｜DSML｜｜tool_calls>", "<tool_calls>")
+        .replace("</｜｜DSML｜｜tool_calls>", "</tool_calls>")
+        .replace("<｜｜DSML｜｜invoke", "<invoke")
+        .replace("</｜｜DSML｜｜invoke>", "</invoke>")
+        .replace("<｜｜DSML｜｜parameter", "<parameter")
+        .replace("</｜｜DSML｜｜parameter>", "</parameter>")
+    )
 
     start_idx = clean_xml.find("<tool_calls>")
     end_idx = clean_xml.rfind("</tool_calls>")
     if start_idx != -1 and end_idx != -1:
-        clean_xml = clean_xml[start_idx:end_idx + 13]
+        clean_xml = clean_xml[start_idx : end_idx + 13]
     else:
         return []
 
     try:
         root = ET.fromstring(clean_xml)
         tools = []
-        for invoke in root.findall('invoke'):
-            tool_name = invoke.get('name')
+        for invoke in root.findall("invoke"):
+            tool_name = invoke.get("name")
             params = {}
-            for param in invoke.findall('parameter'):
-                params[param.get('name')] = param.text
+            for param in invoke.findall("parameter"):
+                params[param.get("name")] = param.text
 
-            tools.append({
-                "id": f"call_dsml_{uuid4().hex[:8]}",
-                "type": "function",
-                "function": {
-                    "name": tool_name,
-                    "arguments": json.dumps(params)
+            tools.append(
+                {
+                    "id": f"call_dsml_{uuid4().hex[:8]}",
+                    "type": "function",
+                    "function": {"name": tool_name, "arguments": json.dumps(params)},
                 }
-            })
+            )
         return tools
     except ET.ParseError as e:
         import logging
+
         logging.getLogger(__name__).warning(f"Error parseando DSML: {e}")
         return []
+
 
 def _find_all_occurrences(
     content: str,
@@ -125,10 +128,10 @@ def _disambiguate(
         before_ok = True
         after_ok = True
         if context_before:
-            before_region = content[max(0, start - 200):start].rstrip("\n")
+            before_region = content[max(0, start - 200) : start].rstrip("\n")
             before_ok = before_region.endswith(context_before.rstrip("\n"))
         if context_after:
-            after_region = content[end:end + 200].lstrip("\n")
+            after_region = content[end : end + 200].lstrip("\n")
             after_ok = after_region.startswith(context_after.lstrip("\n"))
         if before_ok and after_ok:
             result.append((start, end))
@@ -140,6 +143,7 @@ class AIAgent:
         self.session = session
         self.project_id: UUID | None = self._coerce_project_id(project_id)
         from app.infrastructure.config import DEFAULT_LLM_MODEL
+
         self.model = DEFAULT_LLM_MODEL
 
         self.tools = [
@@ -396,7 +400,13 @@ class AIAgent:
                                 "description": "Descripción corta del cambio para el mensaje del diff, ej. 'Cambiar color del botón principal a rojo'",
                             },
                         },
-                        "required": ["file_path", "original_file_hash", "old_code", "new_code", "description"],
+                        "required": [
+                            "file_path",
+                            "original_file_hash",
+                            "old_code",
+                            "new_code",
+                            "description",
+                        ],
                     },
                 },
             },
@@ -448,6 +458,31 @@ class AIAgent:
             },
         ]
 
+        from app.application.tools.graph_tools import BlastRadiusArgs
+        from app.application.tools.telemetry_tools import FlowStateArgs
+
+        self.tools.append(
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_file_blast_radius",
+                    "description": "Calculates the blast radius of a file by finding its in-degree, out-degree, and a list of files that directly import it.",
+                    "parameters": BlastRadiusArgs.model_json_schema(),
+                },
+            }
+        )
+
+        self.tools.append(
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_developer_flow_state",
+                    "description": "Fetches the developer's current flow state based on the last 30 minutes of telemetry pings (active time, idle ratio, friction level).",
+                    "parameters": FlowStateArgs.model_json_schema(),
+                },
+            }
+        )
+
         self._project_root: str | None = None
         self._pending_proposals: list[dict[str, Any]] = []
 
@@ -468,22 +503,26 @@ class AIAgent:
                 if not self.project_id or not file_path:
                     return "Error: project_id and file_path are required."
                 from app.infrastructure.db.models import UniversalBookmarkModel
+
                 bookmark_stmt = select(UniversalBookmarkModel).where(
                     UniversalBookmarkModel.project_id == self.project_id,
-                    UniversalBookmarkModel.file_path == file_path
+                    UniversalBookmarkModel.file_path == file_path,
                 )
                 bookmark_result = await session.execute(bookmark_stmt)
                 bookmarks = bookmark_result.scalars().all()
                 if not bookmarks:
                     return "No bookmarks found for this file."
-                return json.dumps([
-                    {
-                        "note": b.note,
-                        "selected_text": b.selected_text,
-                        "start_line": b.start_line,
-                        "end_line": b.end_line
-                    } for b in bookmarks
-                ])
+                return json.dumps(
+                    [
+                        {
+                            "note": b.note,
+                            "selected_text": b.selected_text,
+                            "start_line": b.start_line,
+                            "end_line": b.end_line,
+                        }
+                        for b in bookmarks
+                    ]
+                )
 
             elif name == "get_node_dependencies":
                 node_name = args.get("node_name", "")
@@ -492,21 +531,43 @@ class AIAgent:
                 from app.infrastructure.repositories.graph_repository import (
                     SQLAlchemyGraphRepository,
                 )
+
                 repo = SQLAlchemyGraphRepository(session)
                 try:
-                    edges = await repo.get_blast_radius(self.project_id, f"file:{node_name}", max_depth=2)
+                    edges = await repo.get_blast_radius(
+                        self.project_id, f"file:{node_name}", max_depth=2
+                    )
                     if not edges:
                         return "No dependencies found."
-                    return json.dumps([
-                        {
-                            "source": e["source_file_path"],
-                            "target": e["target_id"],
-                            "type": e["edge_type"]
-                        } for e in edges
-                    ])
+                    return json.dumps(
+                        [
+                            {
+                                "type": e["edge_type"],
+                                "source": e["source_id"],
+                                "target": e["target_id"],
+                            }
+                            for e in edges
+                        ]
+                    )
                 except Exception as e:
-                    logger.warning("Unhandled exception: %s", e, exc_info=True)
-                    return f"Error retrieving dependencies: {str(e)}"
+                    return f"Error al buscar dependencias: {str(e)}"
+
+            elif name == "get_file_blast_radius":
+                from app.application.tools.graph_tools import get_file_blast_radius
+
+                file_path = args.get("file_path", "")
+                if not self.project_id or not file_path:
+                    return "Error: project_id and file_path are required."
+                blast_result = await get_file_blast_radius(session, self.project_id, file_path)
+                return json.dumps(blast_result)
+
+            elif name == "get_developer_flow_state":
+                from app.application.tools.telemetry_tools import get_developer_flow_state
+
+                if not self.project_id:
+                    return "Error: project_id is required."
+                flow_result = await get_developer_flow_state(session, self.project_id)
+                return json.dumps(flow_result)
 
             elif name == "get_project_context_summary":
                 if not self.project_id:
@@ -516,8 +577,13 @@ class AIAgent:
                     return "Error: No project context available."
                 try:
                     from app.infrastructure.ai.project_scanner import get_project_awareness_xml
-                    awareness_xml = await get_project_awareness_xml(root, self.project_id, getattr(self, 'session', None))
-                    return awareness_xml if awareness_xml else "Project has no tracked dependencies."
+
+                    awareness_xml = await get_project_awareness_xml(
+                        root, self.project_id, getattr(self, "session", None)
+                    )
+                    return (
+                        awareness_xml if awareness_xml else "Project has no tracked dependencies."
+                    )
                 except Exception as e:
                     logger.warning("Unhandled exception: %s", e, exc_info=True)
                     return f"Error building project summary: {str(e)}"
@@ -586,14 +652,14 @@ class AIAgent:
                 # Convert for LIKE query instead of MATCH
                 sanitized = f"%{query.strip()}%"
 
-                result = await session.execute(
+                search_res = await session.execute(
                     text(
                         "SELECT type, name, path, line FROM search_index "
                         "WHERE name LIKE :q OR path LIKE :q OR content LIKE :q LIMIT 20"
                     ),
                     {"q": sanitized},
                 )
-                rows = result.fetchall()
+                rows = search_res.fetchall()
                 if not rows:
                     return "No results found in codebase."
                 return json.dumps(
@@ -614,15 +680,15 @@ class AIAgent:
                 try:
                     content = target.read_text(encoding="utf-8", errors="ignore")
                     file_hash = hashlib.sha256(content.encode()).hexdigest()
-                    truncated = content[:2000] + (
-                        "...(truncated)" if len(content) > 2000 else ""
+                    truncated = content[:2000] + ("...(truncated)" if len(content) > 2000 else "")
+                    return json.dumps(
+                        {
+                            "content": truncated,
+                            "file_hash": file_hash,
+                            "file_path": file_path,
+                            "total_length": len(content),
+                        }
                     )
-                    return json.dumps({
-                        "content": truncated,
-                        "file_hash": file_hash,
-                        "file_path": file_path,
-                        "total_length": len(content),
-                    })
                 except FileNotFoundError:
                     return f"Error: File not found — {file_path}"
                 except Exception as e:
@@ -665,7 +731,7 @@ class AIAgent:
                 return f"<contexto_ast>\n<ecosistema>\n# Ecosystem for {query}\n</ecosistema>\n<firmas_hermanas>\n# Firmas\n</firmas_hermanas>\n<codigo_objetivo>\n# Target code\n</codigo_objetivo>\n</contexto_ast>"
 
             elif name == "check_developer_vital_signs":
-                result = await session.execute(
+                vital_res = await session.execute(
                     text("""
                         SELECT
                             COALESCE(SUM(thinking_ms + coding_ms + testing_ms), 0) as total_ms,
@@ -675,7 +741,7 @@ class AIAgent:
                         WHERE timestamp >= datetime('now', '-30 minutes')
                     """)
                 )
-                row = result.fetchone()
+                row = vital_res.fetchone()
                 if not row:
                     return "No hay datos de telemetría disponibles."
 
@@ -695,14 +761,16 @@ class AIAgent:
                 if total_min < 15 and idle_pings >= 5:
                     status = "bloqueado"
 
-                return json.dumps({
-                    "ventana": "30 minutos",
-                    "deep_flow_horas": deep_flow_hrs,
-                    "actividad_total_minutos": total_min,
-                    "pings_inactivos": idle_pings,
-                    "ratio_inactividad_pct": idle_ratio,
-                    "diagnostico": status,
-                })
+                return json.dumps(
+                    {
+                        "ventana": "30 minutos",
+                        "deep_flow_horas": deep_flow_hrs,
+                        "actividad_total_minutos": total_min,
+                        "pings_inactivos": idle_pings,
+                        "ratio_inactividad_pct": idle_ratio,
+                        "diagnostico": status,
+                    }
+                )
 
             elif name == "propose_code_edit":
                 file_path = args.get("file_path", "")
@@ -760,9 +828,7 @@ class AIAgent:
 
                 if len(matches) > 1:
                     if context_before or context_after:
-                        matches = _disambiguate(
-                            content, matches, context_before, context_after
-                        )
+                        matches = _disambiguate(content, matches, context_before, context_after)
                         if not matches:
                             return (
                                 "Error: El bloque aparece múltiples veces y los contextos "
@@ -853,7 +919,10 @@ class AIAgent:
         awareness_xml = ""
         try:
             from app.infrastructure.ai.project_scanner import get_project_awareness_xml
-            awareness_xml = await get_project_awareness_xml(root, self.project_id, getattr(self, 'session', None))
+
+            awareness_xml = await get_project_awareness_xml(
+                root, self.project_id, getattr(self, "session", None)
+            )
             if not awareness_xml:
                 awareness_xml = ""
         except Exception:
@@ -864,10 +933,11 @@ class AIAgent:
 
         prompt_model = await get_prompt_async(self.session, "ai_agent_base")
         if prompt_model:
-            base_prompt = render_prompt(prompt_model.content, root=root, awareness_xml=awareness_xml)
+            base_prompt = render_prompt(
+                prompt_model.content, root=root, awareness_xml=awareness_xml
+            )
         else:
             base_prompt = f"Eres SprintLogic AI (El Crisol), el arquitecto de software socrático integrado en el IDE del usuario.\nProyecto alojado en: {root}\n\n"
-
 
         # Pipeline Telescópico - Inyectar Developer RAG
         if user_query:
@@ -875,12 +945,13 @@ class AIAgent:
                 import litellm
 
                 from app.infrastructure.security.credential_manager import CredentialManager
+
                 api_key = CredentialManager.get_api_key("gemini")
                 if api_key:
+                    from app.infrastructure.config import DEFAULT_EMBEDDING_MODEL
+
                     embed_resp = await litellm.aembedding(
-                        model="gemini/text-embedding-004",
-                        input=[user_query],
-                        api_key=api_key
+                        model=DEFAULT_EMBEDDING_MODEL, input=[user_query], api_key=api_key
                     )
                     query_vector = embed_resp.data[0]["embedding"]
 
@@ -897,10 +968,12 @@ class AIAgent:
                             insight = None
                             if all_insights:
                                 q_vec = np.array(query_vector, dtype=np.float32)
-                                db_matrix = np.vstack([
-                                    np.frombuffer(i.embedding_blob, dtype=np.float32)
-                                    for i in all_insights
-                                ])
+                                db_matrix = np.vstack(
+                                    [
+                                        np.frombuffer(i.embedding_blob, dtype=np.float32)
+                                        for i in all_insights
+                                    ]
+                                )
                                 similarities = np.dot(db_matrix, q_vec)
                                 best_index = np.argmax(similarities)
                                 best_score = similarities[best_index]
@@ -909,7 +982,7 @@ class AIAgent:
                                     insight_obj = all_insights[int(best_index)]
                                     insight = {
                                         "sintoma": insight_obj.sintoma,
-                                        "solucion": insight_obj.solucion
+                                        "solucion": insight_obj.solucion,
                                     }
                     except Exception:
                         logger.warning("Unhandled exception", exc_info=True)
@@ -925,6 +998,7 @@ class AIAgent:
             except Exception as e:
                 logger.warning("Unhandled exception: %s", e, exc_info=True)
                 import logging
+
                 logging.getLogger(__name__).warning(f"Error fetching insight memory: {e}")
 
         return base_prompt
@@ -958,8 +1032,7 @@ class AIAgent:
 
         try:
             summary_input = "\n".join(
-                f"[{m.get('role', '?')}]: {str(m.get('content', ''))[:400]}"
-                for m in to_summarize
+                f"[{m.get('role', '?')}]: {str(m.get('content', ''))[:400]}" for m in to_summarize
             )
 
             response = await litellm.acompletion(
@@ -1000,7 +1073,7 @@ class AIAgent:
             if len(messages) <= MAX_FALLBACK:
                 return messages
             if system_msg:
-                return [system_msg] + messages[-(MAX_FALLBACK - 1):]
+                return [system_msg] + messages[-(MAX_FALLBACK - 1) :]
             return messages[-MAX_FALLBACK:]
 
     async def chat_stream(self, messages: list[dict[str, Any]], model: str):
@@ -1026,14 +1099,19 @@ class AIAgent:
 
             system_msg = await self._build_system_message(user_query)
             if system_msg:
-                existing_system = next((m.get("content", "") for m in messages if m.get("role") == "system"), "")
+                existing_system = next(
+                    (m.get("content", "") for m in messages if m.get("role") == "system"), ""
+                )
                 # We append existing system context (e.g. EDITOR_CONTEXT from sync.py) to our built prompt
                 if existing_system:
                     # Quick heuristic to avoid duplicating the base prompt if it was already injected
                     if "=== IRON PROMPT" in existing_system:
                         # Extract just the EDITOR_CONTEXT
                         import re
-                        match = re.search(r"<EDITOR_CONTEXT>.*?</EDITOR_CONTEXT>", existing_system, re.DOTALL)
+
+                        match = re.search(
+                            r"<EDITOR_CONTEXT>.*?</EDITOR_CONTEXT>", existing_system, re.DOTALL
+                        )
                         if match:
                             system_msg += f"\n\n{match.group(0)}"
                     else:
@@ -1115,7 +1193,11 @@ class AIAgent:
                         if is_intercepting_tool:
                             xml_accumulator += text_chunk
                             # We are intercepting. Check if we hit the end tag.
-                            if "</｜｜DSML｜｜tool_calls>" in xml_accumulator or "</tool_calls>" in xml_accumulator or "</invoke>" in xml_accumulator:
+                            if (
+                                "</｜｜DSML｜｜tool_calls>" in xml_accumulator
+                                or "</tool_calls>" in xml_accumulator
+                                or "</invoke>" in xml_accumulator
+                            ):
                                 parsed_tools = _parse_dsml_tool_calls(xml_accumulator)
                                 tool_calls_accum.extend(parsed_tools)
 
@@ -1142,7 +1224,9 @@ class AIAgent:
                                     yield json.dumps({"type": "message_chunk", "text": safe_text})
 
                                 yield_buffer = ""
-                                yield json.dumps({"type": "agent_state", "status": "Preparando herramientas..."})
+                                yield json.dumps(
+                                    {"type": "agent_state", "status": "Preparando herramientas..."}
+                                )
                                 break
 
                             # Check for partial suffix match (lookahead)
@@ -1253,9 +1337,7 @@ class AIAgent:
         except Exception:
             _logger = logging.getLogger(__name__)
             _logger.exception("AI agent execution failed")
-            yield json.dumps(
-                {"type": "error", "message": "Falla catastrófica en el núcleo"}
-            )
+            yield json.dumps({"type": "error", "message": "Falla catastrófica en el núcleo"})
 
     @staticmethod
     def _coerce_project_id(value: UUID | str | None) -> UUID | None:

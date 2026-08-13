@@ -6,6 +6,7 @@ from tree_sitter import Language, Parser, Query, QueryCursor
 TS_LANGUAGE = Language(tsts.language_typescript())
 parser = Parser(TS_LANGUAGE)
 
+
 @dataclass
 class UndocumentedExport:
     name: str
@@ -15,12 +16,15 @@ class UndocumentedExport:
     end_line: int
     end_column: int
 
+
 class ASTAuditor:
     def __init__(self):
         # Query to find all export statements that export a function or arrow function
         # We capture the export_statement as @export_target
         # We capture the function name, parameters, and return type for signature extraction
-        self.export_query = Query(TS_LANGUAGE, """
+        self.export_query = Query(
+            TS_LANGUAGE,
+            """
         (export_statement
           declaration: [
             (function_declaration
@@ -40,16 +44,20 @@ class ASTAuditor:
             )
           ]
         ) @export_target
-        """)
+        """,
+        )
 
         # Query to find exports that already have a preceding comment
-        self.doc_query = Query(TS_LANGUAGE, """
+        self.doc_query = Query(
+            TS_LANGUAGE,
+            """
         (
           (comment)+ @doc
           .
           (export_statement) @exported_with_doc
         )
-        """)
+        """,
+        )
 
     def audit_code(self, source_code: bytes) -> list[UndocumentedExport]:
         tree = parser.parse(source_code)
@@ -85,18 +93,30 @@ class ASTAuditor:
 
             if "func.name" in captures:
                 name_node = captures["func.name"][0]
-                name = name_node.text.decode('utf8') if name_node.text else ""
+                name = name_node.text.decode("utf8") if name_node.text else ""
                 params_nodes = captures.get("func.params")
-                params = params_nodes[0].text.decode('utf8') if params_nodes and params_nodes[0].text else "()"
+                params = (
+                    params_nodes[0].text.decode("utf8")
+                    if params_nodes and params_nodes[0].text
+                    else "()"
+                )
                 ret_nodes = captures.get("func.return")
-                ret_type = ret_nodes[0].text.decode('utf8') if ret_nodes and ret_nodes[0].text else ""
+                ret_type = (
+                    ret_nodes[0].text.decode("utf8") if ret_nodes and ret_nodes[0].text else ""
+                )
             elif "var.name" in captures:
                 name_node = captures["var.name"][0]
-                name = name_node.text.decode('utf8') if name_node.text else ""
+                name = name_node.text.decode("utf8") if name_node.text else ""
                 params_nodes = captures.get("var.params")
-                params = params_nodes[0].text.decode('utf8') if params_nodes and params_nodes[0].text else "()"
+                params = (
+                    params_nodes[0].text.decode("utf8")
+                    if params_nodes and params_nodes[0].text
+                    else "()"
+                )
                 ret_nodes = captures.get("var.return")
-                ret_type = ret_nodes[0].text.decode('utf8') if ret_nodes and ret_nodes[0].text else ""
+                ret_type = (
+                    ret_nodes[0].text.decode("utf8") if ret_nodes and ret_nodes[0].text else ""
+                )
 
             if not name_node:
                 name_node = export_node
@@ -104,15 +124,18 @@ class ASTAuditor:
             signature = f"{name} = {params}{ret_type}"
 
             # Line is 1-indexed for Monaco, col is 1-indexed
-            results.append(UndocumentedExport(
-                name=name,
-                signature=signature,
-                start_line=name_node.start_point.row + 1,
-                start_column=name_node.start_point.column + 1,
-                end_line=name_node.end_point.row + 1,
-                end_column=name_node.end_point.column + 1
-            ))
+            results.append(
+                UndocumentedExport(
+                    name=name,
+                    signature=signature,
+                    start_line=name_node.start_point.row + 1,
+                    start_column=name_node.start_point.column + 1,
+                    end_line=name_node.end_point.row + 1,
+                    end_column=name_node.end_point.column + 1,
+                )
+            )
 
         return results
+
 
 ast_auditor = ASTAuditor()

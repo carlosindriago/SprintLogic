@@ -4,6 +4,7 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+
 def calculate_schema_hash(project_path: str) -> str:
     """
     Calculates a combined SHA-256 hash of all database schema and migration files.
@@ -14,11 +15,11 @@ def calculate_schema_hash(project_path: str) -> str:
     # Define exact paths or glob patterns to include
     patterns = [
         "database/migrations/**/*.php",  # Laravel Migrations
-        "app/Models/**/*.php",           # Laravel Eloquent Models
-        "prisma/schema.prisma",          # Prisma ORM
-        "**/*/migrations/*.py",          # Django Migrations
-        "**/*.sql",                      # Raw SQL files
-        "db/schema.rb"                   # Ruby on Rails Schema
+        "app/Models/**/*.php",  # Laravel Eloquent Models
+        "prisma/schema.prisma",  # Prisma ORM
+        "**/*/migrations/*.py",  # Django Migrations
+        "**/*.sql",  # Raw SQL files
+        "db/schema.rb",  # Ruby on Rails Schema
     ]
 
     ignore_dirs = {".git", "node_modules", "vendor", "__pycache__", ".venv", "venv"}

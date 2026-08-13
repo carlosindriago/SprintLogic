@@ -27,7 +27,11 @@ def detect_framework(project_path: str) -> str | None:
             continue
         try:
             text = composer_file.read_text(encoding="utf-8", errors="ignore")
-            if "laravel/framework" in text or "illuminate/database" in text or "laravel/laravel" in text:
+            if (
+                "laravel/framework" in text
+                or "illuminate/database" in text
+                or "laravel/laravel" in text
+            ):
                 logger.info("Framework detected via composer.json: laravel")
                 return "laravel"
         except Exception as e:
@@ -56,7 +60,6 @@ def detect_framework(project_path: str) -> str | None:
                 return "django"
         except Exception as e:
             logger.warning("Error reading %s: %s", req_file, e)
-
 
     # =========================================================================
     # STEP B: Direct Root Signatures

@@ -20,20 +20,22 @@ from app.utils.security import resolve_project_path
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(
-    prefix="/projects/{project_id}/tests",
-    tags=["Test Studio"]
-)
+router = APIRouter(prefix="/projects/{project_id}/tests", tags=["Test Studio"])
+
 
 class TestGenerationRequest(BaseModel):
     file_path: str
+
 
 class TestAuditRequest(BaseModel):
     file_path: str
     test_file_path: str | None = None
 
+
 @router.get("/discovery")
-async def discover_tests(project_id: str, session: AsyncSession = Depends(get_db_session)) -> dict[str, Any]:
+async def discover_tests(
+    project_id: str, session: AsyncSession = Depends(get_db_session)
+) -> dict[str, Any]:
     """
     Scans the project to discover test files, frameworks, and coverage status using multi-language heuristics.
     """
@@ -50,17 +52,12 @@ async def discover_tests(project_id: str, session: AsyncSession = Depends(get_db
     tests_found = scan_project_tests(project.path)
     framework = detect_framework(project.path) or "unknown"
 
-    return {
-        "status": "success",
-        "framework": framework,
-        "items": tests_found
-    }
+    return {"status": "success", "framework": framework, "items": tests_found}
+
 
 @router.post("/generate")
 async def generate_tests(
-    project_id: str,
-    request: TestGenerationRequest,
-    session: AsyncSession = Depends(get_db_session)
+    project_id: str, request: TestGenerationRequest, session: AsyncSession = Depends(get_db_session)
 ) -> dict[str, Any]:
     """
     Generates a test suite for a given source file using high-capacity LLM.
@@ -96,13 +93,19 @@ async def generate_tests(
     framework = detect_framework(project.path) or "Generic"
 
     # Fetch prompt
-    prompt_record = await prompt_repository.get_prompt_async(session, prompt_repository.TEST_GENERATOR_PROMPT_ID)
-    prompt_content = prompt_record.content if prompt_record else prompt_repository.TEST_GENERATOR_CONTENT
+    prompt_record = await prompt_repository.get_prompt_async(
+        session, prompt_repository.TEST_GENERATOR_PROMPT_ID
+    )
+    prompt_content = (
+        prompt_record.content if prompt_record else prompt_repository.TEST_GENERATOR_CONTENT
+    )
 
     # Interpolate prompt
-    system_prompt = prompt_content.replace("{framework}", framework) \
-                                  .replace("{file_path}", request.file_path) \
-                                  .replace("{source_code}", source_code)
+    system_prompt = (
+        prompt_content.replace("{framework}", framework)
+        .replace("{file_path}", request.file_path)
+        .replace("{source_code}", source_code)
+    )
 
     # Use configured model for test_studio
     provider, model_id, fallbacks = await resolve_tool_model(session, "test_studio")
@@ -112,9 +115,7 @@ async def generate_tests(
     try:
         # Generar pruebas usando la IA
         response_text = await gateway.generate_completion(
-            prompt=system_prompt,
-            lang_code="en",
-            fallbacks=fallbacks
+            prompt=system_prompt, lang_code="en", fallbacks=fallbacks
         )
     except HTTPException:
         raise
@@ -122,16 +123,12 @@ async def generate_tests(
         logger.error(f"Error generating tests: {str(e)}")
         raise HTTPException(status_code=500, detail="Error communicating with LLM")
 
-    return {
-        "status": "success",
-        "generated_test": response_text
-    }
+    return {"status": "success", "generated_test": response_text}
+
 
 @router.post("/audit")
 async def audit_tests(
-    project_id: str,
-    request: TestAuditRequest,
-    session: AsyncSession = Depends(get_db_session)
+    project_id: str, request: TestAuditRequest, session: AsyncSession = Depends(get_db_session)
 ) -> dict[str, Any]:
     """
     Audits source code and current tests (if any) using QA Mentor.
@@ -182,12 +179,18 @@ async def audit_tests(
                 logger.warning("Unhandled exception", exc_info=True)
                 current_tests = "Failed to read existing test file."
 
-    prompt_record = await prompt_repository.get_prompt_async(session, prompt_repository.TEST_AUDIT_MENTOR_PROMPT_ID)
-    prompt_content = prompt_record.content if prompt_record else prompt_repository.TEST_AUDIT_MENTOR_CONTENT
+    prompt_record = await prompt_repository.get_prompt_async(
+        session, prompt_repository.TEST_AUDIT_MENTOR_PROMPT_ID
+    )
+    prompt_content = (
+        prompt_record.content if prompt_record else prompt_repository.TEST_AUDIT_MENTOR_CONTENT
+    )
 
-    system_prompt = prompt_content.replace("{file_path}", request.file_path) \
-                                  .replace("{source_code}", source_code) \
-                                  .replace("{current_tests}", current_tests)
+    system_prompt = (
+        prompt_content.replace("{file_path}", request.file_path)
+        .replace("{source_code}", source_code)
+        .replace("{current_tests}", current_tests)
+    )
 
     provider, model_id, fallbacks = await resolve_tool_model(session, "test_studio")
     resolved_label = tool_model_label(provider, model_id)
@@ -195,9 +198,7 @@ async def audit_tests(
 
     try:
         response_text = await gateway.generate_completion(
-            prompt=system_prompt,
-            lang_code="en",
-            fallbacks=fallbacks
+            prompt=system_prompt, lang_code="en", fallbacks=fallbacks
         )
     except HTTPException:
         raise
@@ -205,7 +206,4 @@ async def audit_tests(
         logger.error(f"Error generating audit: {str(e)}")
         raise HTTPException(status_code=500, detail="Error communicating with LLM for audit")
 
-    return {
-        "status": "success",
-        "audit_report": response_text
-    }
+    return {"status": "success", "audit_report": response_text}

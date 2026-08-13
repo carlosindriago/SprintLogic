@@ -27,6 +27,7 @@ router = APIRouter()
 
 _logger = logging.getLogger("sprintlogic.fim")
 
+
 def _normalize_model_name(model_str: str) -> str:
     """Normalizes model IDs to ensure LiteLLM routing compatibility."""
     if not model_str:
@@ -36,10 +37,14 @@ def _normalize_model_name(model_str: str) -> str:
         return "nvidia_nim/" + model_str.split("nvidia_nim/")[-1]
 
     import os
-    if os.getenv("DEFAULT_LLM_PROVIDER") == "openrouter" and not model_str.startswith("openrouter/"):
+
+    if os.getenv("DEFAULT_LLM_PROVIDER") == "openrouter" and not model_str.startswith(
+        "openrouter/"
+    ):
         return f"openrouter/{model_str}"
 
     return model_str
+
 
 def _extract_json(text: str) -> str:
     """Robust two-stage JSON extractor to safely parse conversational LLM outputs."""
@@ -54,25 +59,26 @@ def _extract_json(text: str) -> str:
             return extracted
 
     # Phase 2: Fallback usando índices absolutos ignorando texto introductorio
-    start_dict = text.find('{')
-    end_dict = text.rfind('}')
-    start_list = text.find('[')
-    end_list = text.rfind(']')
+    start_dict = text.find("{")
+    end_dict = text.rfind("}")
+    start_list = text.find("[")
+    end_list = text.rfind("]")
 
     has_dict = start_dict != -1 and end_dict != -1 and end_dict > start_dict
     has_list = start_list != -1 and end_list != -1 and end_list > start_list
 
     if has_dict and has_list:
         if start_dict < start_list:
-            return text[start_dict:end_dict+1]
+            return text[start_dict : end_dict + 1]
         else:
-            return text[start_list:end_list+1]
+            return text[start_list : end_list + 1]
     elif has_list:
-        return text[start_list:end_list+1]
+        return text[start_list : end_list + 1]
     elif has_dict:
-        return text[start_dict:end_dict+1]
+        return text[start_dict : end_dict + 1]
 
     return text.strip()
+
 
 class APIKeysPayload(BaseModel):
     gemini_key: str | None = None
@@ -200,18 +206,74 @@ async def get_active_models(payload: APIKeysPayload):
 
 
 TECH_RULES = [
-    {"name": "TypeScript", "icon": "SiTypescript", "regex": r"interface |type |: string|: number", "doc_url": "https://www.typescriptlang.org/docs/"},
-    {"name": "React", "icon": "SiReact", "regex": r"from 'react'|useState|useEffect", "doc_url": "https://react.dev/"},
-    {"name": "Python", "icon": "SiPython", "regex": r"def |import |class |asyncio", "doc_url": "https://docs.python.org/3/"},
-    {"name": "Next.js", "icon": "SiNextdotjs", "regex": r"next/|NEXT_PUBLIC", "doc_url": "https://nextjs.org/docs"},
-    {"name": "FastAPI", "icon": "SiFastapi", "regex": r"from fastapi|import FastAPI|APIRouter", "doc_url": "https://fastapi.tiangolo.com/"},
-    {"name": "Tailwind CSS", "icon": "SiTailwindcss", "regex": r"className=.*flex|className=.*text-|className=.*bg-", "doc_url": "https://tailwindcss.com/"},
-    {"name": "Node.js", "icon": "SiNodedotjs", "regex": r"require\(|module.exports|process\.env", "doc_url": "https://nodejs.org/"},
-    {"name": "Docker", "icon": "SiDocker", "regex": r"FROM |RUN |WORKDIR |CMD |ENTRYPOINT", "doc_url": "https://docs.docker.com/"},
-    {"name": "SQL", "icon": "SiPostgresql", "regex": r"SELECT |INSERT |UPDATE |DELETE |FROM ", "doc_url": "https://dev.mysql.com/doc/"},
-    {"name": "HTML5", "icon": "SiHtml5", "regex": r"<div|<span|<html|<body", "doc_url": "https://developer.mozilla.org/es/docs/Web/HTML"},
-    {"name": "CSS3", "icon": "SiCss", "regex": r"margin:|padding:|color:|background:", "doc_url": "https://developer.mozilla.org/es/docs/Web/CSS"},
+    {
+        "name": "TypeScript",
+        "icon": "SiTypescript",
+        "regex": r"interface |type |: string|: number",
+        "doc_url": "https://www.typescriptlang.org/docs/",
+    },
+    {
+        "name": "React",
+        "icon": "SiReact",
+        "regex": r"from 'react'|useState|useEffect",
+        "doc_url": "https://react.dev/",
+    },
+    {
+        "name": "Python",
+        "icon": "SiPython",
+        "regex": r"def |import |class |asyncio",
+        "doc_url": "https://docs.python.org/3/",
+    },
+    {
+        "name": "Next.js",
+        "icon": "SiNextdotjs",
+        "regex": r"next/|NEXT_PUBLIC",
+        "doc_url": "https://nextjs.org/docs",
+    },
+    {
+        "name": "FastAPI",
+        "icon": "SiFastapi",
+        "regex": r"from fastapi|import FastAPI|APIRouter",
+        "doc_url": "https://fastapi.tiangolo.com/",
+    },
+    {
+        "name": "Tailwind CSS",
+        "icon": "SiTailwindcss",
+        "regex": r"className=.*flex|className=.*text-|className=.*bg-",
+        "doc_url": "https://tailwindcss.com/",
+    },
+    {
+        "name": "Node.js",
+        "icon": "SiNodedotjs",
+        "regex": r"require\(|module.exports|process\.env",
+        "doc_url": "https://nodejs.org/",
+    },
+    {
+        "name": "Docker",
+        "icon": "SiDocker",
+        "regex": r"FROM |RUN |WORKDIR |CMD |ENTRYPOINT",
+        "doc_url": "https://docs.docker.com/",
+    },
+    {
+        "name": "SQL",
+        "icon": "SiPostgresql",
+        "regex": r"SELECT |INSERT |UPDATE |DELETE |FROM ",
+        "doc_url": "https://dev.mysql.com/doc/",
+    },
+    {
+        "name": "HTML5",
+        "icon": "SiHtml5",
+        "regex": r"<div|<span|<html|<body",
+        "doc_url": "https://developer.mozilla.org/es/docs/Web/HTML",
+    },
+    {
+        "name": "CSS3",
+        "icon": "SiCss",
+        "regex": r"margin:|padding:|color:|background:",
+        "doc_url": "https://developer.mozilla.org/es/docs/Web/CSS",
+    },
 ]
+
 
 @router.post("/tech-scan", response_model=TechScanResponse)
 async def tech_scan(request: TechScanRequest):
@@ -222,28 +284,38 @@ async def tech_scan(request: TechScanRequest):
 
         for tech_data in TECH_RULES:
             if re.search(tech_data["regex"], content):
-                techs.append(TechInfo(
-                    name=tech_data["name"],
-                    version="N/A",
-                    doc_url=tech_data["doc_url"],
-                    icon=tech_data["icon"]
-                ))
+                techs.append(
+                    TechInfo(
+                        name=tech_data["name"],
+                        version="N/A",
+                        doc_url=tech_data["doc_url"],
+                        icon=tech_data["icon"],
+                    )
+                )
 
         if not techs:
-            lang_str = request.language if getattr(request, 'language', None) else "Desconocido"
-            techs.append(TechInfo(
-                name=f"Código Básico ({lang_str})",
-                version="N/A",
-                doc_url="#",
-                icon="SiGnubash"
-            ))
+            lang_str = request.language if getattr(request, "language", None) else "Desconocido"
+            techs.append(
+                TechInfo(
+                    name=f"Código Básico ({lang_str})", version="N/A", doc_url="#", icon="SiGnubash"
+                )
+            )
 
         return TechScanResponse(technologies=techs)
 
     except Exception as e:
         _logger.error(f"[TECH SCAN ERROR] {str(e)}")
-        lang_str = request.language if getattr(request, 'language', None) else "Desconocido"
-        return {"technologies": [{"name": f"Error Analizador ({lang_str})", "version": "N/A", "doc_url": "#", "icon": "SiGnubash"}]}
+        lang_str = request.language if getattr(request, "language", None) else "Desconocido"
+        return {
+            "technologies": [
+                {
+                    "name": f"Error Analizador ({lang_str})",
+                    "version": "N/A",
+                    "doc_url": "#",
+                    "icon": "SiGnubash",
+                }
+            ]
+        }
 
 
 @router.post("/health-overview", response_model=CodeCoachOverview)
@@ -291,9 +363,13 @@ async def health_overview(
             "CRÍTICO: TIENES PROHIBIDO PENSAR EN VOZ ALTA. NO expliques tu razonamiento fuera del JSON."
         )
 
-        lines = request.file_content.split('\n')
+        lines = request.file_content.split("\n")
         if len(lines) > 300:
-            truncated_content = '\n'.join(lines[:150]) + '\n\n... [CÓDIGO TRUNCADO POR TAMAÑO] ...\n\n' + '\n'.join(lines[-150:])
+            truncated_content = (
+                "\n".join(lines[:150])
+                + "\n\n... [CÓDIGO TRUNCADO POR TAMAÑO] ...\n\n"
+                + "\n".join(lines[-150:])
+            )
         else:
             truncated_content = request.file_content
 
@@ -323,6 +399,7 @@ async def health_overview(
                 raw_content = ""
                 try:
                     import asyncio
+
                     response = await asyncio.wait_for(
                         litellm.acompletion(
                             model=_normalize_model_name(adapted["model"]),
@@ -333,7 +410,7 @@ async def health_overview(
                             timeout=60,
                             **adapted["kwargs"],
                         ),
-                        timeout=65.0
+                        timeout=65.0,
                     )
 
                     raw_content = str(response.choices[0].message.content or "").strip()
@@ -343,6 +420,7 @@ async def health_overview(
                         raise ValueError("Empty response from LLM")
 
                     import json
+
                     parsed = json.loads(raw_clean)
 
                     overview = CodeCoachOverview(
@@ -350,28 +428,35 @@ async def health_overview(
                         critical_security=str(parsed.get("critical_security", "")),
                         clean_code_score=int(parsed.get("clean_code_score", 100)),
                         technical_debt_and_tips=parsed.get("technical_debt_and_tips", []),
-                        is_degraded=False
+                        is_degraded=False,
                     )
 
                     return overview
 
                 except TimeoutError:
-                    _logger.warning("Health Overview Timeout con modelo %s. Cambiando al siguiente fallback.", current_model)
+                    _logger.warning(
+                        "Health Overview Timeout con modelo %s. Cambiando al siguiente fallback.",
+                        current_model,
+                    )
                     last_error = f"Timeout en {current_model}"
                     break  # Salimos del bucle de intentos para saltar al siguiente modelo
 
                 except Exception as e:
                     if not raw_content:
-                        _logger.warning("Health Overview API call failed with model %s: %s", current_model, e)
+                        _logger.warning(
+                            "Health Overview API call failed with model %s: %s", current_model, e
+                        )
                         last_error = repr(e)
                         break
 
                     if attempt < MAX_RETRIES:
                         model_messages.append({"role": "assistant", "content": raw_content})
-                        model_messages.append({
-                            "role": "user",
-                            "content": f"ERROR DE PARSEO: {str(e)}. Devuelve JSON puro sin formato extra."
-                        })
+                        model_messages.append(
+                            {
+                                "role": "user",
+                                "content": f"ERROR DE PARSEO: {str(e)}. Devuelve JSON puro sin formato extra.",
+                            }
+                        )
                         continue
                     else:
                         last_error = f"JSON Parse Error after retries: {str(e)}"
@@ -382,9 +467,12 @@ async def health_overview(
             structure="El proveedor de IA no responde o está saturado.",
             critical_security="El análisis no se pudo completar porque todos los modelos de respaldo (fallbacks) fallaron o excedieron el tiempo límite.",
             clean_code_score=0,
-            technical_debt_and_tips=["Verifica tu conexión a internet o cambia de proveedor en los ajustes de la IA.", "Es posible que el servicio esté experimentando un alto tráfico."],
+            technical_debt_and_tips=[
+                "Verifica tu conexión a internet o cambia de proveedor en los ajustes de la IA.",
+                "Es posible que el servicio esté experimentando un alto tráfico.",
+            ],
             is_degraded=True,
-            error_detail=f"Todos los intentos fallaron. Último error: {last_error}"
+            error_detail=f"Todos los intentos fallaron. Último error: {last_error}",
         )
 
     except Exception as e:
@@ -397,7 +485,7 @@ async def health_overview(
             clean_code_score=0,
             technical_debt_and_tips=[],
             is_degraded=True,
-            error_detail=f"Fallo del proveedor IA: {error_msg}"
+            error_detail=f"Fallo del proveedor IA: {error_msg}",
         )
 
 
@@ -445,18 +533,26 @@ async def contextual_mentorship(
                 "CRÍTICO: TIENES PROHIBIDO PENSAR EN VOZ ALTA. NO expliques tu razonamiento fuera del JSON."
             )
 
-        original_lines = request.file_content.split('\n')
+        original_lines = request.file_content.split("\n")
         # Inyectar números de línea absolutos
-        lines = [f"[Line {i+1}] {line}" for i, line in enumerate(original_lines)]
+        lines = [f"[Line {i + 1}] {line}" for i, line in enumerate(original_lines)]
 
         if len(lines) > 300:
-            truncated_content = '\n'.join(lines[:150]) + '\n\n... [CÓDIGO TRUNCADO POR TAMAÑO] ...\n\n' + '\n'.join(lines[-150:])
+            truncated_content = (
+                "\n".join(lines[:150])
+                + "\n\n... [CÓDIGO TRUNCADO POR TAMAÑO] ...\n\n"
+                + "\n".join(lines[-150:])
+            )
         else:
-            truncated_content = '\n'.join(lines)
+            truncated_content = "\n".join(lines)
 
         native_errors_text = ""
         if request.native_errors:
-            native_errors_text = "ERRORES NATIVOS DE COMPILACIÓN/LINTER REPORTADOS POR EL EDITOR:\n" + "\n".join(request.native_errors) + "\n\n"
+            native_errors_text = (
+                "ERRORES NATIVOS DE COMPILACIÓN/LINTER REPORTADOS POR EL EDITOR:\n"
+                + "\n".join(request.native_errors)
+                + "\n\n"
+            )
 
         user = (
             f"Analiza este código en {request.language or 'código'}. El cursor del usuario está cerca de la línea {request.cursor_line}:\n\n"
@@ -484,6 +580,7 @@ async def contextual_mentorship(
                 raw_content = ""
                 try:
                     import asyncio
+
                     response = await asyncio.wait_for(
                         litellm.acompletion(
                             model=_normalize_model_name(adapted["model"]),
@@ -494,7 +591,7 @@ async def contextual_mentorship(
                             timeout=120,
                             **adapted["kwargs"],
                         ),
-                        timeout=125.0
+                        timeout=125.0,
                     )
 
                     raw_content = str(response.choices[0].message.content or "").strip()
@@ -504,28 +601,40 @@ async def contextual_mentorship(
                         raise ValueError("Empty response from LLM")
 
                     import json
+
                     parsed = json.loads(raw_clean)
                     if not isinstance(parsed, list):
                         raise ValueError("Root JSON must be a list")
 
                     markers = []
                     for item in parsed:
-                        if isinstance(item, dict) and "line" in item and "severity" in item and "message" in item and "explanation" in item:
-                            markers.append(CodeCoachMarker(
-                                line=int(item["line"]),
-                                severity=str(item["severity"]),
-                                message=str(item["message"]),
-                                title=item.get("title"),
-                                explanation=str(item["explanation"]),
-                                suggested_code=item.get("suggested_code"),
-                                snippet_before=item.get("snippet_before"),
-                                snippet_after=item.get("snippet_after")
-                            ))
+                        if (
+                            isinstance(item, dict)
+                            and "line" in item
+                            and "severity" in item
+                            and "message" in item
+                            and "explanation" in item
+                        ):
+                            markers.append(
+                                CodeCoachMarker(
+                                    line=int(item["line"]),
+                                    severity=str(item["severity"]),
+                                    message=str(item["message"]),
+                                    title=item.get("title"),
+                                    explanation=str(item["explanation"]),
+                                    suggested_code=item.get("suggested_code"),
+                                    snippet_before=item.get("snippet_before"),
+                                    snippet_after=item.get("snippet_after"),
+                                )
+                            )
 
                     return markers
 
                 except TimeoutError:
-                    _logger.warning("Contextual Mentorship Timeout con modelo %s. Cambiando al siguiente fallback.", current_model)
+                    _logger.warning(
+                        "Contextual Mentorship Timeout con modelo %s. Cambiando al siguiente fallback.",
+                        current_model,
+                    )
                     last_error = f"Timeout en {current_model}"
                     break  # Salir de los reintentos y probar el siguiente modelo en models_to_try
 
@@ -534,35 +643,41 @@ async def contextual_mentorship(
                     if attempt < MAX_RETRIES:
                         if raw_content:
                             model_messages.append({"role": "assistant", "content": raw_content})
-                        model_messages.append({
-                            "role": "user",
-                            "content": f"ERROR: {str(e)}. Devuelve JSON puro sin formato extra."
-                        })
+                        model_messages.append(
+                            {
+                                "role": "user",
+                                "content": f"ERROR: {str(e)}. Devuelve JSON puro sin formato extra.",
+                            }
+                        )
                         continue
                     else:
                         last_error = f"Error after retries: {str(e)}"
                         break
 
         # Si todos los modelos fallan
-        return [CodeCoachMarker(
-            line=1,
-            severity="error",
-            title="Conexión Fallida",
-            message="El proveedor de IA no responde o está saturado.",
-            explanation=f"El análisis no se pudo completar porque todos los modelos de respaldo (fallbacks) fallaron o excedieron el tiempo límite. Verifica tu conexión a internet o cambia de proveedor en los ajustes de la IA. Último error: {last_error}",
-            suggested_code=None,
-            is_degraded=True
-        )]
+        return [
+            CodeCoachMarker(
+                line=1,
+                severity="error",
+                title="Conexión Fallida",
+                message="El proveedor de IA no responde o está saturado.",
+                explanation=f"El análisis no se pudo completar porque todos los modelos de respaldo (fallbacks) fallaron o excedieron el tiempo límite. Verifica tu conexión a internet o cambia de proveedor en los ajustes de la IA. Último error: {last_error}",
+                suggested_code=None,
+                is_degraded=True,
+            )
+        ]
 
     except Exception as e:
         error_msg = repr(e)
         _logger.error(f"Contextual Mentorship Fallback triggered: {error_msg}")
 
-        return [CodeCoachMarker(
-            line=1,
-            severity="error",
-            message="Fallo del proveedor IA",
-            explanation=f"Error_detail: {error_msg}",
-            suggested_code=None,
-            is_degraded=True
-        )]
+        return [
+            CodeCoachMarker(
+                line=1,
+                severity="error",
+                message="Fallo del proveedor IA",
+                explanation=f"Error_detail: {error_msg}",
+                suggested_code=None,
+                is_degraded=True,
+            )
+        ]

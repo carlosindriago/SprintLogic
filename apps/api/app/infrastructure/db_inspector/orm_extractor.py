@@ -105,20 +105,20 @@ async def extract_schema_from_orm(
     source_code = collect_orm_source_code(project_path, framework)
     if not source_code.strip():
         logger.warning("No source code found for framework %s in %s", framework, project_path)
-        return SchemaIR(tables=[], orm_type=framework, extraction_level="orm", detected_framework=framework)
+        return SchemaIR(
+            tables=[], orm_type=framework, extraction_level="orm", detected_framework=framework
+        )
 
     # 1. Fetch prompt template
     prompt_model = await prompt_repository.get_prompt_async(
         session, prompt_repository.ORM_SCHEMA_EXTRACTOR_ID
     )
     prompt_template = (
-        prompt_model.content
-        if prompt_model
-        else prompt_repository.ORM_SCHEMA_EXTRACTOR_CONTENT
+        prompt_model.content if prompt_model else prompt_repository.ORM_SCHEMA_EXTRACTOR_CONTENT
     )
 
-    formatted_prompt = (
-        prompt_template.replace("{framework}", framework).replace("{source_code}", source_code)
+    formatted_prompt = prompt_template.replace("{framework}", framework).replace(
+        "{source_code}", source_code
     )
 
     # 2. Resolve LLM model
@@ -139,7 +139,9 @@ async def extract_schema_from_orm(
         logger.error("LLM ORM schema extraction failed: %s", llm_err, exc_info=True)
         with open("/tmp/db_studio_error.log", "w") as f:
             f.write(f"LLM Failure: {str(llm_err)}\n")
-        return SchemaIR(tables=[], orm_type=framework, extraction_level="orm", detected_framework=framework)
+        return SchemaIR(
+            tables=[], orm_type=framework, extraction_level="orm", detected_framework=framework
+        )
 
     # 4. Clean Markdown formatting & Backticks (Strict Guardrail)
     with open("/tmp/db_studio.log", "a") as f:
@@ -166,4 +168,6 @@ async def extract_schema_from_orm(
         logger.warning("Failed to parse JSON response for ORM schema extraction: %s", parse_err)
         with open("/tmp/db_studio.log", "a") as f:
             f.write(f"JSON Parse failed: {str(parse_err)}\nRaw response: {raw_response}\n")
-        return SchemaIR(tables=[], orm_type=framework, extraction_level="orm", detected_framework=framework)
+        return SchemaIR(
+            tables=[], orm_type=framework, extraction_level="orm", detected_framework=framework
+        )

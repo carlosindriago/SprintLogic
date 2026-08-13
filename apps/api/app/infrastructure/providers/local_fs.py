@@ -8,6 +8,7 @@ Key design decisions:
 - Emits an initial 'discovering' count so the frontend can render a
   determinate progress bar instead of an indeterminate spinner.
 """
+
 import asyncio
 import logging
 import os
@@ -107,10 +108,9 @@ class LocalFileSystemProvider(CodebaseProvider):
             rel_root = os.path.relpath(root, root_str)
             # Prune ignored directories in place so os.walk never enters vendor/, node_modules/, .git/, etc.
             dirs[:] = [
-                d for d in dirs
-                if not self._spec.match_file(
-                    d + "/" if rel_root == "." else f"{rel_root}/{d}/"
-                )
+                d
+                for d in dirs
+                if not self._spec.match_file(d + "/" if rel_root == "." else f"{rel_root}/{d}/")
             ]
 
             for file in files:

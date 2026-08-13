@@ -27,15 +27,17 @@ class DeltaSyncOrchestrator:
         # 1. Comprobación temprana (Early Exit) si el archivo no ha cambiado
         async with get_sessionmaker()() as session:
             result = await session.execute(
-                text("SELECT id FROM adr_chunks WHERE filepath = :filepath AND file_hash = :file_hash LIMIT 1"),
-                {"filepath": filepath, "file_hash": file_hash}
+                text(
+                    "SELECT id FROM adr_chunks WHERE filepath = :filepath AND file_hash = :file_hash LIMIT 1"
+                ),
+                {"filepath": filepath, "file_hash": file_hash},
             )
             if result.scalar() is not None:
                 # El archivo no ha cambiado, nos ahorramos el RAG
                 return False
 
         # 2. Partición Semántica (El Bisturí)
-        chunks = self.splitter.split(content, file_name=filepath.split('/')[-1])
+        chunks = self.splitter.split(content, file_name=filepath.split("/")[-1])
         engine = VectorEngine.get_instance()
 
         chunks_with_embeddings = []
@@ -53,7 +55,7 @@ class DeltaSyncOrchestrator:
                 # A. Identificar IDs antiguos (rowid) para borrarlos de la tabla virtual
                 result = await session.execute(
                     text("SELECT id FROM adr_chunks WHERE filepath = :filepath"),
-                    {"filepath": filepath}
+                    {"filepath": filepath},
                 )
                 old_ids = [row[0] for row in result.fetchall()]
 
@@ -67,22 +69,26 @@ class DeltaSyncOrchestrator:
                     # Borrar de la tabla de metadatos (estantería normal)
                     await session.execute(
                         text("DELETE FROM adr_chunks WHERE filepath = :filepath"),
-                        {"filepath": filepath}
+                        {"filepath": filepath},
                     )
 
                 # B. Inserción Sincronizada del nuevo estado
                 for chunk_text, emb_bytes in chunks_with_embeddings:
                     # Inserción en Estantería Normal con RETURNING id (Micro-Reglazo)
                     res = await session.execute(
-                        text("INSERT INTO adr_chunks (filepath, file_hash, chunk_text) VALUES (:filepath, :file_hash, :chunk_text) RETURNING id"),
-                        {"filepath": filepath, "file_hash": file_hash, "chunk_text": chunk_text}
+                        text(
+                            "INSERT INTO adr_chunks (filepath, file_hash, chunk_text) VALUES (:filepath, :file_hash, :chunk_text) RETURNING id"
+                        ),
+                        {"filepath": filepath, "file_hash": file_hash, "chunk_text": chunk_text},
                     )
                     row_id = res.scalar()
 
                     # Inserción en Catálogo Mágico enlazado por el rowid
                     await session.execute(
-                        text("INSERT INTO adr_vectors (rowid, embedding) VALUES (:rowid, :embedding)"),
-                        {"rowid": row_id, "embedding": emb_bytes}
+                        text(
+                            "INSERT INTO adr_vectors (rowid, embedding) VALUES (:rowid, :embedding)"
+                        ),
+                        {"rowid": row_id, "embedding": emb_bytes},
                     )
 
         return True

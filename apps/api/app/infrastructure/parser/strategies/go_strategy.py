@@ -30,17 +30,20 @@ class GoAnalyzerStrategy(LanguageAnalyzerStrategy):
 
     def _compile_queries(self) -> None:
         from tree_sitter import Query
-        self.pass1_query = Query(self.go_language,
+
+        self.pass1_query = Query(
+            self.go_language,
             """
             (package_clause (package_identifier) @pkg.name)
             (function_declaration name: (identifier) @func.name)
             (method_declaration name: (field_identifier) @method.name)
             (type_declaration (type_spec name: (type_identifier) @type.name))
             (var_declaration (var_spec name: (identifier) @var.name))
-            """
+            """,
         )
 
-        self.pass2_query = Query(self.go_language,
+        self.pass2_query = Query(
+            self.go_language,
             """
             (import_spec name: (package_identifier) @import.alias path: (interpreted_string_literal) @import.path)
             (import_spec path: (interpreted_string_literal) @import.path)
@@ -55,7 +58,7 @@ class GoAnalyzerStrategy(LanguageAnalyzerStrategy):
             )
 
             (type_identifier) @type.use
-            """
+            """,
         )
 
     def is_compatible(self, project_path: Path) -> bool:
@@ -72,7 +75,9 @@ class GoAnalyzerStrategy(LanguageAnalyzerStrategy):
     async def parse_dependencies(self, project_path: Path) -> dict[str, Any]:
         module_prefix = self._extract_module_prefix(project_path)
         if not module_prefix:
-            logger.warning("No se pudo extraer el módulo de go.mod, los imports internos podrían fallar.")
+            logger.warning(
+                "No se pudo extraer el módulo de go.mod, los imports internos podrían fallar."
+            )
 
         nodes = []
         edges = []
@@ -85,7 +90,11 @@ class GoAnalyzerStrategy(LanguageAnalyzerStrategy):
 
         go_files = []
         for filepath in project_path.rglob("*.go"):
-            if "vendor" in filepath.parts or "node_modules" in filepath.parts or filepath.name.endswith("_test.go"):
+            if (
+                "vendor" in filepath.parts
+                or "node_modules" in filepath.parts
+                or filepath.name.endswith("_test.go")
+            ):
                 continue
             go_files.append(filepath)
 
@@ -99,19 +108,22 @@ class GoAnalyzerStrategy(LanguageAnalyzerStrategy):
             if folder_rel_path == ".":
                 folder_rel_path = ""
 
-            nodes.append({
-                "id": f"file:{rel_path}",
-                "label": filepath.name,
-                "type": "file",
-                "language": "go",
-                "file_path": rel_path
-            })
+            nodes.append(
+                {
+                    "id": f"file:{rel_path}",
+                    "label": filepath.name,
+                    "type": "file",
+                    "language": "go",
+                    "file_path": rel_path,
+                }
+            )
 
             code = filepath.read_bytes()
             tree = self.parser.parse(code)
             parsed_trees[rel_path] = tree
 
             from tree_sitter import QueryCursor
+
             cursor = QueryCursor(self.pass1_query)
             current_package = ""
 
@@ -121,12 +133,12 @@ class GoAnalyzerStrategy(LanguageAnalyzerStrategy):
                         if not node.text:
                             continue
                         if capture_name == "pkg.name":
-                            current_package = node.text.decode('utf8')
+                            current_package = node.text.decode("utf8")
                             folder_to_pkg[folder_rel_path] = current_package
                         else:
                             if not current_package:
                                 continue
-                            symbol = node.text.decode('utf8')
+                            symbol = node.text.decode("utf8")
                             key = (folder_rel_path, symbol)
                             if key not in symbol_table:
                                 symbol_table[key] = []
@@ -155,17 +167,17 @@ class GoAnalyzerStrategy(LanguageAnalyzerStrategy):
                             continue
                         if capture_name == "import.path":
                             # El import literal tiene comillas (ej. '"github.com/carlos/sprintlogic/internal/db"')
-                            import_str = node.text.decode('utf8').strip('"')
+                            import_str = node.text.decode("utf8").strip('"')
 
                             if module_prefix and import_str.startswith(module_prefix):
                                 # Import interno! Quitamos el prefijo
                                 # Si el module es 'github.com/my/proj', y el import es 'github.com/my/proj/pkg'
-                                target_folder = import_str[len(module_prefix):].strip('/')
+                                target_folder = import_str[len(module_prefix) :].strip("/")
 
                                 target_pkg_name = folder_to_pkg.get(target_folder)
                                 if target_pkg_name:
                                     # Por defecto, el alias es la última parte de la ruta
-                                    default_alias = target_folder.split('/')[-1]
+                                    default_alias = target_folder.split("/")[-1]
                                     # Mapeamos alias -> RUTA FISICA DE LA CARPETA (la clave infalible)
                                     file_alias_map[default_alias] = target_folder
 
@@ -174,16 +186,18 @@ class GoAnalyzerStrategy(LanguageAnalyzerStrategy):
                             pass
 
                         elif capture_name == "call.local":
-                            symbol = node.text.decode('utf8')
+                            symbol = node.text.decode("utf8")
                             # Llamada implícita, buscamos en nuestra propia carpeta
                             targets = symbol_table.get((folder_rel_path, symbol), [])
                             for tgt in targets:
                                 if tgt != f"file:{rel_path}":  # No aristas a sí mismo
-                                    edges.append({
-                                        "source_id": f"file:{rel_path}",
-                                        "target_id": tgt,
-                                        "type": "calls"
-                                    })
+                                    edges.append(
+                                        {
+                                            "source_id": f"file:{rel_path}",
+                                            "target_id": tgt,
+                                            "type": "calls",
+                                        }
+                                    )
 
                         elif capture_name == "call.field":
                             # Si es pkg.Call(), `call.field` es Call, y `call.pkg_or_obj` fue el nodo anterior.
@@ -191,30 +205,32 @@ class GoAnalyzerStrategy(LanguageAnalyzerStrategy):
                             if parent and parent.type == "selector_expression":
                                 operand = parent.child_by_field_name("operand")
                                 if operand and operand.text:
-                                    alias = operand.text.decode('utf8')
-                                    symbol = node.text.decode('utf8')
+                                    alias = operand.text.decode("utf8")
+                                    symbol = node.text.decode("utf8")
 
                                     # ¿Es un alias de paquete conocido?
                                     if alias in file_alias_map:
                                         target_folder = file_alias_map[alias]
                                         targets = symbol_table.get((target_folder, symbol), [])
                                         for tgt in targets:
-                                            edges.append({
-                                                "source_id": f"file:{rel_path}",
-                                                "target_id": tgt,
-                                                "type": "calls"
-                                            })
+                                            edges.append(
+                                                {
+                                                    "source_id": f"file:{rel_path}",
+                                                    "target_id": tgt,
+                                                    "type": "calls",
+                                                }
+                                            )
                                     # También podría ser una llamada a método en el mismo paquete (ej. miObj.Metodo)
                                     else:
                                         targets = symbol_table.get((folder_rel_path, symbol), [])
                                         for tgt in targets:
                                             if tgt != f"file:{rel_path}":
-                                                edges.append({
-                                                    "source_id": f"file:{rel_path}",
-                                                    "target_id": tgt,
-                                                    "type": "calls"
-                                                })
+                                                edges.append(
+                                                    {
+                                                        "source_id": f"file:{rel_path}",
+                                                        "target_id": tgt,
+                                                        "type": "calls",
+                                                    }
+                                                )
 
         return {"nodes": nodes, "edges": edges}
-
-

@@ -27,6 +27,7 @@ git_gateway = LocalGitGateway()
 llm_gateway = LiteLLMGateway()
 vcs_adapter = GitHubAdapter()
 
+
 class GitActionRequest(BaseModel):
     action: str
     message: str = ""
@@ -197,7 +198,9 @@ async def generate_commit_message(
         cm_provider, cm_model, _ = await resolve_tool_model(session, "chat_title_gen")
         actual_model = tool_model_label(cm_provider, cm_model)
         lang_code = req.headers.get("Accept-Language", "en").split("-")[0]
-        message = llm_gateway.generate_completion(prompt=prompt, model=actual_model, lang_code=lang_code)
+        message = llm_gateway.generate_completion(
+            prompt=prompt, model=actual_model, lang_code=lang_code
+        )
 
         # Clean up any potential markdown formatting the LLM might have returned
         message = message.strip()
@@ -258,6 +261,7 @@ async def get_commit_diff(
 # -----------------------------------------------------------------------------
 # Advanced Git Client Endpoints
 # -----------------------------------------------------------------------------
+
 
 @router.get("/{project_id}/git/pull-requests")
 async def get_pull_requests(project_id: str, session: AsyncSession = Depends(get_db_session)):
@@ -390,7 +394,8 @@ async def delete_branch(
         return {"status": "success", "output": out}
     except UnmergedBranchError as e:
         raise HTTPException(
-            status_code=409, detail={"message": "Unmerged branch error", "requires_force": e.requires_force}
+            status_code=409,
+            detail={"message": "Unmerged branch error", "requires_force": e.requires_force},
         )
     except RuntimeError as e:
         logger.error("Git operation failed: %s", e, exc_info=True)
@@ -706,6 +711,88 @@ async def commit_changes(
         result = await git_gateway.commit_changes(project.path, request.message)
     except Exception as e:
         logger.error("Git operation failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred")
+
+    return result
+
+
+class BranchCheckoutRequest(BaseModel):
+    branch_name: str
+
+
+@router.post("/{project_id}/git/checkout")
+async def checkout_branch(
+    project_id: str,
+    request: BranchCheckoutRequest,
+    session: AsyncSession = Depends(get_db_session),
+):
+    try:
+        project = await SQLAlchemyProjectRepository(session).get_project(UUID(project_id))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID")
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    try:
+        result = await git_gateway.checkout(project.path, request.branch_name)
+    except Exception as e:
+        logger.error("Git checkout failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred")
+
+    return result
+
+
+class DiscardChangesRequest(BaseModel):
+    target_branch: str | None = None
+
+
+class CommitAndSwitchRequest(BaseModel):
+    message: str
+    target_branch: str = "main"
+
+
+@router.post("/{project_id}/git/commit-and-switch")
+async def commit_and_switch(
+    project_id: str,
+    request: CommitAndSwitchRequest,
+    session: AsyncSession = Depends(get_db_session),
+):
+    try:
+        project = await SQLAlchemyProjectRepository(session).get_project(UUID(project_id))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID")
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    try:
+        result = await git_gateway.commit_and_switch(
+            project.path, request.message, request.target_branch
+        )
+    except Exception as e:
+        logger.error("Git commit and switch failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return result
+
+
+@router.post("/{project_id}/git/discard-changes")
+async def discard_all_changes(
+    project_id: str,
+    request: DiscardChangesRequest | None = None,
+    session: AsyncSession = Depends(get_db_session),
+):
+    try:
+        project = await SQLAlchemyProjectRepository(session).get_project(UUID(project_id))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID")
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    target_branch = request.target_branch if request else None
+    try:
+        result = await git_gateway.discard_changes(project.path, target_branch=target_branch)
+    except Exception as e:
+        logger.error("Git discard changes failed: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="An internal error occurred")
 
     return result

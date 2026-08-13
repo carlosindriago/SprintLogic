@@ -11,6 +11,7 @@ from app.infrastructure.security.credential_manager import CredentialManager
 
 logger = logging.getLogger(__name__)
 
+
 class LiteLLMGateway:
     def __init__(self, model_name: str | None = None):
         self.model_name = model_name or DEFAULT_LLM_MODEL
@@ -18,6 +19,7 @@ class LiteLLMGateway:
 
     def _get_adapted_params(self) -> dict:
         from app.infrastructure.ai.provider_adapter import ProviderAdapter
+
         provider = ProviderAdapter.get_provider(self.model_name)
         api_key = self.cred_manager.get_api_key(provider)
         return ProviderAdapter.adapt(self.model_name, api_key)
@@ -27,18 +29,20 @@ class LiteLLMGateway:
             return None
         fallback_params = []
         from app.infrastructure.ai.provider_adapter import ProviderAdapter
+
         for fb_model in fallbacks:
             fb_provider = ProviderAdapter.get_provider(fb_model)
             fb_api_key = self.cred_manager.get_api_key(fb_provider)
             if fb_api_key:
                 fb_adapted = ProviderAdapter.adapt(fb_model, fb_api_key)
-                fallback_params.append({
-                    "model": fb_adapted["model"],
-                    "api_key": fb_adapted.get("api_key")
-                })
+                fallback_params.append(
+                    {"model": fb_adapted["model"], "api_key": fb_adapted.get("api_key")}
+                )
         return fallback_params if fallback_params else None
 
-    async def generate_completion(self, prompt: str, lang_code: str = "en", fallbacks: list[str] | None = None) -> str:
+    async def generate_completion(
+        self, prompt: str, lang_code: str = "en", fallbacks: list[str] | None = None
+    ) -> str:
         prompt += self._build_language_clause(lang_code)
         adapted = self._get_adapted_params()
 
@@ -59,12 +63,19 @@ class LiteLLMGateway:
             error_msg = str(e)
             if "RateLimitError" in error_msg or "rate_limit_exceeded" in error_msg.lower():
                 from fastapi import HTTPException
-                raise HTTPException(status_code=429, detail="LLM Provider Rate Limit Exceeded. Please wait a moment and try again or switch the model.")
+
+                raise HTTPException(
+                    status_code=429,
+                    detail="LLM Provider Rate Limit Exceeded. Please wait a moment and try again or switch the model.",
+                )
             elif "AuthenticationError" in error_msg:
                 from fastapi import HTTPException
-                raise HTTPException(status_code=401, detail="LLM Authentication failed. Check your API key or if the model is supported.")
-            raise
 
+                raise HTTPException(
+                    status_code=401,
+                    detail="LLM Authentication failed. Check your API key or if the model is supported.",
+                )
+            raise
 
     def _build_language_clause(self, lang_code: str) -> str:
         if lang_code == "es":
@@ -85,25 +96,22 @@ class LiteLLMGateway:
                         "properties": {
                             "target_file": {
                                 "type": "string",
-                                "description": "The path to the file to analyze, e.g., 'apps/web/src/UserService.ts'"
+                                "description": "The path to the file to analyze, e.g., 'apps/web/src/UserService.ts'",
                             },
                             "max_depth": {
                                 "type": "integer",
                                 "description": "Maximum depth of the BFS traversal (default 2)",
-                                "default": 2
-                            }
+                                "default": 2,
+                            },
                         },
-                        "required": ["target_file"]
-                    }
-                }
+                        "required": ["target_file"],
+                    },
+                },
             }
         ]
 
     async def chat_with_graph_rag(
-        self,
-        project_id: str,
-        messages: list[dict[str, Any]],
-        analyze_blast_radius_use_case: Any
+        self, project_id: str, messages: list[dict[str, Any]], analyze_blast_radius_use_case: Any
     ) -> str:
         """
         Executes a ReAct agent loop using LiteLLM to answer architectural questions,
@@ -114,6 +122,7 @@ class LiteLLMGateway:
         max_tool_iterations = 3
 
         from uuid import UUID
+
         proj_uuid = UUID(project_id)
 
         adapted = self._get_adapted_params()
@@ -125,7 +134,7 @@ class LiteLLMGateway:
                 tools=tools,
                 tool_choice="auto",
                 api_key=adapted.get("api_key"),
-                **adapted.get("kwargs", {})
+                **adapted.get("kwargs", {}),
             )
 
             response_message = response.choices[0].message
@@ -143,9 +152,7 @@ class LiteLLMGateway:
                         try:
                             # Executing the Use Case
                             tool_result = await analyze_blast_radius_use_case.execute(
-                                project_id=proj_uuid,
-                                target_file=target_file,
-                                max_depth=max_depth
+                                project_id=proj_uuid, target_file=target_file, max_depth=max_depth
                             )
                         except Exception as e:
                             logger.error(f"Error executing analyze_blast_radius: {e}")
@@ -174,7 +181,7 @@ class LiteLLMGateway:
         metrics: dict[str, Any],
         skeletons: dict[str, Any],
         project_context_xml: str = "",
-        lang_code: str = "en"
+        lang_code: str = "en",
     ) -> AsyncGenerator[str, None]:
 
         from app.infrastructure.db.database import get_sessionmaker
@@ -190,15 +197,19 @@ class LiteLLMGateway:
         for k in ["dependencies", "isolated_components", "edge_count", "in_degree"]:
             metrics_copy.pop(k, None)
 
-        metrics_xml = "<networkx_metrics>\n" + json.dumps(metrics_copy, indent=2) + "\n</networkx_metrics>"
-        skeletons_xml = "<code_skeletons>\n" + json.dumps(skeletons, indent=2) + "\n</code_skeletons>"
+        metrics_xml = (
+            "<networkx_metrics>\n" + json.dumps(metrics_copy, indent=2) + "\n</networkx_metrics>"
+        )
+        skeletons_xml = (
+            "<code_skeletons>\n" + json.dumps(skeletons, indent=2) + "\n</code_skeletons>"
+        )
 
         prompt = prompt_content.format(
             project_path=project_path,
             project_name=project_name,
             project_context_xml=project_context_xml,
             metrics_xml=metrics_xml,
-            skeletons_xml=skeletons_xml
+            skeletons_xml=skeletons_xml,
         )
 
         prompt += self._build_language_clause(lang_code)
@@ -210,7 +221,7 @@ class LiteLLMGateway:
             messages=[{"role": "user", "content": prompt}],
             stream=True,
             api_key=adapted.get("api_key"),
-            **adapted.get("kwargs", {})
+            **adapted.get("kwargs", {}),
         )
 
         try:
@@ -225,7 +236,9 @@ class LiteLLMGateway:
             if hasattr(response_iterator, "aclose"):
                 await response_iterator.aclose()
 
-    async def extract_kanban_tickets_phantom(self, report_text: str, extractor_model: str, lang_code: str = "en") -> list[dict[str, Any]]:
+    async def extract_kanban_tickets_phantom(
+        self, report_text: str, extractor_model: str, lang_code: str = "en"
+    ) -> list[dict[str, Any]]:
         import json
 
         from litellm import acompletion
@@ -242,7 +255,7 @@ class LiteLLMGateway:
                 "Extract actionable Kanban tickets from the report below.\n\n"
                 f"Report:\n{report_text}\n\n"
                 "Respond strictly in JSON format matching exactly this schema: "
-                "{\"tickets\": [{\"title\": \"...\", \"description\": \"...\"}]}"
+                '{"tickets": [{"title": "...", "description": "..."}]}'
             )
         else:
             prompt = phantom.content.format(report_text=report_text)
@@ -251,6 +264,7 @@ class LiteLLMGateway:
 
         try:
             from app.infrastructure.ai.provider_adapter import ProviderAdapter
+
             provider = ProviderAdapter.get_provider(extractor_model)
             api_key = self.cred_manager.get_api_key(provider)
             adapted = ProviderAdapter.adapt(extractor_model, api_key)
@@ -260,7 +274,7 @@ class LiteLLMGateway:
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
                 api_key=adapted.get("api_key"),
-                **adapted.get("kwargs", {})
+                **adapted.get("kwargs", {}),
             )
             content = response.choices[0].message.content
             data = json.loads(content)

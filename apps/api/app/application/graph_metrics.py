@@ -12,7 +12,12 @@ def _compute_graph_metrics_cpu_bound(nodes_data: list, edges_data: list) -> dict
 
     # Add nodes with their attributes
     for n in nodes_data:
-        G.add_node(n["id"], label=n["label"], is_test=n.get("is_test", False), file_path=n.get("file_path", ""))
+        G.add_node(
+            n["id"],
+            label=n["label"],
+            is_test=n.get("is_test", False),
+            file_path=n.get("file_path", ""),
+        )
 
     # Add edges with their types
     for e in edges_data:
@@ -34,8 +39,8 @@ def _compute_graph_metrics_cpu_bound(nodes_data: list, edges_data: list) -> dict
             for pred in G.predecessors(node):
                 edge_data = G.get_edge_data(pred, node)
                 pred_data = G.nodes[pred]
-                etype = edge_data.get('type', 'UNKNOWN')
-                if etype == 'API_CALL':
+                etype = edge_data.get("type", "UNKNOWN")
+                if etype == "API_CALL":
                     api_count += 1
                 else:
                     code_count += 1
@@ -43,15 +48,17 @@ def _compute_graph_metrics_cpu_bound(nodes_data: list, edges_data: list) -> dict
                 dependents.append(f"[{etype}] {pred_data.get('label', pred)}{test_flag}")
 
             summary = dependents[:10] + [f"+{count - 10} más"] if count > 10 else dependents
-            god_objects_in.append({
-                "node": node_data.get("label", node),
-                "file_path": node_data.get("file_path", ""),
-                "is_test": node_data.get("is_test", False),
-                "count": count,
-                "code_count": code_count,
-                "api_count": api_count,
-                "top_dependents": summary
-            })
+            god_objects_in.append(
+                {
+                    "node": node_data.get("label", node),
+                    "file_path": node_data.get("file_path", ""),
+                    "is_test": node_data.get("is_test", False),
+                    "count": count,
+                    "code_count": code_count,
+                    "api_count": api_count,
+                    "top_dependents": summary,
+                }
+            )
 
     # 3. God Objects (Out-Degree)
     out_degrees = sorted(G.out_degree(), key=lambda x: x[1], reverse=True)
@@ -65,8 +72,8 @@ def _compute_graph_metrics_cpu_bound(nodes_data: list, edges_data: list) -> dict
             for succ in G.successors(node):
                 edge_data = G.get_edge_data(node, succ)
                 succ_data = G.nodes[succ]
-                etype = edge_data.get('type', 'UNKNOWN')
-                if etype == 'API_CALL':
+                etype = edge_data.get("type", "UNKNOWN")
+                if etype == "API_CALL":
                     api_count += 1
                 else:
                     code_count += 1
@@ -74,22 +81,24 @@ def _compute_graph_metrics_cpu_bound(nodes_data: list, edges_data: list) -> dict
                 dependencies.append(f"[{etype}] {succ_data.get('label', succ)}{test_flag}")
 
             summary = dependencies[:10] + [f"+{count - 10} más"] if count > 10 else dependencies
-            god_objects_out.append({
-                "node": node_data.get("label", node),
-                "file_path": node_data.get("file_path", ""),
-                "is_test": node_data.get("is_test", False),
-                "count": count,
-                "code_count": code_count,
-                "api_count": api_count,
-                "top_dependencies": summary
-            })
+            god_objects_out.append(
+                {
+                    "node": node_data.get("label", node),
+                    "file_path": node_data.get("file_path", ""),
+                    "is_test": node_data.get("is_test", False),
+                    "count": count,
+                    "code_count": code_count,
+                    "api_count": api_count,
+                    "top_dependencies": summary,
+                }
+            )
 
     # 4. Isolated components (Files with 0 degree connection to any other file)
     isolated = len([node for node, degree in G.degree() if degree == 0])
 
     return {
-        "cyclic_dependencies": cycles[:10], # Truncate to save tokens
+        "cyclic_dependencies": cycles[:10],  # Truncate to save tokens
         "god_objects_in": god_objects_in,
         "god_objects_out": god_objects_out,
-        "isolated_components": isolated
+        "isolated_components": isolated,
     }

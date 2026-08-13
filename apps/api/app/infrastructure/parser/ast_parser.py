@@ -107,7 +107,8 @@ from dataclasses import dataclass
 def compute_ast_hash(node_code: str) -> str:
     # Remove only edge whitespaces to avoid corrupting string literals inside the code
     normalized = node_code.strip()
-    return hashlib.sha256(normalized.encode('utf-8')).hexdigest()
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
 
 @dataclass
 class ParsedNode:
@@ -119,6 +120,7 @@ class ParsedNode:
     content: str
     hash: str
     parent_fqn: str
+
 
 class TreeSitterParser:
     def parse_code(
@@ -138,9 +140,12 @@ class TreeSitterParser:
         tree = parser.parse(code_bytes)
 
         from app.infrastructure.parser.language_adapters import get_adapter
+
         adapter = get_adapter(ext)
         if adapter:
-            parsed_nodes, imports, api_endpoints = adapter.extract_nodes(tree, code_bytes, file_path)
+            parsed_nodes, imports, api_endpoints = adapter.extract_nodes(
+                tree, code_bytes, file_path
+            )
         else:
             parsed_nodes, imports, api_endpoints = [], set(), set()
 
@@ -153,7 +158,10 @@ async def fetch_git_birth_dates(repo_path: str) -> dict[str, int]:
     dates: dict[str, int] = {}
     try:
         proc = await asyncio.create_subprocess_exec(
-            "git", "log", "--name-status", "--diff-filter=A",
+            "git",
+            "log",
+            "--name-status",
+            "--diff-filter=A",
             "--pretty=format:commit_time:%at",
             cwd=repo_path,
             stdout=asyncio.subprocess.PIPE,
@@ -240,7 +248,9 @@ def resolve_import_edges(
                     ts_exts = {".ts", ".tsx", ".js", ".jsx", ".mjs", ".json"}
                     src_ext = Path(source_path_str).suffix.lower()
                     tgt_ext = Path(target).suffix.lower()
-                    is_compatible = (tgt_ext in ts_exts) if (src_ext in ts_exts) else (src_ext == tgt_ext)
+                    is_compatible = (
+                        (tgt_ext in ts_exts) if (src_ext in ts_exts) else (src_ext == tgt_ext)
+                    )
 
                     if is_compatible:
                         target_id = f"file:{target}"
@@ -274,14 +284,16 @@ def dedupe_edges(edges: list[GraphEdge]) -> list[GraphEdge]:
     return list(unique_edges.values())
 
 
-def resolve_api_edges(
-    project_id: UUID, file_endpoints: dict[str, set[str]]
-) -> list[GraphEdge]:
+def resolve_api_edges(project_id: UUID, file_endpoints: dict[str, set[str]]) -> list[GraphEdge]:
     edges = []
 
     # Separate consumers and exposers
-    exposers: dict[str, set[tuple[str, str]]] = {} # e.g. {"file:/path/to/java": {("GET", "/api/users/*")}}
-    consumers: dict[str, set[tuple[str, str]]] = {} # e.g. {"file:/path/to/ts": {("POST", "*/api/users/*")}}
+    exposers: dict[
+        str, set[tuple[str, str]]
+    ] = {}  # e.g. {"file:/path/to/java": {("GET", "/api/users/*")}}
+    consumers: dict[
+        str, set[tuple[str, str]]
+    ] = {}  # e.g. {"file:/path/to/ts": {("POST", "*/api/users/*")}}
 
     # Import the matcher
     from app.infrastructure.parser.route_matcher import (
@@ -292,7 +304,7 @@ def resolve_api_edges(
         for ep in endpoints:
             if ep.startswith("EXPOSES:"):
                 # EXPOSES:VERB:/route
-                parts = ep[8:].split(':', 1)
+                parts = ep[8:].split(":", 1)
                 if len(parts) == 2:
                     verb, route = parts
                     if file_id not in exposers:
@@ -300,7 +312,7 @@ def resolve_api_edges(
                     exposers[file_id].add((verb, route))
             elif ep.startswith("CONSUMES:"):
                 # CONSUMES:VERB:/route
-                parts = ep[9:].split(':', 1)
+                parts = ep[9:].split(":", 1)
                 if len(parts) == 2:
                     verb, route = parts
                     if file_id not in consumers:
@@ -339,7 +351,7 @@ def extract_nodes_from_code(
     edges = []
 
     file_node_id = f"file:{file_path}"
-    lines = code.split(b'\n')
+    lines = code.split(b"\n")
     birth_time = (birth_dates or {}).get(file_path)
     if birth_time is None:
         try:
@@ -353,11 +365,13 @@ def extract_nodes_from_code(
             label=NodeLabel.FILE,
             name=os.path.basename(file_path),
             file_path=file_path,
-            meta_data=json.dumps({
-                "start_line": 1,
-                "end_line": len(lines),
-                "birth_time": birth_time,
-            }),
+            meta_data=json.dumps(
+                {
+                    "start_line": 1,
+                    "end_line": len(lines),
+                    "birth_time": birth_time,
+                }
+            ),
             file_size=len(code),
             loc=len(lines),
         )
@@ -377,12 +391,14 @@ def extract_nodes_from_code(
                 label=NodeLabel.CLASS if pnode.node_type == "class" else NodeLabel.FUNCTION,
                 name=pnode.name,
                 file_path=file_path,
-                meta_data=json.dumps({
-                    "start_line": pnode.start_line,
-                    "end_line": pnode.end_line,
-                    "fqn": pnode.fqn,
-                    "hash": pnode.hash,
-                })
+                meta_data=json.dumps(
+                    {
+                        "start_line": pnode.start_line,
+                        "end_line": pnode.end_line,
+                        "fqn": pnode.fqn,
+                        "hash": pnode.hash,
+                    }
+                ),
             )
         )
         parent_id = file_node_id if pnode.parent_fqn == file_path else pnode.parent_fqn
@@ -391,7 +407,7 @@ def extract_nodes_from_code(
                 project_id=project_id,
                 source_id=parent_id,
                 target_id=pnode.fqn,
-                type=EdgeType.CONTAINS
+                type=EdgeType.CONTAINS,
             )
         )
 
@@ -412,7 +428,7 @@ class ASTParserService:
                 "target",
                 "build",
                 ".gradle",
-                ".idea"
+                ".idea",
             }
         else:
             self.ignore_dirs = set(ignore_dirs)
