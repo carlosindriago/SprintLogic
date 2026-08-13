@@ -8,7 +8,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import ReactMarkdown from "react-markdown";
-import { getProjectTasks, saveProjectTasks, getKanbanConfig, saveKanbanConfig, syncKanbanCommits, KanbanColumn, fetchProjectTickets, updateKanbanTicket, deleteKanbanTicket, createKanbanTicket, createGitBranch, commitChanges, fetchEpics, fetchSprints } from '@/lib/api';
+import { getProjectTasks, saveProjectTasks, getKanbanConfig, saveKanbanConfig, syncKanbanCommits, KanbanColumn, fetchProjectTickets, updateKanbanTicket, deleteKanbanTicket, createKanbanTicket, createGitBranch, commitChanges, fetchEpics, fetchSprints, getGitStatus, discardGitChanges, checkoutGitBranch } from '@/lib/api';
 import { KanbanTicket, Epic, Sprint } from '@/types';
 import TicketDrawer from "./TicketDrawer";
 import { SprintEpicManagerModal } from "./SprintEpicManagerModal";
@@ -246,6 +246,16 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
   const [commitPrompt, setCommitPrompt] = useState<{ticketId: string, title: string} | null>(null);
   const [commitMessage, setCommitMessage] = useState("");
 
+  // Unsaved Changes Modal State
+  const [unsavedChangesModal, setUnsavedChangesModal] = useState<{
+    ticketId: string,
+    branchName: string,
+    activeTask: Task,
+    newStatus: string,
+    newTasks: Task[],
+    prevTasksState: Task[]
+  } | null>(null);
+
   // Quick Add State
   const [quickAddText, setQuickAddText] = useState("");
   const [isQuickAdding, setIsQuickAdding] = useState(false);
@@ -385,6 +395,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
 
     let newTasks = [...tasks];
     const activeTask = { ...newTasks[activeIndex] };
+    const originalStatus = activeTask.status;
     let newStatus = activeTask.status;
 
     if (isOverColumn) {
@@ -414,10 +425,61 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
       }
     }
 
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(activeIdStr);
+
+    // GitFlow Guards Validation
+    if (isUuid && newStatus !== originalStatus) {
+      const targetCol = columns.find((c) => c.id === newStatus);
+      const prevCol = columns.find((c) => c.id === originalStatus);
+      const targetIndex = columns.findIndex((c) => c.id === newStatus);
+      const prevIndex = columns.findIndex((c) => c.id === originalStatus);
+
+      // In Progress Interceptor
+      if (targetCol?.rule === 'create_ephemeral_branch') {
+        try {
+          if (projectId) {
+            const gitStatus = await getGitStatus(projectId);
+            const activeBranch = gitStatus.branch;
+            if (!['main', 'master', 'develop'].includes(activeBranch)) {
+              toast.error(`🚨 Bloqueo de Git: Estás en la rama '${activeBranch}'. Cambia a main/master antes de iniciar un ticket nuevo.`);
+              return;
+            }
+          }
+        } catch (e) {
+          console.error("Failed to check git status", e);
+        }
+      }
+
+      // To Do Interceptor (moving backwards)
+      if (targetIndex < prevIndex) {
+        try {
+          const raw = rawTickets.find(r => r.id === activeIdStr);
+          if (raw && raw.branch_name && projectId) {
+            const gitStatus = await getGitStatus(projectId);
+            if (gitStatus.branch === raw.branch_name) {
+              const isDirty = gitStatus.modified > 0 || gitStatus.untracked > 0;
+              if (isDirty) {
+                // Abort optimistic update, show modal
+                setUnsavedChangesModal({
+                  ticketId: activeIdStr,
+                  branchName: raw.branch_name,
+                  activeTask,
+                  newStatus,
+                  newTasks,
+                  prevTasksState
+                });
+                return;
+              }
+            }
+          }
+        } catch (e) {
+          console.error("Failed to check git status for backward move", e);
+        }
+      }
+    }
+
     // ⚡ Optimistic UI update: instant feedback for the user
     setTasks(newTasks);
-
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(activeIdStr);
 
     if (isUuid) {
       try {
@@ -974,6 +1036,69 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
                 }}
                 className="px-3 py-1.5 rounded bg-green-600 text-white hover:bg-green-500 text-xs font-semibold"
               >Commit & Push</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Unsaved Changes Modal */}
+      {unsavedChangesModal && projectId && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#18181b] border border-zinc-700 p-6 rounded-lg max-w-md w-full shadow-2xl">
+            <h3 className="text-zinc-100 font-bold mb-2 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-red-500" />
+              Tienes cambios sin guardar
+            </h3>
+            <p className="text-zinc-400 text-sm mb-6">
+              Detectamos que tienes archivos sin hacer commit en esta tarea (rama <strong>{unsavedChangesModal.branchName}</strong>). ¿Qué deseas hacer?
+            </p>
+
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={() => {
+                  const m = unsavedChangesModal;
+                  setUnsavedChangesModal(null);
+                  addTab({
+                    id: `ExecutionRoom-${m.ticketId}`,
+                    type: "execution-room",
+                    title: `Quirófano: ${m.ticketId.substring(0, 8)}`,
+                    data: { ticketId: m.ticketId, executionMode: "exec_mode_surgeon" }
+                  });
+                }}
+                className="w-full px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-500 text-sm font-semibold transition-colors"
+              >
+                Ir al Quirófano a Guardar
+              </button>
+              
+              <button
+                onClick={async () => {
+                  const m = unsavedChangesModal;
+                  setUnsavedChangesModal(null);
+                  try {
+                    await discardGitChanges(projectId);
+                    await checkoutGitBranch(projectId, "main");
+                    toast.success("Cambios descartados y rama cambiada a main");
+                    
+                    // Proceed with the drag drop action
+                    setTasks(m.newTasks);
+                    await updateKanbanTicket(m.ticketId, { status: m.newStatus as TicketStatus });
+                  } catch (e) {
+                    toast.error("Error al descartar cambios", {
+                      description: "Revisa la consola para más detalles."
+                    });
+                  }
+                }}
+                className="w-full px-4 py-2 rounded bg-red-950/40 text-red-400 border border-red-900/50 hover:bg-red-900/60 text-sm font-semibold transition-colors"
+              >
+                Descartar Todo y Abandonar
+              </button>
+
+              <button
+                onClick={() => setUnsavedChangesModal(null)}
+                className="w-full px-4 py-2 rounded bg-zinc-800 text-zinc-300 hover:bg-zinc-700 text-sm font-semibold transition-colors mt-2"
+              >
+                Cancelar
+              </button>
             </div>
           </div>
         </div>

@@ -735,3 +735,8 @@ class LocalGitGateway:
     async def commit_changes(self, repo_path: str, message: str) -> dict[str, str]:
         output = await self._run_command(repo_path, "commit", "-m", message)
         return {"status": "committed", "message": message, "output": output.strip()}
+
+    async def discard_changes(self, repo_path: str) -> dict[str, str]:
+        await self._run_command(repo_path, "reset", "--hard", "HEAD")
+        await self._run_command(repo_path, "clean", "-fd")
+        return {"status": "discarded", "action": "reset_and_clean"}

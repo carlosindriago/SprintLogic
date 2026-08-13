@@ -299,6 +299,8 @@ export const stageFile = (projectId: string, filePath: string) => api.post(`/pro
 export const unstageFile = (projectId: string, filePath: string) => api.post(`/projects/${projectId}/git/unstage`, { file_path: filePath });
 export const commitChanges = (projectId: string, message: string) => api.post(`/projects/${projectId}/git/commit`, { message });
 export const createGitBranch = (projectId: string, name: string) => api.post(`/projects/${projectId}/git/branches`, { name });
+export const discardGitChanges = (projectId: string) => api.post(`/projects/${projectId}/git/discard-changes`);
+export const checkoutGitBranch = (projectId: string, branch_name: string) => api.post(`/projects/${projectId}/git/checkout`, { branch_name });
 
 // --- Kanban & Tasks ---
 export interface KanbanColumn {

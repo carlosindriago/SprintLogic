@@ -708,3 +708,47 @@ async def commit_changes(
         raise HTTPException(status_code=500, detail="An internal error occurred")
 
     return result
+
+class BranchCheckoutRequest(BaseModel):
+    branch_name: str
+
+@router.post("/{project_id}/git/checkout")
+async def checkout_branch(
+    project_id: str,
+    request: BranchCheckoutRequest,
+    session: AsyncSession = Depends(get_db_session),
+):
+    try:
+        project = await SQLAlchemyProjectRepository(session).get_project(UUID(project_id))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID")
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    try:
+        result = await git_gateway.checkout(project.path, request.branch_name)
+    except Exception as e:
+        logger.error("Git checkout failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred")
+
+    return result
+
+@router.post("/{project_id}/git/discard-changes")
+async def discard_all_changes(
+    project_id: str,
+    session: AsyncSession = Depends(get_db_session),
+):
+    try:
+        project = await SQLAlchemyProjectRepository(session).get_project(UUID(project_id))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID")
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    try:
+        result = await git_gateway.discard_changes(project.path)
+    except Exception as e:
+        logger.error("Git discard changes failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred")
+
+    return result

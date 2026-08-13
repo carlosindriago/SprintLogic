@@ -6,7 +6,7 @@ import Editor, { DiffEditor } from "@monaco-editor/react";
 import { Panel, Group, Separator } from "react-resizable-panels";
 import { useProjectStore } from "@/store/projectStore";
 import ReactMarkdown from "react-markdown";
-import { getKanbanTicket, API_BASE_URL, getFileContent, saveFileContent } from "@/lib/api";
+import { getKanbanTicket, API_BASE_URL, getFileContent, saveFileContent, getGitStatus } from "@/lib/api";
 import { toast } from "sonner";
 import { Task } from "@/types";
 
@@ -99,8 +99,26 @@ export default function ExecutionRoomTab({ data }: ExecutionRoomTabProps) {
   const [newFilePathInput, setNewFilePathInput] = useState("");
   const [projectContextMd, setProjectContextMd] = useState<string>("");
   const [affectedFilesContent, setAffectedFilesContent] = useState<{path: string, content: string}[]>([]);
+  const [actualGitBranch, setActualGitBranch] = useState<string>("");
 
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Fetch actual git branch on mount
+  useEffect(() => {
+    if (!projectId) return;
+    const loadGitStatus = async () => {
+      try {
+        const status = await getGitStatus(projectId);
+        if (status.branch) {
+          setActualGitBranch(status.branch);
+        }
+      } catch (err) {
+        console.error("Failed to load git status", err);
+      }
+    };
+    loadGitStatus();
+  }, [projectId]);
+
 
   useEffect(() => {
     if (!projectId) return;
@@ -439,7 +457,7 @@ Genera tu respuesta estrictamente estructurada de la siguiente manera:
                 🎯 {ticket.title}
               </span>
               <span className="text-xs text-emerald-400 px-2 py-0.5 rounded bg-emerald-950/30 border border-emerald-900/50">
-                🌿 Rama: {ticket.branch_name || 'main'}
+                🌿 Rama Git Actual: {actualGitBranch || '...'}
               </span>
             </>
           )}
