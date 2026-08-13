@@ -4,7 +4,7 @@ import logging
 import os
 from collections.abc import Awaitable, Callable
 
-from watchfiles import Change, awatch
+from watchfiles import Change, DefaultFilter, awatch
 
 _logger = logging.getLogger(__name__)
 
@@ -161,10 +161,17 @@ class FileWatcherService:
         if not queue:
             return
 
+        # Extend DefaultFilter to include common huge dependency directories
+        # DefaultFilter already ignores .git, .venv, node_modules, etc.
+        class IgnoreVendorFilter(DefaultFilter):
+            def __init__(self, **kwargs):
+                super().__init__(**kwargs)
+                self.ignore_dirs = self.ignore_dirs + ('vendor', '.next', 'dist', 'build')
+
         try:
-            async for changes in awatch(path, step=500):
+            async for changes in awatch(path, step=500, watch_filter=IgnoreVendorFilter()):
                 for change, filepath in changes:
-                    if ".git/" in filepath or "node_modules/" in filepath:
+                    if ".git/" in filepath or "node_modules/" in filepath or "vendor/" in filepath:
                         continue
 
                     if filepath in self._backend_writes:

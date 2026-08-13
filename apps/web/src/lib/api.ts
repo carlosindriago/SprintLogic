@@ -301,6 +301,7 @@ export const commitChanges = (projectId: string, message: string) => api.post(`/
 export const createGitBranch = (projectId: string, name: string) => api.post(`/projects/${projectId}/git/branches`, { name });
 export const discardGitChanges = (projectId: string) => api.post(`/projects/${projectId}/git/discard-changes`);
 export const checkoutGitBranch = (projectId: string, branch_name: string) => api.post(`/projects/${projectId}/git/checkout`, { branch_name });
+export const deleteGitBranch = (projectId: string, branchName: string, force: boolean = false) => api.delete(`/projects/${projectId}/git/branches/${encodeURIComponent(branchName)}?force=${force}`);
 
 // --- Kanban & Tasks ---
 export interface KanbanColumn {

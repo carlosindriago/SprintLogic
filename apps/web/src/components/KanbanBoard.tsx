@@ -8,7 +8,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import ReactMarkdown from "react-markdown";
-import { getProjectTasks, saveProjectTasks, getKanbanConfig, saveKanbanConfig, syncKanbanCommits, KanbanColumn, fetchProjectTickets, updateKanbanTicket, deleteKanbanTicket, createKanbanTicket, createGitBranch, commitChanges, fetchEpics, fetchSprints, getGitStatus, discardGitChanges, checkoutGitBranch } from '@/lib/api';
+import { getProjectTasks, saveProjectTasks, getKanbanConfig, saveKanbanConfig, syncKanbanCommits, KanbanColumn, fetchProjectTickets, updateKanbanTicket, deleteKanbanTicket, createKanbanTicket, createGitBranch, commitChanges, fetchEpics, fetchSprints, getGitStatus, discardGitChanges, checkoutGitBranch, deleteGitBranch } from '@/lib/api';
 import { KanbanTicket, Epic, Sprint } from '@/types';
 import TicketDrawer from "./TicketDrawer";
 import { SprintEpicManagerModal } from "./SprintEpicManagerModal";
@@ -256,6 +256,16 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
     prevTasksState: Task[]
   } | null>(null);
 
+  // Delete Clean Branch Modal State
+  const [deleteCleanBranchModal, setDeleteCleanBranchModal] = useState<{
+    ticketId: string,
+    branchName: string,
+    activeTask: Task,
+    newStatus: string,
+    newTasks: Task[],
+    prevTasksState: Task[]
+  } | null>(null);
+
   // Quick Add State
   const [quickAddText, setQuickAddText] = useState("");
   const [isQuickAdding, setIsQuickAdding] = useState(false);
@@ -454,15 +464,29 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
       if (targetIndex < prevIndex) {
         try {
           const raw = rawTickets.find(r => r.id === activeIdStr);
-          if (raw && raw.branch_name && projectId) {
+          if (raw && projectId) {
             const gitStatus = await getGitStatus(projectId);
-            if (gitStatus.branch === raw.branch_name) {
+            const ticketIdPrefix = raw.id.substring(0, 6).toUpperCase();
+            const isTicketBranch = gitStatus.branch === raw.branch_name || gitStatus.branch.includes(ticketIdPrefix);
+
+            if (isTicketBranch) {
               const isDirty = gitStatus.modified > 0 || gitStatus.untracked > 0;
               if (isDirty) {
                 // Abort optimistic update, show modal
                 setUnsavedChangesModal({
                   ticketId: activeIdStr,
-                  branchName: raw.branch_name,
+                  branchName: gitStatus.branch,
+                  activeTask,
+                  newStatus,
+                  newTasks,
+                  prevTasksState
+                });
+                return;
+              } else {
+                // Branch is clean, ask if they want to delete it
+                setDeleteCleanBranchModal({
+                  ticketId: activeIdStr,
+                  branchName: gitStatus.branch,
                   activeTask,
                   newStatus,
                   newTasks,
@@ -991,7 +1015,9 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
               <button 
                 onClick={async () => {
                   try {
-                    await createGitBranch(projectId, `${branchPrompt.type.toLowerCase()}/${branchPrompt.ticketId.substring(0,6).toUpperCase()}-${branchPrompt.title.toLowerCase().replace(/\\s+/g, '-')}`);
+                    const newBranchName = `${branchPrompt.type.toLowerCase()}/${branchPrompt.ticketId.substring(0,6).toUpperCase()}-${branchPrompt.title.toLowerCase().replace(/\\s+/g, '-')}`;
+                    await createGitBranch(projectId, newBranchName);
+                    await updateKanbanTicket(branchPrompt.ticketId, { branch_name: newBranchName });
                     toast.success("Rama creada exitosamente");
                   } catch (e) {
                     toast.error("Error al crear rama");
@@ -1098,6 +1124,73 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
                 className="w-full px-4 py-2 rounded bg-zinc-800 text-zinc-300 hover:bg-zinc-700 text-sm font-semibold transition-colors mt-2"
               >
                 Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Clean Branch Modal */}
+      {deleteCleanBranchModal && projectId && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#18181b] border border-zinc-700 p-6 rounded-lg max-w-md w-full shadow-2xl">
+            <h3 className="text-zinc-100 font-bold mb-2 flex items-center gap-2">
+              <Check className="w-5 h-5 text-blue-500" />
+              Abandonando rama limpia
+            </h3>
+            <p className="text-zinc-400 text-sm mb-6">
+              Esta rama (<strong>{deleteCleanBranchModal.branchName}</strong>) no tiene cambios pendientes. ¿Deseas eliminarla localmente para mantener tu entorno limpio, o prefieres conservarla?
+            </p>
+
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={async () => {
+                  const m = deleteCleanBranchModal;
+                  setDeleteCleanBranchModal(null);
+                  try {
+                    await checkoutGitBranch(projectId, "main");
+                    await deleteGitBranch(projectId, m.branchName, true);
+                    toast.success("Rama eliminada y de vuelta a main.");
+                    
+                    // Proceed with the drag drop action
+                    setTasks(m.newTasks);
+                    await updateKanbanTicket(m.ticketId, { status: m.newStatus as TicketStatus });
+                  } catch (e) {
+                    toast.error("Error al eliminar la rama", {
+                      description: "Es posible que ya haya sido eliminada o requiera forzado manual."
+                    });
+                  }
+                }}
+                className="w-full px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-500 text-sm font-semibold transition-colors"
+              >
+                Eliminar rama y volver a main
+              </button>
+              
+              <button
+                onClick={async () => {
+                  const m = deleteCleanBranchModal;
+                  setDeleteCleanBranchModal(null);
+                  try {
+                    await checkoutGitBranch(projectId, "main");
+                    toast.success("De vuelta a main (rama conservada).");
+                    
+                    // Proceed with the drag drop action
+                    setTasks(m.newTasks);
+                    await updateKanbanTicket(m.ticketId, { status: m.newStatus as TicketStatus });
+                  } catch (e) {
+                    toast.error("Error al cambiar a main");
+                  }
+                }}
+                className="w-full px-4 py-2 rounded bg-zinc-800 text-zinc-300 hover:bg-zinc-700 text-sm font-semibold transition-colors"
+              >
+                Conservar rama y volver a main
+              </button>
+
+              <button
+                onClick={() => setDeleteCleanBranchModal(null)}
+                className="w-full px-4 py-2 rounded bg-transparent text-zinc-400 hover:text-zinc-200 text-sm font-semibold transition-colors mt-2"
+              >
+                Cancelar movimiento
               </button>
             </div>
           </div>
