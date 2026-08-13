@@ -114,7 +114,9 @@ export interface ProjectRepoInsights {
   total_commits: number;
   active_branches: number;
   velocity: number;
+  velocity_history: { day: string; commits: number }[];
   recent_commits: Commit[];
+  top_hotspots: { path: string; impact_score: number; friction: number }[];
 }
 
 export interface FileTreeNode {

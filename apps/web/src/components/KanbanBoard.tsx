@@ -225,7 +225,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
   const [editingColumns, setEditingColumns] = useState<KanbanColumn[]>([]);
   const [newColTitle, setNewColTitle] = useState("");
   const [newColColor, setNewColColor] = useState("border-zinc-500");
-  const [newColRule, setNewColRule] = useState<'manual' | 'auto-on-test-fail' | 'auto-on-test-pass'>('manual');
+  const [newColRule, setNewColRule] = useState<'manual' | 'auto-on-test-fail' | 'auto-on-test-pass' | 'create_ephemeral_branch' | 'prompt_commit_push' | 'require_pull_request'>('manual');
   const [colError, setColError] = useState<string | null>(null);
 
   // Filters State
@@ -245,6 +245,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
   const [branchPrompt, setBranchPrompt] = useState<{ticketId: string, title: string, type: string, currentBranch: string} | null>(null);
   const [commitPrompt, setCommitPrompt] = useState<{ticketId: string, title: string} | null>(null);
   const [commitMessage, setCommitMessage] = useState("");
+  const [blockedBranchModal, setBlockedBranchModal] = useState<{currentBranch: string, rawTicket: any} | null>(null);
 
   // Unsaved Changes Modal State
   const [unsavedChangesModal, setUnsavedChangesModal] = useState<{
@@ -500,7 +501,13 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
             const raw = rawTickets.find(r => r.id === activeIdStr);
             if (raw && projectId) {
               const gitStatus = await getGitStatus(projectId);
-              setBranchPrompt({ ticketId: activeIdStr, title: raw.title, type: raw.type, currentBranch: gitStatus.branch });
+              const isBaseBranch = ['main', 'master', 'develop'].includes(gitStatus.branch);
+              
+              if (!isBaseBranch) {
+                setBlockedBranchModal({ currentBranch: gitStatus.branch, rawTicket: raw });
+              } else {
+                setBranchPrompt({ ticketId: activeIdStr, title: raw.title, type: raw.type, currentBranch: gitStatus.branch });
+              }
             }
           } else if (targetCol.rule === 'prompt_commit_push') {
             const raw = rawTickets.find(r => r.id === activeIdStr);
@@ -1000,7 +1007,10 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
             <p className="text-zinc-400 text-xs mb-4">Se ha detectado el arrastre a una columna que requiere una rama git.</p>
             
             <div className="bg-zinc-950 border border-zinc-800 p-3 rounded text-sm text-zinc-300 font-mono mb-4 break-words">
-              {`${branchPrompt.type.toLowerCase()}/${branchPrompt.ticketId.substring(0,6).toUpperCase()}-${branchPrompt.title.toLowerCase().replace(/\s+/g, '-')}`}
+              {`${branchPrompt.type.toLowerCase()}/${branchPrompt.ticketId.substring(0,6).toUpperCase()}-${(() => {
+                const sanitize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+                return sanitize(branchPrompt.title);
+              })()}`}
             </div>
 
             <div className="flex justify-end gap-2">
@@ -1011,7 +1021,8 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
               <button 
                 onClick={async () => {
                   try {
-                    const newBranchName = `${branchPrompt.type.toLowerCase()}/${branchPrompt.ticketId.substring(0,6).toUpperCase()}-${branchPrompt.title.toLowerCase().replace(/\\s+/g, '-')}`;
+                    const sanitizedTitle = branchPrompt.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+                    const newBranchName = `${branchPrompt.type.toLowerCase()}/${branchPrompt.ticketId.substring(0,6).toUpperCase()}-${sanitizedTitle}`;
                     await createGitBranch(projectId, newBranchName);
                     await updateKanbanTicket(branchPrompt.ticketId, { branch_name: newBranchName });
                     toast.success("Rama creada exitosamente");
@@ -1120,6 +1131,43 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
                 className="w-full px-4 py-2 rounded bg-zinc-800 text-zinc-300 hover:bg-zinc-700 text-sm font-semibold transition-colors mt-2"
               >
                 Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Blocked Branch Modal */}
+      {blockedBranchModal && projectId && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#18181b] border border-zinc-700 p-6 rounded-lg max-w-md w-full shadow-2xl">
+            <h3 className="text-zinc-100 font-bold mb-2 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-yellow-500" />
+              Estás en otra rama efímera
+            </h3>
+            <p className="text-zinc-400 text-sm mb-6">
+              Actualmente estás en la rama <strong>{blockedBranchModal.currentBranch}</strong>. Para mantener un buen orden de GitFlow, debes hacer un PR o mergearla con main antes de crear una nueva rama efímera.
+            </p>
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={() => setBlockedBranchModal(null)}
+                className="w-full px-4 py-2 rounded bg-zinc-800 text-zinc-300 hover:bg-zinc-700 text-sm font-semibold transition-colors"
+              >
+                Entendido
+              </button>
+              <button
+                onClick={() => {
+                  setBranchPrompt({ 
+                    ticketId: blockedBranchModal.rawTicket.id, 
+                    title: blockedBranchModal.rawTicket.title, 
+                    type: blockedBranchModal.rawTicket.type, 
+                    currentBranch: blockedBranchModal.currentBranch 
+                  });
+                  setBlockedBranchModal(null);
+                }}
+                className="w-full px-4 py-2 rounded bg-red-950/40 text-red-400 border border-red-900/50 hover:bg-red-900/60 text-sm font-semibold transition-colors mt-2"
+              >
+                Continuar bajo mi responsabilidad
               </button>
             </div>
           </div>

@@ -17,6 +17,8 @@ from app.infrastructure.git.git_gateway import LocalGitGateway
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Projects - Insights"])
 from sqlalchemy import select
+from collections import Counter
+from datetime import datetime, timedelta
 
 from app.infrastructure.db.models import GraphNodeModel
 
@@ -186,6 +188,7 @@ async def _compute_flow_insights(
 async def get_project_repo_insights(
     project_id: str, session: AsyncSession = Depends(get_db_session)
 ):
+    from app.infrastructure.db.models import GraphEdgeModel
     try:
         project_uuid = UUID(project_id)
     except ValueError:
@@ -239,16 +242,58 @@ async def get_project_repo_insights(
     except Exception:
         logger.warning("Unhandled exception", exc_info=True)
 
+    velocity_history = []
     try:
         out_velocity = await git_gateway._run_command(
             project.path, "rev-list", "--count", '--since="7 days ago"', "HEAD"
         )
         velocity = int(out_velocity) if out_velocity.strip().isdigit() else 0
+
+        # Calculate daily velocity history
+        out_history = await git_gateway._run_command(
+            project.path, "log", "--since=7 days ago", "--date=short", "--pretty=format:%ad"
+        )
+        counts = Counter(out_history.splitlines())
+        today = datetime.now().date()
+        for i in range(6, -1, -1):
+            d = (today - timedelta(days=i)).strftime("%Y-%m-%d")
+            velocity_history.append({
+                "day": d,
+                "commits": counts.get(d, 0)
+            })
     except Exception:
         logger.warning("Unhandled exception", exc_info=True)
 
     try:
         recent_commits = await git_gateway.get_recent_commits(project.path, limit=5)
+    except Exception:
+        logger.warning("Unhandled exception", exc_info=True)
+
+    # Calculate Top Hotspots
+    top_hotspots = []
+    try:
+        edges_res = await session.execute(
+            select(GraphEdgeModel.source_id, GraphEdgeModel.target_id)
+            .where(GraphEdgeModel.project_id == project_uuid)
+        )
+        edge_counts = {}
+        for row in edges_res:
+            edge_counts[row.source_id] = edge_counts.get(row.source_id, 0) + 1
+            edge_counts[row.target_id] = edge_counts.get(row.target_id, 0) + 1
+
+        nodes_res = await session.execute(
+            select(GraphNodeModel.id, GraphNodeModel.file_path)
+            .where(GraphNodeModel.project_id == project_uuid)
+        )
+        node_paths = {row.id: row.file_path for row in nodes_res}
+
+        for node_id, count in sorted(edge_counts.items(), key=lambda x: x[1], reverse=True):
+            if node_id in node_paths and len(top_hotspots) < 5:
+                top_hotspots.append({
+                    "path": node_paths[node_id],
+                    "impact_score": count,
+                    "friction": 0
+                })
     except Exception:
         logger.warning("Unhandled exception", exc_info=True)
 
@@ -258,5 +303,7 @@ async def get_project_repo_insights(
         "total_commits": total_commits,
         "active_branches": active_branches,
         "velocity": velocity,
+        "velocity_history": velocity_history,
         "recent_commits": recent_commits,
+        "top_hotspots": top_hotspots,
     }

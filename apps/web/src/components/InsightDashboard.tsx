@@ -830,53 +830,40 @@ export default function InsightDashboard({ projectId }: { projectId: string }) {
             </>
           ) : (
             <>
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <Card className="bg-zinc-900 border-zinc-800/50">
                   <CardHeader className="flex flex-row items-center justify-between pb-2">
-                    <CardTitle className="text-sm font-medium text-zinc-400">Total Commits</CardTitle>
-                    <GitCommit className="w-4 h-4 text-purple-500" />
+                    <CardTitle className="text-sm font-medium text-zinc-400">Tareas Completadas</CardTitle>
+                    <Activity className="w-4 h-4 text-emerald-500" />
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl md:text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-purple-600">
-                      {repoData?.total_commits ?? 0}
+                    <div className="text-2xl md:text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-emerald-400 to-emerald-600">
+                      {repoData?.tasks_by_state?.done ?? 0}
                     </div>
                   </CardContent>
                 </Card>
 
                 <Card className="bg-zinc-900 border-zinc-800/50">
                   <CardHeader className="flex flex-row items-center justify-between pb-2">
-                    <CardTitle className="text-sm font-medium text-zinc-400">Ramas Activas</CardTitle>
-                    <GitBranch className="w-4 h-4 text-purple-500" />
+                    <CardTitle className="text-sm font-medium text-zinc-400">Fricción (Pausas)</CardTitle>
+                    <Flame className="w-4 h-4 text-orange-500" />
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl md:text-3xl font-bold text-zinc-200">
-                      {repoData?.active_branches ?? 0}
+                    <div className="text-2xl md:text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-orange-400 to-red-500">
+                      {flowData?.idle_breaks ?? 0}
                     </div>
                   </CardContent>
                 </Card>
 
                 <Card className="bg-zinc-900 border-zinc-800/50">
                   <CardHeader className="flex flex-row items-center justify-between pb-2">
-                    <CardTitle className="text-sm font-medium text-zinc-400">Tareas Pendientes</CardTitle>
-                    <FolderGit2 className="w-4 h-4 text-purple-500" />
+                    <CardTitle className="text-sm font-medium text-zinc-400">Deep Work (hrs)</CardTitle>
+                    <Zap className="w-4 h-4 text-blue-500" />
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl md:text-3xl font-bold text-zinc-200">
-                      {repoData?.tasks_by_state?.todo ?? 0}
+                    <div className="text-2xl md:text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-blue-600">
+                      {flowData?.deep_flow_hours ?? 0}
                     </div>
-                  </CardContent>
-                </Card>
-
-                <Card className="bg-zinc-900 border-zinc-800/50">
-                  <CardHeader className="flex flex-row items-center justify-between pb-2">
-                    <CardTitle className="text-sm font-medium text-zinc-400">Velocity (7d)</CardTitle>
-                    <InfinityIcon className="w-4 h-4 text-purple-500" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl md:text-3xl font-bold text-zinc-200">
-                      {repoData?.velocity ?? 0}
-                    </div>
-                    <p className="text-xs text-zinc-500 mt-1">commits / 7 días</p>
                   </CardContent>
                 </Card>
               </div>
@@ -906,26 +893,16 @@ export default function InsightDashboard({ projectId }: { projectId: string }) {
 
                 <Card className="bg-zinc-900 border-zinc-800/50 lg:col-span-2 flex flex-col min-w-0">
                   <CardHeader>
-                    <CardTitle className="text-base md:text-lg text-zinc-300">Lenguajes</CardTitle>
+                    <CardTitle className="text-base md:text-lg text-zinc-300">Tendencia de Velocidad (Commits)</CardTitle>
                   </CardHeader>
-                  <CardContent className="flex-1 min-h-0 min-w-0 flex items-center justify-center">
+                  <CardContent className="flex-1 min-h-0 min-w-0 pb-6 pl-0">
                     <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={langData}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={60}
-                          outerRadius={80}
-                          paddingAngle={5}
-                          dataKey="value"
-                        >
-                          {langData.map((entry: LanguageDistributionItem, index: number) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                          ))}
-                        </Pie>
+                      <BarChart data={repoData?.velocity_history ?? []} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                        <XAxis dataKey="day" stroke="#475569" fontSize={12} tickMargin={10} axisLine={false} tickLine={false} tickFormatter={(val) => val.substring(5)} />
+                        <YAxis stroke="#475569" fontSize={12} tickMargin={10} axisLine={false} tickLine={false} />
                         <RechartsTooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', borderRadius: '8px' }} />
-                      </PieChart>
+                        <Bar dataKey="commits" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                      </BarChart>
                     </ResponsiveContainer>
                   </CardContent>
                 </Card>
@@ -933,35 +910,33 @@ export default function InsightDashboard({ projectId }: { projectId: string }) {
 
               <Card className="bg-zinc-900 border-zinc-800/50 min-w-0">
                 <CardHeader>
-                  <CardTitle className="text-base md:text-lg text-zinc-300">Últimos Commits</CardTitle>
+                  <CardTitle className="text-base md:text-lg text-zinc-300">Cuellos de Botella Arquitectónicos (Hotspots)</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left">
                       <thead className="text-xs text-zinc-400 uppercase bg-zinc-800/50">
                         <tr>
-                          <th className="px-6 py-3 rounded-tl">Hash</th>
-                          <th className="px-6 py-3">Mensaje</th>
-                          <th className="px-6 py-3">Autor</th>
-                          <th className="px-6 py-3 rounded-tr">Fecha</th>
+                          <th className="px-6 py-3 rounded-tl">Ruta del Archivo</th>
+                          <th className="px-6 py-3">Impact Score</th>
+                          <th className="px-6 py-3 rounded-tr">Fricción</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {repoData?.recent_commits && repoData.recent_commits.length > 0 ? (
-                          repoData.recent_commits.map((commit: Commit, index: number) => (
-                            <tr key={commit.hash} className={`border-b border-zinc-800/50 ${index % 2 === 0 ? 'bg-zinc-900' : 'bg-zinc-800/20'} hover:bg-zinc-800/50 transition-colors`}>
-                              <td className="px-6 py-4 font-mono text-xs text-purple-400">{commit.hash.substring(0, 7)}</td>
-                              <td className="px-6 py-4 max-w-[200px] md:max-w-[400px]">
-                                <div className="truncate text-zinc-300" title={commit.subject}>{commit.subject}</div>
+                        {repoData?.top_hotspots && repoData.top_hotspots.length > 0 ? (
+                          repoData.top_hotspots.map((hotspot, idx) => (
+                            <tr key={idx} className="border-b border-zinc-800 hover:bg-zinc-800/50 transition-colors">
+                              <td className="px-6 py-3 font-mono text-xs text-zinc-300 truncate max-w-[300px]" title={hotspot.path}>
+                                {hotspot.path}
                               </td>
-                              <td className="px-6 py-4 text-zinc-400">{commit.author}</td>
-                              <td className="px-6 py-4 text-zinc-500 whitespace-nowrap">{new Date(commit.date).toLocaleDateString()}</td>
+                              <td className="px-6 py-3 text-orange-400 font-bold">{hotspot.impact_score}</td>
+                              <td className="px-6 py-3 text-red-400">{hotspot.friction}</td>
                             </tr>
                           ))
                         ) : (
                           <tr>
-                            <td colSpan={4} className="px-6 py-8 text-center text-zinc-500 text-sm">
-                              No hay commits recientes en este proyecto.
+                            <td colSpan={3} className="px-6 py-4 text-center text-zinc-500">
+                              No se detectaron cuellos de botella.
                             </td>
                           </tr>
                         )}
