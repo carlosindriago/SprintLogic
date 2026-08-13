@@ -499,10 +499,13 @@ Evalúa brevemente (máx 3-4 líneas) si el plan aborda correctamente el ticket.
         llm_gateway = LiteLLMGateway()
 
         try:
-            response_text = await asyncio.to_thread(
-                llm_gateway.generate_completion,
-                prompt=prompt,
-                model=actual_model
+            response_text = await asyncio.wait_for(
+                asyncio.to_thread(
+                    llm_gateway.generate_completion,
+                    prompt=prompt,
+                    model=actual_model
+                ),
+                timeout=5.0
             )
             plan_observations = response_text.strip()
         except Exception as e:
