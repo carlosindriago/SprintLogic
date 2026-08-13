@@ -558,16 +558,16 @@ class AIAgent:
                 file_path = args.get("file_path", "")
                 if not self.project_id or not file_path:
                     return "Error: project_id and file_path are required."
-                result = await get_file_blast_radius(session, self.project_id, file_path)
-                return json.dumps(result)
+                blast_result = await get_file_blast_radius(session, self.project_id, file_path)
+                return json.dumps(blast_result)
 
             elif name == "get_developer_flow_state":
                 from app.application.tools.telemetry_tools import get_developer_flow_state
 
                 if not self.project_id:
                     return "Error: project_id is required."
-                result = await get_developer_flow_state(session, self.project_id)
-                return json.dumps(result)
+                flow_result = await get_developer_flow_state(session, self.project_id)
+                return json.dumps(flow_result)
 
             elif name == "get_project_context_summary":
                 if not self.project_id:
@@ -652,14 +652,14 @@ class AIAgent:
                 # Convert for LIKE query instead of MATCH
                 sanitized = f"%{query.strip()}%"
 
-                result = await session.execute(
+                search_res = await session.execute(
                     text(
                         "SELECT type, name, path, line FROM search_index "
                         "WHERE name LIKE :q OR path LIKE :q OR content LIKE :q LIMIT 20"
                     ),
                     {"q": sanitized},
                 )
-                rows = result.fetchall()
+                rows = search_res.fetchall()
                 if not rows:
                     return "No results found in codebase."
                 return json.dumps(
@@ -731,7 +731,7 @@ class AIAgent:
                 return f"<contexto_ast>\n<ecosistema>\n# Ecosystem for {query}\n</ecosistema>\n<firmas_hermanas>\n# Firmas\n</firmas_hermanas>\n<codigo_objetivo>\n# Target code\n</codigo_objetivo>\n</contexto_ast>"
 
             elif name == "check_developer_vital_signs":
-                result = await session.execute(
+                vital_res = await session.execute(
                     text("""
                         SELECT
                             COALESCE(SUM(thinking_ms + coding_ms + testing_ms), 0) as total_ms,
@@ -741,7 +741,7 @@ class AIAgent:
                         WHERE timestamp >= datetime('now', '-30 minutes')
                     """)
                 )
-                row = result.fetchone()
+                row = vital_res.fetchone()
                 if not row:
                     return "No hay datos de telemetría disponibles."
 

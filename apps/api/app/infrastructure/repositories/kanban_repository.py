@@ -74,11 +74,11 @@ class SQLAlchemyKanbanRepository:
         if sprint_names:
             from sqlalchemy import func
 
-            query = select(SprintModel).where(
+            sprint_query = select(SprintModel).where(
                 SprintModel.project_id == project_id,
                 func.lower(SprintModel.name).in_([n.lower() for n in sprint_names]),
             )
-            res = await self.session.execute(query)
+            res = await self.session.execute(sprint_query)
             existing_sprints = res.scalars().all()
             for s in existing_sprints:
                 sprint_map[s.name.lower()] = s.id
@@ -229,7 +229,7 @@ class SQLAlchemyKanbanRepository:
             branch_name=ticket.branch_name,
             epic_id=ticket.epic_id,
             sprint_id=ticket.sprint_id,
-            subtasks=ticket.subtasks or [],
+            subtasks=list(ticket.subtasks) if isinstance(ticket.subtasks, list) else [],
             affected_nodes=links,
         )
 
@@ -265,7 +265,7 @@ class SQLAlchemyKanbanRepository:
                     branch_name=t.branch_name,
                     epic_id=t.epic_id,
                     sprint_id=t.sprint_id,
-                    subtasks=t.subtasks or [],
+                    subtasks=list(t.subtasks) if isinstance(t.subtasks, list) else [],
                     affected_nodes=links,
                 )
             )
@@ -322,7 +322,7 @@ class SQLAlchemyKanbanRepository:
             branch_name=ticket.branch_name,
             epic_id=ticket.epic_id,
             sprint_id=ticket.sprint_id,
-            subtasks=ticket.subtasks or [],
+            subtasks=list(ticket.subtasks) if isinstance(ticket.subtasks, list) else [],
             created_at=ticket.created_at,
             updated_at=ticket.updated_at,
             affected_nodes=links,

@@ -455,7 +455,7 @@ Debes responder ÚNICAMENTE con un objeto JSON válido con esta estructura exact
     actual_model = tool_model_label(wbs_provider, wbs_model)
     llm_gateway = LiteLLMGateway()
 
-    kwargs = {"response_format": {"type": "json_object"}}
+    kwargs: dict[str, Any] = {"response_format": {"type": "json_object"}}
     if fallback_models:
         kwargs["fallbacks"] = fallback_models
     kwargs["timeout"] = 15.0
@@ -594,7 +594,7 @@ Evalúa brevemente (máx 3-4 líneas) si el plan aborda correctamente el ticket.
         actual_model = tool_model_label(provider, model)
         llm_gateway = LiteLLMGateway()
 
-        kwargs = {}
+        kwargs: dict[str, Any] = {}
         if fallback_models:
             kwargs["fallbacks"] = fallback_models
         kwargs["timeout"] = 5.0  # litellm per-request timeout

@@ -181,8 +181,12 @@ async def list_tool_mappings(session: AsyncSession) -> dict:
     stored = result.scalars().all()
 
     stored_map: dict[str, tuple[str, str, list[str] | None]] = {
-        m.tool_name: (m.provider_id, m.model_name, m.fallback_models)
-        for m in stored  # type: ignore
+        m.tool_name: (
+            m.provider_id,
+            m.model_name,
+            m.fallback_models if isinstance(m.fallback_models, list) else None,
+        )
+        for m in stored
     }
 
     default_provider, default_model_id, _ = await resolve_default_model(session)

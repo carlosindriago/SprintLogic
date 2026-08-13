@@ -1,5 +1,6 @@
 import logging
 import os
+from typing import Any
 from uuid import UUID
 
 from fastapi import (
@@ -272,14 +273,14 @@ async def get_project_repo_insights(
         logger.warning("Unhandled exception", exc_info=True)
 
     # Calculate Top Hotspots
-    top_hotspots = []
+    top_hotspots: list[dict[str, Any]] = []
     try:
         edges_res = await session.execute(
             select(GraphEdgeModel.source_id, GraphEdgeModel.target_id).where(
                 GraphEdgeModel.project_id == project_uuid
             )
         )
-        edge_counts = {}
+        edge_counts: dict[Any, int] = {}
         for row in edges_res:
             edge_counts[row.source_id] = edge_counts.get(row.source_id, 0) + 1
             edge_counts[row.target_id] = edge_counts.get(row.target_id, 0) + 1
