@@ -134,8 +134,27 @@ export default function ExecutionRoomTab({ data }: ExecutionRoomTabProps) {
         if (task) {
           setTicket(task);
           
-          // Pre-carguen como pestañas los archivos listados en affected_nodes
-          if (task.affected_nodes && task.affected_nodes.length > 0) {
+          // Pre-carguen como pestañas los archivos listados
+          const storedOpenFiles = localStorage.getItem(`sprintlogic_open_files_${ticketId}`);
+          const storedActiveFile = localStorage.getItem(`sprintlogic_active_file_${ticketId}`);
+          
+          let loadedFiles: string[] = [];
+          if (storedOpenFiles) {
+            try {
+              loadedFiles = JSON.parse(storedOpenFiles);
+            } catch (e) {
+              console.error("Failed to parse stored open files", e);
+            }
+          }
+
+          if (loadedFiles.length > 0) {
+            setOpenFiles(loadedFiles);
+            if (storedActiveFile && loadedFiles.includes(storedActiveFile)) {
+              setActiveFilePath(storedActiveFile);
+            } else {
+              setActiveFilePath(loadedFiles[0]);
+            }
+          } else if (task.affected_nodes && task.affected_nodes.length > 0) {
             const files = task.affected_nodes.map((n: any) => n.file_path || n.node_id || n);
             setOpenFiles(files);
             if (files.length > 0) {
@@ -173,6 +192,22 @@ export default function ExecutionRoomTab({ data }: ExecutionRoomTabProps) {
       localStorage.setItem(`sprintlogic_chat_${ticketId}`, JSON.stringify(messages));
     }
   }, [messages, ticketId]);
+
+  useEffect(() => {
+    if (ticketId) {
+      if (openFiles.length > 0) {
+        localStorage.setItem(`sprintlogic_open_files_${ticketId}`, JSON.stringify(openFiles));
+      } else {
+        localStorage.removeItem(`sprintlogic_open_files_${ticketId}`);
+      }
+      
+      if (activeFilePath) {
+        localStorage.setItem(`sprintlogic_active_file_${ticketId}`, activeFilePath);
+      } else {
+        localStorage.removeItem(`sprintlogic_active_file_${ticketId}`);
+      }
+    }
+  }, [openFiles, activeFilePath, ticketId]);
 
   const clearChatHistory = () => {
     if (window.confirm("¿Seguro que deseas borrar el historial del chat?")) {
