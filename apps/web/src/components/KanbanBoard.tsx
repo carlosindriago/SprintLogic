@@ -242,7 +242,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
   const [activeDrawerTicketId, setActiveDrawerTicketId] = useState<string | null>(null);
 
   // Prompts State
-  const [branchPrompt, setBranchPrompt] = useState<{ticketId: string, title: string, type: string} | null>(null);
+  const [branchPrompt, setBranchPrompt] = useState<{ticketId: string, title: string, type: string, currentBranch: string} | null>(null);
   const [commitPrompt, setCommitPrompt] = useState<{ticketId: string, title: string} | null>(null);
   const [commitMessage, setCommitMessage] = useState("");
 
@@ -444,21 +444,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
       const targetIndex = columns.findIndex((c) => c.id === newStatus);
       const prevIndex = columns.findIndex((c) => c.id === originalStatus);
 
-      // In Progress Interceptor
-      if (targetCol?.rule === 'create_ephemeral_branch') {
-        try {
-          if (projectId) {
-            const gitStatus = await getGitStatus(projectId);
-            const activeBranch = gitStatus.branch;
-            if (!['main', 'master', 'develop'].includes(activeBranch)) {
-              toast.error(`🚨 Bloqueo de Git: Estás en la rama '${activeBranch}'. Cambia a main/master antes de iniciar un ticket nuevo.`);
-              return;
-            }
-          }
-        } catch (e) {
-          console.error("Failed to check git status", e);
-        }
-      }
+      // In Progress Interceptor (removed blocking logic to let BranchPrompt handle it)
 
       // To Do Interceptor (moving backwards)
       if (targetIndex < prevIndex) {
@@ -512,8 +498,9 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
         if (targetCol) {
           if (targetCol.rule === 'create_ephemeral_branch') {
             const raw = rawTickets.find(r => r.id === activeIdStr);
-            if (raw) {
-              setBranchPrompt({ ticketId: activeIdStr, title: raw.title, type: raw.type });
+            if (raw && projectId) {
+              const gitStatus = await getGitStatus(projectId);
+              setBranchPrompt({ ticketId: activeIdStr, title: raw.title, type: raw.type, currentBranch: gitStatus.branch });
             }
           } else if (targetCol.rule === 'prompt_commit_push') {
             const raw = rawTickets.find(r => r.id === activeIdStr);
