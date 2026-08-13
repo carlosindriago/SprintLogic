@@ -168,7 +168,7 @@ export function AIReportViewer({ projectId, reportId, markdown: initialMarkdown 
         report_id: reportId,
         affected_nodes: affectedNodes,
       });
-      toast.success("Ticket registrado en el Kanban", {
+      toast.success("Ticket registrado en Sprint Center", {
         description: `"${issue.title}" ha sido enviado a la columna TODO.`,
       });
     } catch (err) {

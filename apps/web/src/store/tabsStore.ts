@@ -54,19 +54,34 @@ const DEFAULT_SESSION: ProjectSession = {
   activeTabId: 'dashboard',
 };
 
+const normalizeTab = (tab: TabData): TabData => {
+  if ((tab.id === 'kanban' || tab.type === 'kanban') && (tab.title === 'Kanban' || !tab.title)) {
+    return { ...tab, title: 'Sprint Center' };
+  }
+  return tab;
+};
+
 export const useTabsStore = create<TabsState>()(
   persist(
     (set, get) => ({
-      tabs: DEFAULT_SESSION.tabs,
+      tabs: DEFAULT_SESSION.tabs.map(normalizeTab),
       activeTabId: DEFAULT_SESSION.activeTabId,
       dirtyFiles: {},
       currentProjectId: null,
       projectSessions: {},
 
-      addTab: (tab) => {
+      addTab: (rawTab) => {
+        const tab = normalizeTab(rawTab);
         const { tabs } = get();
         const exists = tabs.find(t => t.id === tab.id);
         if (exists) {
+          if (exists.title !== tab.title) {
+            set({
+              tabs: tabs.map(t => t.id === tab.id ? { ...t, title: tab.title } : t),
+              activeTabId: tab.id
+            });
+            return;
+          }
           set({ activeTabId: tab.id });
           return;
         }
@@ -171,6 +186,8 @@ export const useTabsStore = create<TabsState>()(
         if (!Array.isArray(targetTabs) || targetTabs.length === 0) {
           targetTabs = [...DEFAULT_SESSION.tabs];
           targetActiveId = DEFAULT_SESSION.activeTabId;
+        } else {
+          targetTabs = targetTabs.map(normalizeTab);
         }
 
         if (!targetActiveId) {
@@ -204,12 +221,20 @@ export const useTabsStore = create<TabsState>()(
         const merged = { ...currentState, ...(persistedState as Partial<TabsState>) };
         if (!Array.isArray(merged.tabs) || merged.tabs.length === 0) {
           merged.tabs = [...DEFAULT_SESSION.tabs];
+        } else {
+          merged.tabs = merged.tabs.map(normalizeTab);
         }
         if (!merged.activeTabId) {
           merged.activeTabId = DEFAULT_SESSION.activeTabId;
         }
         if (!merged.projectSessions) {
           merged.projectSessions = {};
+        } else {
+          for (const pid in merged.projectSessions) {
+            if (Array.isArray(merged.projectSessions[pid].tabs)) {
+              merged.projectSessions[pid].tabs = merged.projectSessions[pid].tabs.map(normalizeTab);
+            }
+          }
         }
         return merged;
       },
