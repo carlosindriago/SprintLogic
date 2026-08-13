@@ -211,8 +211,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
     setIsSyncing(true);
     try {
       await syncKanbanCommits(projectId);
-      const data = await getProjectTasks(projectId);
-      setTasks(data.tasks);
+      await fetchTasks();
     } catch (e) {
       console.error("Manual commit sync failed", e);
     } finally {
