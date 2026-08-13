@@ -91,11 +91,21 @@ export function useEditorState({
           }
           setLoading(false);
         }
-      } catch {
+      } catch (err: any) {
         if (isMounted) {
-          originalContentRef.current = '// Error loading file';
-          currentContentRef.current = '// Error loading file';
-          setLoading(false);
+          // If it's a 404 Not Found, treat it as a new/empty file
+          if (err instanceof ApiError && err.status === 404) {
+            originalContentRef.current = '';
+            currentContentRef.current = '';
+            setInitialValue('');
+            setLoading(false);
+            setIsDirty(true); // Mark dirty so it can be saved
+          } else {
+            originalContentRef.current = '// Error loading file: ' + (err as Error).message;
+            currentContentRef.current = '// Error loading file: ' + (err as Error).message;
+            setInitialValue(originalContentRef.current);
+            setLoading(false);
+          }
         }
       }
     };
@@ -141,9 +151,20 @@ export function useEditorState({
     setSaving(true);
     try {
       const current = editorRef.current.getValue();
-      const response = await saveFileContent(projectId, targetPath, current, originalHashRef.current);
-      if (response && response.new_hash) {
-        originalHashRef.current = response.new_hash;
+      let response;
+      try {
+        response = await saveFileContent(projectId, targetPath, current, originalHashRef.current);
+      } catch (err: any) {
+        if (err instanceof ApiError && err.status === 404) {
+          // File does not exist yet, create it instead
+          const { createFile } = await import('@/lib/api');
+          response = await createFile(projectId, targetPath, current);
+        } else {
+          throw err;
+        }
+      }
+      if (response && (response as any).new_hash) {
+        originalHashRef.current = (response as any).new_hash;
       }
       originalContentRef.current = current;
       currentContentRef.current = current;
