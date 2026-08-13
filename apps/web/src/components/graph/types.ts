@@ -18,6 +18,7 @@ export interface ForceNode extends GraphNode {
   _extCache?: string;
   _colorCache?: string;
   _glowColorCache?: string;
+  _safeTime?: number;
 }
 
 export interface ForceLink extends GraphEdge {

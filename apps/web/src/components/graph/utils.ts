@@ -1,10 +1,3 @@
-// SENSEI FIX: Nuestro escudo, protegiendo contra los undefined y las mutaciones de D3.
-export const getSafeTime = (nodeRef: unknown): number => {
-  if (!nodeRef || typeof nodeRef !== 'object') return 0;
-  const value = (nodeRef as { birth_time?: unknown }).birth_time;
-  return typeof value === 'number' ? value : 0;
-};
-
 // Normalize any label casing to TitleCase ("file" -> "File") — must match activeTypes set values exactly.
 export const toTitleCase = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 

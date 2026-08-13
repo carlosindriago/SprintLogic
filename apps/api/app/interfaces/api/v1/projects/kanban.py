@@ -30,6 +30,7 @@ from app.infrastructure.repositories.tool_model_repository import (
 )
 from app.interfaces.api.v1.wbs_schemas import WBSHierarchicalResponse
 from app.utils.async_io import async_exists
+from app.utils.security import resolve_project_path
 
 from .memory import _dump_json_file, _load_json_file
 from .ws import project_event_queues
@@ -171,7 +172,7 @@ async def get_project_sticky_notes(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    json_path = os.path.join(project.path, f"{project_id}.json")
+    json_path = str(resolve_project_path(project.path, f"{project_id}.json"))
 
     notes = []
     if await async_exists(json_path):
@@ -199,7 +200,7 @@ async def update_project_sticky_notes(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    json_path = os.path.join(project.path, f"{project_id}.json")
+    json_path = str(resolve_project_path(project.path, f"{project_id}.json"))
 
     data = {}
     if await async_exists(json_path):

@@ -1,7 +1,7 @@
-import { useCallback, useRef, useState, useEffect } from "react";
+import { useCallback, useRef, useState, useEffect, useMemo } from "react";
 import type { NodeObject, LinkObject } from "react-force-graph-2d";
 import { ForceNode, ForceLink } from "../types";
-import { getSafeTime, drawRoundedSquare, drawDiamond, drawTriangle, drawFile } from "../utils";
+import { drawRoundedSquare, drawDiamond, drawTriangle, drawFile } from "../utils";
 import { graphTheme, extColorHash } from "@/lib/graph-theme";
 
 interface UseGraphCanvasProps {
@@ -79,13 +79,17 @@ export function useGraphCanvas({
       iconImages.current[ext] = img;
     });
   }, []);
+  const activeFocusNeighbors = useMemo(() => {
+    const active = focusNode || hoverNode;
+    return active ? neighbors.get(active) : undefined;
+  }, [focusNode, hoverNode, neighbors]);
 
   const isFaded = useCallback((nodeId: string) => {
     const activeFocus = focusNode || hoverNode;
     if (!activeFocus) return false;
     if (nodeId === activeFocus) return false;
-    return !neighbors.get(activeFocus)?.has(nodeId);
-  }, [focusNode, hoverNode, neighbors]);
+    return !activeFocusNeighbors?.has(nodeId);
+  }, [focusNode, hoverNode, activeFocusNeighbors]);
 
   const paintBackground = useCallback((ctx: CanvasRenderingContext2D, globalScale: number) => {
     if (!displayGraphData || !displayGraphData.nodes || displayGraphData.nodes.length === 0) return;
@@ -98,7 +102,7 @@ export function useGraphCanvas({
     }
     
     displayGraphData.nodes.forEach((n: ForceNode) => {
-      if (cutoffTimeRef.current && getSafeTime(n) > cutoffTimeRef.current) return;
+      if (cutoffTimeRef.current && (n._safeTime || 0) > cutoffTimeRef.current) return;
       const mod = n._modCache;
       if (!mod) return;
       
@@ -155,7 +159,7 @@ export function useGraphCanvas({
     if (!activeTypes.has(label)) return;
 
     const progress = animProgressRef.current;
-    const bTime = getSafeTime(n);
+    const bTime = n._safeTime || 0;
     if (progress < 1 && timeRange) {
       const cutoff = timeRange.min + (timeRange.max - timeRange.min) * progress;
       if (bTime > cutoff) return;
@@ -441,8 +445,8 @@ export function useGraphCanvas({
     if (targetLabel && !activeTypes.has(targetLabel)) return false;
 
     if (cutoffTimeRef.current) {
-      const sTime = getSafeTime(sourceNode);
-      const tTime = getSafeTime(targetNode);
+      const sTime = sourceNode._safeTime || 0;
+      const tTime = targetNode._safeTime || 0;
       if (sTime > cutoffTimeRef.current || tTime > cutoffTimeRef.current) return false;
     }
 

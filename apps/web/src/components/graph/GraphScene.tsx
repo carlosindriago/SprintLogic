@@ -11,7 +11,6 @@ import { getLocalChanges } from "@/lib/api";
 import GraphNodeDetailsPanel from "./components/GraphNodeDetailsPanel";
 
 import { GraphSceneProps, ForceNode, ForceLink } from "./types";
-import { getSafeTime } from "./utils";
 
 import {
   useGraphData,
@@ -245,7 +244,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
           nodeCanvasObject={paintNode}
           nodeVisibility={(node: NodeObject) => {
             if (!cutoffTimeRef.current) return true;
-            return getSafeTime(node) <= cutoffTimeRef.current;
+            return ((node as ForceNode)._safeTime || 0) <= cutoffTimeRef.current;
           }}
           linkColor={getLinkColor}
           linkWidth={getLinkWidth}
