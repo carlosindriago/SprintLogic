@@ -238,7 +238,7 @@ export default function AIAuditPanel({ projectId }: AIAuditPanelProps) {
         <div className="flex items-center gap-3 px-4 py-2 bg-zinc-900 border-b border-zinc-800/50 shrink-0">
           <button
             onClick={handleBack}
-            className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-white transition-colors"
+            className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-white transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-blue-500"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             Volver
@@ -249,7 +249,7 @@ export default function AIAuditPanel({ projectId }: AIAuditPanelProps) {
           <button
             onClick={() => setConfirmDiscard(true)}
             disabled={discarding}
-            className="ml-auto px-3 py-1 rounded text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-colors disabled:opacity-30"
+            className="ml-auto px-3 py-1 rounded text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-colors disabled:opacity-30 focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-blue-500"
           >
             {discarding ? "Descartando..." : "Descartar Cambios"}
           </button>
@@ -307,7 +307,7 @@ export default function AIAuditPanel({ projectId }: AIAuditPanelProps) {
         <button
           onClick={fetchDashboard}
           disabled={loading || refreshing}
-          className="p-1 rounded text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors disabled:opacity-30"
+          className="p-1 rounded text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors disabled:opacity-30 focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-blue-500"
           title="Refrescar"
           aria-label="Refrescar"
         >
@@ -406,7 +406,7 @@ export default function AIAuditPanel({ projectId }: AIAuditPanelProps) {
                 <button
                   onClick={handleCommit}
                   disabled={stagedCount === 0 || !commitMessage.trim() || committing}
-                  className="px-4 py-2 rounded text-sm font-medium bg-green-600 text-white hover:bg-green-500 border border-green-500/20 transition-colors disabled:opacity-30 shrink-0"
+                  className="px-4 py-2 rounded text-sm font-medium bg-green-600 text-white hover:bg-green-500 border border-green-500/20 transition-colors disabled:opacity-30 shrink-0 focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-blue-500"
                 >
                   {committing ? 'Commiteando...' : 'Hacer Commit'}
                 </button>
@@ -541,7 +541,7 @@ function StatusColumn({
           {showActionAll && onActionAll && count > 0 && (
             <button
               onClick={onActionAll}
-              className="text-[10px] px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200 transition-colors"
+              className="text-[10px] px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200 transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-blue-500"
             >
               {headerActionLabel ?? 'Acción'}
             </button>
@@ -591,7 +591,7 @@ function DashboardFileRow({
   return (
     <button
       onClick={() => onClick(item)}
-      className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-zinc-800/40 transition-colors group border-b border-zinc-800/30 last:border-b-0"
+      className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-zinc-800/40 transition-colors group border-b border-zinc-800/30 last:border-b-0 focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-blue-500"
     >
       {statusBadge(item.status)}
       <div className="flex-1 min-w-0">
@@ -645,14 +645,14 @@ function ConfirmationModal({
           <button
             onClick={onCancel}
             disabled={loading}
-            className="px-4 py-1.5 rounded text-xs text-zinc-300 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700/50 transition-colors disabled:opacity-30"
+            className="px-4 py-1.5 rounded text-xs text-zinc-300 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700/50 transition-colors disabled:opacity-30 focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-blue-500"
           >
             Cancelar
           </button>
           <button
             onClick={onConfirm}
             disabled={loading}
-            className="px-4 py-1.5 rounded text-xs font-medium bg-red-600 text-white hover:bg-red-500 border border-red-500/20 transition-colors disabled:opacity-30"
+            className="px-4 py-1.5 rounded text-xs font-medium bg-red-600 text-white hover:bg-red-500 border border-red-500/20 transition-colors disabled:opacity-30 focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-blue-500"
           >
             {loading ? "Descartando..." : "Descartar"}
           </button>
