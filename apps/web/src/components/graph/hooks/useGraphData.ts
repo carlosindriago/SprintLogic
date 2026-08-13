@@ -43,6 +43,7 @@ const enrichGraphData = (data: GraphData) => {
       lowerNameCache.set(n, lowerName);
     }
     node._lowerName = lowerName;
+    node._safeTime = typeof node.birth_time === 'number' ? node.birth_time : 0;
   });
 
   data.links.forEach((l) => {
