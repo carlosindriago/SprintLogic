@@ -860,56 +860,63 @@ Genera tu respuesta estrictamente estructurada de la siguiente manera:
                 Cancelar
               </button>
               <button
-                                onClick={async () => {
-                  if (externalPlan.trim() && projectId) {
-                    setIsLoading(true);
-                    try {
-                      // Extract paths: anything that looks like a path (e.g. `src/components/MyFile.tsx`)
-                      const pathRegex = /`([a-zA-Z0-9_.\-/]+\.[a-zA-Z0-9]+)`/g;
-                      let match;
-                      const extractedPaths = new Set<string>();
-                      while ((match = pathRegex.exec(externalPlan)) !== null) {
-                        extractedPaths.add(match[1]);
-                      }
-                      
-                      // Also find raw paths
-                      const rawPathRegex = /(?:[a-zA-Z0-9_-]+\/)+[a-zA-Z0-9_-]+\.[a-zA-Z0-9]+/g;
-                      while ((match = rawPathRegex.exec(externalPlan)) !== null) {
-                        extractedPaths.add(match[0]);
-                      }
-
-                      const pathsList = Array.from(extractedPaths);
-                      
-                      const res = await fetch(`${API_BASE_URL}/projects/${projectId}/kanban/validate-plan-paths`, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          paths: pathsList,
-                          ticket_description: ticket?.description,
-                          plan_text: externalPlan
-                        })
-                      });
-                      
-                      if (res.ok) {
-                        const data = await res.json();
-                        setValidatedPaths(data.validated_paths || []);
-                        if (data.plan_observations) {
-                          setPlanObservations(data.plan_observations);
-                        }
-                      }
-                    } catch (e) {
-                      console.error("Failed to validate paths:", e);
-                    } finally {
-                      setIsLoading(false);
+                onClick={async () => {
+                  if (!externalPlan.trim()) {
+                    toast.error("El plan está vacío");
+                    return;
+                  }
+                  if (!projectId) {
+                    toast.error("Error: ID del proyecto no encontrado");
+                    return;
+                  }
+                  
+                  setIsLoading(true);
+                  try {
+                    const pathRegex = /`([a-zA-Z0-9_.\-/]+\.[a-zA-Z0-9]+)`/g;
+                    let match;
+                    const extractedPaths = new Set<string>();
+                    while ((match = pathRegex.exec(externalPlan)) !== null) {
+                      extractedPaths.add(match[1]);
                     }
 
-                    setMessages(prev => [...prev, { role: "assistant", content: `**[Plan Inyectado]**
+                    const rawPathRegex = /(?:[a-zA-Z0-9_-]+\/)+[a-zA-Z0-9_-]+\.[a-zA-Z0-9]+/g;
+                    while ((match = rawPathRegex.exec(externalPlan)) !== null) {
+                      extractedPaths.add(match[0]);
+                    }
 
-${externalPlan}` }]);
-                    setShowPlanInput(false);
-                    setExternalPlan("");
-                    toast.success("Plan inyectado al contexto local");
+                    const pathsList = Array.from(extractedPaths);
+                    
+                    const res = await fetch(`${API_BASE_URL}/projects/${projectId}/kanban/validate-plan-paths`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        paths: pathsList,
+                        ticket_description: ticket?.description || "",
+                        plan_text: externalPlan
+                      })
+                    });
+                    
+                    if (res.ok) {
+                      const data = await res.json();
+                      setValidatedPaths(data.validated_paths || []);
+                      if (data.plan_observations) {
+                        setPlanObservations(data.plan_observations);
+                      }
+                    } else {
+                      console.error("Backend error:", await res.text());
+                      toast.error("Error validando el plan con el servidor");
+                    }
+                  } catch (e) {
+                    console.error("Failed to validate paths:", e);
+                    toast.error("Fallo de red al validar el plan");
+                  } finally {
+                    setIsLoading(false);
                   }
+
+                  setMessages(prev => [...prev, { role: "assistant", content: `**[Plan Inyectado]**\n\n${externalPlan}` }]);
+                  setShowPlanInput(false);
+                  setExternalPlan("");
+                  toast.success("Plan inyectado al contexto local");
                 }}
                 className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-4 py-2 rounded transition-colors"
               >
