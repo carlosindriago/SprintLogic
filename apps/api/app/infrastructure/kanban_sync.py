@@ -43,7 +43,7 @@ class KanbanSyncService:
                     "id": "in_progress",
                     "title": "In Progress",
                     "color": "border-blue-500",
-                    "rule": "pomodoro",
+                    "rule": "create_ephemeral_branch",
                 },
                 {
                     "id": "test",

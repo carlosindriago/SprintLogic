@@ -911,13 +911,22 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
                       value={newColRule}
                       onChange={(e) => {
                         const val = e.target.value as KanbanColumn['rule'];
-                        if (val === 'manual' || val === 'auto-on-test-fail' || val === 'auto-on-test-pass') {
+                        if (
+                          val === 'manual' || 
+                          val === 'auto-on-test-fail' || 
+                          val === 'auto-on-test-pass' || 
+                          val === 'create_ephemeral_branch' || 
+                          val === 'prompt_commit_push' || 
+                          val === 'require_pull_request'
+                        ) {
                           setNewColRule(val);
                         }
                       }}
                     >
                       <option value="manual">Manual (100% control)</option>
-
+                      <option value="create_ephemeral_branch">Git: Prompt Crear Rama (In Progress)</option>
+                      <option value="prompt_commit_push">Git: Prompt Commit & Push</option>
+                      <option value="require_pull_request">Git: Requerir PR (Bloqueo)</option>
                       <option value="auto-on-test-fail">Test (Auto si falla test)</option>
                       <option value="auto-on-test-pass">Done (Auto si commit + test OK)</option>
                     </select>
