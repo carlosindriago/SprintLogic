@@ -98,6 +98,7 @@ export default function ExecutionRoomTab({ data }: ExecutionRoomTabProps) {
   const [showOpenFileModal, setShowOpenFileModal] = useState(false);
   const [newFilePathInput, setNewFilePathInput] = useState("");
   const [projectContextMd, setProjectContextMd] = useState<string>("");
+  const [affectedFilesContent, setAffectedFilesContent] = useState<{path: string, content: string}[]>([]);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -158,6 +159,25 @@ export default function ExecutionRoomTab({ data }: ExecutionRoomTabProps) {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Fetch affected files content for Context Hydration
+  useEffect(() => {
+    if (!projectId || openFiles.length === 0) return;
+    const loadAffectedFiles = async () => {
+      try {
+        const promises = openFiles.map(path => 
+          getFileContent(projectId, path)
+            .then(res => ({ path, content: res.content }))
+            .catch(() => null)
+        );
+        const results = await Promise.all(promises);
+        setAffectedFilesContent(results.filter(Boolean) as {path: string, content: string}[]);
+      } catch (err) {
+        console.error("Failed to load affected files for hydration", err);
+      }
+    };
+    loadAffectedFiles();
+  }, [projectId, openFiles]);
+
   // Handle active file loading
   useEffect(() => {
     const loadFile = async () => {
@@ -177,6 +197,15 @@ export default function ExecutionRoomTab({ data }: ExecutionRoomTabProps) {
     loadFile();
   }, [projectId, activeFilePath]);
 
+  const scanForSecrets = (code: string): boolean => {
+    const secretRegex = /(api_key|secret_key|password|aws_access_key|jwt_token|access_token|db_pass)\s*[:=>]\s*["'][a-zA-Z0-9\-_]{8,}["']/i;
+    const awsRegex = /AKIA[0-9A-Z]{16}/;
+    const githubRegex = /ghp_[a-zA-Z0-9]{36}/;
+    const stripeRegex = /(sk_live_|pk_live_)[a-zA-Z0-9]+/;
+    
+    return secretRegex.test(code) || awsRegex.test(code) || githubRegex.test(code) || stripeRegex.test(code);
+  };
+
   const copyStructuredPrompt = () => {
     if (!ticket) return;
     const t = ticket as any;
@@ -186,6 +215,24 @@ export default function ExecutionRoomTab({ data }: ExecutionRoomTabProps) {
     const subtasks = t.subtasks && t.subtasks.length > 0 
       ? t.subtasks.map((st: any) => `- [ ] ${st.title}`).join('\n')
       : "No hay subtareas definidas.";
+
+    // DLP Block
+    for (const file of affectedFilesContent) {
+      if (scanForSecrets(file.content)) {
+        toast.error("🚨 ALERTA DE SEGURIDAD: Se han detectado posibles contraseñas, API Keys o tokens hardcodeados en los archivos. SprintLogic prohíbe la exportación de secretos a LLMs externos. Por favor, remueve el secreto, usa variables de entorno e inténtalo de nuevo.", {
+          duration: 6000,
+          style: { background: "#7f1d1d", color: "#fff" }
+        });
+        return;
+      }
+    }
+
+    const filesString = affectedFilesContent.map(f => `
+### Archivo: \`${f.path}\`
+\`\`\`${f.path.split('.').pop() || 'text'}
+${f.content}
+\`\`\`
+`).join('\n');
 
     const promptText = `# CONTEXTO GLOBAL DEL PROYECTO
 A continuación se detalla la arquitectura, estructura de directorios y mapa de dependencias de nuestro proyecto actual:
@@ -204,6 +251,12 @@ ${ticketDescription}
 
 ## Subtareas a cumplir:
 ${subtasks}
+
+---
+
+# CÓDIGO FUENTE DE ARCHIVOS AFECTADOS
+A continuación se proporciona el código actual de los archivos involucrados:
+${filesString || '> (No hay archivos precargados)'}
 
 ---
 
