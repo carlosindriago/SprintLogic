@@ -16,9 +16,10 @@ from app.infrastructure.git.git_gateway import LocalGitGateway
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Projects - Insights"])
-from sqlalchemy import select
 from collections import Counter
 from datetime import datetime, timedelta
+
+from sqlalchemy import select
 
 from app.infrastructure.db.models import GraphNodeModel
 
