@@ -3,6 +3,8 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { Send, Download, Play, Zap, GraduationCap, Layout, Settings2, CheckCircle2, ClipboardCopy, FileInput, Save, FileCode2, Plus } from "lucide-react";
 import Editor, { DiffEditor } from "@monaco-editor/react";
+import { EditorTab } from "@/components/editor/EditorTab";
+import type { GraphNode } from "@/types";
 import { Panel, Group, Separator } from "react-resizable-panels";
 import { useProjectStore } from "@/store/projectStore";
 import ReactMarkdown from "react-markdown";
@@ -100,6 +102,8 @@ export default function ExecutionRoomTab({ data }: ExecutionRoomTabProps) {
   const [projectContextMd, setProjectContextMd] = useState<string>("");
   const [affectedFilesContent, setAffectedFilesContent] = useState<{path: string, content: string}[]>([]);
   const [actualGitBranch, setActualGitBranch] = useState<string>("");
+  const [validatedPaths, setValidatedPaths] = useState<any[]>([]);
+  const [planObservations, setPlanObservations] = useState<string>("");
 
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -538,12 +542,34 @@ Genera tu respuesta estrictamente estructurada de la siguiente manera:
                             if (!match) {
                               const isFilePath = /\/[\w.-]+/i.test(content) && /\.(ts|tsx|js|jsx|py|php|html|css|json|md)$/i.test(content);
                               if (isFilePath) {
+                                const validation = validatedPaths.find(p => p.original_path === content);
+                                
+                                if (validation && !validation.exists) {
+                                  return (
+                                    <span className="block my-2 p-3 bg-red-950/30 border border-red-800/50 rounded-lg w-full">
+                                      <span className="flex items-center gap-2 text-red-400 font-semibold mb-2 text-xs">
+                                        ⚠️ SprintLogic Note: La ruta original "{content}" no se encontró en el repo.
+                                      </span>
+                                      {validation.suggested_path ? (
+                                        <span className="flex items-center gap-2 text-xs">
+                                          <span className="text-zinc-300">💡 Ruta real sugerida:</span>
+                                          <button onClick={() => handleOpenFile(validation.suggested_path)} className="bg-blue-900/30 text-blue-400 hover:text-blue-300 hover:underline px-2 py-1 rounded font-mono cursor-pointer">
+                                            📂 {validation.suggested_path}
+                                          </button>
+                                        </span>
+                                      ) : (
+                                        <span className="text-zinc-500 text-xs">No se encontró una ruta similar.</span>
+                                      )}
+                                    </span>
+                                  );
+                                }
+                                
                                 return (
                                   <button
                                     onClick={() => handleOpenFile(content)}
-                                    className="bg-blue-900/30 text-blue-400 hover:text-blue-300 hover:underline px-1 rounded mx-0.5 inline-flex items-center gap-1 font-mono text-[10px] cursor-pointer"
+                                    className="bg-blue-900/30 text-emerald-400 hover:text-emerald-300 hover:underline px-1 rounded mx-0.5 inline-flex items-center gap-1 font-mono text-[10px] cursor-pointer"
                                   >
-                                    📂 {content}
+                                    ✅ 📂 {content}
                                   </button>
                                 );
                               }
@@ -560,6 +586,14 @@ Genera tu respuesta estrictamente estructurada de la siguiente manera:
                 {isLoading && (
                   <div className="text-xs text-zinc-500 animate-pulse flex items-center gap-2 self-start p-3">
                     <Play className="w-3 h-3 animate-spin" /> Procesando instrucción...
+                  </div>
+                )}
+                {planObservations && (
+                  <div className="mx-4 my-2 p-3 bg-blue-950/40 border border-blue-800/50 rounded-lg">
+                    <div className="flex items-center gap-2 font-semibold text-blue-400 mb-1 text-xs">
+                      <Zap className="w-3.5 h-3.5" /> Observaciones de SprintLogic sobre este plan...
+                    </div>
+                    <p className="text-xs text-blue-200">{planObservations}</p>
                   </div>
                 )}
                 <div ref={chatEndRef} />
@@ -629,7 +663,7 @@ Genera tu respuesta estrictamente estructurada de la siguiente manera:
               </div>
 
               {/* Editor Workspace */}
-              <div className="flex-1 relative">
+              <div className="flex-1 relative flex flex-col">
                 {!activeFilePath ? (
                   <div className="absolute inset-0 flex items-center justify-center text-zinc-500 flex-col gap-3 p-6 text-center">
                     <FileCode2 className="w-10 h-10 opacity-30" />
@@ -648,23 +682,21 @@ Genera tu respuesta estrictamente estructurada de la siguiente manera:
                     }}
                   />
                 ) : (
-                  <Editor
-                    path={activeFilePath}
-                    value={fileContent}
-                    theme="vs-dark"
-                    onChange={handleEditorChange}
-                    options={{
-                      minimap: { enabled: false },
-                      wordWrap: "on",
-                      scrollBeyondLastLine: false,
-                      fontSize: 13,
-                    }}
+                  <EditorTab
+                    key={activeFilePath}
+                    projectId={projectId!}
+                    node={{
+                      id: activeFilePath,
+                      file_path: activeFilePath,
+                      name: activeFilePath.split('/').pop() || activeFilePath,
+                      metadata: {}
+                    } as GraphNode}
                   />
                 )}
               </div>
 
-              {/* Editor Actions Bottom Bar */}
-              <div className="h-12 bg-zinc-900 border-t border-zinc-800 flex items-center justify-between px-4 shrink-0">
+              {/* Editor Actions Bottom Bar (Kept for Diff & Patch) */}
+              <div className="h-12 bg-zinc-900 border-t border-zinc-800 flex items-center justify-between px-4 shrink-0 z-20">
                 <div className="text-xs text-zinc-500 font-mono truncate max-w-md">
                   {activeFilePath || "Ningún archivo activo"}
                 </div>
@@ -675,8 +707,8 @@ Genera tu respuesta estrictamente estructurada de la siguiente manera:
                       if (isDiffMode) {
                         setIsDiffMode(false);
                       } else {
-                        setDiffOriginal(originalContent);
-                        setDiffModified(fileContent);
+                        // The user might have made changes in EditorTab, but EditorTab manages its own state.
+                        // We will rely on EditorTab's saved content or we can just Diff original content.
                         setIsDiffMode(true);
                       }
                     }}
@@ -693,17 +725,19 @@ Genera tu respuesta estrictamente estructurada de la siguiente manera:
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-yellow-950/60 hover:bg-yellow-900/80 text-yellow-400 disabled:opacity-50 rounded border border-yellow-800/60 text-xs font-semibold transition-colors"
                   >
                     <Zap className="w-3.5 h-3.5" />
-                    Aplicar Parche IA
+                    Aplicar Parche IA (Diff)
                   </button>
 
-                  <button
-                    onClick={handleSaveFile}
-                    disabled={!hasUnsavedChanges || !activeFilePath}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-900/50 disabled:text-blue-400/50 text-white rounded text-xs font-semibold transition-colors"
-                  >
-                    <Save className="w-3.5 h-3.5" />
-                    Guardar
-                  </button>
+                  {isDiffMode && (
+                    <button
+                      onClick={handleSaveFile}
+                      disabled={!hasUnsavedChanges || !activeFilePath}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-900/50 disabled:text-blue-400/50 text-white rounded text-xs font-semibold transition-colors"
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      Guardar Diff
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -826,9 +860,52 @@ Genera tu respuesta estrictamente estructurada de la siguiente manera:
                 Cancelar
               </button>
               <button
-                onClick={() => {
-                  if (externalPlan.trim()) {
-                    setMessages(prev => [...prev, { role: "assistant", content: `**[Plan Inyectado]**\n\n${externalPlan}` }]);
+                                onClick={async () => {
+                  if (externalPlan.trim() && projectId) {
+                    setIsLoading(true);
+                    try {
+                      // Extract paths: anything that looks like a path (e.g. `src/components/MyFile.tsx`)
+                      const pathRegex = /`([a-zA-Z0-9_.\-/]+\.[a-zA-Z0-9]+)`/g;
+                      let match;
+                      const extractedPaths = new Set<string>();
+                      while ((match = pathRegex.exec(externalPlan)) !== null) {
+                        extractedPaths.add(match[1]);
+                      }
+                      
+                      // Also find raw paths
+                      const rawPathRegex = /(?:[a-zA-Z0-9_-]+\/)+[a-zA-Z0-9_-]+\.[a-zA-Z0-9]+/g;
+                      while ((match = rawPathRegex.exec(externalPlan)) !== null) {
+                        extractedPaths.add(match[0]);
+                      }
+
+                      const pathsList = Array.from(extractedPaths);
+                      
+                      const res = await fetch(`${API_BASE_URL}/projects/${projectId}/kanban/validate-plan-paths`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          paths: pathsList,
+                          ticket_description: ticket?.description,
+                          plan_text: externalPlan
+                        })
+                      });
+                      
+                      if (res.ok) {
+                        const data = await res.json();
+                        setValidatedPaths(data.validated_paths || []);
+                        if (data.plan_observations) {
+                          setPlanObservations(data.plan_observations);
+                        }
+                      }
+                    } catch (e) {
+                      console.error("Failed to validate paths:", e);
+                    } finally {
+                      setIsLoading(false);
+                    }
+
+                    setMessages(prev => [...prev, { role: "assistant", content: `**[Plan Inyectado]**
+
+${externalPlan}` }]);
                     setShowPlanInput(false);
                     setExternalPlan("");
                     toast.success("Plan inyectado al contexto local");

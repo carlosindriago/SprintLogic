@@ -1,4 +1,5 @@
 import asyncio
+import difflib
 import json
 import logging
 import os
@@ -13,9 +14,11 @@ from fastapi import (
     Request,
 )
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.db.database import get_db_session
+from app.infrastructure.db.models import GraphNodeModel
 from app.infrastructure.db.project_repository import SQLAlchemyProjectRepository
 from app.infrastructure.git.git_gateway import LocalGitGateway
 from app.infrastructure.repositories.tool_model_repository import (
@@ -97,6 +100,21 @@ class StickyNote(BaseModel):
 
 class UpdateStickyNotesRequest(BaseModel):
     notes: list[StickyNote]
+
+class PathValidationResult(BaseModel):
+    original_path: str
+    exists: bool
+    suggested_path: str | None = None
+    confidence: float | None = None
+
+class ValidatePlanResponse(BaseModel):
+    validated_paths: list[PathValidationResult]
+    plan_observations: str | None = None
+
+class ValidatePlanRequest(BaseModel):
+    paths: list[str]
+    ticket_description: str | None = None
+    plan_text: str | None = None
 
 @router.get("/projects/{project_id}/kanban/config")
 async def get_kanban_config(project_id: str, session: AsyncSession = Depends(get_db_session)):
@@ -402,3 +420,96 @@ Debes responder ÚNICAMENTE con un objeto JSON válido con esta estructura exact
     except Exception as e:
         logger.error("WBS AI planning failed: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="An internal error occurred")
+
+@router.post("/projects/{project_id}/kanban/validate-plan-paths", response_model=ValidatePlanResponse)
+async def validate_plan_paths(
+    project_id: str,
+    request: ValidatePlanRequest,
+    session: AsyncSession = Depends(get_db_session)
+):
+    try:
+        project_uuid = UUID(project_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project ID format")
+
+    repo = SQLAlchemyProjectRepository(session)
+    project = await repo.get_project(project_uuid)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Fetch all project nodes for exact and fuzzy matching
+    stmt = select(GraphNodeModel.file_path).where(GraphNodeModel.project_id == project_uuid)
+    result = await session.execute(stmt)
+    all_paths = [row[0] for row in result.fetchall() if row[0]]
+
+    validated_paths = []
+    for p in request.paths:
+        if p in all_paths:
+            validated_paths.append(PathValidationResult(
+                original_path=p,
+                exists=True,
+                suggested_path=p,
+                confidence=1.0
+            ))
+        else:
+            matches = difflib.get_close_matches(p, all_paths, n=1, cutoff=0.3)
+            if matches:
+                suggested = matches[0]
+                ratio = difflib.SequenceMatcher(None, p, suggested).ratio()
+                validated_paths.append(PathValidationResult(
+                    original_path=p,
+                    exists=False,
+                    suggested_path=suggested,
+                    confidence=ratio
+                ))
+            else:
+                # Try matching just the basename
+                basename = p.split("/")[-1]
+                basename_matches = [ap for ap in all_paths if ap.endswith(basename)]
+                if basename_matches:
+                    suggested = basename_matches[0]
+                    ratio = difflib.SequenceMatcher(None, p, suggested).ratio()
+                    validated_paths.append(PathValidationResult(
+                        original_path=p,
+                        exists=False,
+                        suggested_path=suggested,
+                        confidence=ratio
+                    ))
+                else:
+                    validated_paths.append(PathValidationResult(
+                        original_path=p,
+                        exists=False,
+                        suggested_path=None,
+                        confidence=0.0
+                    ))
+
+    plan_observations = None
+    if request.plan_text and request.ticket_description:
+        prompt = f"""Eres el arquitecto del sistema evaluando un plan técnico de un LLM.
+Ticket: {request.ticket_description}
+
+Plan Propuesto:
+{request.plan_text}
+
+Evalúa brevemente (máx 3-4 líneas) si el plan aborda correctamente el ticket. Si ves inconsistencias notorias o alucinaciones (ej. usar un framework distinto, tocar archivos irrelevantes), indícalo claramente. Si el plan parece sólido, responde: "El plan es congruente con la tarea."
+"""
+        from app.infrastructure.ai.llm_gateway import LiteLLMGateway
+        provider, model, _ = await resolve_tool_model(session, "planning_studio")
+        actual_model = tool_model_label(provider, model)
+        llm_gateway = LiteLLMGateway()
+
+        try:
+            response_text = await asyncio.to_thread(
+                llm_gateway.generate_completion,
+                prompt=prompt,
+                model=actual_model
+            )
+            plan_observations = response_text.strip()
+        except Exception as e:
+            logger.error("LLM Plan validation failed: %s", e, exc_info=True)
+            plan_observations = "Error al evaluar semánticamente el plan."
+
+    return ValidatePlanResponse(
+        validated_paths=validated_paths,
+        plan_observations=plan_observations
+    )
