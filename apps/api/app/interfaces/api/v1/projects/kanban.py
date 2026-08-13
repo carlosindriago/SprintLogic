@@ -445,48 +445,72 @@ async def validate_plan_paths(
     # Fetch all project nodes for exact and fuzzy matching
     stmt = select(GraphNodeModel.file_path).where(GraphNodeModel.project_id == project_uuid)
     result = await session.execute(stmt)
-    all_paths = [row[0] for row in result.fetchall() if row[0]]
+
+    project_base_path = project.path
+    if not project_base_path.endswith("/"):
+        project_base_path += "/"
+
+    all_absolute_paths = [row[0] for row in result.fetchall() if row[0]]
+    all_paths = [ap.replace(project_base_path, "") for ap in all_absolute_paths]
 
     validated_paths = []
     for p in request.paths:
+        # Check exact relative path match
         if p in all_paths:
+            # Map back to absolute path for suggested_path
+            idx = all_paths.index(p)
             validated_paths.append(PathValidationResult(
                 original_path=p,
                 exists=True,
-                suggested_path=p,
+                suggested_path=all_absolute_paths[idx],
                 confidence=1.0
             ))
         else:
-            matches = difflib.get_close_matches(p, all_paths, n=1, cutoff=0.3)
-            if matches:
-                suggested = matches[0]
-                ratio = difflib.SequenceMatcher(None, p, suggested).ratio()
+            # Check if p is a suffix of any relative path (e.g. resources/views/...)
+            suffix_matches = [i for i, ap in enumerate(all_paths) if ap.endswith(p)]
+            if suffix_matches:
+                idx = suffix_matches[0]
                 validated_paths.append(PathValidationResult(
                     original_path=p,
-                    exists=False,
-                    suggested_path=suggested,
-                    confidence=ratio
+                    exists=True, # It exists as a suffix
+                    suggested_path=all_absolute_paths[idx],
+                    confidence=1.0
                 ))
             else:
-                # Try matching just the basename
-                basename = p.split("/")[-1]
-                basename_matches = [ap for ap in all_paths if ap.endswith(basename)]
-                if basename_matches:
-                    suggested = basename_matches[0]
-                    ratio = difflib.SequenceMatcher(None, p, suggested).ratio()
+                matches = difflib.get_close_matches(p, all_paths, n=1, cutoff=0.3)
+                if matches:
+                    suggested_rel = matches[0]
+                    idx = all_paths.index(suggested_rel)
+                    suggested_abs = all_absolute_paths[idx]
+                    ratio = difflib.SequenceMatcher(None, p, suggested_rel).ratio()
                     validated_paths.append(PathValidationResult(
                         original_path=p,
                         exists=False,
-                        suggested_path=suggested,
+                        suggested_path=suggested_abs,
                         confidence=ratio
                     ))
                 else:
-                    validated_paths.append(PathValidationResult(
-                        original_path=p,
-                        exists=False,
-                        suggested_path=None,
-                        confidence=0.0
-                    ))
+                    # Try matching just the basename
+                    basename = p.split("/")[-1]
+                    basename_matches = [i for i, ap in enumerate(all_paths) if ap.endswith(basename)]
+                    if basename_matches:
+                        idx = basename_matches[0]
+                        suggested_rel = all_paths[idx]
+                        suggested_abs = all_absolute_paths[idx]
+                        ratio = difflib.SequenceMatcher(None, p, suggested_rel).ratio()
+                        validated_paths.append(PathValidationResult(
+                            original_path=p,
+                            exists=False,
+                            suggested_path=suggested_abs,
+                            confidence=ratio
+                        ))
+                    else:
+                        validated_paths.append(PathValidationResult(
+                            original_path=p,
+                            exists=False,
+                            suggested_path=None,
+                            confidence=0.0
+                        ))
 
     plan_observations = None
     if request.plan_text and request.ticket_description:
@@ -520,7 +544,7 @@ Evalúa brevemente (máx 3-4 líneas) si el plan aborda correctamente el ticket.
             plan_observations = response_text.strip()
         except Exception as e:
             logger.error("LLM Plan validation failed: %s", e, exc_info=True)
-            plan_observations = "Error al evaluar semánticamente el plan."
+            plan_observations = None
 
     return ValidatePlanResponse(
         validated_paths=validated_paths,

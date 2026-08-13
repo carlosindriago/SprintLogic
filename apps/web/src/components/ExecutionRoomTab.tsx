@@ -533,7 +533,7 @@ Genera tu respuesta estrictamente estructurada de la siguiente manera:
                         </span>
                       )}
                     </div>
-                    <div className="prose prose-invert prose-xs max-w-none">
+                    <div className="prose prose-invert prose-xs max-w-none break-words overflow-hidden">
                       <ReactMarkdown
                         components={{
                           code({className, children, ...props}: any) {
@@ -546,15 +546,19 @@ Genera tu respuesta estrictamente estructurada de la siguiente manera:
                                 
                                 if (validation && !validation.exists) {
                                   return (
-                                    <span className="block my-2 p-3 bg-red-950/30 border border-red-800/50 rounded-lg w-full">
+                                    <span className="block my-2 p-3 bg-red-950/30 border border-red-800/50 rounded-lg w-full overflow-hidden">
                                       <span className="flex items-center gap-2 text-red-400 font-semibold mb-2 text-xs">
                                         ⚠️ SprintLogic Note: La ruta original "{content}" no se encontró en el repo.
                                       </span>
                                       {validation.suggested_path ? (
-                                        <span className="flex items-center gap-2 text-xs">
-                                          <span className="text-zinc-300">💡 Ruta real sugerida:</span>
-                                          <button onClick={() => handleOpenFile(validation.suggested_path)} className="bg-blue-900/30 text-blue-400 hover:text-blue-300 hover:underline px-2 py-1 rounded font-mono cursor-pointer">
-                                            📂 {validation.suggested_path}
+                                        <span className="flex items-center gap-2 text-xs overflow-hidden">
+                                          <span className="text-zinc-300 whitespace-nowrap">💡 Ruta real sugerida:</span>
+                                          <button 
+                                            onClick={() => handleOpenFile(validation.suggested_path)} 
+                                            className="bg-blue-900/30 text-blue-400 hover:text-blue-300 hover:underline px-2 py-1 rounded font-mono cursor-pointer truncate max-w-full text-left"
+                                            title={validation.suggested_path}
+                                          >
+                                            📂 .../{validation.suggested_path.split('/').slice(-2).join('/')}
                                           </button>
                                         </span>
                                       ) : (
@@ -566,10 +570,11 @@ Genera tu respuesta estrictamente estructurada de la siguiente manera:
                                 
                                 return (
                                   <button
-                                    onClick={() => handleOpenFile(content)}
-                                    className="bg-blue-900/30 text-emerald-400 hover:text-emerald-300 hover:underline px-1 rounded mx-0.5 inline-flex items-center gap-1 font-mono text-[10px] cursor-pointer"
+                                    onClick={() => handleOpenFile(validation?.suggested_path || content)}
+                                    className="bg-blue-900/30 text-emerald-400 hover:text-emerald-300 hover:underline px-1 rounded mx-0.5 inline-flex items-center gap-1 font-mono text-[10px] cursor-pointer truncate align-bottom max-w-full"
+                                    title={validation?.suggested_path || content}
                                   >
-                                    ✅ 📂 {content}
+                                    ✅ 📂 {(validation?.suggested_path || content).split('/').slice(-2).join('/')}
                                   </button>
                                 );
                               }
