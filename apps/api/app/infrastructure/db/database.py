@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.pool import NullPool
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite+aiosqlite:///sprintlogic.db")
 
@@ -26,6 +27,7 @@ def get_engine() -> AsyncEngine:
         _engine = create_async_engine(
             DATABASE_URL,
             echo=False,
+            poolclass=NullPool if "sqlite" in DATABASE_URL else None,
             connect_args={"timeout": 30.0} if "sqlite" in DATABASE_URL else {}
         )
 
