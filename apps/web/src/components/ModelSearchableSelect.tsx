@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo } from "react";
-import { Search, ChevronDown, Check, X, Sparkles, Filter, RotateCcw } from "lucide-react";
+import { Search, ChevronDown, Check, X, Sparkles, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ModelHealthMetric } from "@/lib/api";
 import { ModelHealthBadge } from "./ModelHealthBadge";
@@ -169,32 +169,32 @@ export function ModelSearchableSelect({
   }
 
   return (
-    <div ref={containerRef} className={cn("relative inline-block w-full", className)}>
-      {/* Trigger Button */}
+    <div ref={containerRef} className={cn("relative inline-block w-full text-zinc-100", className)}>
+      {/* Trigger Button - Guaranteed Dark Theme */}
       <button
         type="button"
         disabled={disabled}
         onClick={() => !disabled && setIsOpen((prev) => !prev)}
         className={cn(
-          "flex items-center justify-between gap-2 w-full px-3 py-2 text-sm rounded-md border text-left transition-colors",
-          "bg-zinc-950 border-zinc-800 text-zinc-200 hover:border-zinc-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
+          "flex items-center justify-between gap-2 w-full px-3 py-2 text-sm rounded-lg border text-left transition-all shadow-sm",
+          "bg-zinc-950 text-zinc-100 border-zinc-800 hover:bg-zinc-900 hover:border-zinc-700 focus:outline-none focus:ring-1 focus:ring-blue-500",
           disabled && "opacity-50 cursor-not-allowed",
-          isOpen && "border-blue-500/50 ring-1 ring-blue-500/20"
+          isOpen && "border-blue-500 ring-1 ring-blue-500/30 bg-zinc-900"
         )}
       >
         <div className="flex items-center gap-2 min-w-0 flex-1">
           {value === "__default__" ? (
-            <span className="text-zinc-400 truncate text-xs">{defaultLabel}</span>
+            <span className="text-zinc-300 font-medium truncate text-xs">{defaultLabel}</span>
           ) : value === "__none__" || !value ? (
-            <span className="text-zinc-500 truncate text-xs">{triggerLabel}</span>
+            <span className="text-zinc-400 truncate text-xs">{triggerLabel}</span>
           ) : (
             <div className="flex items-center gap-2 min-w-0 truncate">
               {selectedModel && (
-                <span className="text-blue-400 font-medium text-xs shrink-0">
+                <span className="text-blue-400 font-semibold text-xs shrink-0">
                   {selectedModel.provider}:
                 </span>
               )}
-              <span className="text-zinc-200 text-xs font-mono truncate">{triggerLabel}</span>
+              <span className="text-zinc-100 text-xs font-mono font-medium truncate">{triggerLabel}</span>
             </div>
           )}
         </div>
@@ -207,11 +207,11 @@ export function ModelSearchableSelect({
         </div>
       </button>
 
-      {/* Popover Dropdown */}
+      {/* Popover Dropdown - Guaranteed Dark Theme */}
       {isOpen && (
         <div
           className={cn(
-            "absolute z-50 mt-1 right-0 top-full bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl p-3 flex flex-col gap-2.5 backdrop-blur-xl animate-in fade-in-0 zoom-in-95",
+            "absolute z-50 mt-1.5 right-0 top-full bg-zinc-900 text-zinc-100 border border-zinc-800 rounded-xl shadow-2xl p-3 flex flex-col gap-3 backdrop-blur-xl animate-in fade-in-0 zoom-in-95",
             popoverWidthClass
           )}
         >
@@ -224,7 +224,7 @@ export function ModelSearchableSelect({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Buscar por nombre, ID o proveedor..."
-              className="w-full bg-zinc-950 border border-zinc-800 rounded-md pl-9 pr-8 py-1.5 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-blue-500"
+              className="w-full bg-zinc-950 text-zinc-100 border border-zinc-800 rounded-md pl-9 pr-8 py-2 text-xs placeholder-zinc-500 focus:outline-none focus:border-blue-500 [color-scheme:dark]"
             />
             {searchQuery && (
               <button
@@ -238,7 +238,7 @@ export function ModelSearchableSelect({
           </div>
 
           {/* Filter Row: Selects for Provider & Health Status */}
-          <div className="grid grid-cols-2 gap-2 pb-2 border-b border-zinc-800/80">
+          <div className="grid grid-cols-2 gap-2 pb-2.5 border-b border-zinc-800">
             {/* Provider Filter Select */}
             <div className="flex flex-col gap-1">
               <div className="flex items-center justify-between">
@@ -252,11 +252,13 @@ export function ModelSearchableSelect({
               <select
                 value={selectedProvider}
                 onChange={(e) => setSelectedProvider(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded px-2 py-1.5 text-xs text-zinc-200 focus:outline-none focus:border-blue-500 cursor-pointer"
+                className="w-full bg-zinc-950 text-zinc-100 border border-zinc-800 rounded-md px-2.5 py-1.5 text-xs focus:outline-none focus:border-blue-500 cursor-pointer [color-scheme:dark]"
               >
-                <option value="all">Todos los proveedores ({models.length})</option>
+                <option value="all" className="bg-zinc-900 text-zinc-100">
+                  Todos los proveedores ({models.length})
+                </option>
                 {providersList.map(({ id, name, count }) => (
-                  <option key={id} value={id}>
+                  <option key={id} value={id} className="bg-zinc-900 text-zinc-100">
                     {name} ({count})
                   </option>
                 ))}
@@ -276,13 +278,23 @@ export function ModelSearchableSelect({
               <select
                 value={selectedHealthFilter}
                 onChange={(e) => setSelectedHealthFilter(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded px-2 py-1.5 text-xs text-zinc-200 focus:outline-none focus:border-blue-500 cursor-pointer"
+                className="w-full bg-zinc-950 text-zinc-100 border border-zinc-800 rounded-md px-2.5 py-1.5 text-xs focus:outline-none focus:border-blue-500 cursor-pointer [color-scheme:dark]"
               >
-                <option value="all">Todos los estados ({models.length})</option>
-                <option value="healthy">🟢 Healthy ({healthStats.healthy})</option>
-                <option value="degraded">🟡 Degraded ({healthStats.degraded})</option>
-                <option value="failing">🔴 Failing ({healthStats.failing})</option>
-                <option value="untested">⚪ Sin llamadas ({healthStats.untested})</option>
+                <option value="all" className="bg-zinc-900 text-zinc-100">
+                  Todos los estados ({models.length})
+                </option>
+                <option value="healthy" className="bg-zinc-900 text-zinc-100">
+                  🟢 Healthy ({healthStats.healthy})
+                </option>
+                <option value="degraded" className="bg-zinc-900 text-zinc-100">
+                  🟡 Degraded ({healthStats.degraded})
+                </option>
+                <option value="failing" className="bg-zinc-900 text-zinc-100">
+                  🔴 Failing ({healthStats.failing})
+                </option>
+                <option value="untested" className="bg-zinc-900 text-zinc-100">
+                  ⚪ Sin llamadas ({healthStats.untested})
+                </option>
               </select>
             </div>
           </div>
@@ -314,15 +326,15 @@ export function ModelSearchableSelect({
                   setIsOpen(false);
                 }}
                 className={cn(
-                  "flex items-center justify-between p-2 rounded-md text-xs text-left transition-colors",
+                  "flex items-center justify-between p-2 rounded-lg text-xs text-left transition-colors",
                   value === "__default__"
-                    ? "bg-blue-600/20 text-blue-300 border border-blue-500/30"
-                    : "hover:bg-zinc-800/70 text-zinc-400"
+                    ? "bg-blue-600/20 text-blue-200 border border-blue-500/30"
+                    : "hover:bg-zinc-800/80 text-zinc-300"
                 )}
               >
                 <div className="flex items-center gap-2">
                   <Sparkles className="w-3.5 h-3.5 text-blue-400" />
-                  <span>{defaultLabel}</span>
+                  <span className="font-medium">{defaultLabel}</span>
                 </div>
                 {value === "__default__" && <Check className="w-3.5 h-3.5 text-blue-400" />}
               </button>
@@ -337,14 +349,14 @@ export function ModelSearchableSelect({
                   setIsOpen(false);
                 }}
                 className={cn(
-                  "flex items-center justify-between p-2 rounded-md text-xs text-left transition-colors",
+                  "flex items-center justify-between p-2 rounded-lg text-xs text-left transition-colors",
                   value === "__none__" || !value
-                    ? "bg-zinc-800 text-zinc-300 border border-zinc-700"
-                    : "hover:bg-zinc-800/70 text-zinc-500"
+                    ? "bg-zinc-800 text-zinc-100 border border-zinc-700"
+                    : "hover:bg-zinc-800/80 text-zinc-400"
                 )}
               >
                 <span>{noneLabel}</span>
-                {(value === "__none__" || !value) && <Check className="w-3.5 h-3.5 text-zinc-400" />}
+                {(value === "__none__" || !value) && <Check className="w-3.5 h-3.5 text-zinc-300" />}
               </button>
             )}
 
@@ -370,22 +382,22 @@ export function ModelSearchableSelect({
                     setIsOpen(false);
                   }}
                   className={cn(
-                    "flex items-center justify-between gap-3 p-2 rounded-md text-left transition-colors group",
+                    "flex items-center justify-between gap-3 p-2 rounded-lg text-left transition-colors group",
                     isSelected
-                      ? "bg-blue-600/20 text-white border border-blue-500/30"
-                      : "hover:bg-zinc-800/70 text-zinc-300"
+                      ? "bg-blue-600/25 text-white border border-blue-500/40"
+                      : "hover:bg-zinc-800/80 text-zinc-200"
                   )}
                 >
                   <div className="flex flex-col min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-medium text-zinc-100 truncate group-hover:text-blue-300 transition-colors">
+                      <span className="text-xs font-semibold text-zinc-100 truncate group-hover:text-blue-300 transition-colors">
                         {m.name}
                       </span>
-                      <span className="text-[10px] text-zinc-500 bg-zinc-800 px-1 rounded border border-zinc-700/50">
+                      <span className="text-[10px] font-medium text-zinc-400 bg-zinc-800 px-1.5 py-0.2 rounded border border-zinc-700/60">
                         {m.provider}
                       </span>
                     </div>
-                    <span className="text-[11px] font-mono text-zinc-500 truncate mt-0.5">
+                    <span className="text-[11px] font-mono text-zinc-400 truncate mt-0.5">
                       {m.id}
                     </span>
                   </div>
