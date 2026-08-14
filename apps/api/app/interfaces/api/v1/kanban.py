@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.patch_engine import apply_patch
+from app.domain.kanban_models import TicketPriority, TicketType
 from app.domain.kanban_schemas import (
     EpicCreate,
     EpicResponse,
@@ -15,9 +16,11 @@ from app.domain.kanban_schemas import (
     KanbanTicketPatch,
     KanbanTicketResponse,
     KanbanTicketUpdate,
+    SecurityTicketHandoffRequest,
     SprintCreate,
     SprintResponse,
     SprintUpdate,
+    TicketNodeLink,
     WBSImportTicket,
 )
 from app.infrastructure.db.database import get_db_session
@@ -88,6 +91,99 @@ async def create_project_ticket(
 
     repo = SQLAlchemyKanbanRepository(session)
     ticket = await repo.create_ticket(project_uuid, payload)
+
+    project_repo = SQLAlchemyProjectRepository(session)
+    project = await project_repo.get_project(project_uuid)
+    if project and project.path:
+        asyncio.create_task(create_git_branch_for_ticket(project.path, ticket))
+
+    return ticket
+
+
+@router.post(
+    "/projects/{project_id}/kanban/tickets/from-security",
+    response_model=KanbanTicketResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_ticket_from_security(
+    project_id: str,
+    payload: SecurityTicketHandoffRequest,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Create a high-priority Security ticket in Planning Studio from Security Studio finding."""
+    try:
+        project_uuid = UUID(project_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid project ID format"
+        )
+
+    # Map severity to priority
+    severity_lower = (payload.severity or "medium").lower()
+    if severity_lower in ("critical", "high"):
+        priority = TicketPriority.HIGH
+    elif severity_lower == "low":
+        priority = TicketPriority.LOW
+    else:
+        priority = TicketPriority.MEDIUM
+
+    # Prepare affected nodes
+    affected_nodes = [
+        TicketNodeLink(node_id=path, file_path=path)
+        for path in (payload.affected_nodes or [payload.file_path])
+        if path
+    ]
+
+    # Prepare subtasks if not provided
+    subtasks = payload.subtasks
+    if not subtasks:
+        subtasks = [
+            {
+                "id": "sec-step-1",
+                "title": f"Aislar vulnerabilidad en {payload.file_path}:{payload.line_number}",
+                "done": False,
+            },
+            {
+                "id": "sec-step-2",
+                "title": "Aplicar mitigación y saneamiento conforme a la evaluación del Tribunal IA",
+                "done": False,
+            },
+            {
+                "id": "sec-step-3",
+                "title": "Ejecutar pruebas de regresión y verificar con escáner SAST",
+                "done": False,
+            },
+        ]
+
+    # Clean / format title
+    title = payload.title
+    if not title.startswith("[Security Fix]"):
+        title = f"[Security Fix] - {title}"
+
+    # Build description including AI explanation and mitigation diff
+    description_parts = [payload.description]
+    if payload.cwe:
+        description_parts.append(f"\n**CWE:** {payload.cwe}")
+    if payload.rule_id:
+        description_parts.append(f"\n**Regla SAST:** `{payload.rule_id}`")
+    if payload.mitigation_diff:
+        description_parts.append(
+            f"\n\n### Parche Propuesto (Mitigación)\n```diff\n{payload.mitigation_diff}\n```"
+        )
+
+    full_description = "\n".join(description_parts)
+
+    ticket_create = KanbanTicketCreate(
+        title=title,
+        type=TicketType.SECURITY,
+        priority=priority,
+        description=full_description,
+        affected_nodes=affected_nodes,
+        subtasks=subtasks,
+    )
+
+    repo = SQLAlchemyKanbanRepository(session)
+    ticket = await repo.create_ticket(project_uuid, ticket_create)
 
     project_repo = SQLAlchemyProjectRepository(session)
     project = await project_repo.get_project(project_uuid)

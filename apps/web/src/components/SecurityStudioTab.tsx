@@ -31,12 +31,14 @@ import {
   evaluateSecurityFinding,
   getFileContent,
   getSecurityToolchainStatus,
+  createSecurityTicketFromFinding,
 } from '@/lib/api';
 import {
   SecurityFinding,
   SecuritySeverity,
   FindingEvaluationResponse,
   ToolchainStatus,
+  SecurityTicketHandoffRequest,
 } from '@/types';
 import { cn } from '@/lib/utils';
 
@@ -63,6 +65,10 @@ export default function SecurityStudioTab() {
   const [evaluations, setEvaluations] = useState<Record<string, FindingEvaluationResponse>>({});
   const [evaluating, setEvaluating] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  // Handoff to Planning Studio tracking
+  const [sendingHandoff, setSendingHandoff] = useState(false);
+  const [sentFindings, setSentFindings] = useState<Record<string, boolean>>({});
 
   // File content for Monaco Diff
   const [originalCode, setOriginalCode] = useState<string>('');
@@ -192,20 +198,64 @@ export default function SecurityStudioTab() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleHandoffToPlanning = () => {
+  const handleHandoffToPlanning = async () => {
     if (!currentProjectId || !selectedFinding) return;
     const evaluation = evaluations[selectedFinding.id];
-    const message = `## Tarea de Seguridad: Mitigar ${selectedFinding.title} (${selectedFinding.severity.toUpperCase()})\n\n` +
-      `- **Archivo**: \`${selectedFinding.file_path}:${selectedFinding.line_number}\`\n` +
-      `- **Regla SAST**: \`${selectedFinding.rule_id}\` (${selectedFinding.cwe || 'N/A'})\n` +
-      `- **Veredicto Juez IA**: ${evaluation ? (evaluation.is_real_threat ? '🚨 Amenaza Real' : '🛡️ Falso Positivo') : 'Pendiente'}\n` +
-      (evaluation ? `- **Explicación**: ${evaluation.explanation}\n\n### Parche Propuesto:\n\`\`\`diff\n${evaluation.mitigation_diff}\n\`\`\`\n` : '');
+    setSendingHandoff(true);
 
-    setProjectState(currentProjectId, {
-      messages: [{ role: 'user', content: message }],
-    });
-    setActiveTab('planning');
-    toast.success('Hallazgo transferido al Planning Studio');
+    try {
+      const payload: SecurityTicketHandoffRequest = {
+        finding_id: selectedFinding.id,
+        title: `${selectedFinding.title || selectedFinding.rule_id} en ${selectedFinding.file_path}`,
+        description: `### Evaluación del Tribunal IA (AppSec)\n${evaluation?.explanation || selectedFinding.description}\n\n**Descripción Original:** ${selectedFinding.description}\n**Severidad:** ${selectedFinding.severity.toUpperCase()}\n**Herramienta:** ${selectedFinding.tool.toUpperCase()}`,
+        severity: selectedFinding.severity,
+        file_path: selectedFinding.file_path,
+        line_number: selectedFinding.line_number,
+        cwe: selectedFinding.cwe,
+        rule_id: selectedFinding.rule_id,
+        mitigation_diff: evaluation?.mitigation_diff || null,
+        subtasks: [
+          {
+            id: 'sec-subtask-1',
+            title: `Aislar vulnerabilidad en ${selectedFinding.file_path}:${selectedFinding.line_number}`,
+            done: false,
+          },
+          {
+            id: 'sec-subtask-2',
+            title: 'Aplicar mitigación y saneamiento conforme a la evaluación del Tribunal IA',
+            done: false,
+          },
+          {
+            id: 'sec-subtask-3',
+            title: 'Ejecutar suite de pruebas unitarias y verificar con escáner SAST',
+            done: false,
+          },
+        ],
+        affected_nodes: [selectedFinding.file_path],
+      };
+
+      await createSecurityTicketFromFinding(currentProjectId, payload);
+
+      setSentFindings((prev) => ({ ...prev, [selectedFinding.id]: true }));
+
+      // Also prime planning store context
+      const message = `## Requerimiento de Seguridad: Mitigar ${selectedFinding.title} (${selectedFinding.severity.toUpperCase()})\n\n` +
+        `- **Archivo Afectado**: \`${selectedFinding.file_path}:${selectedFinding.line_number}\`\n` +
+        `- **Regla SAST**: \`${selectedFinding.rule_id}\` (${selectedFinding.cwe || 'N/A'})\n` +
+        `- **Veredicto Juez IA**: ${evaluation ? (evaluation.is_real_threat ? '🚨 Amenaza Real' : '🛡️ Falso Positivo') : 'Pendiente'}\n` +
+        (evaluation ? `- **Explicación**: ${evaluation.explanation}\n\n### Parche Propuesto:\n\`\`\`diff\n${evaluation.mitigation_diff}\n\`\`\`\n` : '');
+
+      setProjectState(currentProjectId, {
+        messages: [{ role: 'user', content: message }],
+      });
+
+      toast.success('✅ Amenaza enviada al Planning Studio exitosamente. El equipo de arquitectura priorizará su resolución.');
+    } catch (err) {
+      console.error('Error creating ticket from security finding:', err);
+      toast.error((err as Error)?.message || 'Error al enviar requerimiento al Planning Studio');
+    } finally {
+      setSendingHandoff(false);
+    }
   };
 
   const counts = {
@@ -411,19 +461,27 @@ export default function SecurityStudioTab() {
                           {finding.tool}
                         </span>
                       </div>
-                      {evalItem && (
-                        <span
-                          className={cn(
-                            "px-1.5 py-0.5 text-[9px] font-semibold rounded flex items-center gap-1",
-                            evalItem.is_real_threat
-                              ? "bg-red-500/20 text-red-300 border border-red-500/30"
-                              : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-                          )}
-                        >
-                          {evalItem.is_real_threat ? <AlertTriangle className="w-2.5 h-2.5" /> : <ShieldCheck className="w-2.5 h-2.5" />}
-                          {evalItem.is_real_threat ? 'Amenaza Real' : 'Falso Positivo'}
-                        </span>
-                      )}
+                      <div className="flex items-center gap-1">
+                        {sentFindings[finding.id] && (
+                          <span className="px-1.5 py-0.5 text-[9px] font-semibold rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+                            <CheckCircle2 className="w-2.5 h-2.5" />
+                            Planning
+                          </span>
+                        )}
+                        {evalItem && (
+                          <span
+                            className={cn(
+                              "px-1.5 py-0.5 text-[9px] font-semibold rounded flex items-center gap-1",
+                              evalItem.is_real_threat
+                                ? "bg-red-500/20 text-red-300 border border-red-500/30"
+                                : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                            )}
+                          >
+                            {evalItem.is_real_threat ? <AlertTriangle className="w-2.5 h-2.5" /> : <ShieldCheck className="w-2.5 h-2.5" />}
+                            {evalItem.is_real_threat ? 'Amenaza Real' : 'Falso Positivo'}
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     <h3 className="text-xs font-medium text-zinc-100 line-clamp-1 mb-1 group-hover:text-red-300 transition-colors">
@@ -478,12 +536,35 @@ export default function SecurityStudioTab() {
                       </>
                     )}
                   </button>
+
                   <button
                     onClick={handleHandoffToPlanning}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-medium text-xs border border-zinc-700 transition-colors"
+                    disabled={sendingHandoff || sentFindings[selectedFinding.id]}
+                    className={cn(
+                      "flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium text-xs border transition-all shadow-md",
+                      sentFindings[selectedFinding.id]
+                        ? "bg-emerald-950/40 border-emerald-700/60 text-emerald-300"
+                        : currentEval?.is_real_threat
+                        ? "bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 text-white border-red-500/50 shadow-red-950/40"
+                        : "bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border-zinc-700"
+                    )}
                   >
-                    <Send className="w-3.5 h-3.5" />
-                    <span>Planning / Kanban</span>
+                    {sendingHandoff ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Enviando al Planning...</span>
+                      </>
+                    ) : sentFindings[selectedFinding.id] ? (
+                      <>
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>En Planificación</span>
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-3.5 h-3.5" />
+                        <span>Enviar al Planning Studio</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
@@ -569,7 +650,7 @@ export default function SecurityStudioTab() {
                       {currentEval.is_real_threat ? (
                         <div className="flex items-center gap-1 text-red-400 text-xs font-semibold">
                           <AlertTriangle className="w-3.5 h-3.5" />
-                          <span>AMENAZA CONFIRMADA (Requiere Parche)</span>
+                          <span>AMENAZA CONFIRMADA (Requiere Planificación en Quirófano)</span>
                         </div>
                       ) : (
                         <div className="flex items-center gap-1 text-emerald-400 text-xs font-semibold">
@@ -579,6 +660,33 @@ export default function SecurityStudioTab() {
                       )}
                     </div>
                     <p className="text-xs text-zinc-300 leading-relaxed">{currentEval.explanation}</p>
+
+                    {currentEval.is_real_threat && (
+                      <div className="mt-3 pt-3 border-t border-red-900/40 flex items-center justify-between gap-3">
+                        <span className="text-[11px] text-zinc-400">
+                          Todo cambio de código debe ser planificado formalmente antes de ejecutarse en el Quirófano.
+                        </span>
+                        <button
+                          onClick={handleHandoffToPlanning}
+                          disabled={sendingHandoff || sentFindings[selectedFinding.id]}
+                          className={cn(
+                            "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold shrink-0 transition-all border shadow-sm",
+                            sentFindings[selectedFinding.id]
+                              ? "bg-emerald-950/60 border-emerald-600 text-emerald-300"
+                              : "bg-red-600 hover:bg-red-500 text-white border-red-500"
+                          )}
+                        >
+                          {sendingHandoff ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : sentFindings[selectedFinding.id] ? (
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                          ) : (
+                            <Send className="w-3.5 h-3.5" />
+                          )}
+                          <span>{sentFindings[selectedFinding.id] ? "En Planificación" : "Enviar al Planning Studio"}</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               ) : (

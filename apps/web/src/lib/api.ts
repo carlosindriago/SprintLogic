@@ -21,6 +21,7 @@ import {
   FindingEvaluationRequest,
   FindingEvaluationResponse,
   ToolchainStatus,
+  SecurityTicketHandoffRequest,
 } from '../types';
 
 export type { KanbanTicket, KanbanTicketCreate, KanbanTicketUpdate };
@@ -973,6 +974,16 @@ export async function getSecurityToolchainStatus(
 ): Promise<{ status: string; project_id: string; toolchain: ToolchainStatus }> {
   return await api.get<{ status: string; project_id: string; toolchain: ToolchainStatus }>(
     `/projects/${projectId}/security/toolchain/status`
+  );
+}
+
+export async function createSecurityTicketFromFinding(
+  projectId: string,
+  payload: SecurityTicketHandoffRequest
+): Promise<KanbanTicket> {
+  return await api.post<KanbanTicket>(
+    `/projects/${projectId}/kanban/tickets/from-security`,
+    payload
   );
 }
 

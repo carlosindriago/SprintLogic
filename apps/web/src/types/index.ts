@@ -332,3 +332,17 @@ export interface FindingEvaluationResponse {
   model_used: string;
 }
 
+export interface SecurityTicketHandoffRequest {
+  finding_id: string;
+  title: string;
+  description: string;
+  severity: string;
+  file_path: string;
+  line_number: number;
+  cwe?: string | null;
+  rule_id?: string | null;
+  mitigation_diff?: string | null;
+  subtasks?: Array<{ id?: string; title: string; done?: boolean }>;
+  affected_nodes?: string[];
+}
+

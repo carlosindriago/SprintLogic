@@ -32,6 +32,20 @@ class KanbanTicketCreate(BaseModel):
     subtasks: list[dict] = []
 
 
+class SecurityTicketHandoffRequest(BaseModel):
+    finding_id: str
+    title: str
+    description: str
+    severity: str = "medium"
+    file_path: str
+    line_number: int = 1
+    cwe: str | None = None
+    rule_id: str | None = None
+    mitigation_diff: str | None = None
+    subtasks: list[dict] = []
+    affected_nodes: list[str] = []
+
+
 class KanbanTicketUpdate(BaseModel):
     title: str | None = None
     type: TicketType | None = None
