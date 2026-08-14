@@ -357,7 +357,8 @@ export const verifyAndSaveProviderKey = (provider: string, apiKey: string) =>
   api.post<ModelResult[]>(`/settings/providers/${provider}/keys`, { api_key: apiKey });
 export const checkApiKeyStatus = (provider: string) => api.get<{ is_configured: boolean }>(`/settings/api-key/${provider}`);
 export const deleteProviderKey = (provider: string) => api.delete<{ status: string }>(`/settings/api-key/${provider}`);
-export const getCuratedModels = () => api.get<CuratedProvider[]>('/ai/models');
+export const getCuratedModels = (forceRefresh = false) => 
+  api.get<CuratedProvider[]>(`/ai/models${forceRefresh ? '?force_refresh=true' : ''}`);
 
 // --- Tool Model Mappings ---
 export interface ToolModelEntry {

@@ -20,6 +20,7 @@ from app.interfaces.api.v1.settings import (
     CURATED_MODELS,
     PROVIDER_LABELS,
     ProviderFetchError,
+    clear_model_cache,
     fetch_provider_models,
 )
 
@@ -144,12 +145,16 @@ class TechScanResponse(BaseModel):
 
 
 @router.get("/models")
-async def get_ai_models():
+async def get_ai_models(force_refresh: bool = False):
     """Returns the curated model catalog grouped by provider.
 
     Each provider includes an is_configured flag indicating whether an
-    API key has been stored for it. No external APIs are queried.
+    API key has been stored for it. When force_refresh is True, the TTL
+    cache is cleared and fresh models are fetched from provider APIs.
     """
+    if force_refresh:
+        clear_model_cache()
+
     results: list[dict] = []
     for provider, fallback_models in CURATED_MODELS.items():
         key = CredentialManager.get_api_key(provider)
@@ -158,7 +163,7 @@ async def get_ai_models():
         models = fallback_models
         if is_configured:
             try:
-                models = await fetch_provider_models(provider, key)
+                models = await fetch_provider_models(provider, key, force_refresh=force_refresh)
             except ProviderFetchError:
                 pass
 

@@ -460,7 +460,27 @@ export default function AIProvidersSection() {
     degraded: number;
     failing: number;
   } | null>(null);
+  const [isRefreshingCatalog, setIsRefreshingCatalog] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  const handleRefreshModelCatalog = async () => {
+    setIsRefreshingCatalog(true);
+    try {
+      const [provs, data] = await Promise.all([
+        getCuratedModels(true),
+        fetchToolModels(),
+      ]);
+      setCuratedProviders(provs);
+      setGlobalDefault(data.global_default ?? null);
+      const totalModels = provs.reduce((acc, p) => acc + (p.models?.length || 0), 0);
+      toast.success(`Catálogo sincronizado (${totalModels} modelos disponibles)`);
+    } catch (e: unknown) {
+      const err = e as { message?: string };
+      toast.error(`Error al sincronizar modelos: ${err?.message || String(e)}`);
+    } finally {
+      setIsRefreshingCatalog(false);
+    }
+  };
 
   const allModels: ModelOption[] = useMemo(
     () =>
@@ -720,11 +740,26 @@ export default function AIProvidersSection() {
 
   return (
     <div className="flex flex-col gap-8 h-full">
-      <div>
-        <h2 className="text-2xl font-semibold text-white">Modelos & LLMs</h2>
-        <p className="text-sm text-zinc-400 mt-1">
-          Gestiona proveedores oficiales, endpoints personalizados y el modelo predeterminado global con telemetría en tiempo real.
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-semibold text-white">Modelos & LLMs</h2>
+          <p className="text-sm text-zinc-400 mt-1">
+            Gestiona proveedores oficiales, endpoints personalizados y el modelo predeterminado global con telemetría en tiempo real.
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={handleRefreshModelCatalog}
+          disabled={isRefreshingCatalog || isDiagnosing}
+          className="border-zinc-800 bg-zinc-900/90 hover:bg-zinc-800 text-zinc-200 text-xs flex items-center gap-2 h-9 px-3.5 shrink-0 shadow-sm"
+        >
+          <RotateCcw
+            className={cn("w-3.5 h-3.5", isRefreshingCatalog && "animate-spin text-blue-400")}
+          />
+          <span>{isRefreshingCatalog ? "Sincronizando..." : "Sincronizar Modelos"}</span>
+        </Button>
       </div>
 
       <div className="space-y-8 flex-1 overflow-y-auto pr-1 pb-8">

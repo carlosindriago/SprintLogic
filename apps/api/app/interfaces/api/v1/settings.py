@@ -53,7 +53,14 @@ class ProviderFetchError(Exception):
         self.status_code = status_code
 
 
-async def fetch_provider_models(provider: str, api_key: str) -> list[ProviderModel]:
+def clear_model_cache() -> None:
+    """Clears the in-memory provider models TTL cache."""
+    _model_cache.clear()
+
+
+async def fetch_provider_models(
+    provider: str, api_key: str, force_refresh: bool = False
+) -> list[ProviderModel]:
     """Fetch the available models for a provider using the supplied API key.
 
     Returns a list of `ProviderModel`. Raises `ProviderFetchError` on
@@ -61,7 +68,7 @@ async def fetch_provider_models(provider: str, api_key: str) -> list[ProviderMod
     that don't need a per-user key (openrouter) — once we have a result
     we cache it regardless of provider for a 5 minute TTL.
     """
-    if provider in _model_cache:
+    if not force_refresh and provider in _model_cache:
         return list(_model_cache[provider])
 
     models: list[ProviderModel] = []
