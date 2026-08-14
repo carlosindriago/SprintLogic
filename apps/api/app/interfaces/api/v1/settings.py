@@ -278,24 +278,25 @@ async def fetch_provider_models(
 
             elif provider == "cerebras":
                 headers["Authorization"] = f"Bearer {api_key}"
-                try:
-                    res = await client.get(
-                        "https://api.cerebras.ai/v1/models", headers=headers
+                res = await client.get(
+                    "https://api.cerebras.ai/v1/models", headers=headers
+                )
+                if res.status_code == 200:
+                    data = res.json()
+                    models = [
+                        ProviderModel(
+                            id=f"cerebras/{m.get('id', m.get('name'))}"
+                            if not str(m.get("id", "")).startswith("cerebras/")
+                            else str(m.get("id")),
+                            name=str(m.get("id", m.get("name"))),
+                        )
+                        for m in data.get("data", data.get("models", []))
+                        if m.get("id") or m.get("name")
+                    ]
+                elif res.status_code in (401, 403):
+                    raise ProviderFetchError(
+                        "Invalid Cerebras API Key", status_code=res.status_code
                     )
-                    if res.status_code == 200:
-                        data = res.json()
-                        models = [
-                            ProviderModel(
-                                id=f"cerebras/{m.get('id', m.get('name'))}"
-                                if not str(m.get("id", "")).startswith("cerebras/")
-                                else str(m.get("id")),
-                                name=str(m.get("id", m.get("name"))),
-                            )
-                            for m in data.get("data", data.get("models", []))
-                            if m.get("id") or m.get("name")
-                        ]
-                except Exception:
-                    pass
 
                 if not models:
                     models = [

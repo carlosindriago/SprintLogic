@@ -117,6 +117,8 @@ class ProviderAdapter:
         # NVIDIA NIM expects its key via an environment variable.
         if internal_provider == "nvidia" and api_key:
             os.environ["NVIDIA_NIM_API_KEY"] = api_key
+        if internal_provider == "cerebras" and api_key:
+            os.environ["CEREBRAS_API_KEY"] = api_key
 
         return {
             "model": litellm_model,
