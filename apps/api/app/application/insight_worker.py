@@ -25,23 +25,20 @@ def signal_shutdown():
 
 
 async def run_insight_worker_loop():
-    """
-    A lightweight, frictionless background worker running in the asyncio loop.
+    """A lightweight, frictionless background worker running in the asyncio loop.
+
     Extracts 'pepitas de sabiduría' (Developer Insights) from past unmapped conversations.
     """
     logger.info("SprintLogic REM Sleep: Insight Worker started.")
 
+    # Grace period on startup: wait 30s before first run to allow boot completion
+    for _ in range(30):
+        if shutdown_event.is_set():
+            return
+        await asyncio.sleep(1)
+
     while not shutdown_event.is_set():
         try:
-            # Sleep in small increments to allow responsive shutdown
-            for _ in range(300):  # 5 minutes = 300 seconds
-                if shutdown_event.is_set():
-                    break
-                await asyncio.sleep(1)
-
-            if shutdown_event.is_set():
-                break
-
             async with get_sessionmaker()() as session:
                 # Fetch conversations that have not been processed
                 stmt = (
@@ -56,7 +53,7 @@ async def run_insight_worker_loop():
 
                 for conv in unprocessed_convs:
                     if shutdown_event.is_set():
-                        break  # Stop processing new ones, exit gracefully
+                        break
 
                     msg_stmt = (
                         select(MessageModel)
@@ -67,22 +64,32 @@ async def run_insight_worker_loop():
                     messages = msgs_res.scalars().all()
 
                     if len(messages) < 2:
-                        continue  # Not enough data
+                        conv.insight_extracted = True
+                        session.add(conv)
+                        await session.commit()
+                        continue
 
                     # Consolidate memory!
                     await _extract_and_save_insight(session, conv, messages)
 
+            # Sleep between cycles (5 minutes = 300 seconds)
+            for _ in range(300):
+                if shutdown_event.is_set():
+                    break
+                await asyncio.sleep(1)
+
         except Exception as e:
-            logger.error(f"Error in Insight Worker: {e}")
+            logger.warning(f"Insight Worker background loop notice: {e}")
+            await asyncio.sleep(10)
 
     logger.info("Insight Worker gracefully shutdown.")
 
 
 async def _extract_and_save_insight(
     session: AsyncSession, conv: ConversationModel, messages: list[MessageModel]
-):
+) -> None:
     try:
-        # Build prompt for Gemini to extract "sintoma" and "solucion"
+        # Build prompt for LLM to extract "sintoma" and "solucion"
         chat_text = ""
         for m in messages:
             chat_text += f"[{m.role.upper()}]: {m.content}\n"
@@ -107,62 +114,95 @@ async def _extract_and_save_insight(
                 "Si la conversación no contiene nada valioso (charlas genéricas), devuelve un JSON vacío: {}."
             )
 
-        # 3-tier model resolution: DB override -> INSIGHT_WORKER_MODEL env -> DEFAULT_LLM_MODEL
+        # Model resolution: DB override -> env override -> default
         from app.infrastructure.repositories.tool_model_repository import resolve_tool_model
 
         provider_id, model_name, fallbacks = await resolve_tool_model(session, "insight_worker")
 
         api_key = CredentialManager.get_api_key(provider_id)
         if not api_key:
+            # Mark conversation as processed to avoid infinite loop when credentials are not configured
+            conv.insight_extracted = True
+            session.add(conv)
+            await session.commit()
             return
+
         adapted = ProviderAdapter.adapt(model_name, api_key)
 
         from app.infrastructure.llm.litellm_gateway import LiteLLMGateway
 
         gateway = LiteLLMGateway()
 
-        response = await litellm.acompletion(
-            model=adapted["model"],
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": chat_text},
-            ],
-            api_key=adapted.get("api_key", api_key),
-            response_format={"type": "json_object"},
-            fallbacks=gateway.build_fallback_params(fallbacks),
-            num_retries=0,
-            timeout=45,
-            **adapted.get("kwargs", {}),
-        )
+        try:
+            response = await litellm.acompletion(
+                model=adapted["model"],
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": chat_text},
+                ],
+                api_key=adapted.get("api_key", api_key),
+                response_format={"type": "json_object"},
+                fallbacks=gateway.build_fallback_params(fallbacks),
+                num_retries=1,
+                timeout=25,
+                **adapted.get("kwargs", {}),
+            )
+        except Exception as llm_err:
+            logger.warning(
+                f"Insight Worker: No se pudo extraer insight de conversación {conv.id} ({llm_err}). Marcando como procesada."
+            )
+            conv.insight_extracted = True
+            session.add(conv)
+            await session.commit()
+            return
 
-        raw_content = response.choices[0].message.content
+        raw_content = response.choices[0].message.content if response and response.choices else None
         if not raw_content:
+            conv.insight_extracted = True
+            session.add(conv)
+            await session.commit()
             return
 
-        data = json.loads(raw_content)
-        if "sintoma" not in data or "solucion" not in data:
-            return  # Empty or invalid JSON means no valuable insight
+        try:
+            data = json.loads(raw_content)
+        except Exception:
+            conv.insight_extracted = True
+            session.add(conv)
+            await session.commit()
+            return
 
-        # Get embedding for semantic search
-        # We concatenate the symptom and solution to create a strong semantic vector
+        if not isinstance(data, dict) or "sintoma" not in data or "solucion" not in data:
+            conv.insight_extracted = True
+            session.add(conv)
+            await session.commit()
+            return
+
+        # Generate embedding for semantic search with graceful fallback
         embed_text = f"Síntoma: {data['sintoma']} | Solución: {data['solucion']}"
-
-        # Fallback to Gemini API key for embeddings if the default provider doesn't support them.
         gemini_api_key = CredentialManager.get_api_key("gemini")
-        if not gemini_api_key:
-            return
 
-        from app.infrastructure.config import DEFAULT_EMBEDDING_MODEL
+        embedding_vector: list[float] | None = None
+        if gemini_api_key:
+            from app.infrastructure.config import DEFAULT_EMBEDDING_MODEL
 
-        embed_resp = await litellm.aembedding(
-            model=DEFAULT_EMBEDDING_MODEL, input=[embed_text], api_key=gemini_api_key
-        )
+            for emb_model in [DEFAULT_EMBEDDING_MODEL, "gemini/embedding-001"]:
+                try:
+                    embed_resp = await litellm.aembedding(
+                        model=emb_model, input=[embed_text], api_key=gemini_api_key
+                    )
+                    if embed_resp and embed_resp.data:
+                        embedding_vector = embed_resp.data[0]["embedding"]
+                        break
+                except Exception as emb_err:
+                    logger.debug(f"Embedding attempt ({emb_model}) failed: {emb_err}")
 
-        embedding_vector = embed_resp.data[0]["embedding"]
+        # Fallback to zero vector if embedding service is unreachable
+        if embedding_vector is not None:
+            vector_np = np.array(embedding_vector, dtype=np.float32)
+        else:
+            vector_np = np.zeros(768, dtype=np.float32)
 
         # Save to SQLite using DeveloperInsightModel
-        vector_np = np.array(embedding_vector, dtype=np.float32)
-
         insight = DeveloperInsightModel(
             id=str(uuid.uuid4()),
             conversation_id=str(conv.id),
@@ -179,7 +219,13 @@ async def _extract_and_save_insight(
         session.add(conv)
         await session.commit()
 
-        logger.info(f"Insight consolidado para la conversación {conv.id}")
+        logger.info(f"Insight consolidado exitosamente para la conversación {conv.id}")
 
     except Exception as e:
-        logger.error(f"Fallo consolidando insight: {e}")
+        logger.warning(f"Error procesando insight de conversación {conv.id}: {e}")
+        try:
+            conv.insight_extracted = True
+            session.add(conv)
+            await session.commit()
+        except Exception:
+            pass
