@@ -673,6 +673,10 @@ export const sendPlanningMessage = async (
         try {
           const parsed = JSON.parse(jsonStr);
 
+          if (parsed.error) {
+            throw new Error(parsed.error);
+          }
+
           if (parsed.text) {
             accumulatedText += parsed.text;
             onTextUpdate?.(accumulatedText);
@@ -687,6 +691,9 @@ export const sendPlanningMessage = async (
             // Done
           }
         } catch (e) {
+          if (e instanceof Error && e.message && !e.message.startsWith("Unexpected token") && !e.message.startsWith("JSON.parse")) {
+            throw e;
+          }
           console.warn("Failed to parse SSE line", e, "Line:", line);
         }
       }

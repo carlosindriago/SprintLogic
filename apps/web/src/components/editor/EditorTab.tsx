@@ -448,14 +448,18 @@ export function EditorTab({
         onCut={async () => {
           const selection = editorRef.current?.getSelection();
           if (selection && !selection.isEmpty()) {
-            await navigator.clipboard.writeText(editorRef.current?.getModel()?.getValueInRange(selection) ?? '');
+            try {
+              await navigator.clipboard.writeText(editorRef.current?.getModel()?.getValueInRange(selection) ?? '');
+            } catch {}
             editorRef.current?.executeEdits('cut', [{ range: selection, text: '', forceMoveMarkers: true }]);
           }
         }}
         onCopy={async () => {
           const selection = editorRef.current?.getSelection();
           if (selection && !selection.isEmpty()) {
-            await navigator.clipboard.writeText(editorRef.current?.getModel()?.getValueInRange(selection) ?? '');
+            try {
+              await navigator.clipboard.writeText(editorRef.current?.getModel()?.getValueInRange(selection) ?? '');
+            } catch {}
           }
         }}
         onPaste={async () => {

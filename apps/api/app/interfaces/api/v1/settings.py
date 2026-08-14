@@ -457,8 +457,7 @@ async def remove_tool_model_mapping(
     session: AsyncSession = Depends(get_db_session),
 ):
     """Remove the model override for a tool, reverting it to the global default."""
-    deleted = await delete_tool_mapping(session, tool_name)
-    if not deleted:
-        raise HTTPException(status_code=404, detail=f"No override found for tool '{tool_name}'")
+    await delete_tool_mapping(session, tool_name)
     await session.commit()
     return {"status": "deleted", "tool_name": tool_name}
+

@@ -37,7 +37,7 @@ async def process_planning_message(req: Request, request: PlanningRequest):
     from app.infrastructure.db.database import get_sessionmaker
 
     async with get_sessionmaker()() as session:
-        ps_provider, ps_model, _ = await resolve_tool_model(session, "planning_studio")
+        ps_provider, ps_model, fallbacks = await resolve_tool_model(session, "planning_studio")
         model = tool_model_label(ps_provider, ps_model)
 
     from app.infrastructure.ai.provider_adapter import ProviderAdapter
@@ -80,6 +80,11 @@ async def process_planning_message(req: Request, request: PlanningRequest):
     for msg in request.messages:
         messages_to_send.append({"role": msg.role, "content": msg.content})
 
+    from app.infrastructure.llm.litellm_gateway import LiteLLMGateway
+
+    gateway = LiteLLMGateway()
+    fallback_params = gateway.build_fallback_params(fallbacks)
+
     async def generate() -> AsyncGenerator[str, None]:
         try:
             response = await litellm.acompletion(
@@ -88,13 +93,16 @@ async def process_planning_message(req: Request, request: PlanningRequest):
                 tools=tools,
                 api_key=adapted["api_key"],
                 stream=True,
+                fallbacks=fallback_params,
+                num_retries=1,
+                timeout=60,
                 **adapted["kwargs"],
             )
 
             tool_calls_buffer: dict[int, Any] = {}
 
             async for chunk in response:
-                delta = chunk.choices[0].delta
+                delta = chunk.choices[0].delta if chunk and chunk.choices else None
 
                 # Yield text content
                 if delta and delta.content:
@@ -131,7 +139,8 @@ async def process_planning_message(req: Request, request: PlanningRequest):
             yield f"data: {json.dumps({'is_done': True})}\n\n"
 
         except Exception as e:
-            logging.error("Planning streaming failed", exc_info=True)
+            logging.warning("Planning streaming encountered an issue: %s", e)
             yield f"data: {json.dumps({'error': str(e), 'is_done': True})}\n\n"
 
     return StreamingResponse(generate(), media_type="text/event-stream")
+

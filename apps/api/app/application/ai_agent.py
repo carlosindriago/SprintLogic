@@ -950,15 +950,24 @@ class AIAgent:
                 if api_key:
                     from app.infrastructure.config import DEFAULT_EMBEDDING_MODEL
 
-                    embed_resp = await litellm.aembedding(
-                        model=DEFAULT_EMBEDDING_MODEL, input=[user_query], api_key=api_key
-                    )
-                    query_vector = embed_resp.data[0]["embedding"]
+                    query_vector: list[float] | None = None
+                    for emb_model in [DEFAULT_EMBEDDING_MODEL, "gemini/embedding-001"]:
+                        try:
+                            embed_resp = await litellm.aembedding(
+                                model=emb_model, input=[user_query], api_key=api_key
+                            )
+                            if embed_resp and embed_resp.data:
+                                query_vector = embed_resp.data[0]["embedding"]
+                                break
+                        except Exception as emb_err:
+                            logger.debug(f"Query embedding attempt ({emb_model}) failed: {emb_err}")
 
-                    import numpy as np
-                    from sqlalchemy.future import select
+                    if query_vector:
+                        import numpy as np
+                        from sqlalchemy.future import select
 
-                    from app.infrastructure.db.models import DeveloperInsightModel
+                        from app.infrastructure.db.models import DeveloperInsightModel
+
 
                     try:
                         async with get_sessionmaker()() as insight_session:

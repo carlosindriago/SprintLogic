@@ -6,4 +6,5 @@ import os
 DEFAULT_LLM_MODEL: str = os.getenv("DEFAULT_LLM_MODEL", "gemini/gemini-2.5-flash")
 
 # Global default embedding model
-DEFAULT_EMBEDDING_MODEL: str = os.getenv("DEFAULT_EMBEDDING_MODEL", "gemini/text-embedding-004")
+DEFAULT_EMBEDDING_MODEL: str = os.getenv("DEFAULT_EMBEDDING_MODEL", "gemini/embedding-001")
+
