@@ -179,22 +179,44 @@ async def _extract_and_save_insight(
 
         # Generate embedding for semantic search with graceful fallback
         embed_text = f"Síntoma: {data['sintoma']} | Solución: {data['solucion']}"
-        gemini_api_key = CredentialManager.get_api_key("gemini")
+        from app.infrastructure.config import DEFAULT_EMBEDDING_MODEL
+
+        emb_provider = ProviderAdapter.get_provider(DEFAULT_EMBEDDING_MODEL)
+        emb_api_key = (
+            CredentialManager.get_api_key(f"sprintlogic_{emb_provider}")
+            or CredentialManager.get_api_key(emb_provider)
+            or CredentialManager.get_api_key("sprintlogic_openrouter")
+            or CredentialManager.get_api_key("openrouter")
+            or CredentialManager.get_api_key("gemini")
+        )
 
         embedding_vector: list[float] | None = None
-        if gemini_api_key:
-            from app.infrastructure.config import DEFAULT_EMBEDDING_MODEL
+        if emb_api_key or "ollama" in DEFAULT_EMBEDDING_MODEL.lower():
+            try:
+                adapted = ProviderAdapter.adapt(DEFAULT_EMBEDDING_MODEL, emb_api_key)
+                embed_resp = await litellm.aembedding(
+                    model=adapted["model"],
+                    input=[embed_text],
+                    api_key=adapted["api_key"],
+                    **adapted["kwargs"],
+                )
+                if embed_resp and embed_resp.data:
+                    embedding_vector = embed_resp.data[0]["embedding"]
+            except Exception as emb_err:
+                logger.debug(f"Embedding attempt ({DEFAULT_EMBEDDING_MODEL}) failed: {emb_err}")
+                gemini_key = CredentialManager.get_api_key("gemini")
+                if gemini_key and DEFAULT_EMBEDDING_MODEL != "gemini/embedding-001":
+                    try:
+                        embed_resp = await litellm.aembedding(
+                            model="gemini/embedding-001",
+                            input=[embed_text],
+                            api_key=gemini_key,
+                        )
+                        if embed_resp and embed_resp.data:
+                            embedding_vector = embed_resp.data[0]["embedding"]
+                    except Exception as fallback_err:
+                        logger.debug(f"Fallback embedding attempt failed: {fallback_err}")
 
-            for emb_model in [DEFAULT_EMBEDDING_MODEL, "gemini/embedding-001"]:
-                try:
-                    embed_resp = await litellm.aembedding(
-                        model=emb_model, input=[embed_text], api_key=gemini_api_key
-                    )
-                    if embed_resp and embed_resp.data:
-                        embedding_vector = embed_resp.data[0]["embedding"]
-                        break
-                except Exception as emb_err:
-                    logger.debug(f"Embedding attempt ({emb_model}) failed: {emb_err}")
 
         # Fallback to zero vector if embedding service is unreachable
         if embedding_vector is not None:
