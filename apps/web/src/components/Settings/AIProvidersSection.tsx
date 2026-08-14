@@ -506,6 +506,24 @@ export default function AIProvidersSection() {
     [curatedProviders]
   );
 
+  const configuredProviders = useMemo(
+    () => curatedProviders.filter((p) => p.is_configured),
+    [curatedProviders]
+  );
+
+  const configuredModels: ModelOption[] = useMemo(
+    () =>
+      configuredProviders.flatMap((p) =>
+        p.models.map((m) => ({
+          id: m.id,
+          name: m.name,
+          provider: p.provider,
+          provider_id: p.provider_id,
+        }))
+      ),
+    [configuredProviders]
+  );
+
   const loadBackendProviders = useCallback(async () => {
     try {
       const [data, provs, health] = await Promise.all([
@@ -666,9 +684,9 @@ export default function AIProvidersSection() {
       }
     } else if (diagnosticScope.startsWith("provider:")) {
       const provId = diagnosticScope.replace("provider:", "");
-      targets = allModels.filter((m) => m.provider_id === provId || m.provider === provId);
+      targets = configuredModels.filter((m) => m.provider_id === provId || m.provider === provId);
     } else {
-      targets = allModels;
+      targets = configuredModels;
     }
 
     if (targets.length === 0) {
@@ -792,16 +810,18 @@ export default function AIProvidersSection() {
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
-              {/* Scope Selector */}
+              {/* Scope Selector: only configured providers */}
               <select
                 value={diagnosticScope}
                 onChange={(e) => setDiagnosticScope(e.target.value)}
-                disabled={isDiagnosing}
+                disabled={isDiagnosing || configuredProviders.length === 0}
                 className="bg-zinc-950 text-zinc-200 border border-zinc-800 rounded-md px-2.5 py-1.5 text-xs focus:outline-none focus:border-blue-500 [color-scheme:dark] cursor-pointer"
               >
                 <option value="active">⚡ Solo Modelos Activos</option>
-                <option value="all">🌐 Todos los modelos ({allModels.length})</option>
-                {curatedProviders.map((p) => (
+                {configuredModels.length > 0 && (
+                  <option value="all">🌐 Todos los configurados ({configuredModels.length})</option>
+                )}
+                {configuredProviders.map((p) => (
                   <option key={p.provider_id} value={`provider:${p.provider_id}`}>
                     🏢 Proveedor: {p.provider} ({p.models.length})
                   </option>
