@@ -30,6 +30,7 @@ import {
   ModelHealthMetric,
 } from "@/lib/api";
 import { ModelHealthBadge } from "@/components/ModelHealthBadge";
+import { ModelSearchableSelect, ModelOption } from "@/components/ModelSearchableSelect";
 import { useLLMConfigStore } from "@/store/llmConfigStore";
 import { useFimStore } from "@/store/fimStore";
 import { Switch } from "@/components/ui/switch";
@@ -916,10 +917,10 @@ function ToolModelsSection({ providers }: { providers: CuratedProvider[] }) {
               </div>
             </div>
 
-            <div className="flex items-center gap-3 mt-1">
-              <Select
+            <div className="mt-1">
+              <ModelSearchableSelect
                 value={currentValue}
-                onValueChange={(val) => {
+                onChange={(val) => {
                   if (!val) return;
                   if (val === "__default__") {
                     handleReset(tool.tool_name);
@@ -928,51 +929,13 @@ function ToolModelsSection({ providers }: { providers: CuratedProvider[] }) {
                     handleOverride(tool.tool_name, providerId, modelParts.join("/"));
                   }
                 }}
+                models={allModels}
+                healthMetrics={healthMetrics}
+                allowDefault={true}
+                defaultLabel={`Usar modelo por defecto (${tool.default_provider}/${tool.default_model})`}
                 disabled={isBusy}
-              >
-                <SelectTrigger className="bg-zinc-950 border-zinc-800 text-zinc-200 h-9 text-sm flex-1">
-                  <SelectValue>
-                    {isBusy ? (
-                      "Guardando..."
-                    ) : tool.is_overridden ? (
-                      <span className="flex items-center gap-2">
-                        <span className="text-blue-400">{tool.effective_provider}</span>
-                        <span className="text-zinc-500">/</span>
-                        <span className="text-zinc-300">{tool.effective_model}</span>
-                      </span>
-                    ) : (
-                      <span className="flex items-center gap-2">
-                        <span className="text-zinc-500">Default — </span>
-                        <span className="text-zinc-400">{tool.effective_provider}/{tool.effective_model}</span>
-                      </span>
-                    )}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent className="bg-zinc-900 border-zinc-800 text-zinc-200 max-h-[300px]">
-                  <SelectItem value="__default__" className="focus:bg-zinc-800 focus:text-zinc-100 cursor-pointer py-2 text-zinc-400">
-                    Usar modelo por defecto ({tool.default_provider}/{tool.default_model})
-                  </SelectItem>
-                  {allModels.map((m) => {
-                    const val = `${m.provider_id}/${m.id}`;
-                    const metric = getMetricForModel(m.provider_id, m.id);
-                    return (
-                      <SelectItem
-                        key={val}
-                        value={val}
-                        className="focus:bg-zinc-800 focus:text-zinc-100 cursor-pointer py-2"
-                      >
-                        <div className="flex items-center justify-between gap-4 w-full">
-                          <span>
-                            {m.name}{" "}
-                            <span className="text-zinc-500 text-xs ml-1">({m.provider})</span>
-                          </span>
-                          <ModelHealthBadge metric={metric} />
-                        </div>
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
+                popoverWidthClass="w-[520px]"
+              />
             </div>
           </div>
         );

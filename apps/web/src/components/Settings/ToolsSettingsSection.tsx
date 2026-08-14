@@ -17,6 +17,7 @@ import {
   ModelHealthMetric,
 } from "@/lib/api";
 import { ModelHealthBadge } from "@/components/ModelHealthBadge";
+import { ModelSearchableSelect, ModelOption } from "@/components/ModelSearchableSelect";
 
 export default function ToolsSettingsSection() {
   const [toolModels, setToolModels] = useState<ToolModelEntry[]>([]);
@@ -242,10 +243,10 @@ export default function ToolsSettingsSection() {
               </div>
             </div>
 
-            <div className="w-72 shrink-0">
-              <Select
+            <div className="w-80 md:w-96 shrink-0">
+              <ModelSearchableSelect
                 value={globalDefault.is_overridden ? `${globalDefault.provider}/${globalDefault.model}` : "__default__"}
-                onValueChange={(val) => {
+                onChange={(val) => {
                   if (!val) return;
                   if (val === "__default__") {
                     handleReset("__default__");
@@ -254,46 +255,13 @@ export default function ToolsSettingsSection() {
                     handleOverride("__default__", providerId, modelParts.join("/"));
                   }
                 }}
+                models={allModels}
+                healthMetrics={healthMetrics}
+                allowDefault={globalDefault.is_overridden}
+                defaultLabel={`Usar DEFAULT_LLM_MODEL (${toolModels[0]?.default_model || "env"})`}
                 disabled={isDefaultBusy}
-              >
-                <SelectTrigger className="bg-zinc-950 border-zinc-800 text-zinc-200 h-9 text-sm border-blue-500/20">
-                  {isDefaultBusy ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin text-zinc-400" />
-                  ) : globalDefault.is_overridden ? (
-                    <span className="truncate">
-                      <span className="text-blue-400">{globalDefault.provider}</span>
-                      <span className="text-zinc-500 mx-1">/</span>
-                      <span className="text-zinc-300">{globalDefault.model}</span>
-                    </span>
-                  ) : (
-                    <span className="text-zinc-400 truncate">
-                      {globalDefault.provider}/{globalDefault.model}
-                    </span>
-                  )}
-                </SelectTrigger>
-                <SelectContent className="bg-zinc-900 border-zinc-800 text-zinc-200 max-h-[280px]">
-                  {globalDefault.is_overridden && (
-                    <SelectItem value="__default__" className="cursor-pointer py-2 text-zinc-400">
-                      Usar DEFAULT_LLM_MODEL ({toolModels[0]?.default_model || "env"})
-                    </SelectItem>
-                  )}
-                  {allModels.map((m) => {
-                    const val = `${m.provider_id}/${m.id}`;
-                    const metric = getMetricForModel(m.provider_id, m.id);
-                    return (
-                      <SelectItem key={val} value={val} className="cursor-pointer py-2">
-                        <div className="flex items-center justify-between gap-4 w-full">
-                          <span>
-                            {m.name}{" "}
-                            <span className="text-zinc-500 text-xs ml-1">({m.provider})</span>
-                          </span>
-                          <ModelHealthBadge metric={metric} />
-                        </div>
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
+                popoverWidthClass="w-[520px]"
+              />
             </div>
           </div>
         )}
@@ -334,10 +302,10 @@ export default function ToolsSettingsSection() {
                 </div>
               </div>
 
-              <div className="w-72 shrink-0">
-                <Select
+              <div className="w-80 md:w-96 shrink-0">
+                <ModelSearchableSelect
                   value={currentValue}
-                  onValueChange={(val) => {
+                  onChange={(val) => {
                     if (!val) return;
                     if (val === "__default__") {
                       handleReset(tool.tool_name);
@@ -346,53 +314,13 @@ export default function ToolsSettingsSection() {
                       handleOverride(tool.tool_name, providerId, modelParts.join("/"));
                     }
                   }}
+                  models={allModels}
+                  healthMetrics={healthMetrics}
+                  allowDefault={true}
+                  defaultLabel={`Default (${tool.default_provider}/${tool.default_model})`}
                   disabled={isBusy}
-                >
-                  <SelectTrigger className="bg-zinc-950 border-zinc-800 text-zinc-200 h-9 text-sm">
-                    {isBusy ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin text-zinc-400" />
-                    ) : tool.is_overridden ? (
-                      <span className="truncate">
-                        <span className="text-blue-400">{tool.effective_provider}</span>
-                        <span className="text-zinc-500 mx-1">/</span>
-                        <span className="text-zinc-300">{tool.effective_model}</span>
-                      </span>
-                    ) : (
-                      <span className="text-zinc-400 truncate">
-                        Default — {tool.effective_provider}/{tool.effective_model}
-                      </span>
-                    )}
-                  </SelectTrigger>
-                  <SelectContent className="bg-zinc-900 border-zinc-800 text-zinc-200 max-h-[280px]">
-                    <SelectItem
-                      value="__default__"
-                      className="cursor-pointer py-2 text-zinc-400"
-                    >
-                      Usar modelo por defecto ({tool.default_provider}/{tool.default_model})
-                    </SelectItem>
-                    {allModels.map((m) => {
-                      const val = `${m.provider_id}/${m.id}`;
-                      const metric = getMetricForModel(m.provider_id, m.id);
-                      return (
-                        <SelectItem
-                          key={val}
-                          value={val}
-                          className="cursor-pointer py-2"
-                        >
-                          <div className="flex items-center justify-between gap-4 w-full">
-                            <span>
-                              {m.name}{" "}
-                              <span className="text-zinc-500 text-xs ml-1">
-                                ({m.provider})
-                              </span>
-                            </span>
-                            <ModelHealthBadge metric={metric} />
-                          </div>
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
+                  popoverWidthClass="w-[520px]"
+                />
               </div>
             </div>
           );
