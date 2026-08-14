@@ -17,6 +17,11 @@ import {
   Sprint,
   SprintCreate,
   SprintUpdate,
+  SecurityScanResponse,
+  FindingEvaluationRequest,
+  FindingEvaluationResponse,
+  ToolchainStatus,
+  SecurityTicketHandoffRequest,
 } from '../types';
 
 export type { KanbanTicket, KanbanTicketCreate, KanbanTicketUpdate };
@@ -951,3 +956,34 @@ export async function generateMigrationPlan(projectId: string, draftId: string):
   const res = await api.post<MigrationPlanResponse>(`/projects/${projectId}/database/drafts/${draftId}/generate-plan`);
   return res;
 }
+
+// --- Security Studio API ---
+export async function scanSecurity(projectId: string): Promise<SecurityScanResponse> {
+  return await api.post<SecurityScanResponse>(`/projects/${projectId}/security/scan`);
+}
+
+export async function evaluateSecurityFinding(
+  projectId: string,
+  payload: FindingEvaluationRequest
+): Promise<FindingEvaluationResponse> {
+  return await api.post<FindingEvaluationResponse>(`/projects/${projectId}/security/evaluate`, payload);
+}
+
+export async function getSecurityToolchainStatus(
+  projectId: string
+): Promise<{ status: string; project_id: string; toolchain: ToolchainStatus }> {
+  return await api.get<{ status: string; project_id: string; toolchain: ToolchainStatus }>(
+    `/projects/${projectId}/security/toolchain/status`
+  );
+}
+
+export async function createSecurityTicketFromFinding(
+  projectId: string,
+  payload: SecurityTicketHandoffRequest
+): Promise<KanbanTicket> {
+  return await api.post<KanbanTicket>(
+    `/projects/${projectId}/kanban/tickets/from-security`,
+    payload
+  );
+}
+

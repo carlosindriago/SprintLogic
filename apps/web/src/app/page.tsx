@@ -106,6 +106,7 @@ const DatabaseStudioTab = dynamic(() => import("@/components/DatabaseStudio/Data
 const TestStudioTab = dynamic(() => import("@/components/TestStudioTab"), { ssr: false });
 const DocumentStudioTab = dynamic(() => import("@/components/DocumentStudioTab"), { ssr: false });
 const ExecutionRoomTab = dynamic(() => import("@/components/ExecutionRoomTab"), { ssr: false });
+const SecurityStudioTab = dynamic(() => import("@/components/SecurityStudioTab"), { ssr: false });
 
 export default function Home() {
   const [path, setPath] = useState("");
@@ -493,6 +494,8 @@ export default function Home() {
         return <TestStudioTab key={activeTab.id} />;
       case 'document-studio':
         return <DocumentStudioTab key={activeTab.id} />;
+      case 'security-studio':
+        return <SecurityStudioTab key={activeTab.id} />;
       case 'settings':
         return <SettingsTab data={activeTab.data} key={activeTab.id} />;
       case 'graph':

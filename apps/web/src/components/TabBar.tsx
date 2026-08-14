@@ -5,7 +5,7 @@ import { useTabsStore, TabData } from '@/store/tabsStore';
 import { useMarkersStore } from '@/store/markersStore';
 import { useUnsavedStore } from '@/store/unsavedStore';
 import { draftStore } from '@/lib/draftStore';
-import { X, BarChart3, Layout, Network, GitBranch, FilePlus, FolderGit2, Save, Trash2, AlertTriangle, Bot, NotebookPen, Zap } from 'lucide-react';
+import { X, BarChart3, Layout, Network, GitBranch, FilePlus, FolderGit2, Save, Trash2, AlertTriangle, Bot, NotebookPen, Zap, ShieldAlert } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import FileIcon from './FileIcon';
 import { useOmniPadStore } from '@/store/omniPadStore';
@@ -23,6 +23,7 @@ const TAB_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   'prompt-studio': Bot,
   audit: FolderGit2,
   'execution-room': Zap,
+  'security-studio': ShieldAlert,
 };
 
 interface TabBarProps {

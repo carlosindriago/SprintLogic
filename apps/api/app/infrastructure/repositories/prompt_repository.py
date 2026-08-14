@@ -266,6 +266,12 @@ async def initialize_prompts(session: AsyncSession):
             "content": GRAPH_NODE_INSIGHT_CONTENT,
             "required_variables": GRAPH_NODE_INSIGHT_VARS,
         },
+        {
+            "id": SECURITY_JUDGE_PROMPT_ID,
+            "description": "Juez de Seguridad (Security Studio) — Evaluación probabilística de vulnerabilidades SAST",
+            "content": SECURITY_JUDGE_PROMPT_CONTENT,
+            "required_variables": SECURITY_JUDGE_PROMPT_VARS,
+        },
     ]
 
     for p in prompts_to_init:
@@ -630,6 +636,38 @@ EXEC_MODE_WHITEBOARD_ID = "exec_mode_whiteboard"
 EXEC_MODE_WHITEBOARD_CONTENT = """Eres un Arquitecto Principal. Nuestra meta es planificar en una pizarra. No escribas código de producción. Devuelve diagramas de flujo (Mermaid), pseudocódigo y estructuras de alto nivel."""
 EXEC_MODE_WHITEBOARD_VARS: list[str] = []
 
+SECURITY_JUDGE_PROMPT_ID = "security_judge_prompt"
+SECURITY_JUDGE_PROMPT_CONTENT = """Eres un Arquitecto de Seguridad (AppSec) evaluando el reporte de una herramienta SAST determinista. Tu objetivo es descartar Falsos Positivos. Recibirás el código fuente vulnerable y su contexto topológico. Responde estrictamente en JSON con el esquema: {'is_real_threat': boolean, 'confidence_score': number, 'mitigation_diff': string, 'explanation': string}. Si no es una amenaza real, explica por qué la herramienta estática se equivocó.
+
+[HALLAZGO SAST]:
+Herramienta: {tool}
+Regla: {rule_id}
+Archivo: {file_path}:L{line_number}
+Severidad: {severity}
+CWE: {cwe}
+Descripción: {finding_description}
+
+[CÓDIGO FUENTE VULNERABLE]:
+```
+{source_code}
+```
+
+[CONTEXTO TOPOLÓGICO]:
+{topological_context}
+"""
+SECURITY_JUDGE_PROMPT_VARS = [
+    "tool",
+    "rule_id",
+    "file_path",
+    "line_number",
+    "severity",
+    "cwe",
+    "finding_description",
+    "source_code",
+    "topological_context",
+]
+
 
 def init_doc_prompts():
     pass
+

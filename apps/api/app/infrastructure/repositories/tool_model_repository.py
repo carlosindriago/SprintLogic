@@ -90,6 +90,10 @@ KNOWN_TOOLS: dict[str, ToolDef] = {
         "display_name": "Insight de Nodo del Grafo",
         "description": "Genera resúmenes ejecutivos de 3 líneas sobre la responsabilidad del archivo seleccionado",
     },
+    "security_studio": {
+        "display_name": "Security Studio (Juez de Seguridad)",
+        "description": "Juez probabilístico de vulnerabilidades SAST y descarte inteligente de falsos positivos",
+    },
 }
 
 
