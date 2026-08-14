@@ -511,7 +511,7 @@ export default function AIProvidersSection() {
     [curatedProviders]
   );
 
-  const configuredModels: ModelOption[] = useMemo(
+  const configuredModelOptions: ModelOption[] = useMemo(
     () =>
       configuredProviders.flatMap((p) =>
         p.models.map((m) => ({
@@ -684,9 +684,9 @@ export default function AIProvidersSection() {
       }
     } else if (diagnosticScope.startsWith("provider:")) {
       const provId = diagnosticScope.replace("provider:", "");
-      targets = configuredModels.filter((m) => m.provider_id === provId || m.provider === provId);
+      targets = configuredModelOptions.filter((m) => m.provider_id === provId || m.provider === provId);
     } else {
-      targets = configuredModels;
+      targets = configuredModelOptions;
     }
 
     if (targets.length === 0) {
@@ -818,8 +818,8 @@ export default function AIProvidersSection() {
                 className="bg-zinc-950 text-zinc-200 border border-zinc-800 rounded-md px-2.5 py-1.5 text-xs focus:outline-none focus:border-blue-500 [color-scheme:dark] cursor-pointer"
               >
                 <option value="active">⚡ Solo Modelos Activos</option>
-                {configuredModels.length > 0 && (
-                  <option value="all">🌐 Todos los configurados ({configuredModels.length})</option>
+                {configuredModelOptions.length > 0 && (
+                  <option value="all">🌐 Todos los configurados ({configuredModelOptions.length})</option>
                 )}
                 {configuredProviders.map((p) => (
                   <option key={p.provider_id} value={`provider:${p.provider_id}`}>
