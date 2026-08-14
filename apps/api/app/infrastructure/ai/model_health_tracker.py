@@ -156,25 +156,29 @@ class ModelHealthTracker:
         from app.infrastructure.ai.provider_adapter import ProviderAdapter
         from app.infrastructure.security.credential_manager import CredentialManager
 
-        resolved_provider = provider or ProviderAdapter.get_provider(model_id)
-        api_key = None
-        base_url = None
-
-        if resolved_provider.startswith("custom_"):
-            provider_id = resolved_provider.replace("custom_", "")
-            import keyring
-
-            from app.infrastructure.db.sync_helpers import get_custom_provider_sync
-
-            p_data = get_custom_provider_sync(provider_id)
-            if p_data:
-                api_key = keyring.get_password(p_data["keyring_service_id"], "api_key")
-                base_url = p_data.get("base_url")
-        else:
-            api_key = CredentialManager.get_api_key(resolved_provider)
-
         t0 = time.perf_counter()
+        resolved_provider = provider or "unknown"
         try:
+            from app.infrastructure.ai.provider_adapter import ProviderAdapter
+            from app.infrastructure.security.credential_manager import CredentialManager
+
+            resolved_provider = provider or ProviderAdapter.get_provider(model_id) or "openai"
+            api_key = None
+            base_url = None
+
+            if resolved_provider and resolved_provider.startswith("custom_"):
+                provider_id = resolved_provider.replace("custom_", "")
+                import keyring
+
+                from app.infrastructure.db.sync_helpers import get_custom_provider_sync
+
+                p_data = get_custom_provider_sync(provider_id)
+                if p_data:
+                    api_key = keyring.get_password(p_data["keyring_service_id"], "api_key")
+                    base_url = p_data.get("base_url")
+            elif resolved_provider:
+                api_key = CredentialManager.get_api_key(resolved_provider)
+
             if (
                 not api_key
                 and resolved_provider != "openrouter"

@@ -789,10 +789,17 @@ export default function AIProvidersSection() {
             <div className="pt-2.5 border-t border-zinc-800/80 space-y-2">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
                 <div className="flex items-center gap-2 font-mono text-zinc-300">
-                  {isDiagnosing && <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-400" />}
+                  {isDiagnosing ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-400" />
+                  ) : (
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                  )}
                   <span>
                     {isDiagnosing ? "Diagnosticando:" : "Diagnóstico completado:"}{" "}
-                    <strong className="text-white">{diagnosticProgress.tested}</strong> / {diagnosticProgress.total} modelos
+                    <strong className="text-white">
+                      {diagnosticProgress.tested ?? diagnosticProgress.total}
+                    </strong>{" "}
+                    / {diagnosticProgress.total} modelos
                   </span>
                 </div>
                 <div className="flex items-center gap-2 font-mono text-[11px] flex-wrap">
@@ -809,11 +816,25 @@ export default function AIProvidersSection() {
               </div>
 
               {/* Progress bar */}
-              <div className="w-full bg-zinc-950 rounded-full h-1.5 overflow-hidden border border-zinc-800">
+              <div className="w-full bg-zinc-950 rounded-full h-2 overflow-hidden border border-zinc-800">
                 <div
-                  className="bg-blue-500 h-full transition-all duration-300 rounded-full"
+                  className={cn(
+                    "h-full transition-all duration-300 rounded-full",
+                    !isDiagnosing
+                      ? "bg-emerald-500 shadow-sm shadow-emerald-500/50"
+                      : "bg-blue-500"
+                  )}
                   style={{
-                    width: `${diagnosticProgress.total > 0 ? (diagnosticProgress.tested / diagnosticProgress.total) * 100 : 0}%`,
+                    width: `${
+                      diagnosticProgress.total > 0
+                        ? Math.min(
+                            100,
+                            ((diagnosticProgress.tested ?? diagnosticProgress.total) /
+                              diagnosticProgress.total) *
+                              100
+                          )
+                        : 0
+                    }%`,
                   }}
                 />
               </div>

@@ -520,7 +520,7 @@ async def diagnose_models_stream(
     async def event_generator():
         total = len(target_models)
         if total == 0:
-            yield f"data: {json.dumps({'type': 'complete', 'total': 0, 'healthy': 0, 'degraded': 0, 'failing': 0})}\n\n"
+            yield f"data: {json.dumps({'type': 'complete', 'total': 0, 'tested': 0, 'healthy': 0, 'degraded': 0, 'failing': 0})}\n\n"
             return
 
         semaphore = asyncio.Semaphore(concurrency)
@@ -534,11 +534,21 @@ async def diagnose_models_stream(
             m_id = m_info.id or m_info.model or m_info.slug or m_info.name or ""
             m_provider = m_info.provider or m_info.provider_id
             async with semaphore:
-                res = await ModelHealthTracker.ping_model(
-                    model_id=m_id,
-                    provider=m_provider,
-                    timeout_seconds=timeout_seconds,
-                )
+                try:
+                    res = await ModelHealthTracker.ping_model(
+                        model_id=m_id,
+                        provider=m_provider,
+                        timeout_seconds=timeout_seconds,
+                    )
+                except Exception as exc:
+                    res = {
+                        "model_id": m_id,
+                        "provider": m_provider or "unknown",
+                        "success": False,
+                        "latency_ms": 0,
+                        "status": "failing",
+                        "error": str(exc)[:250],
+                    }
                 tested_count += 1
                 if res["status"] == "healthy":
                     healthy_count += 1
@@ -550,7 +560,17 @@ async def diagnose_models_stream(
 
         tasks = [test_single_model(m) for m in target_models]
         for coro in asyncio.as_completed(tasks):
-            result = await coro
+            try:
+                result = await coro
+            except Exception as exc:
+                result = {
+                    "model_id": "unknown",
+                    "provider": "unknown",
+                    "success": False,
+                    "latency_ms": 0,
+                    "status": "failing",
+                    "error": str(exc)[:250],
+                }
             event_payload = {
                 "type": "progress",
                 "tested": tested_count,
@@ -562,7 +582,7 @@ async def diagnose_models_stream(
             }
             yield f"data: {json.dumps(event_payload)}\n\n"
 
-        yield f"data: {json.dumps({'type': 'complete', 'total': total, 'healthy': healthy_count, 'degraded': degraded_count, 'failing': failing_count})}\n\n"
+        yield f"data: {json.dumps({'type': 'complete', 'total': total, 'tested': total, 'healthy': healthy_count, 'degraded': degraded_count, 'failing': failing_count})}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
