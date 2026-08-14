@@ -32,13 +32,26 @@ class LiteLLMGateway:
 
         for fb_model in fallbacks:
             fb_provider = ProviderAdapter.get_provider(fb_model)
-            fb_api_key = self.cred_manager.get_api_key(fb_provider)
-            if fb_api_key:
-                fb_adapted = ProviderAdapter.adapt(fb_model, fb_api_key)
-                fallback_params.append(
-                    {"model": fb_adapted["model"], "api_key": fb_adapted.get("api_key")}
-                )
+            fb_api_key = (
+                self.cred_manager.get_api_key(f"sprintlogic_{fb_provider}")
+                or self.cred_manager.get_api_key(fb_provider)
+                or self.cred_manager.get_api_key("sprintlogic_openrouter")
+                or self.cred_manager.get_api_key("openrouter")
+            )
+            if fb_api_key or "ollama" in fb_model.lower():
+                try:
+                    fb_adapted = ProviderAdapter.adapt(fb_model, fb_api_key)
+                    entry: dict[str, Any] = {
+                        "model": fb_adapted["model"],
+                        "api_key": fb_adapted.get("api_key"),
+                    }
+                    if fb_adapted.get("kwargs"):
+                        entry.update(fb_adapted["kwargs"])
+                    fallback_params.append(entry)
+                except Exception as adapt_err:
+                    logger.debug("Failed to adapt fallback %s: %s", fb_model, adapt_err)
         return fallback_params if fallback_params else None
+
 
     async def generate_completion(
         self, prompt: str, lang_code: str = "en", fallbacks: list[str] | None = None

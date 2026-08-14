@@ -116,87 +116,96 @@ async def process_planning_message(req: Request, request: PlanningRequest):
             except Exception as adapt_err:
                 logging.debug("Could not adapt fallback model %s: %s", fb_model, adapt_err)
 
+    MAX_RETRIES_PER_CANDIDATE = 2
+
     async def generate() -> AsyncGenerator[str, None]:
         last_error = None
         for i, candidate in enumerate(candidates):
-            has_yielded = False
-            try:
-                if i > 0:
-                    logging.info(
-                        "Planning streaming: falling back to candidate %d (%s)",
-                        i,
-                        candidate["model"],
+            for attempt in range(1, MAX_RETRIES_PER_CANDIDATE + 1):
+                has_yielded = False
+                timeout = 15 if attempt == 1 else 20
+                try:
+                    if i > 0 or attempt > 1:
+                        logging.info(
+                            "Planning streaming: candidate %d (%s) attempt %d/%d (timeout=%ds)",
+                            i,
+                            candidate["model"],
+                            attempt,
+                            MAX_RETRIES_PER_CANDIDATE,
+                            timeout,
+                        )
+
+                    response = await litellm.acompletion(
+                        model=candidate["model"],
+                        messages=messages_to_send,
+                        tools=tools,
+                        api_key=candidate["api_key"],
+                        stream=True,
+                        num_retries=0,
+                        timeout=timeout,
+                        **candidate.get("kwargs", {}),
                     )
 
-                response = await litellm.acompletion(
-                    model=candidate["model"],
-                    messages=messages_to_send,
-                    tools=tools,
-                    api_key=candidate["api_key"],
-                    stream=True,
-                    num_retries=1,
-                    timeout=30,
-                    **candidate.get("kwargs", {}),
-                )
+                    tool_calls_buffer: dict[int, Any] = {}
 
-                tool_calls_buffer: dict[int, Any] = {}
+                    async for chunk in response:
+                        delta = chunk.choices[0].delta if chunk and chunk.choices else None
 
-                async for chunk in response:
-                    delta = chunk.choices[0].delta if chunk and chunk.choices else None
+                        # Yield text content
+                        if delta and delta.content:
+                            has_yielded = True
+                            yield f"data: {json.dumps({'text': delta.content, 'is_done': False})}\n\n"
 
-                    # Yield text content
-                    if delta and delta.content:
-                        has_yielded = True
-                        yield f"data: {json.dumps({'text': delta.content, 'is_done': False})}\n\n"
+                        # Buffer tool calls
+                        if delta and getattr(delta, "tool_calls", None):
+                            has_yielded = True
+                            for tc in delta.tool_calls:
+                                idx = tc.index
+                                if idx not in tool_calls_buffer:
+                                    tool_calls_buffer[idx] = {
+                                        "id": tc.id or f"call_{idx}",
+                                        "type": "function",
+                                        "function": {
+                                            "name": tc.function.name if tc.function.name else "",
+                                            "arguments": tc.function.arguments
+                                            if tc.function.arguments
+                                            else "",
+                                        },
+                                    }
+                                else:
+                                    if tc.function.name:
+                                        tool_calls_buffer[idx]["function"]["name"] += tc.function.name
+                                    if tc.function.arguments:
+                                        tool_calls_buffer[idx]["function"]["arguments"] += (
+                                            tc.function.arguments
+                                        )
 
-                    # Buffer tool calls
-                    if delta and getattr(delta, "tool_calls", None):
-                        has_yielded = True
-                        for tc in delta.tool_calls:
-                            idx = tc.index
-                            if idx not in tool_calls_buffer:
-                                tool_calls_buffer[idx] = {
-                                    "id": tc.id or f"call_{idx}",
-                                    "type": "function",
-                                    "function": {
-                                        "name": tc.function.name if tc.function.name else "",
-                                        "arguments": tc.function.arguments
-                                        if tc.function.arguments
-                                        else "",
-                                    },
-                                }
-                            else:
-                                if tc.function.name:
-                                    tool_calls_buffer[idx]["function"]["name"] += tc.function.name
-                                if tc.function.arguments:
-                                    tool_calls_buffer[idx]["function"]["arguments"] += (
-                                        tc.function.arguments
-                                    )
+                    # Yield accumulated tool calls at the end
+                    if tool_calls_buffer:
+                        calls_list = list(tool_calls_buffer.values())
+                        yield f"data: {json.dumps({'tool_calls': calls_list, 'is_done': False})}\n\n"
 
-                # Yield accumulated tool calls at the end
-                if tool_calls_buffer:
-                    calls_list = list(tool_calls_buffer.values())
-                    yield f"data: {json.dumps({'tool_calls': calls_list, 'is_done': False})}\n\n"
+                    yield f"data: {json.dumps({'is_done': True})}\n\n"
+                    return
 
-                yield f"data: {json.dumps({'is_done': True})}\n\n"
-                return
-
-            except Exception as e:
-                last_error = e
-                logging.warning(
-                    "Planning streaming candidate %d (%s) failed: %s",
-                    i,
-                    candidate["model"],
-                    e,
-                )
-                if not has_yielded and i < len(candidates) - 1:
-                    continue
-                yield f"data: {json.dumps({'error': str(e), 'is_done': True})}\n\n"
-                return
+                except Exception as e:
+                    last_error = e
+                    logging.warning(
+                        "Planning streaming candidate %d (%s) attempt %d failed: %s",
+                        i,
+                        candidate["model"],
+                        attempt,
+                        e,
+                    )
+                    if has_yielded:
+                        # Cannot safely retry if partial chunks were already yielded to the frontend
+                        yield f"data: {json.dumps({'error': str(e), 'is_done': True})}\n\n"
+                        return
 
         if last_error:
             yield f"data: {json.dumps({'error': str(last_error), 'is_done': True})}\n\n"
 
     return StreamingResponse(generate(), media_type="text/event-stream")
+
 
 
