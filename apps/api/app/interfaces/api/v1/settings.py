@@ -485,12 +485,17 @@ async def reset_model_health_metrics(
 
 
 class DiagnoseModelItem(BaseModel):
-    id: str
+    model_config = {"extra": "ignore"}
+    id: str | None = None
+    model: str | None = None
+    slug: str | None = None
+    name: str | None = None
     provider: str | None = None
     provider_id: str | None = None
 
 
 class DiagnoseModelsRequest(BaseModel):
+    model_config = {"extra": "ignore"}
     models: list[DiagnoseModelItem] = []
     concurrency: int = 3
     timeout_seconds: int = 6
@@ -508,7 +513,7 @@ async def diagnose_models_stream(
 
     from app.infrastructure.ai.model_health_tracker import ModelHealthTracker
 
-    target_models = request.models or []
+    target_models = [m for m in (request.models or []) if (m.id or m.model or m.slug or m.name)]
     concurrency = min(max(1, request.concurrency), 6)
     timeout_seconds = min(max(2, request.timeout_seconds), 15)
 
@@ -526,7 +531,7 @@ async def diagnose_models_stream(
 
         async def test_single_model(m_info: DiagnoseModelItem):
             nonlocal tested_count, healthy_count, degraded_count, failing_count
-            m_id = m_info.id
+            m_id = m_info.id or m_info.model or m_info.slug or m_info.name or ""
             m_provider = m_info.provider or m_info.provider_id
             async with semaphore:
                 res = await ModelHealthTracker.ping_model(
@@ -543,7 +548,7 @@ async def diagnose_models_stream(
                     failing_count += 1
                 return res
 
-        tasks = [test_single_model(m) for m in target_models if m.id]
+        tasks = [test_single_model(m) for m in target_models]
         for coro in asyncio.as_completed(tasks):
             result = await coro
             event_payload = {

@@ -586,22 +586,50 @@ export default function AIProvidersSection() {
     let targets: ModelOption[] = [];
 
     if (diagnosticScope === "active") {
-      const activeSlugs = new Set<string>();
       if (globalDefault) {
         if (globalDefault.model) {
-          activeSlugs.add(globalDefault.model);
-          activeSlugs.add(`${globalDefault.provider}/${globalDefault.model}`);
+          const mName = globalDefault.model;
+          const pName = globalDefault.provider || mName.split("/")[0] || "";
+          const found = allModels.find(
+            (m) =>
+              m.id === mName ||
+              m.id === mName.split("/").slice(1).join("/") ||
+              `${m.provider_id}/${m.id}` === mName
+          );
+          if (found) {
+            targets.push(found);
+          } else {
+            targets.push({
+              id: mName.includes("/") ? mName.split("/").slice(1).join("/") : mName,
+              name: mName,
+              provider: pName,
+              provider_id: pName,
+            });
+          }
         }
         if (globalDefault.fallback_models) {
           globalDefault.fallback_models.forEach((f) => {
-            activeSlugs.add(f);
-            activeSlugs.add(f.replace(/^[^\/]+\//, ""));
+            if (!f || f === "__none__") return;
+            const pName = f.includes("/") ? f.split("/")[0] : "";
+            const mId = f.includes("/") ? f.split("/").slice(1).join("/") : f;
+            const found = allModels.find(
+              (m) => m.id === f || m.id === mId || `${m.provider_id}/${m.id}` === f
+            );
+            if (found) {
+              if (!targets.some((t) => t.id === found.id && t.provider_id === found.provider_id)) {
+                targets.push(found);
+              }
+            } else {
+              targets.push({
+                id: mId,
+                name: f,
+                provider: pName,
+                provider_id: pName,
+              });
+            }
           });
         }
       }
-      targets = allModels.filter(
-        (m) => activeSlugs.has(m.id) || activeSlugs.has(`${m.provider_id}/${m.id}`)
-      );
       if (targets.length === 0 && allModels.length > 0) {
         targets = allModels.slice(0, 5);
       }

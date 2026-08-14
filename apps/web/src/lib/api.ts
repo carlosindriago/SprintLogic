@@ -438,15 +438,19 @@ export async function diagnoseModelsStream(
   concurrency = 3,
   timeoutSeconds = 6
 ): Promise<void> {
+  const sanitizedModels = models
+    .filter((m) => Boolean(m && m.id))
+    .map((m) => ({
+      id: String(m.id),
+      provider: m.provider || m.provider_id || undefined,
+      provider_id: m.provider_id || m.provider || undefined,
+    }));
+
   const res = await fetch(`${API_BASE_URL}/settings/model-health/diagnose`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      models: models.map((m) => ({
-        id: m.id,
-        provider: m.provider,
-        provider_id: m.provider_id,
-      })),
+      models: sanitizedModels,
       concurrency,
       timeout_seconds: timeoutSeconds,
     }),
@@ -454,7 +458,27 @@ export async function diagnoseModelsStream(
   });
 
   if (!res.ok) {
-    throw new Error(`Error HTTP ${res.status} al iniciar diagnóstico`);
+    let errorDetail = `Error HTTP ${res.status}`;
+    try {
+      const errorText = await res.text();
+      try {
+        const errorJson = JSON.parse(errorText);
+        if (Array.isArray(errorJson.detail)) {
+          errorDetail = errorJson.detail
+            .map((d: { loc?: string[]; msg?: string }) => `${d.loc?.join('.')}: ${d.msg}`)
+            .join(', ');
+        } else if (typeof errorJson.detail === 'string') {
+          errorDetail = errorJson.detail;
+        } else if (errorJson.message) {
+          errorDetail = String(errorJson.message);
+        }
+      } catch {
+        if (errorText) errorDetail = errorText;
+      }
+    } catch {
+      // fallback
+    }
+    throw new Error(errorDetail);
   }
 
   if (!res.body) return;
