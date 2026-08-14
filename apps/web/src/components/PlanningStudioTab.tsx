@@ -164,9 +164,17 @@ export default function PlanningStudioTab() {
           }
         }
       );
-    } catch (e) {
-      console.error(e);
-      setMessages((prev) => [...prev, { role: 'assistant', content: 'Error: Could not reach planning studio.' }]);
+    } catch (e: unknown) {
+      const errorMsg = e instanceof Error ? e.message : 'Could not reach planning studio.';
+      setMessages((prev) => {
+        const copy = [...prev];
+        const last = copy[copy.length - 1];
+        if (last && last.role === 'assistant') {
+          last.content = `⚠️ ${errorMsg}`;
+          return copy;
+        }
+        return [...prev, { role: 'assistant', content: `⚠️ ${errorMsg}` }];
+      });
     } finally {
       setIsLoading(false);
     }
