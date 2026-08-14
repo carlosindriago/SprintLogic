@@ -619,22 +619,30 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
     }
   };
 
+  const rawTicketsMap = useMemo(() => {
+    const map = new Map<string, KanbanTicket>();
+    for (const r of rawTickets) {
+      map.set(r.id, r);
+    }
+    return map;
+  }, [rawTickets]);
+
   const filteredTasks = useMemo(() => {
     let filtered = tasks;
     if (sprintFilter !== "Todas") {
       filtered = filtered.filter(t => {
-        const raw = rawTickets.find(r => r.id === t.id);
+        const raw = rawTicketsMap.get(t.id);
         return raw?.sprint_id === sprintFilter;
       });
     }
     if (epicFilter !== "Todas") {
       filtered = filtered.filter(t => {
-        const raw = rawTickets.find(r => r.id === t.id);
+        const raw = rawTicketsMap.get(t.id);
         return raw?.epic_id === epicFilter;
       });
     }
     return filtered;
-  }, [tasks, sprintFilter, epicFilter, rawTickets]);
+  }, [tasks, sprintFilter, epicFilter, rawTicketsMap]);
 
   // ⚡ Bolt: Performance Optimization
   // Groups tasks by status in a single pass O(N).
