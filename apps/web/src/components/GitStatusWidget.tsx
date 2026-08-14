@@ -54,7 +54,7 @@ export default function GitStatusWidget({ projectId }: { projectId: string }) {
     <Card className="bg-zinc-800 border-zinc-700/50 text-zinc-200 mt-auto shrink-0">
       <CardHeader className="p-3 pb-0">
         <CardTitle className="text-xs font-medium flex items-center justify-between">
-          <span className="flex items-center gap-1.5"><GitBranch className="w-3.5 h-3.5" /> Git Status</span>
+          <span className="flex items-center gap-1.5"><GitBranch className="w-3.5 h-3.5" aria-hidden="true" /> Git Status</span>
           {status && status.modified !== undefined && status.untracked !== undefined && (status.modified > 0 || status.untracked > 0) && (
              <span className="bg-amber-500/20 text-amber-500 text-[10px] px-1.5 py-0.5 rounded-full font-bold">
                {status.modified + status.untracked}
@@ -76,7 +76,7 @@ export default function GitStatusWidget({ projectId }: { projectId: string }) {
               className="w-full bg-zinc-700 hover:bg-zinc-600 h-7 text-xs flex gap-1.5"
               onClick={openGitGraph}
             >
-              <GitCommit className="w-3.5 h-3.5" /> Abrir Sala de Control
+              <GitCommit className="w-3.5 h-3.5" aria-hidden="true" /> Abrir Sala de Control
             </Button>
           </>
         ) : (
