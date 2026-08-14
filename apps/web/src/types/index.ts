@@ -275,6 +275,27 @@ export interface SecurityFinding {
   metadata?: Record<string, unknown>;
 }
 
+export interface ToolInfo {
+  status: 'ready' | 'downloading' | 'missing' | 'error';
+  version: string;
+  path: string;
+  available: boolean;
+}
+
+export interface ToolchainStatus {
+  base_dir: string;
+  platform: {
+    os: string;
+    arch: string;
+    system: string;
+    machine: string;
+  };
+  tools: {
+    gitleaks: ToolInfo;
+    semgrep: ToolInfo;
+  };
+}
+
 export interface SecurityScanResponse {
   status: string;
   project_id: string;
@@ -286,6 +307,7 @@ export interface SecurityScanResponse {
     total: number;
   };
   findings: SecurityFinding[];
+  toolchain?: ToolchainStatus;
 }
 
 export interface FindingEvaluationRequest {

@@ -20,6 +20,7 @@ import {
   SecurityScanResponse,
   FindingEvaluationRequest,
   FindingEvaluationResponse,
+  ToolchainStatus,
 } from '../types';
 
 export type { KanbanTicket, KanbanTicketCreate, KanbanTicketUpdate };
@@ -965,5 +966,13 @@ export async function evaluateSecurityFinding(
   payload: FindingEvaluationRequest
 ): Promise<FindingEvaluationResponse> {
   return await api.post<FindingEvaluationResponse>(`/projects/${projectId}/security/evaluate`, payload);
+}
+
+export async function getSecurityToolchainStatus(
+  projectId: string
+): Promise<{ status: string; project_id: string; toolchain: ToolchainStatus }> {
+  return await api.get<{ status: string; project_id: string; toolchain: ToolchainStatus }>(
+    `/projects/${projectId}/security/toolchain/status`
+  );
 }
 

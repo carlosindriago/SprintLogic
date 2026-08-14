@@ -26,6 +26,7 @@ from app.infrastructure.repositories.tool_model_repository import (
     tool_model_label,
 )
 from app.infrastructure.security.sast_runner import SecurityEngine, SecurityFinding
+from app.infrastructure.security.toolchain import global_toolchain
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +74,19 @@ def _clean_json_response(raw_text: str) -> dict[str, Any]:
         }
 
 
+@router.get("/toolchain/status")
+async def get_toolchain_status(
+    project_id: str,
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    """Get current status of native security binary toolchain (Gitleaks, Semgrep)."""
+    return {
+        "status": "success",
+        "project_id": project_id,
+        "toolchain": global_toolchain.get_status(),
+    }
+
+
 @router.post("/scan")
 async def scan_project_security(
     project_id: str,
@@ -108,6 +122,7 @@ async def scan_project_security(
         "project_id": project_id,
         "counts": counts,
         "findings": [f.to_dict() for f in findings],
+        "toolchain": global_toolchain.get_status(),
     }
 
 

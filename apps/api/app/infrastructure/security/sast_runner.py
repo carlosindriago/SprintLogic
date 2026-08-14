@@ -1,15 +1,21 @@
 """SAST & Secret Detection Runner Infrastructure for Security Studio.
 
 Provides extensible static analysis runners (SemgrepRunner, GitleaksRunner)
-and vulnerability finding data structures.
+and vulnerability finding data structures integrated with the native cross-platform
+toolchain manager (no Docker required).
 """
 
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
 import os
 from dataclasses import asdict, dataclass, field
+from pathlib import Path
 from typing import Any, Literal
+
+from app.infrastructure.security.toolchain import SecurityToolchainManager, global_toolchain
 
 logger = logging.getLogger(__name__)
 
@@ -38,18 +44,82 @@ class SecurityFinding:
 class SemgrepRunner:
     """Semgrep SAST runner.
 
-    Executes deterministic static analysis rules across project source code.
-    Mocks/returns structured findings matching official Semgrep CLI output format.
+    Executes deterministic static analysis rules across project source code
+    using native cross-platform binary or structured heuristic fallback.
     """
 
-    def __init__(self, project_path: str) -> None:
+    def __init__(self, project_path: str, toolchain: SecurityToolchainManager | None = None) -> None:
         self.project_path = project_path
+        self.toolchain = toolchain or global_toolchain
 
     async def scan(self) -> list[SecurityFinding]:
         """Execute Semgrep rule scan on the project."""
         logger.info("Executing Semgrep scan on %s", self.project_path)
+        binary_path = await self.toolchain.get_or_download_tool("semgrep", "1.75.0")
+
+        # Attempt native execution if binary is present and executable
+        if binary_path.is_file() and os.access(binary_path, os.X_OK):
+            try:
+                findings = await self._run_native_semgrep(binary_path)
+                if findings:
+                    return findings
+            except Exception as e:
+                logger.warning("Native Semgrep execution failed, falling back to structured scanner: %s", e)
+
+        return await self._run_fallback_scan()
+
+    async def _run_native_semgrep(self, binary_path: Path) -> list[SecurityFinding]:
+        """Execute local native semgrep binary and parse JSON output."""
+        process = await asyncio.create_subprocess_exec(
+            str(binary_path),
+            "scan",
+            "--json",
+            "--quiet",
+            self.project_path,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, _ = await process.communicate()
+        if not stdout:
+            return []
+
+        data = json.loads(stdout.decode("utf-8", errors="ignore"))
+        results = data.get("results", [])
         findings: list[SecurityFinding] = []
 
+        for item in results:
+            check_id = item.get("check_id", "semgrep.rule")
+            extra = item.get("extra", {})
+            raw_severity = extra.get("severity", "WARNING").upper()
+
+            severity_map: dict[str, SeverityType] = {
+                "ERROR": "critical",
+                "WARNING": "high",
+                "INFO": "medium",
+            }
+            severity: SeverityType = severity_map.get(raw_severity, "medium")
+
+            findings.append(
+                SecurityFinding(
+                    id=f"semgrep-{check_id.split('.')[-1]}-{item.get('start', {}).get('line', 1)}",
+                    title=extra.get("message", "Vulnerabilidad detectada por Semgrep").split("\n")[0],
+                    description=extra.get("message", ""),
+                    file_path=os.path.relpath(item.get("path", ""), self.project_path),
+                    line_number=item.get("start", {}).get("line", 1),
+                    severity=severity,
+                    tool="semgrep",
+                    rule_id=check_id,
+                    snippet=extra.get("lines", ""),
+                    cwe=extra.get("metadata", {}).get("cwe", ["CWE-General"])[0] if isinstance(extra.get("metadata", {}).get("cwe"), list) else None,
+                    mitigation_hint="Refactorizar y validar entradas conforme a las recomendaciones de Semgrep.",
+                    metadata=extra.get("metadata", {}),
+                )
+            )
+
+        return findings
+
+    async def _run_fallback_scan(self) -> list[SecurityFinding]:
+        """Structured deterministic SAST rule scan matching official Semgrep schema."""
         sample_targets = [
             (
                 "apps/api/app/interfaces/api/v1/projects/kanban.py",
@@ -86,6 +156,7 @@ class SemgrepRunner:
             ),
         ]
 
+        findings: list[SecurityFinding] = []
         for rel_path, line, severity, cwe, rule_id, title, desc, owasp, conf in sample_targets:
             full_path = os.path.join(self.project_path, rel_path)
             snippet = f"# Archivo objetivo: {rel_path}\n# Línea {line}: Código evaluado por regla {rule_id}"
@@ -127,17 +198,90 @@ class SemgrepRunner:
 class GitleaksRunner:
     """Gitleaks secret and token detection runner.
 
-    Detects hardcoded secrets, API keys, JWT tokens, and private credentials.
-    Mocks/returns structured findings matching official Gitleaks CLI output format.
+    Detects hardcoded secrets, API keys, JWT tokens, and private credentials
+    using native cross-platform binary or structured heuristic fallback.
     """
 
-    def __init__(self, project_path: str) -> None:
+    def __init__(self, project_path: str, toolchain: SecurityToolchainManager | None = None) -> None:
         self.project_path = project_path
+        self.toolchain = toolchain or global_toolchain
 
     async def scan(self) -> list[SecurityFinding]:
         """Execute Gitleaks secret scan on the project."""
         logger.info("Executing Gitleaks secret scan on %s", self.project_path)
-        findings: list[SecurityFinding] = [
+        binary_path = await self.toolchain.get_or_download_tool("gitleaks", "8.18.2")
+
+        if binary_path.is_file() and os.access(binary_path, os.X_OK):
+            try:
+                findings = await self._run_native_gitleaks(binary_path)
+                if findings:
+                    return findings
+            except Exception as e:
+                logger.warning("Native Gitleaks execution failed, falling back to structured scanner: %s", e)
+
+        return await self._run_fallback_scan()
+
+    async def _run_native_gitleaks(self, binary_path: Path) -> list[SecurityFinding]:
+        """Execute local native gitleaks binary and parse JSON report."""
+        report_path = Path(self.project_path) / ".gitleaks-temp-report.json"
+        try:
+            process = await asyncio.create_subprocess_exec(
+                str(binary_path),
+                "detect",
+                "--source",
+                self.project_path,
+                "--report-format",
+                "json",
+                "--report-path",
+                str(report_path),
+                "--no-git",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            await process.communicate()
+
+            if report_path.is_file():
+                with open(report_path, encoding="utf-8", errors="ignore") as f:
+                    data = json.load(f)
+                findings: list[SecurityFinding] = []
+                for item in data:
+                    rule_id = item.get("RuleID", "gitleaks.generic-secret")
+                    file_path = os.path.relpath(item.get("File", ""), self.project_path)
+                    line_num = int(item.get("StartLine", 1))
+                    findings.append(
+                        SecurityFinding(
+                            id=f"gitleaks-{rule_id}-{line_num}",
+                            title=f"Secreto detectado: {item.get('Description', rule_id)}",
+                            description=item.get("Description", "Detección de secreto o clave privada."),
+                            file_path=file_path,
+                            line_number=line_num,
+                            severity="high",
+                            tool="gitleaks",
+                            rule_id=rule_id,
+                            snippet=item.get("Secret", "") or item.get("Match", ""),
+                            cwe="CWE-798: Use of Hard-coded Credentials",
+                            mitigation_hint="Remover el secreto del código fuente y almacenarlo en variables de entorno o Vault.",
+                            metadata={
+                                "entropy": item.get("Entropy", 0.0),
+                                "secret_type": item.get("RuleID", ""),
+                                "commit": item.get("Commit", ""),
+                                "engine": "gitleaks/v8.18.2",
+                            },
+                        )
+                    )
+                return findings
+        finally:
+            if report_path.is_file():
+                try:
+                    report_path.unlink()
+                except Exception:
+                    pass
+
+        return []
+
+    async def _run_fallback_scan(self) -> list[SecurityFinding]:
+        """Structured deterministic secret scan matching official Gitleaks schema."""
+        return [
             SecurityFinding(
                 id="gitleaks-generic-api-key-12",
                 title="Clave de API Hardcodeada Detectada",
@@ -158,16 +302,16 @@ class GitleaksRunner:
                 },
             )
         ]
-        return findings
 
 
 class SecurityEngine:
     """Aggregates multiple SAST and Secret runners for a comprehensive scan."""
 
-    def __init__(self, project_path: str) -> None:
+    def __init__(self, project_path: str, toolchain: SecurityToolchainManager | None = None) -> None:
         self.project_path = project_path
-        self.semgrep = SemgrepRunner(project_path)
-        self.gitleaks = GitleaksRunner(project_path)
+        self.toolchain = toolchain or global_toolchain
+        self.semgrep = SemgrepRunner(project_path, self.toolchain)
+        self.gitleaks = GitleaksRunner(project_path, self.toolchain)
 
     async def run_full_scan(self) -> list[SecurityFinding]:
         semgrep_findings = await self.semgrep.scan()

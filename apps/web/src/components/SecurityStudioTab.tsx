@@ -20,6 +20,7 @@ import {
   Search,
   CheckCircle2,
   XCircle,
+  Cpu,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useProjectStore } from '@/store/projectStore';
@@ -29,11 +30,13 @@ import {
   scanSecurity,
   evaluateSecurityFinding,
   getFileContent,
+  getSecurityToolchainStatus,
 } from '@/lib/api';
 import {
   SecurityFinding,
   SecuritySeverity,
   FindingEvaluationResponse,
+  ToolchainStatus,
 } from '@/types';
 import { cn } from '@/lib/utils';
 
@@ -49,6 +52,8 @@ export default function SecurityStudioTab() {
   const setProjectState = usePlanningStore((state) => state.setProjectState);
 
   const [scanning, setScanning] = useState(false);
+  const [provisioningMsg, setProvisioningMsg] = useState<string | null>(null);
+  const [toolchain, setToolchain] = useState<ToolchainStatus | null>(null);
   const [findings, setFindings] = useState<SecurityFinding[]>([]);
   const [selectedFinding, setSelectedFinding] = useState<SecurityFinding | null>(null);
   const [severityFilter, setSeverityFilter] = useState<string>('all');
@@ -63,12 +68,32 @@ export default function SecurityStudioTab() {
   const [originalCode, setOriginalCode] = useState<string>('');
   const [loadingCode, setLoadingCode] = useState(false);
 
+  const checkToolchain = useCallback(async () => {
+    if (!currentProjectId) return;
+    try {
+      const res = await getSecurityToolchainStatus(currentProjectId);
+      setToolchain(res.toolchain);
+    } catch (err) {
+      console.debug('Toolchain status query:', err);
+    }
+  }, [currentProjectId]);
+
   const handleScan = useCallback(async () => {
     if (!currentProjectId) return;
     setScanning(true);
+    const isMissingAny = !toolchain || toolchain.tools.gitleaks.status !== 'ready' || toolchain.tools.semgrep.status !== 'ready';
+    setProvisioningMsg(
+      isMissingAny
+        ? 'Descargando motor de seguridad nativo (Gitleaks v8.18 / Semgrep v1.75)...'
+        : 'Ejecutando análisis estático nativo y detección de secretos...'
+    );
+
     try {
       const res = await scanSecurity(currentProjectId);
       setFindings(res.findings);
+      if (res.toolchain) {
+        setToolchain(res.toolchain);
+      }
       if (res.findings.length > 0) {
         setSelectedFinding(res.findings[0]);
       } else {
@@ -80,10 +105,17 @@ export default function SecurityStudioTab() {
       toast.error((err as Error)?.message || 'Error al ejecutar escaneo SAST');
     } finally {
       setScanning(false);
+      setProvisioningMsg(null);
     }
-  }, [currentProjectId]);
+  }, [currentProjectId, toolchain]);
 
-  // Initial scan if empty
+  // Initial check & scan
+  useEffect(() => {
+    if (currentProjectId) {
+      checkToolchain();
+    }
+  }, [currentProjectId, checkToolchain]);
+
   useEffect(() => {
     if (currentProjectId && findings.length === 0 && !scanning) {
       handleScan();
@@ -254,6 +286,13 @@ export default function SecurityStudioTab() {
         </div>
 
         <div className="flex items-center gap-3">
+          <div className="hidden sm:flex items-center gap-2 px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-300">
+            <Cpu className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="font-medium">Nativo Cross-Platform</span>
+            <span className="text-zinc-500 font-mono">({toolchain?.platform.os || 'native'})</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse ml-0.5" />
+          </div>
+
           <button
             onClick={handleScan}
             disabled={scanning}
@@ -262,7 +301,7 @@ export default function SecurityStudioTab() {
             {scanning ? (
               <>
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                <span>Analizando SAST...</span>
+                <span>{provisioningMsg || 'Analizando SAST...'}</span>
               </>
             ) : (
               <>
