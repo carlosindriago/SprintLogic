@@ -437,7 +437,7 @@ export async function diagnoseModelsStream(
   onEvent: (event: DiagnoseEventPayload) => void,
   signal?: AbortSignal,
   concurrency = 3,
-  timeoutSeconds = 6
+  timeoutSeconds = 12
 ): Promise<void> {
   const sanitizedModels = models
     .filter((m) => Boolean(m && m.id))

@@ -505,7 +505,7 @@ class DiagnoseModelsRequest(BaseModel):
     model_config = {"extra": "ignore"}
     models: list[DiagnoseModelItem] = []
     concurrency: int = 3
-    timeout_seconds: int = 6
+    timeout_seconds: int = 12
 
 
 @router.post("/model-health/diagnose")
@@ -522,7 +522,7 @@ async def diagnose_models_stream(
 
     target_models = [m for m in (request.models or []) if (m.id or m.model or m.slug or m.name)]
     concurrency = min(max(1, request.concurrency), 6)
-    timeout_seconds = min(max(2, request.timeout_seconds), 15)
+    timeout_seconds = min(max(2, request.timeout_seconds), 20)
 
     async def event_generator():
         total = len(target_models)

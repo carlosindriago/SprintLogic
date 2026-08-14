@@ -148,9 +148,9 @@ class ModelHealthTracker:
         cls,
         model_id: str,
         provider: str | None = None,
-        timeout_seconds: int = 6,
+        timeout_seconds: int = 12,
     ) -> dict[str, Any]:
-        """Pings a single model with a 1-token prompt to check availability & latency."""
+        """Pings a single model with a lightweight prompt to check availability & latency."""
         import litellm
 
         from app.infrastructure.ai.provider_adapter import ProviderAdapter
@@ -175,7 +175,7 @@ class ModelHealthTracker:
                 p_data = get_custom_provider_sync(provider_id)
                 if p_data:
                     api_key = keyring.get_password(p_data["keyring_service_id"], "api_key")
-                    base_url = p_data.get("base_url")
+                    base_url = p_data["base_url"]
             elif resolved_provider:
                 api_key = CredentialManager.get_api_key(resolved_provider)
 
@@ -191,12 +191,12 @@ class ModelHealthTracker:
             if base_url:
                 call_kwargs["api_base"] = base_url
 
-            # Lightweight ping: 1 prompt character, max_tokens=1, 0 retries
+            # Lightweight ping: compliant with reasoning models (max_tokens=10, 0 retries)
             await litellm.acompletion(
                 model=adapted["model"],
-                messages=[{"role": "user", "content": "1"}],
+                messages=[{"role": "user", "content": "Hi"}],
                 api_key=adapted["api_key"],
-                max_tokens=1,
+                max_tokens=10,
                 timeout=timeout_seconds,
                 num_retries=0,
                 **call_kwargs,
