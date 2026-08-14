@@ -256,3 +256,57 @@ export interface SprintUpdate {
   start_date?: string;
   end_date?: string;
 }
+
+// --- Security Studio Types ---
+export type SecuritySeverity = "critical" | "high" | "medium" | "low";
+
+export interface SecurityFinding {
+  id: string;
+  title: string;
+  description: string;
+  file_path: string;
+  line_number: number;
+  severity: SecuritySeverity;
+  tool: string;
+  rule_id: string;
+  snippet: string;
+  cwe?: string | null;
+  mitigation_hint?: string | null;
+  metadata?: Record<string, unknown>;
+}
+
+export interface SecurityScanResponse {
+  status: string;
+  project_id: string;
+  counts: {
+    critical: number;
+    high: number;
+    medium: number;
+    low: number;
+    total: number;
+  };
+  findings: SecurityFinding[];
+}
+
+export interface FindingEvaluationRequest {
+  finding_id: string;
+  tool: string;
+  rule_id: string;
+  file_path: string;
+  line_number: number;
+  severity: string;
+  cwe?: string | null;
+  finding_description: string;
+  source_code?: string;
+  topological_context?: string;
+}
+
+export interface FindingEvaluationResponse {
+  finding_id: string;
+  is_real_threat: boolean;
+  confidence_score: number;
+  mitigation_diff: string;
+  explanation: string;
+  model_used: string;
+}
+
