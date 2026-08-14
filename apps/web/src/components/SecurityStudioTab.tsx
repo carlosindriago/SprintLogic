@@ -450,7 +450,38 @@ export default function SecurityStudioTab() {
               </div>
 
               {/* El Tribunal IA - Probabilistic Judge Verdict */}
-              {currentEval ? (
+              {evaluating ? (
+                <div className="p-5 rounded-xl border border-indigo-500/40 bg-gradient-to-br from-indigo-950/30 via-zinc-900/50 to-zinc-950/60 backdrop-blur-md relative overflow-hidden shadow-lg shadow-indigo-950/30">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center border border-indigo-500/40">
+                        <Scale className="w-4 h-4 animate-pulse" />
+                      </div>
+                      <div>
+                        <h3 className="text-xs font-bold uppercase tracking-wider text-indigo-300 flex items-center gap-2">
+                          <span>Tribunal IA en Deliberación</span>
+                          <span className="w-2 h-2 rounded-full bg-indigo-400 animate-ping" />
+                        </h3>
+                        <p className="text-xs text-indigo-100 font-semibold mt-0.5">
+                          El Juez Probabilístico está analizando la vulnerabilidad...
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-3.5 rounded-lg bg-black/50 border border-indigo-900/50 space-y-2.5">
+                    <div className="flex items-center gap-2 text-xs text-zinc-300">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400 shrink-0" />
+                      <span className="text-[11px] text-zinc-300 font-mono">
+                        Evaluando contexto topológico, descartando falsos positivos y sintetizando parche de mitigación...
+                      </span>
+                    </div>
+                    <div className="w-full bg-zinc-800/80 h-1.5 rounded-full overflow-hidden">
+                      <div className="bg-gradient-to-r from-indigo-500 via-pink-500 to-indigo-500 h-full w-full animate-pulse" />
+                    </div>
+                  </div>
+                </div>
+              ) : currentEval ? (
                 <div
                   className={cn(
                     "p-4 rounded-xl border transition-all",
@@ -573,7 +604,11 @@ export default function SecurityStudioTab() {
                       renderSideBySide: true,
                       scrollBeyondLastLine: false,
                       fontSize: 13,
+                      lineHeight: 20,
+                      wordWrap: 'on',
                       lineNumbers: 'on',
+                      renderWhitespace: 'selection',
+                      smoothScrolling: true,
                     }}
                   />
                 </div>

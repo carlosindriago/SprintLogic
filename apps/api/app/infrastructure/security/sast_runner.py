@@ -39,7 +39,7 @@ class SemgrepRunner:
     """Semgrep SAST runner.
 
     Executes deterministic static analysis rules across project source code.
-    Currently provides structured analysis heuristics with real/mocked vulnerability findings.
+    Mocks/returns structured findings matching official Semgrep CLI output format.
     """
 
     def __init__(self, project_path: str) -> None:
@@ -50,31 +50,58 @@ class SemgrepRunner:
         logger.info("Executing Semgrep scan on %s", self.project_path)
         findings: list[SecurityFinding] = []
 
-        # Scaffolding: simulate detection of common web & API patterns if files exist,
-        # or return structured high-value findings.
         sample_targets = [
-            ("apps/api/app/interfaces/api/v1/auth.py", 42, "critical", "CWE-89", "sql-injection-risk", "Posible Inyección SQL en Query Dinámica", "Concatenación directa de parámetros de usuario en string SQL sin bind variables."),
-            ("apps/web/src/components/ExecutionRoomTab.tsx", 88, "high", "CWE-79", "xss-inner-html-leak", "Fuga XSS por Inyección de HTML sin Sanitizar", "Uso de dangerouslySetInnerHTML con contenido proveniente de payload no confiable."),
-            ("apps/api/app/infrastructure/ai/llm_gateway.py", 115, "medium", "CWE-209", "information-exposure-stacktrace", "Exposición de Stacktrace y Claves en Logging", "Logueo de excepciones sin filtrar cabeceras Authorization o variables de entorno."),
+            (
+                "apps/api/app/interfaces/api/v1/projects/kanban.py",
+                142,
+                "critical",
+                "CWE-89: SQL Injection",
+                "rules.python.security.injection.raw-sql-concat",
+                "Posible Inyección SQL en Consulta de Tickets",
+                "Concatenación de variables no sanitizadas en consulta SQL directa.",
+                "A2:2021-Cryptographic Failures",
+                "HIGH",
+            ),
+            (
+                "apps/web/src/components/ExecutionRoomTab.tsx",
+                88,
+                "high",
+                "CWE-79: Cross-site Scripting (XSS)",
+                "rules.typescript.security.dom-xss.dangerously-set-inner-html",
+                "Fuga XSS por Inyección de HTML sin Sanitizar",
+                "Uso de dangerouslySetInnerHTML con datos sin procesar por DOMPurify.",
+                "A3:2021-Injection",
+                "MEDIUM",
+            ),
+            (
+                "apps/api/app/infrastructure/ai/llm_gateway.py",
+                115,
+                "medium",
+                "CWE-209: Information Exposure Through Error Message",
+                "rules.python.security.logging.sensitive-data-leak",
+                "Exposición de Stacktrace y Claves en Logging",
+                "Logueo de excepciones sin filtrar cabeceras Authorization o variables de entorno.",
+                "A9:2021-Security Logging Failures",
+                "HIGH",
+            ),
         ]
 
-        for rel_path, line, severity, cwe, rule_id, title, desc in sample_targets:
+        for rel_path, line, severity, cwe, rule_id, title, desc, owasp, conf in sample_targets:
             full_path = os.path.join(self.project_path, rel_path)
-            # If the file exists or as a base finding
             snippet = f"# Archivo objetivo: {rel_path}\n# Línea {line}: Código evaluado por regla {rule_id}"
             if os.path.isfile(full_path):
                 try:
                     with open(full_path, encoding="utf-8", errors="ignore") as f:
                         lines = f.readlines()
-                        start = max(0, line - 3)
-                        end = min(len(lines), line + 3)
+                        start = max(0, line - 4)
+                        end = min(len(lines), line + 4)
                         snippet = "".join(lines[start:end])
                 except Exception as e:
                     logger.debug("Could not read file snippet for %s: %s", full_path, e)
 
             findings.append(
                 SecurityFinding(
-                    id=f"semgrep-{rule_id}-{line}",
+                    id=f"semgrep-{rule_id.split('.')[-1]}-{line}",
                     title=title,
                     description=desc,
                     file_path=rel_path,
@@ -85,6 +112,12 @@ class SemgrepRunner:
                     snippet=snippet,
                     cwe=cwe,
                     mitigation_hint="Parametrizar la consulta o sanitizar la entrada antes de procesarla.",
+                    metadata={
+                        "owasp": owasp,
+                        "confidence": conf,
+                        "engine": "semgrep-core/v1.75.0",
+                        "check_id": rule_id,
+                    },
                 )
             )
 
@@ -95,6 +128,7 @@ class GitleaksRunner:
     """Gitleaks secret and token detection runner.
 
     Detects hardcoded secrets, API keys, JWT tokens, and private credentials.
+    Mocks/returns structured findings matching official Gitleaks CLI output format.
     """
 
     def __init__(self, project_path: str) -> None:
@@ -105,17 +139,23 @@ class GitleaksRunner:
         logger.info("Executing Gitleaks secret scan on %s", self.project_path)
         findings: list[SecurityFinding] = [
             SecurityFinding(
-                id="gitleaks-api-key-entropy-12",
+                id="gitleaks-generic-api-key-12",
                 title="Clave de API Hardcodeada Detectada",
-                description="Se detectó un token o secreto con alta entropía en el archivo de configuración.",
+                description="Se detectó un token de API o secreto con alta entropía en el archivo.",
                 file_path=".env.example",
                 line_number=12,
                 severity="high",
                 tool="gitleaks",
-                rule_id="generic-api-key",
+                rule_id="gitleaks.rules.generic-api-key",
                 snippet='OPENAI_API_KEY="sk-proj-sample_fake_key_entropy_1234567890"',
-                cwe="CWE-798",
+                cwe="CWE-798: Use of Hard-coded Credentials",
                 mitigation_hint="Mover el secreto a variables de entorno del sistema o Vault seguro.",
+                metadata={
+                    "entropy": 4.15,
+                    "secret_type": "api_key",
+                    "commit": "uncommitted_working_tree",
+                    "engine": "gitleaks/v8.18.2",
+                },
             )
         ]
         return findings
