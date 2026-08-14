@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo } from "react";
-import { Search, ChevronDown, Check, X, ShieldAlert, Sparkles, Filter } from "lucide-react";
+import { Search, ChevronDown, Check, X, Sparkles, Filter, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ModelHealthMetric } from "@/lib/api";
 import { ModelHealthBadge } from "./ModelHealthBadge";
@@ -37,7 +37,7 @@ export function ModelSearchableSelect({
   placeholder = "Selecciona un modelo...",
   disabled = false,
   className,
-  popoverWidthClass = "w-[460px] max-w-[90vw]",
+  popoverWidthClass = "w-[480px] max-w-[95vw]",
   allowDefault = false,
   defaultLabel = "Usar modelo por defecto",
   allowNone = false,
@@ -60,7 +60,6 @@ export function ModelSearchableSelect({
     }
     if (isOpen) {
       document.addEventListener("mousedown", handleClickOutside);
-      // Focus search input on open
       setTimeout(() => {
         searchInputRef.current?.focus();
       }, 50);
@@ -80,19 +79,48 @@ export function ModelSearchableSelect({
     );
   };
 
+  // Provider list with model counts
   const providersList = useMemo(() => {
-    const set = new Set<string>();
+    const map = new Map<string, { id: string; name: string; count: number }>();
     models.forEach((m) => {
-      if (m.provider) set.add(m.provider);
+      const key = m.provider_id || m.provider || "other";
+      const name = m.provider || m.provider_id || "Otro";
+      const existing = map.get(key);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        map.set(key, { id: key, name, count: 1 });
+      }
     });
-    return Array.from(set);
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
   }, [models]);
+
+  // Health statistics counts
+  const healthStats = useMemo(() => {
+    let healthy = 0;
+    let degraded = 0;
+    let failing = 0;
+    let untested = 0;
+    models.forEach((m) => {
+      const metric = getMetric(m.provider_id, m.id);
+      const status = metric?.status || "untested";
+      if (status === "healthy") healthy++;
+      else if (status === "degraded") degraded++;
+      else if (status === "failing") failing++;
+      else untested++;
+    });
+    return { healthy, degraded, failing, untested, total: models.length };
+  }, [models, healthMetrics]);
 
   const filteredModels = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
     return models.filter((m) => {
-      // Provider filter
-      if (selectedProvider !== "all" && m.provider !== selectedProvider) {
+      // Provider filter (match provider_id or provider display name)
+      if (
+        selectedProvider !== "all" &&
+        m.provider_id !== selectedProvider &&
+        m.provider !== selectedProvider
+      ) {
         return false;
       }
 
@@ -114,6 +142,14 @@ export function ModelSearchableSelect({
       return true;
     });
   }, [models, searchQuery, selectedProvider, selectedHealthFilter, healthMetrics]);
+
+  const hasActiveFilters = selectedProvider !== "all" || selectedHealthFilter !== "all" || searchQuery.length > 0;
+
+  const resetFilters = () => {
+    setSelectedProvider("all");
+    setSelectedHealthFilter("all");
+    setSearchQuery("");
+  };
 
   // Selected item display resolution
   const selectedModel = models.find(
@@ -201,71 +237,71 @@ export function ModelSearchableSelect({
             )}
           </div>
 
-          {/* Filter Pills */}
-          <div className="flex flex-col gap-1.5 pb-1 border-b border-zinc-800/80">
-            {/* Status Filter */}
-            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
-              <span className="text-[10px] text-zinc-500 uppercase font-semibold tracking-wider mr-1">
-                Estado:
-              </span>
-              {[
-                { id: "all", label: "Todos" },
-                { id: "healthy", label: "🟢 Healthy" },
-                { id: "degraded", label: "🟡 Degraded" },
-                { id: "failing", label: "🔴 Failing" },
-              ].map((f) => (
-                <button
-                  key={f.id}
-                  type="button"
-                  onClick={() => setSelectedHealthFilter(f.id)}
-                  className={cn(
-                    "px-2 py-0.5 rounded text-[10px] font-medium transition-colors shrink-0",
-                    selectedHealthFilter === f.id
-                      ? "bg-blue-600/30 text-blue-300 border border-blue-500/40"
-                      : "bg-zinc-800/60 text-zinc-400 hover:bg-zinc-800 border border-zinc-700/30"
-                  )}
-                >
-                  {f.label}
-                </button>
-              ))}
+          {/* Filter Row: Selects for Provider & Health Status */}
+          <div className="grid grid-cols-2 gap-2 pb-2 border-b border-zinc-800/80">
+            {/* Provider Filter Select */}
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider">
+                  Proveedor
+                </label>
+                {selectedProvider !== "all" && (
+                  <span className="text-[10px] text-blue-400 font-mono">filtrado</span>
+                )}
+              </div>
+              <select
+                value={selectedProvider}
+                onChange={(e) => setSelectedProvider(e.target.value)}
+                className="w-full bg-zinc-950 border border-zinc-800 rounded px-2 py-1.5 text-xs text-zinc-200 focus:outline-none focus:border-blue-500 cursor-pointer"
+              >
+                <option value="all">Todos los proveedores ({models.length})</option>
+                {providersList.map(({ id, name, count }) => (
+                  <option key={id} value={id}>
+                    {name} ({count})
+                  </option>
+                ))}
+              </select>
             </div>
 
-            {/* Provider Filter */}
-            {providersList.length > 1 && (
-              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
-                <span className="text-[10px] text-zinc-500 uppercase font-semibold tracking-wider mr-1">
-                  Proveedor:
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setSelectedProvider("all")}
-                  className={cn(
-                    "px-2 py-0.5 rounded text-[10px] font-medium transition-colors shrink-0",
-                    selectedProvider === "all"
-                      ? "bg-zinc-200 text-zinc-900"
-                      : "bg-zinc-800/60 text-zinc-400 hover:bg-zinc-800 border border-zinc-700/30"
-                  )}
-                >
-                  Todos
-                </button>
-                {providersList.map((p) => (
-                  <button
-                    key={p}
-                    type="button"
-                    onClick={() => setSelectedProvider(p)}
-                    className={cn(
-                      "px-2 py-0.5 rounded text-[10px] font-medium transition-colors shrink-0",
-                      selectedProvider === p
-                        ? "bg-blue-600 text-white"
-                        : "bg-zinc-800/60 text-zinc-400 hover:bg-zinc-800 border border-zinc-700/30"
-                    )}
-                  >
-                    {p}
-                  </button>
-                ))}
+            {/* Health Filter Select */}
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider">
+                  Salud / Estado
+                </label>
+                {selectedHealthFilter !== "all" && (
+                  <span className="text-[10px] text-blue-400 font-mono">filtrado</span>
+                )}
               </div>
-            )}
+              <select
+                value={selectedHealthFilter}
+                onChange={(e) => setSelectedHealthFilter(e.target.value)}
+                className="w-full bg-zinc-950 border border-zinc-800 rounded px-2 py-1.5 text-xs text-zinc-200 focus:outline-none focus:border-blue-500 cursor-pointer"
+              >
+                <option value="all">Todos los estados ({models.length})</option>
+                <option value="healthy">🟢 Healthy ({healthStats.healthy})</option>
+                <option value="degraded">🟡 Degraded ({healthStats.degraded})</option>
+                <option value="failing">🔴 Failing ({healthStats.failing})</option>
+                <option value="untested">⚪ Sin llamadas ({healthStats.untested})</option>
+              </select>
+            </div>
           </div>
+
+          {/* Active filter summary & Clear button */}
+          {hasActiveFilters && (
+            <div className="flex items-center justify-between px-1 text-[11px] text-zinc-400">
+              <span>
+                Mostrando {filteredModels.length} de {models.length} modelos
+              </span>
+              <button
+                type="button"
+                onClick={resetFilters}
+                className="text-blue-400 hover:text-blue-300 flex items-center gap-1 text-[11px]"
+              >
+                <RotateCcw className="w-3 h-3" /> Limpiar filtros
+              </button>
+            </div>
+          )}
 
           {/* Model Options List */}
           <div className="flex flex-col gap-1 max-h-[260px] overflow-y-auto pr-1">
