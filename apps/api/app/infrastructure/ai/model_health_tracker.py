@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -141,6 +142,97 @@ class ModelHealthTracker:
             )
         except RuntimeError:
             pass
+
+    @classmethod
+    async def ping_model(
+        cls,
+        model_id: str,
+        provider: str | None = None,
+        timeout_seconds: int = 6,
+    ) -> dict[str, Any]:
+        """Pings a single model with a 1-token prompt to check availability & latency."""
+        import litellm
+
+        from app.infrastructure.ai.provider_adapter import ProviderAdapter
+        from app.infrastructure.security.credential_manager import CredentialManager
+
+        resolved_provider = provider or ProviderAdapter.get_provider(model_id)
+        api_key = None
+        base_url = None
+
+        if resolved_provider.startswith("custom_"):
+            provider_id = resolved_provider.replace("custom_", "")
+            import keyring
+
+            from app.infrastructure.db.sync_helpers import get_custom_provider_sync
+
+            p_data = get_custom_provider_sync(provider_id)
+            if p_data:
+                api_key = keyring.get_password(p_data["keyring_service_id"], "api_key")
+                base_url = p_data.get("base_url")
+        else:
+            api_key = CredentialManager.get_api_key(resolved_provider)
+
+        t0 = time.perf_counter()
+        try:
+            if (
+                not api_key
+                and resolved_provider != "openrouter"
+                and "ollama" not in model_id.lower()
+            ):
+                raise ValueError(f"API Key for provider '{resolved_provider}' is not configured.")
+
+            adapted = ProviderAdapter.adapt(model_id, api_key)
+            call_kwargs = adapted["kwargs"].copy()
+            if base_url:
+                call_kwargs["api_base"] = base_url
+
+            # Lightweight ping: 1 prompt character, max_tokens=1, 0 retries
+            await litellm.acompletion(
+                model=adapted["model"],
+                messages=[{"role": "user", "content": "1"}],
+                api_key=adapted["api_key"],
+                max_tokens=1,
+                timeout=timeout_seconds,
+                num_retries=0,
+                **call_kwargs,
+            )
+
+            latency_ms = int((time.perf_counter() - t0) * 1000)
+            await cls.record_call(
+                model_id=model_id,
+                provider=resolved_provider,
+                latency_ms=latency_ms,
+                success=True,
+            )
+            return {
+                "model_id": model_id,
+                "provider": resolved_provider,
+                "success": True,
+                "latency_ms": latency_ms,
+                "status": "healthy" if latency_ms <= 15000 else "degraded",
+                "error": None,
+            }
+        except Exception as exc:
+            latency_ms = int((time.perf_counter() - t0) * 1000)
+            is_timeout = "timeout" in str(exc).lower() or "socket" in str(exc).lower()
+            err_msg = str(exc)[:250]
+            await cls.record_call(
+                model_id=model_id,
+                provider=resolved_provider,
+                latency_ms=latency_ms,
+                success=False,
+                error=err_msg,
+                is_timeout=is_timeout,
+            )
+            return {
+                "model_id": model_id,
+                "provider": resolved_provider,
+                "success": False,
+                "latency_ms": latency_ms,
+                "status": "failing",
+                "error": err_msg,
+            }
 
     @classmethod
     async def get_all_metrics(cls, session: AsyncSession) -> list[dict[str, Any]]:

@@ -414,6 +414,80 @@ export const fetchModelHealthMetrics = () => api.get<ModelHealthMetric[]>('/sett
 export const resetModelHealthMetric = (modelId: string) =>
   api.delete<{ status: string; model_id: string }>(`/settings/model-health/${encodeURIComponent(modelId)}`);
 
+export interface DiagnoseEventPayload {
+  type: 'progress' | 'complete';
+  tested: number;
+  total: number;
+  healthy: number;
+  degraded: number;
+  failing: number;
+  result?: {
+    model_id: string;
+    provider: string;
+    success: boolean;
+    latency_ms: number;
+    status: 'healthy' | 'degraded' | 'failing';
+    error: string | null;
+  };
+}
+
+export async function diagnoseModelsStream(
+  models: Array<{ id: string; provider?: string; provider_id?: string }>,
+  onEvent: (event: DiagnoseEventPayload) => void,
+  signal?: AbortSignal,
+  concurrency = 3,
+  timeoutSeconds = 6
+): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/settings/model-health/diagnose`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      models: models.map((m) => ({
+        id: m.id,
+        provider: m.provider,
+        provider_id: m.provider_id,
+      })),
+      concurrency,
+      timeout_seconds: timeoutSeconds,
+    }),
+    signal,
+  });
+
+  if (!res.ok) {
+    throw new Error(`Error HTTP ${res.status} al iniciar diagnóstico`);
+  }
+
+  if (!res.body) return;
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      if (line.startsWith('data: ')) {
+        const jsonStr = line.slice(6).trim();
+        if (jsonStr) {
+          try {
+            const data: DiagnoseEventPayload = JSON.parse(jsonStr);
+            onEvent(data);
+          } catch {
+            // ignore partial json
+          }
+        }
+      }
+    }
+  }
+}
+
+
 
 // --- AI / Analysis ---
 export const getGlobalFlowInsights = () => api.get<ProjectFlowInsights>('/insights/flow');

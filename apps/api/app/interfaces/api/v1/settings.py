@@ -484,3 +484,82 @@ async def reset_model_health_metrics(
     return {"status": "deleted" if deleted else "not_found", "model_id": model_id}
 
 
+class DiagnoseModelItem(BaseModel):
+    id: str
+    provider: str | None = None
+    provider_id: str | None = None
+
+
+class DiagnoseModelsRequest(BaseModel):
+    models: list[DiagnoseModelItem] = []
+    concurrency: int = 3
+    timeout_seconds: int = 6
+
+
+@router.post("/model-health/diagnose")
+async def diagnose_models_stream(
+    request: DiagnoseModelsRequest,
+):
+    """Executes a controlled concurrent diagnostic ping across models and streams progress."""
+    import asyncio
+    import json
+
+    from fastapi.responses import StreamingResponse
+
+    from app.infrastructure.ai.model_health_tracker import ModelHealthTracker
+
+    target_models = request.models or []
+    concurrency = min(max(1, request.concurrency), 6)
+    timeout_seconds = min(max(2, request.timeout_seconds), 15)
+
+    async def event_generator():
+        total = len(target_models)
+        if total == 0:
+            yield f"data: {json.dumps({'type': 'complete', 'total': 0, 'healthy': 0, 'degraded': 0, 'failing': 0})}\n\n"
+            return
+
+        semaphore = asyncio.Semaphore(concurrency)
+        tested_count = 0
+        healthy_count = 0
+        degraded_count = 0
+        failing_count = 0
+
+        async def test_single_model(m_info: DiagnoseModelItem):
+            nonlocal tested_count, healthy_count, degraded_count, failing_count
+            m_id = m_info.id
+            m_provider = m_info.provider or m_info.provider_id
+            async with semaphore:
+                res = await ModelHealthTracker.ping_model(
+                    model_id=m_id,
+                    provider=m_provider,
+                    timeout_seconds=timeout_seconds,
+                )
+                tested_count += 1
+                if res["status"] == "healthy":
+                    healthy_count += 1
+                elif res["status"] == "degraded":
+                    degraded_count += 1
+                else:
+                    failing_count += 1
+                return res
+
+        tasks = [test_single_model(m) for m in target_models if m.id]
+        for coro in asyncio.as_completed(tasks):
+            result = await coro
+            event_payload = {
+                "type": "progress",
+                "tested": tested_count,
+                "total": total,
+                "healthy": healthy_count,
+                "degraded": degraded_count,
+                "failing": failing_count,
+                "result": result,
+            }
+            yield f"data: {json.dumps(event_payload)}\n\n"
+
+        yield f"data: {json.dumps({'type': 'complete', 'total': total, 'healthy': healthy_count, 'degraded': degraded_count, 'failing': failing_count})}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+

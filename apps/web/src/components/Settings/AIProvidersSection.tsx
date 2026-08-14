@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,6 +23,10 @@ import {
   CheckCircle2,
   XCircle,
   Wand2,
+  Activity,
+  Zap,
+  Square,
+  RotateCcw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useFimStore } from "@/store/fimStore";
@@ -34,6 +38,7 @@ import {
   updateToolModel,
   deleteToolModel,
   fetchModelHealthMetrics,
+  diagnoseModelsStream,
   type CuratedProvider,
   type GlobalDefaultEntry,
   type ModelHealthMetric,
@@ -446,6 +451,17 @@ export default function AIProvidersSection() {
     modelSlug: "",
   });
 
+  const [isDiagnosing, setIsDiagnosing] = useState(false);
+  const [diagnosticScope, setDiagnosticScope] = useState<string>("active");
+  const [diagnosticProgress, setDiagnosticProgress] = useState<{
+    tested: number;
+    total: number;
+    healthy: number;
+    degraded: number;
+    failing: number;
+  } | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
   const allModels: ModelOption[] = useMemo(
     () =>
       curatedProviders.flatMap((p) =>
@@ -566,6 +582,114 @@ export default function AIProvidersSection() {
     ? `${globalDefault.provider}/${globalDefault.model}`
     : "DEFAULT_LLM_MODEL";
 
+  const handleRunDiagnostic = async () => {
+    let targets: ModelOption[] = [];
+
+    if (diagnosticScope === "active") {
+      const activeSlugs = new Set<string>();
+      if (globalDefault) {
+        if (globalDefault.model) {
+          activeSlugs.add(globalDefault.model);
+          activeSlugs.add(`${globalDefault.provider}/${globalDefault.model}`);
+        }
+        if (globalDefault.fallback_models) {
+          globalDefault.fallback_models.forEach((f) => {
+            activeSlugs.add(f);
+            activeSlugs.add(f.replace(/^[^\/]+\//, ""));
+          });
+        }
+      }
+      targets = allModels.filter(
+        (m) => activeSlugs.has(m.id) || activeSlugs.has(`${m.provider_id}/${m.id}`)
+      );
+      if (targets.length === 0 && allModels.length > 0) {
+        targets = allModels.slice(0, 5);
+      }
+    } else if (diagnosticScope.startsWith("provider:")) {
+      const provId = diagnosticScope.replace("provider:", "");
+      targets = allModels.filter((m) => m.provider_id === provId || m.provider === provId);
+    } else {
+      targets = allModels;
+    }
+
+    if (targets.length === 0) {
+      toast.error("No hay modelos disponibles para el alcance seleccionado");
+      return;
+    }
+
+    setIsDiagnosing(true);
+    setDiagnosticProgress({
+      tested: 0,
+      total: targets.length,
+      healthy: 0,
+      degraded: 0,
+      failing: 0,
+    });
+
+    const ac = new AbortController();
+    abortControllerRef.current = ac;
+
+    try {
+      await diagnoseModelsStream(
+        targets,
+        (evt) => {
+          setDiagnosticProgress({
+            tested: evt.tested,
+            total: evt.total,
+            healthy: evt.healthy,
+            degraded: evt.degraded,
+            failing: evt.failing,
+          });
+
+          if (evt.result) {
+            const res = evt.result;
+            setHealthMetrics((prev) => {
+              const updated = { ...prev };
+              const metricItem: ModelHealthMetric = {
+                model_id: res.model_id,
+                provider: res.provider,
+                total_calls: 1,
+                success_calls: res.success ? 1 : 0,
+                failed_calls: res.success ? 0 : 1,
+                timeout_calls: res.error && res.error.toLowerCase().includes("timeout") ? 1 : 0,
+                success_rate: res.success ? 100.0 : 0.0,
+                avg_latency_ms: res.latency_ms,
+                last_latency_ms: res.latency_ms,
+                last_error: res.error,
+                status: res.status,
+                last_called_at: new Date().toISOString(),
+              };
+              updated[res.model_id] = metricItem;
+              updated[`${res.provider}/${res.model_id}`] = metricItem;
+              return updated;
+            });
+          }
+        },
+        ac.signal,
+        3,
+        6
+      );
+      toast.success("Diagnóstico de modelos completado");
+    } catch (e: unknown) {
+      const err = e as { name?: string; message?: string };
+      if (err?.name !== "AbortError") {
+        toast.error(`Error durante el diagnóstico: ${err?.message || String(e)}`);
+      }
+    } finally {
+      setIsDiagnosing(false);
+      abortControllerRef.current = null;
+    }
+  };
+
+  const handleCancelDiagnostic = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+      setIsDiagnosing(false);
+      toast.info("Diagnóstico cancelado por el usuario");
+    }
+  };
+
   return (
     <div className="flex flex-col gap-8 h-full">
       <div>
@@ -576,6 +700,99 @@ export default function AIProvidersSection() {
       </div>
 
       <div className="space-y-8 flex-1 overflow-y-auto pr-1 pb-8">
+        {/* ── DIAGNOSTIC SUITE BANNER ── */}
+        <section className="p-4 bg-gradient-to-r from-zinc-900 via-zinc-900/95 to-blue-950/30 border border-zinc-800 rounded-xl space-y-3 shadow-lg">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 shrink-0">
+                <Activity className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-zinc-100 flex items-center gap-2">
+                  Diagnóstico de Salud & Latencia en Vivo
+                </h3>
+                <p className="text-xs text-zinc-400">
+                  Ejecuta pings ultra-ligeros (1 token) en lotes controlados para medir latencia y salud sin saturar APIs.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              {/* Scope Selector */}
+              <select
+                value={diagnosticScope}
+                onChange={(e) => setDiagnosticScope(e.target.value)}
+                disabled={isDiagnosing}
+                className="bg-zinc-950 text-zinc-200 border border-zinc-800 rounded-md px-2.5 py-1.5 text-xs focus:outline-none focus:border-blue-500 [color-scheme:dark] cursor-pointer"
+              >
+                <option value="active">⚡ Solo Modelos Activos</option>
+                <option value="all">🌐 Todos los modelos ({allModels.length})</option>
+                {curatedProviders.map((p) => (
+                  <option key={p.provider_id} value={`provider:${p.provider_id}`}>
+                    🏢 Proveedor: {p.provider} ({p.models.length})
+                  </option>
+                ))}
+              </select>
+
+              {isDiagnosing ? (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleCancelDiagnostic}
+                  className="text-xs flex items-center gap-1.5 h-8"
+                >
+                  <Square className="w-3.5 h-3.5 fill-current" /> Cancelar
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  onClick={handleRunDiagnostic}
+                  className="bg-blue-600 hover:bg-blue-500 text-white text-xs flex items-center gap-1.5 h-8 shadow-sm"
+                >
+                  <Zap className="w-3.5 h-3.5" /> Iniciar Test
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {/* Progress / Status feedback */}
+          {diagnosticProgress && (
+            <div className="pt-2.5 border-t border-zinc-800/80 space-y-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                <div className="flex items-center gap-2 font-mono text-zinc-300">
+                  {isDiagnosing && <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-400" />}
+                  <span>
+                    {isDiagnosing ? "Diagnosticando:" : "Diagnóstico completado:"}{" "}
+                    <strong className="text-white">{diagnosticProgress.tested}</strong> / {diagnosticProgress.total} modelos
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 font-mono text-[11px] flex-wrap">
+                  <span className="text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                    🟢 {diagnosticProgress.healthy} saludables
+                  </span>
+                  <span className="text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                    🟡 {diagnosticProgress.degraded} degradados
+                  </span>
+                  <span className="text-red-400 bg-red-500/10 px-2 py-0.5 rounded border border-red-500/20">
+                    🔴 {diagnosticProgress.failing} caídos
+                  </span>
+                </div>
+              </div>
+
+              {/* Progress bar */}
+              <div className="w-full bg-zinc-950 rounded-full h-1.5 overflow-hidden border border-zinc-800">
+                <div
+                  className="bg-blue-500 h-full transition-all duration-300 rounded-full"
+                  style={{
+                    width: `${diagnosticProgress.total > 0 ? (diagnosticProgress.tested / diagnosticProgress.total) * 100 : 0}%`,
+                  }}
+                />
+              </div>
+            </div>
+          )}
+        </section>
+
         {/* ── BLOCK 1: Global Default ── */}
         <section>
           <div className="flex items-center gap-2 mb-3">
