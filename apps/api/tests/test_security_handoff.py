@@ -48,15 +48,10 @@ async def test_create_ticket_from_security_endpoint():
     mock_ticket.type = TicketType.SECURITY
     mock_ticket.priority = TicketPriority.HIGH
 
-    with patch("app.interfaces.api.v1.kanban.SQLAlchemyKanbanRepository") as mock_kanban_repo, \
-         patch("app.interfaces.api.v1.kanban.SQLAlchemyProjectRepository") as mock_proj_repo:
+    with patch("app.interfaces.api.v1.kanban.SQLAlchemyKanbanRepository") as mock_kanban_repo:
         repo_instance = AsyncMock()
         repo_instance.create_ticket.return_value = mock_ticket
         mock_kanban_repo.return_value = repo_instance
-
-        proj_instance = AsyncMock()
-        proj_instance.get_project.return_value = None
-        mock_proj_repo.return_value = proj_instance
 
         result = await create_ticket_from_security(
             project_id=project_id,
@@ -68,3 +63,49 @@ async def test_create_ticket_from_security_endpoint():
         assert result.type == TicketType.SECURITY
         assert result.priority == TicketPriority.HIGH
         repo_instance.create_ticket.assert_called_once()
+
+        # Verify strict backlog creation payload
+        created_payload = repo_instance.create_ticket.call_args[0][1]
+        assert created_payload.sprint_id is None
+        assert created_payload.epic_id is None
+        assert created_payload.priority == TicketPriority.HIGH
+
+
+@pytest.mark.asyncio
+async def test_critical_vulnerability_strictly_routes_to_backlog():
+    """Verify that even CRITICAL vulnerabilities route strictly to Backlog without sprint assignment."""
+    project_id = str(uuid4())
+    payload = SecurityTicketHandoffRequest(
+        finding_id="semgrep-rce-crit",
+        title="Remote Code Execution via Deserialization",
+        description="Insecure pickle load detected in payload handler",
+        severity="critical",
+        file_path="apps/api/main.py",
+        line_number=45,
+        cwe="CWE-502",
+        rule_id="python.security.deserialization.insecure-pickle",
+    )
+
+    mock_session = AsyncMock()
+    mock_ticket = AsyncMock()
+    mock_ticket.id = uuid4()
+    mock_ticket.type = TicketType.SECURITY
+    mock_ticket.priority = TicketPriority.HIGH
+
+    with patch("app.interfaces.api.v1.kanban.SQLAlchemyKanbanRepository") as mock_kanban_repo:
+        repo_instance = AsyncMock()
+        repo_instance.create_ticket.return_value = mock_ticket
+        mock_kanban_repo.return_value = repo_instance
+
+        result = await create_ticket_from_security(
+            project_id=project_id,
+            payload=payload,
+            session=mock_session,
+        )
+
+        assert result.priority == TicketPriority.HIGH
+        created_payload = repo_instance.create_ticket.call_args[0][1]
+        # Strict Backlog Invariant: MUST NOT be assigned to any sprint
+        assert created_payload.sprint_id is None
+        assert created_payload.epic_id is None
+

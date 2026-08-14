@@ -110,7 +110,14 @@ async def create_ticket_from_security(
     payload: SecurityTicketHandoffRequest,
     session: AsyncSession = Depends(get_db_session),
 ):
-    """Create a high-priority Security ticket in Planning Studio from Security Studio finding."""
+    """Create a security ticket strictly in Planning Studio Backlog (sprint_id=None, status=TODO).
+
+    BUSINESS INVARIANT:
+    All vulnerabilities, regardless of severity (Critical, High, Medium, Low), MUST route
+    exclusively to the Backlog. This prevents unexpected scope creep in active sprints and
+    protects developer Deep Work. The severity level is stored as a priority attribute/tag
+    so the Tech Lead can filter and plan resolution manually from the Planning Studio.
+    """
     try:
         project_uuid = UUID(project_id)
     except ValueError:
@@ -118,7 +125,7 @@ async def create_ticket_from_security(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid project ID format"
         )
 
-    # Map severity to priority
+    # Map severity to priority level for visual filtering in Planning Studio
     severity_lower = (payload.severity or "medium").lower()
     if severity_lower in ("critical", "high"):
         priority = TicketPriority.HIGH
@@ -134,7 +141,7 @@ async def create_ticket_from_security(
         if path
     ]
 
-    # Prepare subtasks if not provided
+    # Prepare atomic subtasks for the Quirófano
     subtasks = payload.subtasks
     if not subtasks:
         subtasks = [
@@ -155,13 +162,16 @@ async def create_ticket_from_security(
             },
         ]
 
-    # Clean / format title
+    # Clean / format title with clear security tag
     title = payload.title
     if not title.startswith("[Security Fix]"):
         title = f"[Security Fix] - {title}"
 
     # Build description including AI explanation and mitigation diff
-    description_parts = [payload.description]
+    description_parts = [
+        f"**Severidad:** `{payload.severity.upper()}` | **Prioridad:** `{priority.value}`\n",
+        payload.description,
+    ]
     if payload.cwe:
         description_parts.append(f"\n**CWE:** {payload.cwe}")
     if payload.rule_id:
@@ -173,6 +183,7 @@ async def create_ticket_from_security(
 
     full_description = "\n".join(description_parts)
 
+    # STRICT ROUTING: Ticket is created strictly with sprint_id=None, epic_id=None, status=TODO (Backlog)
     ticket_create = KanbanTicketCreate(
         title=title,
         type=TicketType.SECURITY,
@@ -180,15 +191,15 @@ async def create_ticket_from_security(
         description=full_description,
         affected_nodes=affected_nodes,
         subtasks=subtasks,
+        sprint_id=None,
+        epic_id=None,
     )
 
     repo = SQLAlchemyKanbanRepository(session)
     ticket = await repo.create_ticket(project_uuid, ticket_create)
 
-    project_repo = SQLAlchemyProjectRepository(session)
-    project = await project_repo.get_project(project_uuid)
-    if project and project.path:
-        asyncio.create_task(create_git_branch_for_ticket(project.path, ticket))
+    # Note: Ephemeral git branches are NOT created for backlog tickets.
+    # Branch provisioning happens when a developer pulls the ticket into active execution in the Quirófano.
 
     return ticket
 
