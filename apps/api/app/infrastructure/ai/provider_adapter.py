@@ -34,6 +34,10 @@ class ProviderAdapter:
             "api_base": "https://api.z.ai/api/paas/v4",
             "extra_headers": {"Accept-Language": "en-US,en"},
         },
+        "cerebras": {
+            "litellm_provider": "openai",
+            "api_base": "https://api.cerebras.ai/v1",
+        },
     }
 
     @staticmethod
@@ -68,6 +72,8 @@ class ProviderAdapter:
             return "nvidia"
         if "z-ai" in model_lower or "zai" in model_lower or "glm" in model_lower:
             return "zai"
+        if "cerebras" in model_lower:
+            return "cerebras"
         return "gemini"
 
     @classmethod

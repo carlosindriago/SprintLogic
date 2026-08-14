@@ -276,6 +276,42 @@ async def fetch_provider_models(
                         ProviderModel(id="zai/glm-4v-plus", name="GLM-4V Plus"),
                     ]
 
+            elif provider == "cerebras":
+                headers["Authorization"] = f"Bearer {api_key}"
+                try:
+                    res = await client.get(
+                        "https://api.cerebras.ai/v1/models", headers=headers
+                    )
+                    if res.status_code == 200:
+                        data = res.json()
+                        models = [
+                            ProviderModel(
+                                id=f"cerebras/{m.get('id', m.get('name'))}"
+                                if not str(m.get("id", "")).startswith("cerebras/")
+                                else str(m.get("id")),
+                                name=str(m.get("id", m.get("name"))),
+                            )
+                            for m in data.get("data", data.get("models", []))
+                            if m.get("id") or m.get("name")
+                        ]
+                except Exception:
+                    pass
+
+                if not models:
+                    models = [
+                        ProviderModel(id="cerebras/llama-3.3-70b", name="Llama 3.3 70B"),
+                        ProviderModel(id="cerebras/llama-3.1-70b", name="Llama 3.1 70B"),
+                        ProviderModel(id="cerebras/llama-3.1-8b", name="Llama 3.1 8B"),
+                        ProviderModel(
+                            id="cerebras/deepseek-r1-distill-llama-70b",
+                            name="DeepSeek R1 Distill 70B",
+                        ),
+                        ProviderModel(
+                            id="cerebras/qwen-2.5-coder-32b",
+                            name="Qwen 2.5 Coder 32B",
+                        ),
+                    ]
+
             else:
                 raise ProviderFetchError(f"Unsupported provider: {provider}")
 
@@ -396,6 +432,14 @@ CURATED_MODELS = {
         ProviderModel(id="zai/glm-4-air", name="GLM-4 Air"),
         ProviderModel(id="zai/glm-4-flash", name="GLM-4 Flash"),
     ],
+    "cerebras": [
+        ProviderModel(id="cerebras/llama-3.3-70b", name="Llama 3.3 70B"),
+        ProviderModel(id="cerebras/llama-3.1-8b", name="Llama 3.1 8B"),
+        ProviderModel(
+            id="cerebras/deepseek-r1-distill-llama-70b",
+            name="DeepSeek R1 Distill 70B",
+        ),
+    ],
 }
 
 PROVIDER_LABELS = {
@@ -410,6 +454,7 @@ PROVIDER_LABELS = {
     "ollama": "Ollama Local",
     "nvidia": "Nvidia NIM",
     "zai": "Z.AI (GLM)",
+    "cerebras": "Cerebras AI",
 }
 
 

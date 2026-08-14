@@ -196,6 +196,22 @@ const NATIVE_PRESETS: NativePreset[] = [
     description:
       "Modelos GLM oficiales de Z.AI / Zhipu AI para chat y razonamiento avanzado.",
   },
+  {
+    id: "cerebras",
+    name: "Cerebras AI",
+    icon: "⚡",
+    color: "text-amber-400",
+    keyLabel: "CEREBRAS_API_KEY",
+    keyPlaceholder: "csk-...",
+    defaultModels: [
+      "llama-3.3-70b",
+      "llama-3.1-70b",
+      "llama-3.1-8b",
+      "deepseek-r1-distill-llama-70b",
+    ],
+    description:
+      "Inferencia de velocidad extrema basada en Wafer-Scale Engine para Llama y DeepSeek R1.",
+  },
 ];
 
 // ─────────────────────────────────────────────
