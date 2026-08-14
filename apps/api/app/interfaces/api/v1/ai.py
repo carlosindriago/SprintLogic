@@ -89,6 +89,7 @@ class APIKeysPayload(BaseModel):
     opencode_zen_key: str | None = None
     opencode_go_key: str | None = None
     nvidia_key: str | None = None
+    zai_key: str | None = None
 
 
 class CodeCoachRequest(BaseModel):
@@ -191,6 +192,7 @@ async def get_active_models(payload: APIKeysPayload):
         "opencode-zen": payload.opencode_zen_key,
         "opencode-go": payload.opencode_go_key,
         "nvidia": payload.nvidia_key,
+        "zai": payload.zai_key,
     }
 
     for provider, fallback_models in CURATED_MODELS.items():

@@ -244,6 +244,37 @@ async def fetch_provider_models(
                     )
                     for m in data.get("data", [])
                 ]
+            elif provider in ("zai", "z-ai"):
+                headers["Authorization"] = f"Bearer {api_key}"
+                headers["Accept-Language"] = "en-US,en"
+                try:
+                    res = await client.get(
+                        "https://api.z.ai/api/paas/v4/models", headers=headers
+                    )
+                    if res.status_code == 200:
+                        data = res.json()
+                        models = [
+                            ProviderModel(
+                                id=f"zai/{m.get('id', m.get('name'))}"
+                                if not str(m.get("id", "")).startswith("zai/")
+                                else str(m.get("id")),
+                                name=str(m.get("id", m.get("name"))),
+                            )
+                            for m in data.get("data", data.get("models", []))
+                            if m.get("id") or m.get("name")
+                        ]
+                except Exception:
+                    pass
+
+                if not models:
+                    models = [
+                        ProviderModel(id="zai/glm-5.2", name="GLM-5.2"),
+                        ProviderModel(id="zai/glm-4-plus", name="GLM-4 Plus"),
+                        ProviderModel(id="zai/glm-4-air", name="GLM-4 Air"),
+                        ProviderModel(id="zai/glm-4-flash", name="GLM-4 Flash"),
+                        ProviderModel(id="zai/glm-4-long", name="GLM-4 Long"),
+                        ProviderModel(id="zai/glm-4v-plus", name="GLM-4V Plus"),
+                    ]
 
             else:
                 raise ProviderFetchError(f"Unsupported provider: {provider}")
@@ -359,6 +390,12 @@ CURATED_MODELS = {
             id="nvidia_nim/nvidia/nemotron-4-340b-instruct", name="Nemotron 4 340B (NIM)"
         ),
     ],
+    "zai": [
+        ProviderModel(id="zai/glm-5.2", name="GLM-5.2"),
+        ProviderModel(id="zai/glm-4-plus", name="GLM-4 Plus"),
+        ProviderModel(id="zai/glm-4-air", name="GLM-4 Air"),
+        ProviderModel(id="zai/glm-4-flash", name="GLM-4 Flash"),
+    ],
 }
 
 PROVIDER_LABELS = {
@@ -372,6 +409,7 @@ PROVIDER_LABELS = {
     "ollama_cloud": "Ollama Cloud",
     "ollama": "Ollama Local",
     "nvidia": "Nvidia NIM",
+    "zai": "Z.AI (GLM)",
 }
 
 

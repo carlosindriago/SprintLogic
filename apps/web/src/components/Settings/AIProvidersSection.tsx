@@ -185,6 +185,17 @@ const NATIVE_PRESETS: NativePreset[] = [
     description:
       "Potencia el Autocompletado Predictivo (FIM). Groq ofrece inferencia de ultra-baja latencia, ideal para sugerencias en tiempo real.",
   },
+  {
+    id: "zai",
+    name: "Z.AI (GLM)",
+    icon: "🧠",
+    color: "text-rose-400",
+    keyLabel: "ZAI_API_KEY",
+    keyPlaceholder: "Bearer token o API Key...",
+    defaultModels: ["glm-5.2", "glm-4-plus", "glm-4-air", "glm-4-flash"],
+    description:
+      "Modelos GLM oficiales de Z.AI / Zhipu AI para chat y razonamiento avanzado.",
+  },
 ];
 
 // ─────────────────────────────────────────────
