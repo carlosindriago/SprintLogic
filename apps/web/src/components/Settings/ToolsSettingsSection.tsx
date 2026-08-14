@@ -13,11 +13,15 @@ import {
   deleteToolModel,
   ToolModelEntry,
   GlobalDefaultEntry,
+  fetchModelHealthMetrics,
+  ModelHealthMetric,
 } from "@/lib/api";
+import { ModelHealthBadge } from "@/components/ModelHealthBadge";
 
 export default function ToolsSettingsSection() {
   const [toolModels, setToolModels] = useState<ToolModelEntry[]>([]);
   const [providers, setProviders] = useState<CuratedProvider[]>([]);
+  const [healthMetrics, setHealthMetrics] = useState<Record<string, ModelHealthMetric>>({});
   const [globalDefault, setGlobalDefault] = useState<GlobalDefaultEntry | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
@@ -35,19 +39,39 @@ export default function ToolsSettingsSection() {
     [providers]
   );
 
+  const getMetricForModel = (providerId?: string | null, modelId?: string | null) => {
+    if (!modelId) return null;
+    return (
+      healthMetrics[modelId] ||
+      healthMetrics[`${providerId}/${modelId}`] ||
+      healthMetrics[modelId.replace(/^[^\/]+\//, "")] ||
+      null
+    );
+  };
+
   useEffect(() => {
     let cancelled = false;
     const doLoad = async () => {
       setLoading(true);
       try {
-        const [data, provs] = await Promise.all([
+        const [data, provs, health] = await Promise.all([
           fetchToolModels(),
           getCuratedModels(),
+          fetchModelHealthMetrics().catch(() => [] as ModelHealthMetric[]),
         ]);
         if (cancelled) return;
         setToolModels(data.tools ?? []);
         setGlobalDefault(data.global_default ?? null);
         setProviders(provs);
+
+        const hMap: Record<string, ModelHealthMetric> = {};
+        for (const h of health) {
+          hMap[h.model_id] = h;
+          if (h.provider) {
+            hMap[`${h.provider}/${h.model_id}`] = h;
+          }
+        }
+        setHealthMetrics(hMap);
       } catch {
         toast.error("Failed to load tool models");
       } finally {
@@ -200,6 +224,7 @@ export default function ToolsSettingsSection() {
                   <h3 className="text-sm font-medium text-white">
                     Modelo Global por Defecto
                   </h3>
+                  <ModelHealthBadge metric={getMetricForModel(globalDefault.provider, globalDefault.model)} />
                   {globalDefault.is_overridden && (
                     <Badge variant="outline" className="text-[10px] border-blue-500/30 text-blue-400 bg-blue-500/10 shrink-0">
                       personalizado
@@ -254,10 +279,16 @@ export default function ToolsSettingsSection() {
                   )}
                   {allModels.map((m) => {
                     const val = `${m.provider_id}/${m.id}`;
+                    const metric = getMetricForModel(m.provider_id, m.id);
                     return (
                       <SelectItem key={val} value={val} className="cursor-pointer py-2">
-                        {m.name}{" "}
-                        <span className="text-zinc-500 text-xs ml-1">({m.provider})</span>
+                        <div className="flex items-center justify-between gap-4 w-full">
+                          <span>
+                            {m.name}{" "}
+                            <span className="text-zinc-500 text-xs ml-1">({m.provider})</span>
+                          </span>
+                          <ModelHealthBadge metric={metric} />
+                        </div>
                       </SelectItem>
                     );
                   })}
@@ -273,6 +304,7 @@ export default function ToolsSettingsSection() {
             ? `${tool.provider_id}/${tool.model_name}`
             : "__default__";
           const isBusy = saving === tool.tool_name;
+          const currentMetric = getMetricForModel(tool.effective_provider, tool.effective_model);
 
           return (
             <div
@@ -288,6 +320,7 @@ export default function ToolsSettingsSection() {
                     <h3 className="text-sm font-medium text-white">
                       {tool.display_name}
                     </h3>
+                    <ModelHealthBadge metric={currentMetric} />
                     {tool.is_overridden && (
                       <Badge
                         variant="outline"
@@ -326,7 +359,7 @@ export default function ToolsSettingsSection() {
                       </span>
                     ) : (
                       <span className="text-zinc-400 truncate">
-                        Predeterminado ({tool.default_provider}/{tool.default_model})
+                        Default — {tool.effective_provider}/{tool.effective_model}
                       </span>
                     )}
                   </SelectTrigger>
@@ -335,20 +368,26 @@ export default function ToolsSettingsSection() {
                       value="__default__"
                       className="cursor-pointer py-2 text-zinc-400"
                     >
-                      Predeterminado ({tool.default_provider}/{tool.default_model})
+                      Usar modelo por defecto ({tool.default_provider}/{tool.default_model})
                     </SelectItem>
                     {allModels.map((m) => {
                       const val = `${m.provider_id}/${m.id}`;
+                      const metric = getMetricForModel(m.provider_id, m.id);
                       return (
                         <SelectItem
                           key={val}
                           value={val}
                           className="cursor-pointer py-2"
                         >
-                          {m.name}{" "}
-                          <span className="text-zinc-500 text-xs ml-1">
-                            ({m.provider})
-                          </span>
+                          <div className="flex items-center justify-between gap-4 w-full">
+                            <span>
+                              {m.name}{" "}
+                              <span className="text-zinc-500 text-xs ml-1">
+                                ({m.provider})
+                              </span>
+                            </span>
+                            <ModelHealthBadge metric={metric} />
+                          </div>
                         </SelectItem>
                       );
                     })}

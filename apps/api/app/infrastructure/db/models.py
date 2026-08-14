@@ -3,7 +3,18 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, LargeBinary, String, Text
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    LargeBinary,
+    String,
+    Text,
+)
 from sqlalchemy import Enum as SQLAlchemyEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -212,7 +223,6 @@ class AnalysisReportModel(Base):
     )
 
 
-from sqlalchemy import BigInteger
 
 
 class SearchIndexModel(Base):
@@ -409,3 +419,23 @@ class UniversalBookmarkModel(Base):
     end_line: Mapped[int | None] = mapped_column(Integer, nullable=True)
     item_type: Mapped[str] = mapped_column(String(50), nullable=False, default="document")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+class ModelHealthMetricModel(Base):
+    __tablename__ = "model_health_metrics"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    model_id: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
+    provider: Mapped[str] = mapped_column(String(100), nullable=False)
+    total_calls: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    success_calls: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    failed_calls: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    timeout_calls: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    total_latency_ms: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    avg_latency_ms: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    last_latency_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    last_status: Mapped[str] = mapped_column(String(50), nullable=False, default="untested")
+    last_called_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+

@@ -461,3 +461,26 @@ async def remove_tool_model_mapping(
     await session.commit()
     return {"status": "deleted", "tool_name": tool_name}
 
+
+@router.get("/model-health")
+async def get_model_health_metrics(
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Return health and reliability metrics for all tracked AI models."""
+    from app.infrastructure.ai.model_health_tracker import ModelHealthTracker
+
+    return await ModelHealthTracker.get_all_metrics(session)
+
+
+@router.delete("/model-health/{model_id:path}")
+async def reset_model_health_metrics(
+    model_id: str,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Reset health metrics for a specific AI model."""
+    from app.infrastructure.ai.model_health_tracker import ModelHealthTracker
+
+    deleted = await ModelHealthTracker.delete_metric(session, model_id)
+    return {"status": "deleted" if deleted else "not_found", "model_id": model_id}
+
+

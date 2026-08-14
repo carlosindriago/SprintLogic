@@ -117,13 +117,18 @@ async def process_planning_message(req: Request, request: PlanningRequest):
                 logging.debug("Could not adapt fallback model %s: %s", fb_model, adapt_err)
 
     MAX_RETRIES_PER_CANDIDATE = 2
+    import time
+
+    from app.infrastructure.ai.model_health_tracker import ModelHealthTracker
 
     async def generate() -> AsyncGenerator[str, None]:
         last_error = None
         for i, candidate in enumerate(candidates):
+            cand_provider = ProviderAdapter.get_provider(candidate["model"])
             for attempt in range(1, MAX_RETRIES_PER_CANDIDATE + 1):
                 has_yielded = False
                 timeout = 15 if attempt == 1 else 20
+                t0 = time.perf_counter()
                 try:
                     if i > 0 or attempt > 1:
                         logging.info(
@@ -185,11 +190,29 @@ async def process_planning_message(req: Request, request: PlanningRequest):
                         calls_list = list(tool_calls_buffer.values())
                         yield f"data: {json.dumps({'tool_calls': calls_list, 'is_done': False})}\n\n"
 
+                    latency_ms = int((time.perf_counter() - t0) * 1000)
+                    ModelHealthTracker.record_call_background(
+                        model_id=candidate["model"],
+                        provider=cand_provider,
+                        latency_ms=latency_ms,
+                        success=True,
+                    )
+
                     yield f"data: {json.dumps({'is_done': True})}\n\n"
                     return
 
                 except Exception as e:
                     last_error = e
+                    latency_ms = int((time.perf_counter() - t0) * 1000)
+                    is_timeout = "timeout" in str(e).lower() or "socket" in str(e).lower()
+                    ModelHealthTracker.record_call_background(
+                        model_id=candidate["model"],
+                        provider=cand_provider,
+                        latency_ms=latency_ms,
+                        success=False,
+                        error=str(e),
+                        is_timeout=is_timeout,
+                    )
                     logging.warning(
                         "Planning streaming candidate %d (%s) attempt %d failed: %s",
                         i,
@@ -204,6 +227,7 @@ async def process_planning_message(req: Request, request: PlanningRequest):
 
         if last_error:
             yield f"data: {json.dumps({'error': str(last_error), 'is_done': True})}\n\n"
+
 
     return StreamingResponse(generate(), media_type="text/event-stream")
 

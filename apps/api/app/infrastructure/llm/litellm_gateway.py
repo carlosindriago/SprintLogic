@@ -58,7 +58,13 @@ class LiteLLMGateway:
     ) -> str:
         prompt += self._build_language_clause(lang_code)
         adapted = self._get_adapted_params()
+        from app.infrastructure.ai.model_health_tracker import ModelHealthTracker
+        from app.infrastructure.ai.provider_adapter import ProviderAdapter
 
+        provider = ProviderAdapter.get_provider(self.model_name)
+        import time
+
+        t0 = time.perf_counter()
         try:
             response = await acompletion(
                 model=adapted["model"],
@@ -69,8 +75,25 @@ class LiteLLMGateway:
                 timeout=120,
                 **adapted.get("kwargs", {}),
             )
+            latency_ms = int((time.perf_counter() - t0) * 1000)
+            ModelHealthTracker.record_call_background(
+                model_id=self.model_name,
+                provider=provider,
+                latency_ms=latency_ms,
+                success=True,
+            )
             return response.choices[0].message.content or ""
         except Exception as e:
+            latency_ms = int((time.perf_counter() - t0) * 1000)
+            is_timeout = "timeout" in str(e).lower() or "socket" in str(e).lower()
+            ModelHealthTracker.record_call_background(
+                model_id=self.model_name,
+                provider=provider,
+                latency_ms=latency_ms,
+                success=False,
+                error=str(e),
+                is_timeout=is_timeout,
+            )
             logger.debug("Unhandled exception: %s", e, exc_info=True)
             # Propagate specific exceptions to the router so it can return 429/401 instead of 500
             error_msg = str(e)
@@ -83,6 +106,7 @@ class LiteLLMGateway:
                 )
             elif "AuthenticationError" in error_msg:
                 from fastapi import HTTPException
+
 
                 raise HTTPException(
                     status_code=401,

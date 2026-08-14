@@ -395,6 +395,26 @@ export const updateToolModel = (toolName: string, providerId: string, modelName:
 export const deleteToolModel = (toolName: string) =>
   api.delete<{ status: string; tool_name: string }>(`/settings/tool-models/${toolName}`);
 
+export interface ModelHealthMetric {
+  model_id: string;
+  provider: string;
+  total_calls: number;
+  success_calls: number;
+  failed_calls: number;
+  timeout_calls: number;
+  success_rate: number;
+  avg_latency_ms: number;
+  last_latency_ms: number;
+  last_error: string | null;
+  status: 'healthy' | 'degraded' | 'failing' | 'untested';
+  last_called_at: string | null;
+}
+
+export const fetchModelHealthMetrics = () => api.get<ModelHealthMetric[]>('/settings/model-health');
+export const resetModelHealthMetric = (modelId: string) =>
+  api.delete<{ status: string; model_id: string }>(`/settings/model-health/${encodeURIComponent(modelId)}`);
+
+
 // --- AI / Analysis ---
 export const getGlobalFlowInsights = () => api.get<ProjectFlowInsights>('/insights/flow');
 export const getProjectFlowInsights = (projectId: string) => api.get<ProjectFlowInsights>(`/projects/${projectId}/insights/flow`);

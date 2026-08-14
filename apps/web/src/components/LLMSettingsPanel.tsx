@@ -26,7 +26,10 @@ import {
   updateToolModel,
   deleteToolModel,
   ToolModelEntry,
+  fetchModelHealthMetrics,
+  ModelHealthMetric,
 } from "@/lib/api";
+import { ModelHealthBadge } from "@/components/ModelHealthBadge";
 import { useLLMConfigStore } from "@/store/llmConfigStore";
 import { useFimStore } from "@/store/fimStore";
 import { Switch } from "@/components/ui/switch";
@@ -754,6 +757,7 @@ function AnalysisConfigSection({ providers }: { providers: CuratedProvider[] }) 
 
 function ToolModelsSection({ providers }: { providers: CuratedProvider[] }) {
   const [toolModels, setToolModels] = useState<ToolModelEntry[]>([]);
+  const [healthMetrics, setHealthMetrics] = useState<Record<string, ModelHealthMetric>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
 
@@ -769,14 +773,39 @@ function ToolModelsSection({ providers }: { providers: CuratedProvider[] }) {
     [providers]
   );
 
+  const getMetricForModel = useCallback(
+    (providerId?: string | null, modelId?: string | null) => {
+      if (!modelId) return null;
+      return (
+        healthMetrics[modelId] ||
+        healthMetrics[`${providerId}/${modelId}`] ||
+        healthMetrics[modelId.replace(/^[^\/]+\//, "")] ||
+        null
+      );
+    },
+    [healthMetrics]
+  );
+
   useEffect(() => {
     let cancelled = false;
     const doLoad = async () => {
       setLoading(true);
       try {
-        const data = await fetchToolModels();
+        const [data, health] = await Promise.all([
+          fetchToolModels(),
+          fetchModelHealthMetrics().catch(() => [] as ModelHealthMetric[]),
+        ]);
         if (cancelled) return;
         setToolModels(data.tools ?? []);
+
+        const hMap: Record<string, ModelHealthMetric> = {};
+        for (const h of health) {
+          hMap[h.model_id] = h;
+          if (h.provider) {
+            hMap[`${h.provider}/${h.model_id}`] = h;
+          }
+        }
+        setHealthMetrics(hMap);
       } catch {
         toast.error("Failed to load tool model mappings");
       } finally {
@@ -865,6 +894,7 @@ function ToolModelsSection({ providers }: { providers: CuratedProvider[] }) {
           ? `${tool.provider_id}/${tool.model_name}`
           : "__default__";
         const isBusy = saving === tool.tool_name;
+        const currentMetric = getMetricForModel(tool.effective_provider, tool.effective_model);
 
         return (
           <div
@@ -876,11 +906,14 @@ function ToolModelsSection({ providers }: { providers: CuratedProvider[] }) {
                 <span className="text-sm font-medium text-zinc-200">{tool.display_name}</span>
                 <span className="text-xs text-zinc-500">{tool.description}</span>
               </div>
-              {tool.is_overridden && (
-                <Badge variant="outline" className="text-[10px] border-blue-500/30 text-blue-400 bg-blue-500/10">
-                  personalizado
-                </Badge>
-              )}
+              <div className="flex items-center gap-2">
+                <ModelHealthBadge metric={currentMetric} />
+                {tool.is_overridden && (
+                  <Badge variant="outline" className="text-[10px] border-blue-500/30 text-blue-400 bg-blue-500/10">
+                    personalizado
+                  </Badge>
+                )}
+              </div>
             </div>
 
             <div className="flex items-center gap-3 mt-1">
@@ -902,13 +935,13 @@ function ToolModelsSection({ providers }: { providers: CuratedProvider[] }) {
                     {isBusy ? (
                       "Guardando..."
                     ) : tool.is_overridden ? (
-                      <span>
+                      <span className="flex items-center gap-2">
                         <span className="text-blue-400">{tool.effective_provider}</span>
-                        <span className="text-zinc-500 mx-1">/</span>
+                        <span className="text-zinc-500">/</span>
                         <span className="text-zinc-300">{tool.effective_model}</span>
                       </span>
                     ) : (
-                      <span>
+                      <span className="flex items-center gap-2">
                         <span className="text-zinc-500">Default — </span>
                         <span className="text-zinc-400">{tool.effective_provider}/{tool.effective_model}</span>
                       </span>
@@ -921,14 +954,20 @@ function ToolModelsSection({ providers }: { providers: CuratedProvider[] }) {
                   </SelectItem>
                   {allModels.map((m) => {
                     const val = `${m.provider_id}/${m.id}`;
+                    const metric = getMetricForModel(m.provider_id, m.id);
                     return (
                       <SelectItem
                         key={val}
                         value={val}
                         className="focus:bg-zinc-800 focus:text-zinc-100 cursor-pointer py-2"
                       >
-                        {m.name}{" "}
-                        <span className="text-zinc-500 text-xs ml-1">({m.provider})</span>
+                        <div className="flex items-center justify-between gap-4 w-full">
+                          <span>
+                            {m.name}{" "}
+                            <span className="text-zinc-500 text-xs ml-1">({m.provider})</span>
+                          </span>
+                          <ModelHealthBadge metric={metric} />
+                        </div>
                       </SelectItem>
                     );
                   })}
