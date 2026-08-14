@@ -1,5 +1,8 @@
+import time
+
 import litellm
 
+from app.infrastructure.ai.model_health_tracker import ModelHealthTracker
 from app.infrastructure.ai.provider_adapter import ProviderAdapter
 from app.infrastructure.security.credential_manager import CredentialManager
 
@@ -62,9 +65,9 @@ class LiteLLMGateway:
 
         last_error = None
         for current_model in models_to_try:
+            t0 = time.perf_counter()
+            provider, api_key, base_url = self._resolve_key(current_model)
             try:
-                provider, api_key, base_url = self._resolve_key(current_model)
-
                 # If no specific key is found for openrouter, it might be in the environment, or we just pass None and let litellm handle it if using ollama local
                 if (
                     not api_key
@@ -87,8 +90,26 @@ class LiteLLMGateway:
                     **call_kwargs,
                 )
 
+                latency_ms = int((time.perf_counter() - t0) * 1000)
+                ModelHealthTracker.record_call_background(
+                    model_id=current_model,
+                    provider=provider,
+                    latency_ms=latency_ms,
+                    success=True,
+                )
+
                 return str(response.choices[0].message.content)
             except Exception as e:
+                latency_ms = int((time.perf_counter() - t0) * 1000)
+                is_timeout = "timeout" in str(e).lower() or "socket" in str(e).lower()
+                ModelHealthTracker.record_call_background(
+                    model_id=current_model,
+                    provider=provider,
+                    latency_ms=latency_ms,
+                    success=False,
+                    error=str(e),
+                    is_timeout=is_timeout,
+                )
                 import logging
 
                 logging.getLogger(__name__).warning(
@@ -125,9 +146,9 @@ class LiteLLMGateway:
 
         last_error = None
         for current_model in models_to_try:
+            t0 = time.perf_counter()
+            provider, api_key, base_url = self._resolve_key(current_model)
             try:
-                provider, api_key, base_url = self._resolve_key(current_model)
-
                 if (
                     not api_key
                     and provider != "openrouter"
@@ -149,8 +170,26 @@ class LiteLLMGateway:
                     **call_kwargs,
                 )
 
+                latency_ms = int((time.perf_counter() - t0) * 1000)
+                ModelHealthTracker.record_call_background(
+                    model_id=current_model,
+                    provider=provider,
+                    latency_ms=latency_ms,
+                    success=True,
+                )
+
                 return str(response.choices[0].message.content)
             except Exception as e:
+                latency_ms = int((time.perf_counter() - t0) * 1000)
+                is_timeout = "timeout" in str(e).lower() or "socket" in str(e).lower()
+                ModelHealthTracker.record_call_background(
+                    model_id=current_model,
+                    provider=provider,
+                    latency_ms=latency_ms,
+                    success=False,
+                    error=str(e),
+                    is_timeout=is_timeout,
+                )
                 import logging
 
                 logging.getLogger(__name__).warning(
