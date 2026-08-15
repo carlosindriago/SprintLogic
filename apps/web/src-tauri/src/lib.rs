@@ -105,18 +105,18 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(move |app_handle, event| {
-            // On app exit, kill the Python sidecar explicitly. Without this
-            // the uvicorn server (and its insight_worker asyncio loop) keeps
-            // running orphaned, leaking RAM and holding the port.
-            if let RunEvent::Exit = event {
-                let sidecar_state = app_handle.state::<SidecarChild>();
-                let mut guard = sidecar_state.0.lock().unwrap();
-                if let Some(mut child) = guard.take() {
-                    // Try graceful kill first (SIGTERM on Unix). Python's
-                    // lifespan() teardown closes insight_worker + process_pool.
-                    let _ = child.kill();
-                    let _ = child.wait();
+            // On app exit or exit requested, kill the Python sidecar explicitly.
+            // Without this the uvicorn server keeps running orphaned on Linux.
+            match event {
+                RunEvent::Exit | RunEvent::ExitRequested { .. } => {
+                    let sidecar_state = app_handle.state::<SidecarChild>();
+                    let mut guard = sidecar_state.0.lock().unwrap();
+                    if let Some(mut child) = guard.take() {
+                        let _ = child.kill();
+                        let _ = child.wait();
+                    }
                 }
+                _ => {}
             }
         });
 }

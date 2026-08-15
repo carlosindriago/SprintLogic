@@ -85,66 +85,61 @@ then
     fi
 fi
 
-# 2. Port cleanup -----------------------------------------------------------
+# 2. Cleanup stray and orphaned processes -----------------------------------
 
-echo -e "\nChecking if port 8000 is free..."
+echo -e "\nChecking for stray or orphaned SprintLogic processes..."
+pkill -f "target/debug/app" 2>/dev/null || true
+pkill -f "apps/web/.next/dev/build/postcss.js" 2>/dev/null || true
+
 if fuser 8000/tcp >/dev/null 2>&1; then
     echo "[!] Port 8000 is occupied. Cleaning it up..."
     fuser -k -9 8000/tcp >/dev/null 2>&1 || true
     sleep 1
 fi
 
-echo -e "\nChecking if port 3420 is free..."
 if fuser 3420/tcp >/dev/null 2>&1; then
     echo "[!] Port 3420 is occupied. Cleaning it up..."
     fuser -k -9 3420/tcp >/dev/null 2>&1 || true
     sleep 1
 fi
 
-# 3. Start Backend -----------------------------------------------------------
+# 3. Start Application -------------------------------------------------------
 
-echo -e "\nStarting SprintLogic Backend (FastAPI)..."
-cd apps/api
-.venv/bin/uvicorn app.main:app --reload --port 8000 &
-BACKEND_PID=$!
-CHILD_PIDS+=("$BACKEND_PID")
-cd ../..
-echo "[start_dev] Backend PID: ${BACKEND_PID}"
-
-echo "[start_dev] Waiting for backend to start listening on port 8000..."
-while ! bash -c 'true < /dev/tcp/127.0.0.1/8000' 2>/dev/null; do
-    sleep 2
-done
-echo "[start_dev] Backend is up and listening on port 8000!"
-
-# 4. Start Frontend (in background so this script can own the lifecycle) ---
-
-cd apps/web
-if command -v cargo &> /dev/null
-then
-    echo "Starting SprintLogic Frontend (Tauri Desktop)..."
+if command -v cargo &> /dev/null && [[ "$1" != "--web" ]]; then
+    echo -e "\nStarting SprintLogic Desktop (Tauri manages backend sidecar)..."
+    cd apps/web
     npx @tauri-apps/cli dev &
     FRONTEND_PID=$!
+    CHILD_PIDS+=("$FRONTEND_PID")
+    cd ../..
+    echo "[start_dev] Desktop Tauri PID: ${FRONTEND_PID}"
 else
-    echo "Starting SprintLogic Frontend (Web Fallback)..."
+    echo -e "\nStarting SprintLogic Backend (FastAPI)..."
+    cd apps/api
+    .venv/bin/uvicorn app.main:app --reload --port 8000 &
+    BACKEND_PID=$!
+    CHILD_PIDS+=("$BACKEND_PID")
+    cd ../..
+    echo "[start_dev] Backend PID: ${BACKEND_PID}"
+
+    echo "[start_dev] Waiting for backend to start listening on port 8000..."
+    while ! bash -c 'true < /dev/tcp/127.0.0.1/8000' 2>/dev/null; do
+        sleep 1
+    done
+    echo "[start_dev] Backend is up and listening on port 8000!"
+
+    echo -e "\nStarting SprintLogic Frontend (Web Mode)..."
+    cd apps/web
     npm run dev &
     FRONTEND_PID=$!
+    CHILD_PIDS+=("$FRONTEND_PID")
+    cd ../..
+    echo "[start_dev] Frontend PID: ${FRONTEND_PID}"
 fi
-CHILD_PIDS+=("$FRONTEND_PID")
-cd ../..
-echo "[start_dev] Frontend PID: ${FRONTEND_PID}"
 
-# 5. Wait for both children. `wait` with multiple PIDs exits as soon as
-#    one of them terminates; we want to keep the script alive until the
-#    user kills it or one of the children dies.
+# 4. Wait for children -------------------------------------------------------
 echo
-echo "[start_dev] Both processes running. Press Ctrl+C to stop everything."
-echo "             Backend  (uvicorn):  PID ${BACKEND_PID}"
-echo "             Frontend (${FRONTEND_CMD:-web}): PID ${FRONTEND_PID}"
-
-# Block until either child exits (e.g. a crash) or the user hits Ctrl+C.
+echo "[start_dev] Processes running. Press Ctrl+C to stop everything cleanly."
 wait -n "${CHILD_PIDS[@]}" 2>/dev/null || true
 
-# If we reach here naturally (one of the children died), the EXIT trap
-# takes care of killing the rest.
-echo "[start_dev] A child process exited. Cleaning up the rest."
+echo "[start_dev] Process exited. Cleaning up the rest."
