@@ -82,6 +82,68 @@ export function escapeRegex(string: string): string {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+export function stripMarkdownFormatting(text: string): string {
+  return text
+    .replace(/[#*_\`~]/g, '')
+    .replace(/\[[ xX]\]/g, '')
+    .replace(/\[(?:Priority|Prioridad|Type|Tipo|Hours|Horas|Branch|Rama):[^\]]+\]/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+/**
+ * Extracts a structured plan snippet or proposed modification from an assistant chat reply.
+ */
+export function extractPlanSnippetFromReply(reply: string, targetSelection?: string | null): string {
+  const clean = reply.trim();
+  if (!clean) return '';
+
+  // 1. Check for code block ```markdown ... ``` or ``` ... ```
+  const codeBlockMatch = clean.match(/```(?:markdown|md)?\s*\n([\s\S]+?)(?:```|$)/i);
+  if (codeBlockMatch && codeBlockMatch[1].trim().length > 5) {
+    return codeBlockMatch[1].trim();
+  }
+
+  // 2. If the entire reply is markdown
+  if (clean.startsWith('#') || clean.startsWith('- [ ]') || clean.startsWith('  - [ ]')) {
+    return clean;
+  }
+
+  // 3. Extract any embedded task list or headings
+  const taskListMatch = clean.match(/((?:^|\n)(?:[-*]\s*\[[\sxX]?\]\s*|\#{1,4}\s+)[^\n]+[\s\S]*)/i);
+  if (taskListMatch && taskListMatch[1].trim().length > 10) {
+    const lines = taskListMatch[1].trim().split('\n');
+    const validLines: string[] = [];
+    for (const line of lines) {
+      if (/^(\s*[-*]\s*(\[[\sxX]?\])?|\s*#{1,4}\s+|>\s+|\s*\d+\.\s+)/.test(line) || (validLines.length > 0 && line.startsWith('  '))) {
+        validLines.push(line);
+      } else if (validLines.length > 0 && !line.trim()) {
+        validLines.push(line);
+      } else if (validLines.length > 0) {
+        break;
+      }
+    }
+    if (validLines.length > 0) {
+      return validLines.join('\n').trim();
+    }
+  }
+
+  // 4. If targetSelection is active, look for quoted proposals or text after colons
+  if (targetSelection && targetSelection.trim().length > 3) {
+    const afterColonMatch = clean.match(/(?:propuesta|redacción|versión|sugerencia|sería|ajuste|texto)[:\s]*\n*([^\n]+(?:\n\s*[-*][^\n]+)*)/i);
+    if (afterColonMatch && afterColonMatch[1].trim().length > 3) {
+      return afterColonMatch[1].trim();
+    }
+    const quotedMatch = clean.match(/["“]([^"”]{4,})["”]/);
+    if (quotedMatch) {
+      return quotedMatch[1].trim();
+    }
+  }
+
+  return '';
+}
+
 /**
  * Performs a smart, non-destructive merge of an AI-generated snippet into the current plan.
  */
@@ -134,6 +196,32 @@ export function smartMergeWbsPlan(
       const before = currentLines.slice(0, bestStart).join('\n');
       const after = currentLines.slice(bestEnd).join('\n');
       return `${before ? before + '\n' : ''}${cleanSnippet}${after ? '\n' + after : ''}`;
+    }
+
+    // 0.3 Stripped Markdown Fuzzy Line Search (for HTML selection without asterisks/checkboxes)
+    const strippedTarget = stripMarkdownFormatting(cleanTarget);
+    if (strippedTarget.length > 3) {
+      for (let i = 0; i < currentLines.length; i++) {
+        const lineStripped = stripMarkdownFormatting(currentLines[i]);
+        if (lineStripped.includes(strippedTarget) || strippedTarget.includes(lineStripped)) {
+          // If cleanSnippet is a full formatted task line, replace current line directly
+          if (cleanSnippet.startsWith('- [ ]') || cleanSnippet.startsWith('###') || cleanSnippet.startsWith('##')) {
+            currentLines[i] = cleanSnippet;
+            return currentLines.join('\n');
+          }
+
+          // If current line is a task, replace title part inside the task
+          const taskMatch = currentLines[i].match(/^(\s*[-*]\s*\[[ xX]?\]\s*\*\*)([^*]+)(\*\*.*)/);
+          if (taskMatch) {
+            currentLines[i] = `${taskMatch[1]}${cleanSnippet.replace(/\*\*/g, '')}${taskMatch[3]}`;
+            return currentLines.join('\n');
+          }
+
+          // Otherwise replace the line
+          currentLines[i] = cleanSnippet;
+          return currentLines.join('\n');
+        }
+      }
     }
   }
 

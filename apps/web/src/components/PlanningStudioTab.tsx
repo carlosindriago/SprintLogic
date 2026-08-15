@@ -21,7 +21,7 @@ import {
   PlanningVersion,
   WBSImportTicket,
 } from '../lib/api';
-import { smartMergeWbsPlan } from '../lib/wbsPlanMerger';
+import { smartMergeWbsPlan, extractPlanSnippetFromReply } from '../lib/wbsPlanMerger';
 import { Task } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -196,9 +196,17 @@ export function extractTicketsFromMarkdown(markdown: string): WBSImportTicket[] 
 
   const PlanningMessageItem = React.memo(function PlanningMessageItem({
     message,
+    onApplySnippet,
   }: {
     message: { role: string; content: string };
+    onApplySnippet?: (content: string) => void;
   }) {
+    const extracted = useMemo(() => {
+      if (message.role !== 'assistant') return null;
+      const snippet = extractPlanSnippetFromReply(message.content);
+      return snippet && snippet.length > 5 ? snippet : null;
+    }, [message.role, message.content]);
+
     return (
       <div className={`flex flex-col ${message.role === 'user' ? 'items-end' : 'items-start'}`}>
         <div
@@ -216,6 +224,17 @@ export function extractTicketsFromMarkdown(markdown: string): WBSImportTicket[] 
           }`}
         >
           <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+          {extracted && onApplySnippet && (
+            <div className="mt-2 pt-2 border-t border-zinc-800/80 flex items-center justify-end">
+              <button
+                type="button"
+                onClick={() => onApplySnippet(extracted)}
+                className="text-[10px] px-2 py-1 bg-emerald-950/60 hover:bg-emerald-900 border border-emerald-500/40 text-emerald-300 rounded-md flex items-center gap-1 font-medium shadow-sm transition-colors"
+              >
+                <Sparkles className="w-3 h-3 text-emerald-400" /> Aplicar al Espejo Mágico
+              </button>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -627,14 +646,8 @@ ${markdownContent || '// Plan vacío'}
         () => {}
       );
       const cleanReply = assistantReply.trim();
-      let extractedPlan = '';
-      const codeBlockMatch = cleanReply.match(/```(?:markdown|md)?\s*\n([\s\S]+?)(?:```|$)/i);
-      if (codeBlockMatch && codeBlockMatch[1].trim().length > 20) {
-        extractedPlan = codeBlockMatch[1].trim();
-      } else if (cleanReply.startsWith('#') && (cleanReply.includes('Épica') || cleanReply.includes('Sprint') || cleanReply.includes('- [ ]'))) {
-        extractedPlan = cleanReply;
-      }
-      if (extractedPlan && extractedPlan.length > 20) {
+      const extractedPlan = extractPlanSnippetFromReply(cleanReply, activeSelection);
+      if (extractedPlan && extractedPlan.length > 3) {
         const mergedPlan = smartMergeWbsPlan(markdownContent, extractedPlan, activeSelection);
         setMarkdownContent(mergedPlan);
         savePlanningDocument(activeProjectId, mergedPlan, activeSelection ? 'Actualización sobre selección' : 'Actualización por IA interna')
@@ -642,6 +655,7 @@ ${markdownContent || '// Plan vacío'}
             setDocData(doc);
             setSavedMarkdown(doc.markdown_content);
             getPlanningHistory(activeProjectId).then(setHistoryVersions);
+            toast.success('✨ Plan actualizado con éxito en el Espejo Mágico');
           })
           .catch((e) => console.warn('Could not auto-save AI plan:', e));
       }
@@ -651,6 +665,23 @@ ${markdownContent || '// Plan vacío'}
     } finally {
       setIsAiStreaming(false);
     }
+  };
+
+  const handleApplySnippet = (snippet: string) => {
+    if (!snippet || !activeProjectId) return;
+    const mergedPlan = smartMergeWbsPlan(markdownContent, snippet, selectedContextSnippet);
+    setMarkdownContent(mergedPlan);
+    savePlanningDocument(activeProjectId, mergedPlan, selectedContextSnippet ? 'Actualización sobre selección' : 'Actualización por IA interna')
+      .then((doc) => {
+        setDocData(doc);
+        setSavedMarkdown(doc.markdown_content);
+        getPlanningHistory(activeProjectId).then(setHistoryVersions);
+        toast.success('✨ Cambio aplicado en el Espejo Mágico');
+      })
+      .catch((e) => {
+        console.warn('Could not save plan:', e);
+        toast.error('Error al guardar el plan');
+      });
   };
 
   const customMarkdownComponents = useMemo(() => {
@@ -735,7 +766,7 @@ ${markdownContent || '// Plan vacío'}
               </div>
             )}
             {messages.map((m, idx) => (
-              <PlanningMessageItem key={idx} message={m} />
+              <PlanningMessageItem key={idx} message={m} onApplySnippet={handleApplySnippet} />
             ))}
             <div ref={messagesEndRef} />
           </div>
