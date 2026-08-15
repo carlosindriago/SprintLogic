@@ -846,9 +846,23 @@ ${markdownContent || '// Plan vacío'}
           </div>
           <div className="flex-1 overflow-y-auto p-4 space-y-4" ref={chatScrollAreaRef}>
             {messages.length === 0 && (
-              <div className="flex flex-col items-center justify-center p-6 text-center text-zinc-500 my-auto">
-                <Sparkles className="w-10 h-10 text-sky-400/40 mb-3" />
-                <h4 className="text-sm font-semibold text-zinc-300 mb-1">Planning Studio Asistente</h4>
+              <div className="flex flex-col items-center justify-center p-4 text-center text-zinc-500 my-auto space-y-3">
+                <div className="p-3 bg-sky-500/10 border border-sky-500/20 rounded-2xl text-sky-400 shadow-sm">
+                  <Sparkles className="w-6 h-6" />
+                </div>
+                <h4 className="text-sm font-semibold text-zinc-200">Agile Coach & Lead Architect</h4>
+                <p className="text-xs text-zinc-400 max-w-xs leading-relaxed">
+                  Pide nuevas épicas, sprints o mejoras arquitectónicas para tu plan vivo.
+                </p>
+                <div className="p-3 bg-gradient-to-br from-sky-950/40 to-purple-950/30 border border-sky-500/30 rounded-xl text-left text-xs text-zinc-300 space-y-1 shadow-sm">
+                  <div className="flex items-center gap-1.5 font-semibold text-sky-300 text-[11px]">
+                    <Highlighter className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                    <span>Edición Quirúrgica por Selección</span>
+                  </div>
+                  <p className="text-[11px] text-zinc-400 leading-relaxed">
+                    Seleccioná cualquier tarea o texto en el <span className="text-zinc-200 font-medium">Espejo Mágico</span> para que el Coach actúe exclusivamente sobre ese fragmento.
+                  </p>
+                </div>
               </div>
             )}
             {messages.map((m, idx) => (
@@ -927,6 +941,12 @@ ${markdownContent || '// Plan vacío'}
                   <button onClick={() => setViewMode('wbs_tree')} className={`text-xs px-3 py-1 rounded-md font-medium transition-colors ${viewMode === 'wbs_tree' ? 'bg-sky-600 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`}>Árbol WBS</button>
                   <button onClick={() => setViewMode('raw_editor')} className={`text-xs px-3 py-1 rounded-md font-medium transition-colors ${viewMode === 'raw_editor' ? 'bg-sky-600 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`}>Editor Markdown</button>
                 </div>
+                {viewMode === 'magic_mirror' && (
+                  <div className="hidden xl:flex items-center gap-1.5 text-[11px] text-sky-300 bg-sky-950/40 border border-sky-500/30 px-3 py-0.5 rounded-full shadow-sm">
+                    <Sparkles className="w-3 h-3 text-sky-400 shrink-0" />
+                    <span>Tip: Seleccioná cualquier texto del plan para enfocar la edición del Agile Coach</span>
+                  </div>
+                )}
                 <div className="flex items-center gap-3 text-xs text-zinc-400">
                   <span className="flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-emerald-500" /> Sincronizado con Sprint Center
