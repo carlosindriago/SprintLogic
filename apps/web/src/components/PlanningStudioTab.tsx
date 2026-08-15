@@ -541,27 +541,37 @@ export default function PlanningStudioTab() {
       let topologicalMap = await getProjectGraphMd(activeProjectId).catch(() => '');
       const megaPrompt = `# DIRECTIVA DE PLANIFICACIÓN ÁGIL (SPRINTLOGIC PLANNING STUDIO)
 
-Eres un Agile Coach y Tech Lead Senior. Analiza la topología del proyecto y el plan WBS actual para generar o expandir un plan estructurado Docs-as-Code.
+Eres un Agile Coach y Tech Lead Senior. Analiza la topología del proyecto y el 'Documento Vivo' de planificación para estructurar o expandir un plan estructurado Docs-as-Code.
 
 ## 1. Topología del Proyecto (Blast Radius & AST)
 \`\`\`markdown
 ${topologicalMap || '// Mapa de dependencias no disponible'}
 \`\`\`
 
-## 2. Plan WBS Actual (Documento Vivo)
+## 2. Documento Vivo Actual (Project Charter + WBS + Icebox)
 \`\`\`markdown
 ${markdownContent || '// Plan vacío'}
 \`\`\`
 
-## 3. Instrucciones de Salida
-1. Devuelve ÚNICAMENTE el bloque Markdown completo del plan actualizado.
-2. Mantén las épicas y tareas previas y añade nuevas fases/tareas según sea necesario.
-3. Utiliza la sintaxis estándar:
-   - \`# <Título>\`
-   - \`## 🎯 Épica <N>: <Nombre>\`
-   - \`### 🏃 Sprint <N> (<Objetivo>)\`
+## 3. Instrucciones y Directivas Obligatorias
+1. ESTRUCTURA OBLIGATORIA DEL DOCUMENTO:
+   - \`# 🎯 Project Charter y Planificación WBS\`
+   - \`## 1. Fundamentos del Proyecto\` (Objetivo Principal, Problema a Resolver, Alcance y Naturaleza, Stack Tecnológico Principal)
+   - \`## 2. Plan de Ejecución (WBS)\`
+   - \`## 🎯 Épica <N>: <Nombre de Épica>\`
+   - \`### 🏃 Sprint <N> (<Objetivo del Sprint>)\`
    - \`- [ ] **<Título de Tarea>** [Priority: High|Medium|Low] [Type: Feature|Refactor|Technical Debt|Security] [Hours: <N>h] [Branch: feat/...]\`
    - \`  - [ ] <Subtarea técnica>\`
+   - \`## 💡 3. Icebox (Backlog y Propuestas Futuras)\`
+   - \`- Idea: <ideas o propuestas que quedan fuera del alcance actual>\`
+
+2. GUARDIÁN DEL ALCANCE (SCOPE GUARDIAN):
+   - Revisa '1. Fundamentos del Proyecto' y úsalo como tu 'Estrella Polar'.
+   - Cualquier idea o funcionalidad que exceda el 'Alcance y Naturaleza' definido debe ser catalogada como Corrupción de Alcance (Scope Creep) y colocada obligatoriamente en la sección '3. Icebox' como viñeta simple (\`- Idea: ...\`) SIN checkboxes (\`- [ ]\`), evitando que el Smart Parser la envíe al Sprint Center prematuramente.
+
+3. PRESERVACIÓN INCREMENTAL (ZERO-DATA-LOSS):
+   - Conserva el Project Charter, épicas, sprints y tareas existentes.
+   - Devuelve ÚNICAMENTE el bloque Markdown completo del plan actualizado.
 `;
       let copied = false;
       try {
