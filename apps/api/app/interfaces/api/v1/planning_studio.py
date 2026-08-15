@@ -506,7 +506,7 @@ async def process_planning_message(req: Request, request: PlanningRequest):
             except Exception as adapt_err:
                 logging.debug("Could not adapt fallback model %s: %s", fb_model, adapt_err)
 
-    MAX_RETRIES_PER_CANDIDATE = 2
+    MAX_RETRIES_PER_CANDIDATE = 1
 
     async def generate() -> AsyncGenerator[str, None]:
         last_error = None
@@ -514,7 +514,7 @@ async def process_planning_message(req: Request, request: PlanningRequest):
             cand_provider = ProviderAdapter.get_provider(candidate["model"])
             for attempt in range(1, MAX_RETRIES_PER_CANDIDATE + 1):
                 has_yielded = False
-                timeout = 15 if attempt == 1 else 20
+                timeout = 6 if i == 0 else 12
                 t0 = time.perf_counter()
                 try:
                     if i > 0 or attempt > 1:
