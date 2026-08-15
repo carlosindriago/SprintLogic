@@ -935,21 +935,21 @@ ${markdownContent || '// Plan vacío'}
             </div>
           ) : (
             <div className="flex-1 min-w-0 flex flex-col overflow-hidden relative">
-              <div className="h-10 border-b border-zinc-800/80 bg-[#121216] px-4 flex items-center justify-between shrink-0">
-                <div className="flex items-center gap-1 bg-[#1a1a20] p-0.5 rounded-lg border border-zinc-800">
+              <div className="h-10 border-b border-zinc-800/80 bg-[#121216] px-4 flex items-center justify-between gap-2 shrink-0 overflow-hidden">
+                <div className="flex items-center gap-1 bg-[#1a1a20] p-0.5 rounded-lg border border-zinc-800 shrink-0">
                   <button onClick={() => setViewMode('magic_mirror')} className={`text-xs px-3 py-1 rounded-md font-medium transition-colors ${viewMode === 'magic_mirror' ? 'bg-sky-600 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`}>Espejo Mágico</button>
                   <button onClick={() => setViewMode('wbs_tree')} className={`text-xs px-3 py-1 rounded-md font-medium transition-colors ${viewMode === 'wbs_tree' ? 'bg-sky-600 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`}>Árbol WBS</button>
                   <button onClick={() => setViewMode('raw_editor')} className={`text-xs px-3 py-1 rounded-md font-medium transition-colors ${viewMode === 'raw_editor' ? 'bg-sky-600 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`}>Editor Markdown</button>
                 </div>
-                {viewMode === 'magic_mirror' && (
-                  <div className="hidden xl:flex items-center gap-1.5 text-[11px] text-sky-300 bg-sky-950/40 border border-sky-500/30 px-3 py-0.5 rounded-full shadow-sm">
+                {viewMode === 'magic_mirror' && !showHistoryDrawer && (
+                  <div className="hidden 2xl:flex items-center gap-1.5 text-[11px] text-sky-300 bg-sky-950/40 border border-sky-500/30 px-3 py-0.5 rounded-full shadow-sm whitespace-nowrap overflow-hidden text-ellipsis max-w-md">
                     <Sparkles className="w-3 h-3 text-sky-400 shrink-0" />
-                    <span>Tip: Seleccioná cualquier texto del plan para enfocar la edición del Agile Coach</span>
+                    <span className="truncate">Tip: Seleccioná cualquier texto del plan para enfocar la edición del Agile Coach</span>
                   </div>
                 )}
-                <div className="flex items-center gap-3 text-xs text-zinc-400">
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500" /> Sincronizado con Sprint Center
+                <div className="flex items-center gap-3 text-xs text-zinc-400 shrink-0">
+                  <span className="flex items-center gap-1.5 whitespace-nowrap">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" /> <span className="hidden md:inline">Sincronizado con Sprint Center</span>
                   </span>
                   <button
                     onClick={async () => {
