@@ -199,7 +199,7 @@ class SecurityToolchainManager:
                 for zip_member in z.infolist():
                     # Zip slip prevention
                     zip_member_path = (target_dir / zip_member.filename).resolve()
-                    if not str(zip_member_path).startswith(str(target_dir.resolve())):
+                    if not zip_member_path.is_relative_to(target_dir.resolve()):
                         continue
                     z.extract(zip_member, target_dir)
         elif url.endswith((".tar.gz", ".tgz")) or tarfile.is_tarfile(io.BytesIO(content)):
@@ -207,7 +207,7 @@ class SecurityToolchainManager:
                 for tar_member in t.getmembers():
                     # Tar slip prevention
                     tar_member_path = (target_dir / tar_member.name).resolve()
-                    if not str(tar_member_path).startswith(str(target_dir.resolve())):
+                    if not tar_member_path.is_relative_to(target_dir.resolve()):
                         continue
                     t.extract(tar_member, target_dir)
         else:
