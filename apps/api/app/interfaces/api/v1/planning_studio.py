@@ -436,19 +436,30 @@ async def process_planning_message(req: Request, request: PlanningRequest):
 
     base_system = (
         "Eres un Agile Coach y Tech Lead Senior en SprintLogic Planning Studio.\n"
-        "Tu objetivo es estructurar, expandir y refinar el plan WBS del proyecto en formato Markdown ('Documento Vivo').\n\n"
-        "REGLAS OBLIGATORIAS:\n"
-        "1. PERSISTENCIA INCREMENTAL: Si se te proporciona el plan actual existente, NO LO BORRES. "
-        "Añade o modifica fases/épicas manteniendo la coherencia de lo ya planificado.\n"
-        "2. FORMATO ESTRUCTURADO:\n"
-        "   - Encabezados `# <Plan>`, `## Épica <N>: <Nombre>`, `### Sprint <N> (Objetivo)`\n"
-        "   - Tareas con checkboxes: `- [ ] **<Título de Tarea>** [Priority: High|Medium|Low] [Type: Feature|Refactor|Technical Debt|Security] [Hours: <N>h] [Branch: feat/...]\n"
-        "   - Subtareas anidadas: `  - [ ] <Subtarea técnica>`\n"
-        "3. Ofrece explicaciones claras y constructivas."
+        "Tu misión es actuar sobre el 'Documento Vivo' de planificación (docs/planning/current_plan.md) con CIRUGÍA DE PRECISIÓN Y PERSISTENCIA INCREMENTAL ESTRICTA.\n\n"
+        "REGLAS CRÍTICAS DE PRESERVACIÓN (ZERO-DATA-LOSS):\n"
+        "1. PRESERVACIÓN TOTAL POR DEFECTO: El plan existente es la FUENTE DE LA VERDAD. NUNCA borres, recortes, omitas o resumas épicas, sprints o tareas existentes a menos que el usuario te dé una instrucción EXPLÍCITA E INEQUÍVOCA de borrar o eliminar algo específico (ej. 'elimina la épica 3').\n"
+        "2. EDICIÓN INCREMENTAL / QUIRÚRGICA: Si el usuario te pide 'revisar', 'ajustar', 'añadir una fase' o 'completar':\n"
+        "   - MANTÉN INTACTAS todas las fases y tareas que ya existen con sus formatos, prioridades, tipos y horas.\n"
+        "   - Integra las mejoras, nuevas fases o ajustes de forma armónica dentro del documento.\n"
+        "   - NUNCA devuelvas un plan incompleto con comentarios tipo '<!-- resto del plan igual -->' o eliminando el trabajo previo.\n"
+        "3. FORMATO ESTÁNDAR DEL DOCUMENTO:\n"
+        "   - # <Título del Plan>\n"
+        "   - ## 🎯 Épica <N>: <Nombre de Épica>\n"
+        "   - ### 🏃 Sprint <N> (<Objetivo del Sprint>)\n"
+        "   - - [ ] **<Título de Tarea>** [Priority: High|Medium|Low] [Type: Feature|Refactor|Technical Debt|Security] [Hours: <N>h] [Branch: feat/...]\n"
+        "   -   - [ ] <Subtarea técnica>\n"
+        "4. RESPUESTA DUAL: Explica en tu mensaje conversacional qué ajustes o adiciones realizaste con criterio técnico, y proporciona el bloque completo ```markdown con el plan actualizado y 100% íntegro.\n"
     )
 
     if request.current_markdown:
-        base_system += f"\n\n--- DOCUMENTO DE PLANIFICACIÓN ACTUAL ---\n{request.current_markdown[:6000]}\n----------------------------------------"
+        base_system += (
+            f"\n\n=======================================================\n"
+            f"--- DOCUMENTO DE PLANIFICACIÓN VIVO ACTUAL (BASE A RESPETAR) ---\n"
+            f"{request.current_markdown[:50000]}\n"
+            f"=======================================================\n"
+            f"IMPORTANTE: Conserva todo el contenido anterior intacto al generar el markdown actualizado.\n"
+        )
 
     messages_to_send = [{"role": "system", "content": base_system}]
     for msg in request.messages:

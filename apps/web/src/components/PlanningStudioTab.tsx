@@ -629,8 +629,8 @@ ${markdownContent || '// Plan vacío'}
           </div>
           <div className="p-3 border-t border-zinc-800 bg-[#141418] shrink-0">
             <form onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }} className="flex items-center gap-2">
-              <Input placeholder="Pide una nueva fase..." value={inputValue} onChange={(e) => setInputValue(e.target.value)} disabled={isAiStreaming} className="bg-[#1b1b22] border-zinc-700 text-xs" />
-              <Button type="submit" size="sm" disabled={isAiStreaming} className="bg-sky-600 text-white"><Send className="w-4 h-4" /></Button>
+              <Input placeholder="Pide una nueva fase, épica o refactor..." value={inputValue} onChange={(e) => setInputValue(e.target.value)} disabled={isAiStreaming} className="bg-[#1b1b22] border-zinc-700 text-xs" />
+              <Button type="submit" size="sm" disabled={isAiStreaming || !inputValue.trim()} className="bg-sky-600 text-white"><Send className="w-4 h-4" /></Button>
             </form>
           </div>
         </div>
@@ -639,61 +639,291 @@ ${markdownContent || '// Plan vacío'}
           {selectedVersion ? (
             <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
               <div className="h-12 border-b border-zinc-800 bg-[#16161b] px-4 flex items-center justify-between shrink-0">
-                <span className="text-xs font-bold text-amber-300">Comparando Versión v{selectedVersion.version}</span>
-                <Button size="sm" variant="outline" onClick={() => setSelectedVersion(null)} className="text-xs text-zinc-300"><X className="w-3.5 h-3.5" /> Cerrar</Button>
+                <div className="flex items-center gap-3">
+                  <div className="p-1.5 bg-amber-500/15 border border-amber-500/30 rounded text-amber-400">
+                    <History className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-amber-300">
+                      Comparando Versión v{selectedVersion.version}
+                    </span>
+                    <span className="text-[11px] text-zinc-400 ml-2">
+                      ({formatRelativeTime(selectedVersion.created_at)} • {formatAbsoluteLocalTime(selectedVersion.created_at)})
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setSelectedVersion(null)}
+                    className="text-xs border-zinc-700 hover:bg-zinc-800 text-zinc-300 gap-1"
+                  >
+                    <X className="w-3.5 h-3.5" /> Cerrar Diff
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => handleRestoreVersion(selectedVersion)}
+                    disabled={isRestoring}
+                    className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold gap-1.5 shadow-md shadow-amber-900/20"
+                  >
+                    {isRestoring ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+                    Restaurar esta Versión
+                  </Button>
+                </div>
               </div>
-              <DiffEditor height="100%" language="markdown" theme="vs-dark" original={selectedVersion.markdown_content} modified={markdownContent} options={{ readOnly: true }} />
+              <DiffEditor
+                height="100%"
+                language="markdown"
+                theme="vs-dark"
+                original={selectedVersion.markdown_content}
+                modified={markdownContent}
+                options={{
+                  readOnly: true,
+                  renderSideBySide: true,
+                  minimap: { enabled: false },
+                  scrollBeyondLastLine: false,
+                  fontSize: 13,
+                  wordWrap: 'on',
+                }}
+              />
             </div>
           ) : (
             <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
               <div className="h-10 border-b border-zinc-800/80 bg-[#121216] px-4 flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-1 bg-[#1a1a20] p-0.5 rounded-lg border border-zinc-800">
-                  <button onClick={() => setViewMode('magic_mirror')} className={`text-xs px-3 py-1 rounded-md ${viewMode === 'magic_mirror' ? 'bg-sky-600 text-white' : 'text-zinc-400'}`}>Espejo Mágico</button>
-                  <button onClick={() => setViewMode('wbs_tree')} className={`text-xs px-3 py-1 rounded-md ${viewMode === 'wbs_tree' ? 'bg-sky-600 text-white' : 'text-zinc-400'}`}>Árbol WBS</button>
-                  <button onClick={() => setViewMode('raw_editor')} className={`text-xs px-3 py-1 rounded-md ${viewMode === 'raw_editor' ? 'bg-sky-600 text-white' : 'text-zinc-400'}`}>Editor</button>
+                  <button onClick={() => setViewMode('magic_mirror')} className={`text-xs px-3 py-1 rounded-md font-medium transition-colors ${viewMode === 'magic_mirror' ? 'bg-sky-600 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`}>Espejo Mágico</button>
+                  <button onClick={() => setViewMode('wbs_tree')} className={`text-xs px-3 py-1 rounded-md font-medium transition-colors ${viewMode === 'wbs_tree' ? 'bg-sky-600 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`}>Árbol WBS</button>
+                  <button onClick={() => setViewMode('raw_editor')} className={`text-xs px-3 py-1 rounded-md font-medium transition-colors ${viewMode === 'raw_editor' ? 'bg-sky-600 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`}>Editor Markdown</button>
+                </div>
+                <div className="flex items-center gap-3 text-xs text-zinc-400">
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" /> Sincronizado con Sprint Center
+                  </span>
+                  <button
+                    onClick={async () => {
+                      if (!activeProjectId) return;
+                      const res = await getProjectTasks(activeProjectId);
+                      if (res?.tasks) {
+                        setKanbanTasks(res.tasks);
+                        toast.success('Estado de tareas refrescado desde Kanban');
+                      }
+                    }}
+                    className="hover:text-zinc-200 p-1 rounded hover:bg-zinc-800 transition-colors"
+                    title="Refrescar estado de tareas desde Kanban"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               </div>
               {viewMode === 'magic_mirror' ? (
                 <div className="flex-1 overflow-y-auto p-8 bg-[#0b0b0e]">
-                  <div className="max-w-4xl mx-auto prose prose-invert prose-zinc max-w-none">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={customMarkdownComponents}>{markdownContent}</ReactMarkdown>
-                  </div>
+                  {isLoadingDoc ? (
+                    <div className="flex items-center justify-center p-12 text-zinc-500">
+                      <Loader2 className="w-6 h-6 animate-spin mr-2" /> Cargando documento vivo...
+                    </div>
+                  ) : (
+                    <div className="max-w-4xl mx-auto prose prose-invert prose-zinc max-w-none">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]} components={customMarkdownComponents}>
+                        {markdownContent || '# Plan no inicializado'}
+                      </ReactMarkdown>
+                    </div>
+                  )}
                 </div>
               ) : viewMode === 'wbs_tree' ? (
                 <div className="flex-1 overflow-y-auto p-6 bg-[#0b0b0e] space-y-6">
-                  {hierarchicalPlan.map((epic, eIdx) => (
-                    <div key={eIdx} className="border border-zinc-800 rounded-xl bg-[#111116] p-4">
-                      <h3 className="font-semibold text-sm text-sky-400">{epic.epicTitle}</h3>
-                      {epic.sprints.map((sprint, sIdx) => (
-                        <div key={sIdx} className="pl-4 mt-2">
-                          <p className="text-xs text-amber-400">{sprint.sprintTitle}</p>
-                          {sprint.tasks.map((task, tIdx) => (
-                            <div key={tIdx} className="text-xs text-zinc-300 py-1">{task.title}</div>
+                  {hierarchicalPlan.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center p-12 text-center text-zinc-500">
+                      <FolderKanban className="w-12 h-12 text-zinc-700 mb-3" />
+                      <h4 className="text-sm font-semibold text-zinc-300 mb-1">No hay épicas ni tareas estructuradas</h4>
+                      <p className="text-xs text-zinc-500 max-w-sm">
+                        Genera un plan con el Agile Coach o usa el Editor Markdown para estructurar épicas (# Épica) y tareas (- [ ] **Tarea**).
+                      </p>
+                    </div>
+                  ) : (
+                    hierarchicalPlan.map((epic, eIdx) => (
+                      <div key={eIdx} className="border border-zinc-800/80 rounded-xl bg-[#111116] overflow-hidden shadow-lg">
+                        <div className="px-5 py-3.5 bg-[#171720] border-b border-zinc-800/80 flex items-center justify-between">
+                          <div className="flex items-center gap-2.5">
+                            <Target className="w-4 h-4 text-sky-400" />
+                            <span className="font-semibold text-sm text-zinc-100">{epic.epicTitle}</span>
+                          </div>
+                          <Badge variant="outline" className="text-[10px] bg-zinc-800 text-zinc-300 border-zinc-700">
+                            {epic.sprints.reduce((acc, s) => acc + s.tasks.length, 0)} tareas
+                          </Badge>
+                        </div>
+                        <div className="p-4 space-y-4">
+                          {epic.sprints.map((sprint, sIdx) => (
+                            <div key={sIdx} className="space-y-2.5">
+                              <div className="flex items-center gap-2 text-xs font-semibold text-amber-400">
+                                <ChevronRight className="w-3.5 h-3.5" />
+                                <span>{sprint.sprintTitle}</span>
+                              </div>
+                              <div className="grid grid-cols-1 gap-2 pl-4">
+                                {sprint.tasks.map((task, tIdx) => {
+                                  const norm = task.title.toLowerCase().replace(/\s+/g, ' ').trim();
+                                  const kanbanMatch = kanbanTaskMap.get(norm);
+                                  const isDone = kanbanMatch?.status?.includes('done') || kanbanMatch?.status === 'completed';
+                                  return (
+                                    <div
+                                      key={tIdx}
+                                      className={`p-3 rounded-lg border transition-colors ${
+                                        isDone
+                                          ? 'bg-zinc-950/40 border-zinc-800/50 opacity-70'
+                                          : 'bg-[#181822] border-zinc-800 hover:border-zinc-700'
+                                      }`}
+                                    >
+                                      <div className="flex items-start justify-between gap-3">
+                                        <div className="flex items-start gap-2.5">
+                                          <div className={`mt-0.5 w-4 h-4 rounded border flex items-center justify-center text-[10px] ${
+                                            isDone ? 'bg-emerald-600 border-emerald-500 text-white' : 'border-zinc-700 text-transparent'
+                                          }`}>
+                                            ✓
+                                          </div>
+                                          <div>
+                                            <span className={`text-xs font-medium ${isDone ? 'line-through text-zinc-400' : 'text-zinc-200'}`}>
+                                              {task.title}
+                                            </span>
+                                            {task.subtasks && task.subtasks.length > 0 && (
+                                              <div className="mt-1.5 space-y-1 pl-2 border-l border-zinc-800">
+                                                {task.subtasks.map((st, subIdx) => (
+                                                  <div key={subIdx} className="text-[11px] text-zinc-400 flex items-center gap-1.5">
+                                                    <span className="w-1 h-1 rounded-full bg-zinc-600" />
+                                                    <span>{st.title}</span>
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            )}
+                                          </div>
+                                        </div>
+                                        <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+                                          {task.priority && (
+                                            <Badge variant="outline" className={`text-[10px] py-0 px-1.5 ${
+                                              task.priority.toLowerCase() === 'high' ? 'bg-rose-500/10 text-rose-300 border-rose-500/30' : 'bg-zinc-800 text-zinc-400 border-zinc-700'
+                                            }`}>
+                                              {task.priority}
+                                            </Badge>
+                                          )}
+                                          {task.type && (
+                                            <Badge variant="outline" className="text-[10px] py-0 px-1.5 bg-blue-500/10 text-blue-300 border-blue-500/30">
+                                              {task.type}
+                                            </Badge>
+                                          )}
+                                          {task.branch_name && (
+                                            <span className="text-[10px] font-mono bg-zinc-900 border border-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded flex items-center gap-1">
+                                              <GitBranch className="w-2.5 h-2.5" /> {task.branch_name}
+                                            </span>
+                                          )}
+                                          {kanbanMatch ? (
+                                            <Badge variant="outline" className="text-[10px] py-0 px-1.5 bg-emerald-500/10 text-emerald-300 border-emerald-500/20 flex items-center gap-1">
+                                              <CheckCircle2 className="w-2.5 h-2.5" /> En Kanban
+                                            </Badge>
+                                          ) : (
+                                            <Badge variant="outline" className="text-[10px] py-0 px-1.5 bg-sky-500/10 text-sky-300 border-sky-500/20">
+                                              ➕ Pendiente
+                                            </Badge>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
                           ))}
                         </div>
-                      ))}
-                    </div>
-                  ))}
+                      </div>
+                    ))
+                  )}
                 </div>
               ) : (
-                <Editor height="100%" language="markdown" theme="vs-dark" value={markdownContent} onChange={(val) => setMarkdownContent(val || '')} />
+                <div className="flex-1 min-w-0 overflow-hidden">
+                  <Editor
+                    height="100%"
+                    language="markdown"
+                    theme="vs-dark"
+                    value={markdownContent}
+                    onChange={(val) => setMarkdownContent(val || '')}
+                    options={{
+                      minimap: { enabled: false },
+                      scrollBeyondLastLine: false,
+                      fontSize: 13,
+                      wordWrap: 'on',
+                      tabSize: 2,
+                    }}
+                  />
+                </div>
               )}
             </div>
           )}
         </div>
 
         {showHistoryDrawer && (
-          <div className="w-80 border-l border-zinc-800 bg-[#121216] flex flex-col shrink-0">
+          <div className="w-80 border-l border-zinc-800 bg-[#121216] flex flex-col shrink-0 shadow-2xl z-20">
             <div className="p-3 border-b border-zinc-800 flex items-center justify-between bg-[#17171d] shrink-0">
-              <span className="text-xs font-bold text-zinc-200">Máquina del Tiempo</span>
-              <button onClick={() => setShowHistoryDrawer(false)}><X className="w-4 h-4 text-zinc-400" /></button>
+              <div className="flex items-center gap-2">
+                <History className="w-4 h-4 text-amber-400" />
+                <span className="text-xs font-bold text-zinc-200">Máquina del Tiempo (Historial)</span>
+              </div>
+              <button
+                onClick={() => setShowHistoryDrawer(false)}
+                className="text-zinc-400 hover:text-zinc-200 p-1 rounded hover:bg-zinc-800"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
-            <div className="flex-1 overflow-y-auto p-3 space-y-2">
-              {historyVersions.map((v) => (
-                <div key={v.id} onClick={() => setSelectedVersion(v)} className="p-3 rounded-lg border border-zinc-800 cursor-pointer bg-[#18181f]">
-                  <div className="text-xs text-zinc-200 font-medium">v{v.version} - {formatRelativeTime(v.created_at)}</div>
+
+            <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
+              {historyVersions.length === 0 ? (
+                <div className="text-center text-xs text-zinc-500 p-4">
+                  No hay versiones previas registradas
                 </div>
-              ))}
+              ) : (
+                historyVersions.map((v) => {
+                  const isSelected = selectedVersion?.id === v.id;
+                  return (
+                    <div
+                      key={v.id}
+                      className={`p-3 rounded-lg border transition-all ${
+                        isSelected
+                          ? 'bg-amber-500/10 border-amber-500/40 shadow-sm'
+                          : 'bg-[#18181f] border-zinc-800/80 hover:border-zinc-700 hover:bg-[#1f1f27]'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1.5">
+                        <Badge variant="outline" className="text-[10px] py-0 px-1.5 bg-zinc-800 text-amber-400 border-zinc-700 font-mono">
+                          v{v.version}
+                        </Badge>
+                        <span className="text-[10px] text-zinc-400">
+                          {formatRelativeTime(v.created_at)}
+                        </span>
+                      </div>
+                      <div className="text-xs text-zinc-200 font-medium line-clamp-2 mb-1">
+                        {v.change_summary || 'Actualización del plan'}
+                      </div>
+                      <div className="text-[10px] text-zinc-500 mb-2.5">
+                        {formatAbsoluteLocalTime(v.created_at)}
+                      </div>
+                      <div className="flex items-center gap-2 pt-1.5 border-t border-zinc-800/60">
+                        <button
+                          onClick={() => setSelectedVersion(v)}
+                          className="text-[11px] flex-1 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-medium transition-colors flex items-center justify-center gap-1"
+                        >
+                          <Eye className="w-3 h-3 text-sky-400" /> Comparar
+                        </button>
+                        <button
+                          onClick={() => handleRestoreVersion(v)}
+                          disabled={isRestoring}
+                          className="text-[11px] flex-1 py-1 rounded bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/30 font-medium transition-colors flex items-center justify-center gap-1"
+                        >
+                          <RotateCcw className="w-3 h-3" /> Restaurar
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
         )}
