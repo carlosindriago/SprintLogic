@@ -39,8 +39,8 @@ class ProviderAdapter:
             "api_base": "https://api.cerebras.ai/v1",
         },
         "github": {
-            "litellm_provider": "github",
-            "api_base": "https://models.inference.ai.azure.com",
+            "litellm_provider": "openai",
+            "api_base": "https://models.github.ai/inference",
         },
     }
 

@@ -318,8 +318,13 @@ async def fetch_provider_models(
                 headers["User-Agent"] = "SprintLogic/1.0"
                 try:
                     res = await client.get(
-                        "https://models.inference.ai.azure.com/models", headers=headers
+                        "https://models.github.ai/inference/models", headers=headers
                     )
+                    if res.status_code != 200:
+                        res = await client.get(
+                            "https://models.inference.ai.azure.com/models", headers=headers
+                        )
+
                     if res.status_code == 200:
                         data = res.json()
                         raw_list = data if isinstance(data, list) else data.get("data", data.get("models", []))
