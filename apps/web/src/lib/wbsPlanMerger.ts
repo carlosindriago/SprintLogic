@@ -85,7 +85,11 @@ export function escapeRegex(string: string): string {
 /**
  * Performs a smart, non-destructive merge of an AI-generated snippet into the current plan.
  */
-export function smartMergeWbsPlan(currentPlan: string, aiSnippet: string): string {
+export function smartMergeWbsPlan(
+  currentPlan: string,
+  aiSnippet: string,
+  targetSelection?: string | null
+): string {
   const cleanCurrent = currentPlan.trim();
   const cleanSnippet = aiSnippet.trim();
 
@@ -94,6 +98,14 @@ export function smartMergeWbsPlan(currentPlan: string, aiSnippet: string): strin
   }
   if (!cleanSnippet) {
     return cleanCurrent;
+  }
+
+  // 0. Direct in-place replacement if explicit selection is targeted
+  if (targetSelection && targetSelection.trim().length > 5) {
+    const cleanTarget = targetSelection.trim();
+    if (cleanCurrent.includes(cleanTarget)) {
+      return cleanCurrent.replace(cleanTarget, cleanSnippet);
+    }
   }
 
   const currentParsed = parseEpicsFromMarkdown(cleanCurrent);

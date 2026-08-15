@@ -61,6 +61,8 @@ import {
   Target,
   ChevronRight,
   FolderKanban,
+  MessageSquare,
+  Highlighter,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -232,6 +234,7 @@ export default function PlanningStudioTab() {
   const [messages, setMessages] = useState<{ role: string; content: string }[]>(initialMessages);
   const [inputValue, setInputValue] = useState('');
   const [isAiStreaming, setIsAiStreaming] = useState(false);
+  const [selectedContextSnippet, setSelectedContextSnippet] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatScrollAreaRef = useRef<HTMLDivElement>(null);
@@ -487,17 +490,43 @@ ${markdownContent || '// Plan vacío'}
     }
   };
 
+  const handleMagicMirrorSelection = () => {
+    const sel = window.getSelection();
+    const text = sel?.toString().trim();
+    if (text && text.length > 5) {
+      setSelectedContextSnippet(text);
+    }
+  };
+
   const handleSendMessage = async (customPrompt?: string) => {
-    const textToSend = customPrompt || inputValue;
-    if (!textToSend.trim() || isAiStreaming || !activeProjectId) return;
-    const newMessages = [...messages, { role: 'user', content: textToSend }];
+    const rawInput = customPrompt || inputValue;
+    if (!rawInput.trim() || isAiStreaming || !activeProjectId) return;
+
+    const activeSelection = selectedContextSnippet;
+    const promptToSend = activeSelection
+      ? `[SECCIÓN SELECCIONADA DEL PLAN A MODIFICAR/ANALIZAR]:\n"""${activeSelection}"""\n\n[INSTRUCCIÓN DEL USUARIO]:\n${rawInput}`
+      : rawInput;
+
+    const displayContent = activeSelection
+      ? `📌 **Sobre la selección:**\n> *"${activeSelection.length > 80 ? activeSelection.slice(0, 80) + '...' : activeSelection}"*\n\n${rawInput}`
+      : rawInput;
+
+    const newMessages = [...messages, { role: 'user', content: displayContent }];
     setMessages(newMessages);
     if (!customPrompt) setInputValue('');
+    setSelectedContextSnippet(null);
     setIsAiStreaming(true);
     let assistantReply = '';
     try {
       await sendPlanningMessage(
-        { messages: newMessages, project_id: activeProjectId, current_markdown: markdownContent },
+        {
+          messages: [
+            ...messages,
+            { role: 'user', content: promptToSend },
+          ],
+          project_id: activeProjectId,
+          current_markdown: markdownContent,
+        },
         (deltaText) => {
           assistantReply = deltaText;
           setMessages([...newMessages, { role: 'assistant', content: assistantReply }]);
@@ -507,15 +536,15 @@ ${markdownContent || '// Plan vacío'}
       const cleanReply = assistantReply.trim();
       let extractedPlan = '';
       const codeBlockMatch = cleanReply.match(/```(?:markdown|md)?\s*\n([\s\S]+?)(?:```|$)/i);
-      if (codeBlockMatch && codeBlockMatch[1].trim().length > 30) {
+      if (codeBlockMatch && codeBlockMatch[1].trim().length > 20) {
         extractedPlan = codeBlockMatch[1].trim();
       } else if (cleanReply.startsWith('#') && (cleanReply.includes('Épica') || cleanReply.includes('Sprint') || cleanReply.includes('- [ ]'))) {
         extractedPlan = cleanReply;
       }
-      if (extractedPlan && extractedPlan.length > 30) {
-        const mergedPlan = smartMergeWbsPlan(markdownContent, extractedPlan);
+      if (extractedPlan && extractedPlan.length > 20) {
+        const mergedPlan = smartMergeWbsPlan(markdownContent, extractedPlan, activeSelection);
         setMarkdownContent(mergedPlan);
-        savePlanningDocument(activeProjectId, mergedPlan, 'Actualización por IA interna')
+        savePlanningDocument(activeProjectId, mergedPlan, activeSelection ? 'Actualización sobre selección' : 'Actualización por IA interna')
           .then((doc) => {
             setDocData(doc);
             setSavedMarkdown(doc.markdown_content);
@@ -623,9 +652,41 @@ ${markdownContent || '// Plan vacío'}
             <div ref={messagesEndRef} />
           </div>
           <div className="p-3 border-t border-zinc-800 bg-[#141418] shrink-0">
+            {selectedContextSnippet && (
+              <div className="mb-2 p-2 bg-gradient-to-r from-sky-950/60 to-purple-950/60 border border-sky-500/40 rounded-lg flex items-start justify-between gap-2 shadow-md animate-in fade-in slide-in-from-bottom-2 duration-150">
+                <div className="flex items-start gap-2 min-w-0">
+                  <Sparkles className="w-3.5 h-3.5 text-sky-400 mt-0.5 shrink-0" />
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] font-bold text-sky-300 uppercase tracking-wider">Contexto Seleccionado</span>
+                      <span className="text-[10px] text-zinc-500 font-mono">({selectedContextSnippet.length} caracteres)</span>
+                    </div>
+                    <p className="text-[11px] text-zinc-200 line-clamp-2 font-mono mt-0.5 bg-black/40 px-1.5 py-0.5 rounded border border-white/5">
+                      "{selectedContextSnippet}"
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSelectedContextSnippet(null)}
+                  className="text-zinc-400 hover:text-zinc-200 p-1 rounded hover:bg-zinc-800 shrink-0"
+                  title="Quitar contexto"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
             <form onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }} className="flex items-center gap-2">
-              <Input placeholder="Pide una nueva fase, épica o refactor..." value={inputValue} onChange={(e) => setInputValue(e.target.value)} disabled={isAiStreaming} className="bg-[#1b1b22] border-zinc-700 text-xs" />
-              <Button type="submit" size="sm" disabled={isAiStreaming || !inputValue.trim()} className="bg-sky-600 text-white"><Send className="w-4 h-4" /></Button>
+              <Input
+                id="agile-coach-input"
+                placeholder={selectedContextSnippet ? "Qué hacemos con la selección..." : "Pide una nueva fase, épica o refactor..."}
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                disabled={isAiStreaming}
+                className="bg-[#1b1b22] border-zinc-700 text-xs focus-visible:border-sky-500"
+              />
+              <Button type="submit" size="sm" disabled={isAiStreaming || !inputValue.trim()} className="bg-sky-600 hover:bg-sky-500 text-white shadow-sm">
+                <Send className="w-4 h-4" />
+              </Button>
             </form>
           </div>
         </div>
@@ -685,7 +746,7 @@ ${markdownContent || '// Plan vacío'}
               />
             </div>
           ) : (
-            <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+            <div className="flex-1 min-w-0 flex flex-col overflow-hidden relative">
               <div className="h-10 border-b border-zinc-800/80 bg-[#121216] px-4 flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-1 bg-[#1a1a20] p-0.5 rounded-lg border border-zinc-800">
                   <button onClick={() => setViewMode('magic_mirror')} className={`text-xs px-3 py-1 rounded-md font-medium transition-colors ${viewMode === 'magic_mirror' ? 'bg-sky-600 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`}>Espejo Mágico</button>
@@ -713,7 +774,11 @@ ${markdownContent || '// Plan vacío'}
                 </div>
               </div>
               {viewMode === 'magic_mirror' ? (
-                <div className="flex-1 overflow-y-auto p-8 bg-[#0b0b0e]">
+                <div
+                  className="flex-1 overflow-y-auto p-8 bg-[#0b0b0e] relative select-text"
+                  onMouseUp={handleMagicMirrorSelection}
+                  onTouchEnd={handleMagicMirrorSelection}
+                >
                   {isLoadingDoc ? (
                     <div className="flex items-center justify-center p-12 text-zinc-500">
                       <Loader2 className="w-6 h-6 animate-spin mr-2" /> Cargando documento vivo...
@@ -723,6 +788,34 @@ ${markdownContent || '// Plan vacío'}
                       <ReactMarkdown remarkPlugins={[remarkGfm]} components={customMarkdownComponents}>
                         {markdownContent || '# Plan no inicializado'}
                       </ReactMarkdown>
+                    </div>
+                  )}
+
+                  {selectedContextSnippet && (
+                    <div className="sticky bottom-4 left-1/2 -translate-x-1/2 z-30 bg-[#16161f]/95 backdrop-blur-md border border-sky-500/40 rounded-xl px-4 py-2.5 shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-2 duration-150">
+                      <div className="flex items-center gap-2">
+                        <Highlighter className="w-4 h-4 text-sky-400" />
+                        <span className="text-xs text-zinc-200 font-medium">
+                          Selección lista ({selectedContextSnippet.length} caracteres)
+                        </span>
+                      </div>
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          const inputEl = document.getElementById('agile-coach-input');
+                          inputEl?.focus();
+                        }}
+                        className="bg-sky-600 hover:bg-sky-500 text-white text-xs h-7 px-3 font-medium gap-1.5 shadow-md shadow-sky-900/30"
+                      >
+                        <MessageSquare className="w-3.5 h-3.5" /> Enviar al Agile Coach
+                      </Button>
+                      <button
+                        onClick={() => setSelectedContextSnippet(null)}
+                        className="text-zinc-500 hover:text-zinc-300 p-1 rounded hover:bg-zinc-800 transition-colors"
+                        title="Deseleccionar"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   )}
                 </div>
