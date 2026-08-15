@@ -21,6 +21,7 @@ import {
   PlanningVersion,
   WBSImportTicket,
 } from '../lib/api';
+import { smartMergeWbsPlan } from '../lib/wbsPlanMerger';
 import { Task } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -500,13 +501,6 @@ ${markdownContent || '// Plan vacío'}
         (deltaText) => {
           assistantReply = deltaText;
           setMessages([...newMessages, { role: 'assistant', content: assistantReply }]);
-          const cleanReply = assistantReply.trim();
-          const codeBlockMatch = cleanReply.match(/```(?:markdown|md)?\s*\n([\s\S]+?)(?:```|$)/i);
-          if (codeBlockMatch && codeBlockMatch[1].trim().length > 30) {
-            setMarkdownContent(codeBlockMatch[1].trim());
-          } else if (cleanReply.startsWith('#') && (cleanReply.includes('Épica') || cleanReply.includes('Sprint') || cleanReply.includes('- [ ]'))) {
-            setMarkdownContent(cleanReply);
-          }
         },
         () => {}
       );
@@ -518,9 +512,10 @@ ${markdownContent || '// Plan vacío'}
       } else if (cleanReply.startsWith('#') && (cleanReply.includes('Épica') || cleanReply.includes('Sprint') || cleanReply.includes('- [ ]'))) {
         extractedPlan = cleanReply;
       }
-      if (extractedPlan && extractedPlan.length > 50) {
-        setMarkdownContent(extractedPlan);
-        savePlanningDocument(activeProjectId, extractedPlan, 'Actualización por IA interna')
+      if (extractedPlan && extractedPlan.length > 30) {
+        const mergedPlan = smartMergeWbsPlan(markdownContent, extractedPlan);
+        setMarkdownContent(mergedPlan);
+        savePlanningDocument(activeProjectId, mergedPlan, 'Actualización por IA interna')
           .then((doc) => {
             setDocData(doc);
             setSavedMarkdown(doc.markdown_content);
