@@ -36,15 +36,52 @@ export default function RootLayout({
       <body className="h-screen w-screen flex flex-col overflow-hidden bg-zinc-950 text-zinc-50">
         <Script
           id="unhandled-rejections"
+          strategy="beforeInteractive"
           dangerouslySetInnerHTML={{
             __html: `
               window.addEventListener('unhandledrejection', function(event) {
                 var r = event.reason;
                 if (!r) return;
-                var n = r.name || '';
-                var m = r.message || '';
-                if (n === 'Canceled' || m === 'Canceled' || m.includes('disposed') || m.includes('TextModel') || n === 'AbortError') {
+                var n = (r && r.name) ? String(r.name) : '';
+                var m = (r && r.message) ? String(r.message) : String(r);
+                var s = String(r);
+                if (
+                  n === 'Canceled' ||
+                  m === 'Canceled' ||
+                  s === 'Canceled' ||
+                  s === 'Canceled: Canceled' ||
+                  n === 'NotAllowedError' ||
+                  m.includes('NotAllowedError') ||
+                  m.includes('user agent or the platform in the current context') ||
+                  m.includes('denied permission') ||
+                  m.includes('disposed') ||
+                  m.includes('TextModel') ||
+                  n === 'AbortError' ||
+                  m.includes('AbortError')
+                ) {
                   event.preventDefault();
+                  if (typeof event.stopImmediatePropagation === 'function') {
+                    event.stopImmediatePropagation();
+                  }
+                }
+              });
+
+              window.addEventListener('error', function(event) {
+                var m = (event && event.message) ? String(event.message) : '';
+                var err = event && event.error;
+                var n = (err && err.name) ? String(err.name) : '';
+                if (
+                  n === 'NotAllowedError' ||
+                  m.includes('NotAllowedError') ||
+                  m.includes('user agent or the platform in the current context') ||
+                  m.includes('denied permission') ||
+                  m.includes('Canceled: Canceled') ||
+                  m.includes('disposed')
+                ) {
+                  event.preventDefault();
+                  if (typeof event.stopImmediatePropagation === 'function') {
+                    event.stopImmediatePropagation();
+                  }
                 }
               });
             `,

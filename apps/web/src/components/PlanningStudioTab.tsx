@@ -505,8 +505,36 @@ ${markdownContent || '// Plan vacío'}
    - \`- [ ] **<Título de Tarea>** [Priority: High|Medium|Low] [Type: Feature|Refactor|Technical Debt|Security] [Hours: <N>h] [Branch: feat/...]\`
    - \`  - [ ] <Subtarea técnica>\`
 `;
-      await navigator.clipboard.writeText(megaPrompt);
-      toast.success('Mega-Prompt copiado al portapapeles');
+      let copied = false;
+      try {
+        if (navigator?.clipboard?.writeText) {
+          await navigator.clipboard.writeText(megaPrompt);
+          copied = true;
+        }
+      } catch {
+        // Fallback for restricted clipboard contexts
+      }
+
+      if (!copied) {
+        try {
+          const ta = document.createElement('textarea');
+          ta.value = megaPrompt;
+          ta.style.position = 'fixed';
+          ta.style.top = '-9999px';
+          document.body.appendChild(ta);
+          ta.select();
+          copied = document.execCommand('copy');
+          document.body.removeChild(ta);
+        } catch {
+          // Ignore
+        }
+      }
+
+      if (copied) {
+        toast.success('Mega-Prompt copiado al portapapeles');
+      } else {
+        toast.error('No se pudo acceder al portapapeles');
+      }
     } catch (err) {
       toast.error('Error al copiar: ' + (err instanceof Error ? err.message : String(err)));
     } finally {
@@ -829,6 +857,7 @@ ${markdownContent || '// Plan vacío'}
                   scrollBeyondLastLine: false,
                   fontSize: 13,
                   wordWrap: 'on',
+                  emptySelectionClipboard: false,
                 }}
               />
             </div>
@@ -1026,6 +1055,7 @@ ${markdownContent || '// Plan vacío'}
                       fontSize: 13,
                       wordWrap: 'on',
                       tabSize: 2,
+                      emptySelectionClipboard: false,
                     }}
                   />
                 </div>
