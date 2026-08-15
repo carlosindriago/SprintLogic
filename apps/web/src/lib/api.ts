@@ -173,7 +173,15 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     const responseText = await response.text();
     try {
       const errorData = JSON.parse(responseText);
-      errorMessage = errorData.detail || errorData.message || errorMessage;
+      if (typeof errorData.detail === 'string') {
+        errorMessage = errorData.detail;
+      } else if (errorData.detail) {
+        errorMessage = JSON.stringify(errorData.detail);
+      } else if (typeof errorData.message === 'string') {
+        errorMessage = errorData.message;
+      } else if (errorData.message) {
+        errorMessage = JSON.stringify(errorData.message);
+      }
     } catch {
       errorMessage = responseText || errorMessage;
     }

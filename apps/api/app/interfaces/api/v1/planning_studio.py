@@ -4,7 +4,7 @@ import json
 import logging
 import time
 from collections.abc import AsyncGenerator
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
@@ -138,7 +138,7 @@ async def get_planning_document(project_id: str):
         )
         doc = doc_res.scalar_one_or_none()
 
-        now = datetime.now(datetime.UTC)
+        now = datetime.now(UTC)
 
         if disk_content is not None:
             # Disk exists: Sync to DB if DB is missing or different
@@ -243,7 +243,7 @@ async def save_planning_document(project_id: str, payload: SavePlanningDocumentR
             raise HTTPException(status_code=500, detail=f"Failed to write to disk: {e}") from e
 
         # 2. Upsert in DB
-        now = datetime.now(datetime.UTC)
+        now = datetime.now(UTC)
         doc_res = await session.execute(
             select(WBSDocumentModel).where(WBSDocumentModel.project_id == project_uuid)
         )
@@ -355,7 +355,7 @@ async def restore_planning_version(project_id: str, version_id: str):
             raise HTTPException(status_code=500, detail=f"Failed to restore file on disk: {e}") from e
 
         # 2. Update current doc
-        now = datetime.now(datetime.UTC)
+        now = datetime.now(UTC)
         doc_res = await session.execute(
             select(WBSDocumentModel).where(WBSDocumentModel.project_id == project_uuid)
         )
