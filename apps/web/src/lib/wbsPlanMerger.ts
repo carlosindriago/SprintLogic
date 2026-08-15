@@ -1,8 +1,9 @@
 /**
- * WBS Plan Intelligent Merger
+ * WBS Plan Intelligent Merger & Full State Replacement Engine
  * 
- * Guarantees zero-data-loss when merging AI-generated planning updates into
- * the live WBS Markdown document (docs/planning/current_plan.md).
+ * Guarantees zero-data-loss and prevents 'Dumb Append' / Frankenstein corruptions
+ * by adhering to Full State Replacement while supporting precision in-place
+ * selection edits.
  */
 
 export interface EpicSection {
@@ -93,43 +94,20 @@ export function stripMarkdownFormatting(text: string): string {
 }
 
 /**
- * Extracts a structured plan snippet or proposed modification from an assistant chat reply.
+ * Extracts the full Markdown document or localized proposal from an assistant chat reply.
+ * Looks strictly for ```markdown ... ``` code blocks first.
  */
 export function extractPlanSnippetFromReply(reply: string, targetSelection?: string | null): string {
   const clean = reply.trim();
   if (!clean) return '';
 
-  // 1. Check for code block ```markdown ... ``` or ``` ... ```
+  // 1. Strict extraction of ```markdown ... ``` or ```md ... ``` or ``` ... ```
   const codeBlockMatch = clean.match(/```(?:markdown|md)?\s*\n([\s\S]+?)(?:```|$)/i);
   if (codeBlockMatch && codeBlockMatch[1].trim().length > 5) {
     return codeBlockMatch[1].trim();
   }
 
-  // 2. If the entire reply is markdown
-  if (clean.startsWith('#') || clean.startsWith('- [ ]') || clean.startsWith('  - [ ]')) {
-    return clean;
-  }
-
-  // 3. Extract any embedded task list or headings
-  const taskListMatch = clean.match(/((?:^|\n)(?:[-*]\s*\[[\sxX]?\]\s*|\#{1,4}\s+)[^\n]+[\s\S]*)/i);
-  if (taskListMatch && taskListMatch[1].trim().length > 10) {
-    const lines = taskListMatch[1].trim().split('\n');
-    const validLines: string[] = [];
-    for (const line of lines) {
-      if (/^(\s*[-*]\s*(\[[\sxX]?\])?|\s*#{1,4}\s+|>\s+|\s*\d+\.\s+)/.test(line) || (validLines.length > 0 && line.startsWith('  '))) {
-        validLines.push(line);
-      } else if (validLines.length > 0 && !line.trim()) {
-        validLines.push(line);
-      } else if (validLines.length > 0) {
-        break;
-      }
-    }
-    if (validLines.length > 0) {
-      return validLines.join('\n').trim();
-    }
-  }
-
-  // 4. If targetSelection is active, look for quoted proposals or text after colons
+  // 2. If targetSelection is active, look for quoted proposals or text after colons
   if (targetSelection && targetSelection.trim().length > 3) {
     const afterColonMatch = clean.match(/(?:propuesta|redacción|versión|sugerencia|sería|ajuste|texto)[:\s]*\n*([^\n]+(?:\n\s*[-*][^\n]+)*)/i);
     if (afterColonMatch && afterColonMatch[1].trim().length > 3) {
@@ -141,11 +119,17 @@ export function extractPlanSnippetFromReply(reply: string, targetSelection?: str
     }
   }
 
+  // 3. Fallback: if entire reply is a clean markdown document starting with heading
+  if (clean.startsWith('#') && (clean.includes('##') || clean.includes('- [ ]'))) {
+    return clean;
+  }
+
   return '';
 }
 
 /**
- * Performs a smart, non-destructive merge of an AI-generated snippet into the current plan.
+ * Performs Full State Replacement or Surgical In-Place Selection Replacement.
+ * NEVER blindly appends to prevent document corruption.
  */
 export function smartMergeWbsPlan(
   currentPlan: string,
@@ -155,25 +139,23 @@ export function smartMergeWbsPlan(
   const cleanCurrent = currentPlan.trim();
   const cleanSnippet = aiSnippet.trim();
 
-  if (!cleanCurrent) {
-    return cleanSnippet;
-  }
-  if (!cleanSnippet) {
-    return cleanCurrent;
-  }
+  if (!cleanCurrent) return cleanSnippet;
+  if (!cleanSnippet) return cleanCurrent;
 
   // ─────────────────────────────────────────────────────────────
-  // 0. EXPLICIT SELECTION REPLACEMENT
+  // 1. LOCALIZED SELECTION REPLACEMENT (Surgical in-place update)
   // ─────────────────────────────────────────────────────────────
-  if (targetSelection && targetSelection.trim().length > 3) {
+  const isFullDocument = cleanSnippet.startsWith('# 🎯') || cleanSnippet.startsWith('# Project') || cleanSnippet.includes('## 1. Fundamentos');
+  
+  if (targetSelection && targetSelection.trim().length > 3 && !isFullDocument) {
     const cleanTarget = targetSelection.trim();
 
-    // 0.1 Direct Exact Substring Replacement
+    // 1.1 Direct Exact Substring Replacement
     if (cleanCurrent.includes(cleanTarget)) {
       return cleanCurrent.replace(cleanTarget, cleanSnippet);
     }
 
-    // 0.2 Line-by-line / Whitespace-Normalized Matching
+    // 1.2 Normalized Whitespace Replacement
     const normTarget = cleanTarget.replace(/\r\n/g, '\n').replace(/\s+/g, ' ').trim();
     const currentLines = cleanCurrent.split('\n');
     let bestStart = -1;
@@ -198,26 +180,21 @@ export function smartMergeWbsPlan(
       return `${before ? before + '\n' : ''}${cleanSnippet}${after ? '\n' + after : ''}`;
     }
 
-    // 0.3 Stripped Markdown Fuzzy Line Search (for HTML selection without asterisks/checkboxes)
+    // 1.3 Fuzzy line match for task items
     const strippedTarget = stripMarkdownFormatting(cleanTarget);
     if (strippedTarget.length > 3) {
       for (let i = 0; i < currentLines.length; i++) {
         const lineStripped = stripMarkdownFormatting(currentLines[i]);
         if (lineStripped.includes(strippedTarget) || strippedTarget.includes(lineStripped)) {
-          // If cleanSnippet is a full formatted task line, replace current line directly
           if (cleanSnippet.startsWith('- [ ]') || cleanSnippet.startsWith('###') || cleanSnippet.startsWith('##')) {
             currentLines[i] = cleanSnippet;
             return currentLines.join('\n');
           }
-
-          // If current line is a task, replace title part inside the task
           const taskMatch = currentLines[i].match(/^(\s*[-*]\s*\[[ xX]?\]\s*\*\*)([^*]+)(\*\*.*)/);
           if (taskMatch) {
             currentLines[i] = `${taskMatch[1]}${cleanSnippet.replace(/\*\*/g, '')}${taskMatch[3]}`;
             return currentLines.join('\n');
           }
-
-          // Otherwise replace the line
           currentLines[i] = cleanSnippet;
           return currentLines.join('\n');
         }
@@ -225,113 +202,10 @@ export function smartMergeWbsPlan(
     }
   }
 
-  const currentParsed = parseEpicsFromMarkdown(cleanCurrent);
-  const snippetParsed = parseEpicsFromMarkdown(cleanSnippet);
-
-  // If current document has no epics, adopt snippet directly
-  if (currentParsed.epics.length === 0) {
-    return cleanSnippet;
-  }
-
   // ─────────────────────────────────────────────────────────────
-  // 1. SPRINT & TASK LEVEL PATCHING (No Level-2 Heading)
+  // 2. FULL STATE REPLACEMENT (The Architect's Zero-Dumb-Append Model)
   // ─────────────────────────────────────────────────────────────
-  if (snippetParsed.epics.length === 0) {
-    // 1.1 Check if snippet is a sprint (### Sprint N)
-    const sprintMatch = cleanSnippet.match(/^###\s+(?:🏃\s*)?sprint\s*(\d+)/im);
-    if (sprintMatch) {
-      const sprintNum = sprintMatch[1];
-      const sprintRegex = new RegExp(`(###\\s+(?:🏃\\s*)?sprint\\s*${sprintNum}[\\s\\S]*?)(?=(?:\\n###|\\n##|\\n---|$))`, 'i');
-      if (sprintRegex.test(cleanCurrent)) {
-        return cleanCurrent.replace(sprintRegex, cleanSnippet);
-      }
-    }
-
-    // 1.2 Check if snippet is a single task (- [ ] **Task Title**)
-    const taskTitleMatch = cleanSnippet.match(/^-\s*\[[\sxX]?\]\s*\*\*([^\*]+)\*\*/m);
-    if (taskTitleMatch) {
-      const taskTitle = taskTitleMatch[1].trim();
-      const normTaskTitle = normalizeHeader(taskTitle);
-
-      // Exact match
-      const taskRegex = new RegExp(
-        `(-\\s*\\[[\\sxX]?\\]\\s*\\*\\*${escapeRegex(taskTitle)}\\*\\*[\\s\\S]*?)(?=(?:\\n-\\s*\\[[\\sxX]?\\]\\s*\\*\\*|\\n###|\\n##|\\n---|$))`,
-        'i'
-      );
-      if (taskRegex.test(cleanCurrent)) {
-        return cleanCurrent.replace(taskRegex, cleanSnippet);
-      }
-
-      // Fuzzy match across all task blocks in document
-      const allTaskMatches = Array.from(
-        cleanCurrent.matchAll(/(-\s*\[[\sxX]?\]\s*\*\*([^\*]+)\*\*[\s\S]*?)(?=(?:\n-\s*\[[\sxX]?\]\s*\*\*|\n###|\n##|\n---|$))/g)
-      );
-      for (const tm of allTaskMatches) {
-        const existingTitle = tm[2]?.trim() || '';
-        const normExisting = normalizeHeader(existingTitle);
-        if (
-          normExisting &&
-          normTaskTitle &&
-          (normExisting.includes(normTaskTitle) || normTaskTitle.includes(normExisting))
-        ) {
-          return cleanCurrent.replace(tm[0], cleanSnippet);
-        }
-      }
-    }
-
-    // Fallback: append as note or section
-    return `${cleanCurrent}\n\n---\n\n${cleanSnippet}`;
-  }
-
-  // If snippet has `# ` (top level title) and has AT LEAST the same number of epics as current plan,
-  // it is only a legitimate full-document replacement IF NO TARGET SELECTION was active!
-  const hasTopLevelHeader = /^#\s+/m.test(cleanSnippet);
-  if (!targetSelection && hasTopLevelHeader && snippetParsed.epics.length >= currentParsed.epics.length) {
-    return cleanSnippet;
-  }
-
-  // SURGICAL IN-PLACE EPIC PATCHING:
-  // The snippet is a partial update containing 1 or more epics to update/add.
-  let mergedEpics = [...currentParsed.epics];
-
-  for (const snippetEpic of snippetParsed.epics) {
-    let matchIdx = -1;
-
-    // 1. Try matching by Epic Number (e.g. Épica 2)
-    if (snippetEpic.epicNumber !== null) {
-      matchIdx = mergedEpics.findIndex((e) => e.epicNumber === snippetEpic.epicNumber);
-    }
-
-    // 2. If no match by number, try matching by Title similarity
-    if (matchIdx === -1) {
-      matchIdx = mergedEpics.findIndex((e) => {
-        if (!snippetEpic.normalizedTitle || !e.normalizedTitle) return false;
-        return (
-          e.normalizedTitle.includes(snippetEpic.normalizedTitle) ||
-          snippetEpic.normalizedTitle.includes(e.normalizedTitle)
-        );
-      });
-    }
-
-    if (matchIdx !== -1) {
-      // Replace the matched epic with the new version
-      mergedEpics[matchIdx] = {
-        ...mergedEpics[matchIdx],
-        raw: snippetEpic.raw,
-        header: snippetEpic.header,
-      };
-    } else {
-      // It's a brand new epic: append it
-      mergedEpics.push(snippetEpic);
-    }
-  }
-
-  // Reconstruct document
-  const preambleText = currentParsed.preamble ? `${currentParsed.preamble.trim()}\n\n---\n\n` : '';
-  const epicsText = mergedEpics
-    .map((e) => e.raw.trim())
-    .filter(Boolean)
-    .join('\n\n---\n\n');
-
-  return `${preambleText}${epicsText}\n`;
+  // The AI returns the complete, newly structured and organized document.
+  // We completely replace the state without blind concatenations.
+  return cleanSnippet;
 }

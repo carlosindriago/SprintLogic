@@ -743,17 +743,19 @@ ${markdownContent || '// Plan vacío'}
       );
       const cleanReply = assistantReply.trim();
       const extractedPlan = extractPlanSnippetFromReply(cleanReply, activeSelection);
-      if (extractedPlan && extractedPlan.length > 3) {
+      if (extractedPlan && extractedPlan.length > 5) {
         const mergedPlan = smartMergeWbsPlan(markdownContent, extractedPlan, activeSelection);
-        setMarkdownContent(mergedPlan);
-        savePlanningDocument(activeProjectId, mergedPlan, activeSelection ? 'Actualización sobre selección' : 'Actualización por IA interna')
-          .then((doc) => {
-            setDocData(doc);
-            setSavedMarkdown(doc.markdown_content);
-            getPlanningHistory(activeProjectId).then(setHistoryVersions);
-            toast.success('✨ Plan actualizado con éxito en el Espejo Mágico');
-          })
-          .catch((e) => console.warn('Could not auto-save AI plan:', e));
+        if (mergedPlan && mergedPlan.trim().length > 5) {
+          setMarkdownContent(mergedPlan);
+          savePlanningDocument(activeProjectId, mergedPlan, activeSelection ? 'Actualización sobre selección' : 'Actualización por IA interna')
+            .then((doc) => {
+              setDocData(doc);
+              setSavedMarkdown(doc.markdown_content);
+              getPlanningHistory(activeProjectId).then(setHistoryVersions);
+              toast.success('✨ Plan actualizado con éxito en el Espejo Mágico');
+            })
+            .catch((e) => console.warn('Could not auto-save AI plan:', e));
+        }
       }
     } catch (err) {
       toast.error('Error del asistente: ' + (err instanceof Error ? err.message : String(err)));
@@ -764,8 +766,15 @@ ${markdownContent || '// Plan vacío'}
   };
 
   const handleApplySnippet = (snippet: string) => {
-    if (!snippet || !activeProjectId) return;
+    if (!snippet || snippet.trim().length < 5 || !activeProjectId) {
+      toast.error('La IA no devolvió un formato Markdown válido para fusionar.');
+      return;
+    }
     const mergedPlan = smartMergeWbsPlan(markdownContent, snippet, selectedContextSnippet);
+    if (!mergedPlan || mergedPlan.trim().length < 5) {
+      toast.error('La IA no devolvió un formato Markdown válido para fusionar.');
+      return;
+    }
     setMarkdownContent(mergedPlan);
     savePlanningDocument(activeProjectId, mergedPlan, selectedContextSnippet ? 'Actualización sobre selección' : 'Actualización por IA interna')
       .then((doc) => {
