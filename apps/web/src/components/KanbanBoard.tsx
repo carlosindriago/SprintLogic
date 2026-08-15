@@ -256,6 +256,14 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
   const [rawTickets, setRawTickets] = useState<KanbanTicket[]>([]);
   const [activeDrawerTicketId, setActiveDrawerTicketId] = useState<string | null>(null);
 
+  const rawTicketsById = useMemo(() => {
+    const map = new Map<string, KanbanTicket>();
+    for (const r of rawTickets) {
+      map.set(r.id, r);
+    }
+    return map;
+  }, [rawTickets]);
+
   // Prompts State
   const [branchPrompt, setBranchPrompt] = useState<{ticketId: string, title: string, type: string, currentBranch: string} | null>(null);
   const [commitPrompt, setCommitPrompt] = useState<{ticketId: string, title: string} | null>(null);
@@ -470,7 +478,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
       // To Do Interceptor (moving backwards)
       if (targetIndex < prevIndex) {
         try {
-          const raw = rawTickets.find(r => r.id === activeIdStr);
+          const raw = rawTicketsById.get(activeIdStr);
           if (raw && projectId) {
             const gitStatus = await getGitStatus(projectId);
             const ticketIdPrefix = raw.id.substring(0, 6).toUpperCase();
@@ -523,7 +531,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
         const targetCol = columns.find(c => c.id === newStatus);
         if (targetCol) {
           if (targetCol.rule === 'create_ephemeral_branch') {
-            const raw = rawTickets.find(r => r.id === activeIdStr);
+            const raw = rawTicketsById.get(activeIdStr);
             if (raw && projectId) {
               const gitStatus = await getGitStatus(projectId);
               const isBaseBranch = ['main', 'master', 'develop'].includes(gitStatus.branch);
@@ -535,7 +543,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
               }
             }
           } else if (targetCol.rule === 'prompt_commit_push') {
-            const raw = rawTickets.find(r => r.id === activeIdStr);
+            const raw = rawTicketsById.get(activeIdStr);
             if (raw) {
               setCommitPrompt({ ticketId: activeIdStr, title: raw.title });
               setCommitMessage(`${raw.type.toLowerCase()}(SL-${raw.id.substring(0,6).toUpperCase()}): ${raw.title}`);
@@ -619,22 +627,23 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
     }
   };
 
+
   const filteredTasks = useMemo(() => {
     let filtered = tasks;
     if (sprintFilter !== "Todas") {
       filtered = filtered.filter(t => {
-        const raw = rawTickets.find(r => r.id === t.id);
+        const raw = rawTicketsById.get(t.id);
         return raw?.sprint_id === sprintFilter;
       });
     }
     if (epicFilter !== "Todas") {
       filtered = filtered.filter(t => {
-        const raw = rawTickets.find(r => r.id === t.id);
+        const raw = rawTicketsById.get(t.id);
         return raw?.epic_id === epicFilter;
       });
     }
     return filtered;
-  }, [tasks, sprintFilter, epicFilter, rawTickets]);
+  }, [tasks, sprintFilter, epicFilter, rawTicketsById]);
 
   // ⚡ Bolt: Performance Optimization
   // Groups tasks by status in a single pass O(N).
@@ -802,7 +811,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
                           task={task}
                           onNodeClick={onNodeClick}
                           onClick={() => {
-                            const isDbTicket = rawTickets.some(r => r.id === task.id);
+                            const isDbTicket = rawTicketsById.has(task.id);
                             if (isDbTicket) {
                               setActiveDrawerTicketId(task.id);
                             }
@@ -1013,7 +1022,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
       {/* Ticket Drawer */}
       {activeDrawerTicketId && (
         <TicketDrawer
-          ticket={rawTickets.find(r => r.id === activeDrawerTicketId)!}
+          ticket={rawTicketsById.get(activeDrawerTicketId)!}
           allSprints={sprints}
           allEpics={epics}
           columns={columns}
