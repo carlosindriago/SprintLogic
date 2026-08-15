@@ -313,6 +313,51 @@ async def fetch_provider_models(
                         ),
                     ]
 
+            elif provider in ("github", "github_models"):
+                headers["Authorization"] = f"Bearer {api_key}"
+                headers["User-Agent"] = "SprintLogic/1.0"
+                try:
+                    res = await client.get(
+                        "https://models.inference.ai.azure.com/models", headers=headers
+                    )
+                    if res.status_code == 200:
+                        data = res.json()
+                        raw_list = data if isinstance(data, list) else data.get("data", data.get("models", []))
+                        models = [
+                            ProviderModel(
+                                id=f"github/{m.get('name', m.get('id'))}"
+                                if not str(m.get('name', m.get('id', ''))).startswith("github/")
+                                else str(m.get('name', m.get('id'))),
+                                name=str(m.get('name', m.get('id'))),
+                            )
+                            for m in raw_list
+                            if m.get("name") or m.get("id")
+                        ]
+                    elif res.status_code in (401, 403):
+                        raise ProviderFetchError(
+                            "Invalid GitHub Personal Access Token (PAT)", status_code=res.status_code
+                        )
+                except ProviderFetchError:
+                    raise
+                except Exception:
+                    pass
+
+                if not models:
+                    models = [
+                        ProviderModel(id="github/gpt-4o", name="GPT-4o"),
+                        ProviderModel(id="github/gpt-4o-mini", name="GPT-4o mini"),
+                        ProviderModel(id="github/o1-preview", name="o1-preview"),
+                        ProviderModel(id="github/o1-mini", name="o1-mini"),
+                        ProviderModel(id="github/o3-mini", name="o3-mini"),
+                        ProviderModel(id="github/Meta-Llama-3.1-405B-Instruct", name="Meta Llama 3.1 405B"),
+                        ProviderModel(id="github/Meta-Llama-3.1-70B-Instruct", name="Meta Llama 3.1 70B"),
+                        ProviderModel(id="github/Meta-Llama-3.1-8B-Instruct", name="Meta Llama 3.1 8B"),
+                        ProviderModel(id="github/Mistral-Large-2407", name="Mistral Large 2407"),
+                        ProviderModel(id="github/Mistral-Nemo", name="Mistral Nemo"),
+                        ProviderModel(id="github/Phi-3.5-MoE-instruct", name="Phi-3.5 MoE"),
+                        ProviderModel(id="github/Phi-3.5-mini-instruct", name="Phi-3.5 mini"),
+                    ]
+
             else:
                 raise ProviderFetchError(f"Unsupported provider: {provider}")
 
@@ -441,6 +486,14 @@ CURATED_MODELS = {
             name="DeepSeek R1 Distill 70B",
         ),
     ],
+    "github": [
+        ProviderModel(id="github/gpt-4o", name="GPT-4o"),
+        ProviderModel(id="github/gpt-4o-mini", name="GPT-4o mini"),
+        ProviderModel(id="github/o1-preview", name="o1-preview"),
+        ProviderModel(id="github/o1-mini", name="o1-mini"),
+        ProviderModel(id="github/Meta-Llama-3.1-70B-Instruct", name="Meta Llama 3.1 70B"),
+        ProviderModel(id="github/Mistral-Large-2407", name="Mistral Large 2407"),
+    ],
 }
 
 PROVIDER_LABELS = {
@@ -456,6 +509,7 @@ PROVIDER_LABELS = {
     "nvidia": "Nvidia NIM",
     "zai": "Z.AI (GLM)",
     "cerebras": "Cerebras AI",
+    "github": "GitHub Models (Copilot)",
 }
 
 

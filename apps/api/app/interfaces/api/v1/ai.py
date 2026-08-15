@@ -91,6 +91,7 @@ class APIKeysPayload(BaseModel):
     nvidia_key: str | None = None
     zai_key: str | None = None
     cerebras_key: str | None = None
+    github_key: str | None = None
 
 
 class CodeCoachRequest(BaseModel):
@@ -195,6 +196,7 @@ async def get_active_models(payload: APIKeysPayload):
         "nvidia": payload.nvidia_key,
         "zai": payload.zai_key,
         "cerebras": payload.cerebras_key,
+        "github": payload.github_key,
     }
 
     for provider, fallback_models in CURATED_MODELS.items():

@@ -12,6 +12,7 @@ ENV_VAR_MAPPINGS: dict[str, list[str]] = {
     "nvidia": ["NVIDIA_API_KEY", "NVIDIA_NIM_API_KEY"],
     "zai": ["ZAI_API_KEY", "Z_AI_API_KEY", "ZHIPU_API_KEY"],
     "cerebras": ["CEREBRAS_API_KEY"],
+    "github": ["GITHUB_TOKEN", "GITHUB_PAT", "GITHUB_MODELS_API_KEY", "GITHUB_API_KEY"],
     "opencode-zen": ["OPENCODE_ZEN_API_KEY", "OPENCODE_API_KEY"],
     "opencode-go": ["OPENCODE_GO_API_KEY"],
 }

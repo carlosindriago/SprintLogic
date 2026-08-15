@@ -31,6 +31,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useFimStore } from "@/store/fimStore";
 import { useSettingsStore } from "@/store/settingsStore";
+import { useLLMConfigStore } from "@/store/llmConfigStore";
 import {
   getCuratedModels,
   verifyAndSaveProviderKey,
@@ -119,6 +120,26 @@ const NATIVE_PRESETS: NativePreset[] = [
       "anthropic/claude-3-5-sonnet",
       "google/gemini-pro",
     ],
+  },
+  {
+    id: "github",
+    name: "GitHub Copilot / Models",
+    icon: "🐙",
+    color: "text-purple-300",
+    keyLabel: "GitHub Personal Access Token (PAT)",
+    keyPlaceholder: "ghp_... o github_pat_...",
+    defaultModels: [
+      "github/gpt-4o",
+      "github/gpt-4o-mini",
+      "github/o1-preview",
+      "github/o1-mini",
+      "github/o3-mini",
+      "github/Meta-Llama-3.1-70B-Instruct",
+      "github/Mistral-Large-2407",
+      "github/Phi-3.5-MoE-instruct",
+    ],
+    description:
+      "Catálogo oficial de GitHub Models para desarrolladores (Copilot Engine). Accede a GPT-4o, o1, Llama 3.1 y Mistral con tu GitHub Personal Access Token (PAT).",
   },
   {
     id: "opencode-zen",
@@ -251,6 +272,8 @@ function PresetCard({
   const setFimModel = useFimStore((s) => s.setFimModel);
   const setGroqApiKey = useFimStore((s) => s.setGroqApiKey);
 
+  const setStoreApiKey = useLLMConfigStore((s) => s.setApiKey);
+
   // Sync selected model down from props if changed externally
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -285,6 +308,7 @@ function PresetCard({
       const fetched = await verifyAndSaveProviderKey(preset.id, keyValue);
       if (fetched.length > 0) {
         setFetchStatus("ok");
+        setStoreApiKey(preset.id, keyValue);
         onRefreshCurated(); // Refreshes the top-level state
         const firstId = fetched[0].id;
         setSelectedModel(firstId);
@@ -293,11 +317,12 @@ function PresetCard({
     } catch {
       setFetchStatus("error");
     }
-  }, [preset.id, keyValue, setFimModel, preset.isFimProvider, onRefreshCurated]);
+  }, [preset.id, keyValue, setFimModel, preset.isFimProvider, onRefreshCurated, setStoreApiKey]);
 
   const handleSave = async () => {
     if (keyValue) {
       await handleFetchModels();
+      setStoreApiKey(preset.id, keyValue);
     }
     if (preset.isFimProvider && keyValue) {
       setGroqApiKey(keyValue);

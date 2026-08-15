@@ -38,6 +38,10 @@ class ProviderAdapter:
             "litellm_provider": "openai",
             "api_base": "https://api.cerebras.ai/v1",
         },
+        "github": {
+            "litellm_provider": "github",
+            "api_base": "https://models.inference.ai.azure.com",
+        },
     }
 
     @staticmethod
@@ -57,6 +61,8 @@ class ProviderAdapter:
                 return "nvidia"
             if provider in ("z-ai", "zai"):
                 return "zai"
+            if provider in ("github", "github_models", "copilot"):
+                return "github"
             return provider
 
         model_lower = model.lower()
@@ -74,6 +80,8 @@ class ProviderAdapter:
             return "zai"
         if "cerebras" in model_lower:
             return "cerebras"
+        if "github" in model_lower or "copilot" in model_lower:
+            return "github"
         return "gemini"
 
     @classmethod
