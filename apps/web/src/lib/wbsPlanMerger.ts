@@ -100,11 +100,40 @@ export function smartMergeWbsPlan(
     return cleanCurrent;
   }
 
-  // 0. Direct in-place replacement if explicit selection is targeted
-  if (targetSelection && targetSelection.trim().length > 5) {
+  // ─────────────────────────────────────────────────────────────
+  // 0. EXPLICIT SELECTION REPLACEMENT
+  // ─────────────────────────────────────────────────────────────
+  if (targetSelection && targetSelection.trim().length > 3) {
     const cleanTarget = targetSelection.trim();
+
+    // 0.1 Direct Exact Substring Replacement
     if (cleanCurrent.includes(cleanTarget)) {
       return cleanCurrent.replace(cleanTarget, cleanSnippet);
+    }
+
+    // 0.2 Line-by-line / Whitespace-Normalized Matching
+    const normTarget = cleanTarget.replace(/\r\n/g, '\n').replace(/\s+/g, ' ').trim();
+    const currentLines = cleanCurrent.split('\n');
+    let bestStart = -1;
+    let bestEnd = -1;
+
+    for (let i = 0; i < currentLines.length; i++) {
+      let accumulated = '';
+      for (let j = i; j < Math.min(i + 30, currentLines.length); j++) {
+        accumulated = currentLines.slice(i, j + 1).join('\n').replace(/\s+/g, ' ').trim();
+        if (accumulated === normTarget || (normTarget.length > 10 && accumulated.includes(normTarget))) {
+          bestStart = i;
+          bestEnd = j + 1;
+          break;
+        }
+      }
+      if (bestStart !== -1) break;
+    }
+
+    if (bestStart !== -1) {
+      const before = currentLines.slice(0, bestStart).join('\n');
+      const after = currentLines.slice(bestEnd).join('\n');
+      return `${before ? before + '\n' : ''}${cleanSnippet}${after ? '\n' + after : ''}`;
     }
   }
 
@@ -167,9 +196,9 @@ export function smartMergeWbsPlan(
   }
 
   // If snippet has `# ` (top level title) and has AT LEAST the same number of epics as current plan,
-  // it is likely a legitimate full-document replacement.
+  // it is only a legitimate full-document replacement IF NO TARGET SELECTION was active!
   const hasTopLevelHeader = /^#\s+/m.test(cleanSnippet);
-  if (hasTopLevelHeader && snippetParsed.epics.length >= currentParsed.epics.length) {
+  if (!targetSelection && hasTopLevelHeader && snippetParsed.epics.length >= currentParsed.epics.length) {
     return cleanSnippet;
   }
 

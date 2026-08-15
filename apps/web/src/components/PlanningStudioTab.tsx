@@ -598,7 +598,7 @@ ${markdownContent || '// Plan vacío'}
 
     const activeSelection = selectedContextSnippet;
     const promptToSend = activeSelection
-      ? `[SECCIÓN SELECCIONADA DEL PLAN A MODIFICAR/ANALIZAR]:\n"""${activeSelection}"""\n\n[INSTRUCCIÓN DEL USUARIO]:\n${textToSend}`
+      ? `[MODIFICACIÓN LOCALIZADA - EDITA ÚNICAMENTE ESTE FRAGMENTO SELECCIONADO]:\n\`\`\`markdown\n${activeSelection}\n\`\`\`\n\n[INSTRUCCIÓN DEL USUARIO]:\n${textToSend}\n\nIMPORTANTE: No devuelvas todo el plan. Devuelve ÚNICAMENTE el bloque Markdown con la versión modificada/reemplazo de este fragmento seleccionado para que se inserte en su lugar exacto.`
       : textToSend;
 
     const displayContent = activeSelection
