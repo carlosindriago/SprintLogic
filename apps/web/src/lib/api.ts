@@ -742,10 +742,59 @@ export const updatePrompt = (id: string, current_content: string) =>
 export const restorePrompt = (id: string) => 
   api.post<PromptRegistryItem>(`/prompts/${id}/restore`);
 
+export interface PlanningDocument {
+  id: string;
+  project_id: string;
+  file_path: string;
+  markdown_content: string;
+  version: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PlanningVersion {
+  id: string;
+  project_id: string;
+  version: number;
+  change_summary: string | null;
+  markdown_content: string;
+  created_at: string;
+}
+
+export const getPlanningDocument = (projectId: string) =>
+  api.get<PlanningDocument>(`/planning-studio/projects/${projectId}/document`);
+
+export const savePlanningDocument = (
+  projectId: string,
+  markdownContent: string,
+  changeSummary?: string,
+  filePath?: string
+) =>
+  api.post<PlanningDocument>(`/planning-studio/projects/${projectId}/document`, {
+    markdown_content: markdownContent,
+    change_summary: changeSummary,
+    file_path: filePath,
+  });
+
+export const getPlanningHistory = (projectId: string) =>
+  api.get<PlanningVersion[]>(`/planning-studio/projects/${projectId}/history`);
+
+export const restorePlanningVersion = (projectId: string, versionId: string) =>
+  api.post<PlanningDocument>(`/planning-studio/projects/${projectId}/history/${versionId}/restore`);
+
+export const getProjectGraphMd = async (projectId: string): Promise<string> => {
+  const res = await fetch(`${API_BASE_URL}/projects/${projectId}/graph/export/md`);
+  if (!res.ok) {
+    throw new Error("Failed to export project topological graph markdown");
+  }
+  return res.text();
+};
+
 export interface PlanningMessagePayload {
   messages: { role: string; content: string }[];
   project_id: string;
   model?: string;
+  current_markdown?: string;
 }
 
 export const sendPlanningMessage = async (
