@@ -194,6 +194,102 @@ export function extractTicketsFromMarkdown(markdown: string): WBSImportTicket[] 
   return tickets;
 }
 
+  const PlanningMessageItem = React.memo(function PlanningMessageItem({
+    message,
+  }: {
+    message: { role: string; content: string };
+  }) {
+    return (
+      <div className={`flex flex-col ${message.role === 'user' ? 'items-end' : 'items-start'}`}>
+        <div
+          className={`text-[11px] px-2 py-0.5 rounded mb-1 font-medium ${
+            message.role === 'user' ? 'text-blue-400' : 'text-emerald-400'
+          }`}
+        >
+          {message.role === 'user' ? 'Tú' : 'Agile Coach'}
+        </div>
+        <div
+          className={`max-w-[92%] rounded-xl p-3 text-xs leading-relaxed ${
+            message.role === 'user'
+              ? 'bg-blue-600 text-white shadow-md'
+              : 'bg-[#18181d] border border-zinc-800 text-zinc-200'
+          }`}
+        >
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+        </div>
+      </div>
+    );
+  });
+
+  interface PlanningChatInputProps {
+    onSendMessage: (text: string) => void;
+    isAiStreaming: boolean;
+    selectedContextSnippet: string | null;
+    onClearContext: () => void;
+  }
+
+  const PlanningChatInput = React.memo(function PlanningChatInput({
+    onSendMessage,
+    isAiStreaming,
+    selectedContextSnippet,
+    onClearContext,
+  }: PlanningChatInputProps) {
+    const [localInput, setLocalInput] = useState('');
+
+    const handleSubmit = (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!localInput.trim() || isAiStreaming) return;
+      onSendMessage(localInput);
+      setLocalInput('');
+    };
+
+    return (
+      <div className="p-3 border-t border-zinc-800 bg-[#141418] shrink-0">
+        {selectedContextSnippet && (
+          <div className="mb-2 p-2 bg-gradient-to-r from-sky-950/60 to-purple-950/60 border border-sky-500/40 rounded-lg flex items-start justify-between gap-2 shadow-md animate-in fade-in slide-in-from-bottom-2 duration-150">
+            <div className="flex items-start gap-2 min-w-0">
+              <Sparkles className="w-3.5 h-3.5 text-sky-400 mt-0.5 shrink-0" />
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-bold text-sky-300 uppercase tracking-wider">Contexto Seleccionado</span>
+                  <span className="text-[10px] text-zinc-500 font-mono">({selectedContextSnippet.length} caracteres)</span>
+                </div>
+                <p className="text-[11px] text-zinc-200 line-clamp-2 font-mono mt-0.5 bg-black/40 px-1.5 py-0.5 rounded border border-white/5">
+                  "{selectedContextSnippet}"
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={onClearContext}
+              className="text-zinc-400 hover:text-zinc-200 p-1 rounded hover:bg-zinc-800 shrink-0"
+              title="Quitar contexto"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+        <form onSubmit={handleSubmit} className="flex items-center gap-2">
+          <Input
+            id="agile-coach-input"
+            placeholder={selectedContextSnippet ? "Qué hacemos con la selección..." : "Pide una nueva fase, épica o refactor..."}
+            value={localInput}
+            onChange={(e) => setLocalInput(e.target.value)}
+            disabled={isAiStreaming}
+            className="bg-[#1b1b22] border-zinc-700 text-xs focus-visible:border-sky-500"
+          />
+          <Button
+            type="submit"
+            size="sm"
+            disabled={isAiStreaming || !localInput.trim()}
+            className="bg-sky-600 hover:bg-sky-500 text-white shadow-sm"
+          >
+            {isAiStreaming ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+          </Button>
+        </form>
+      </div>
+    );
+  });
+
 export default function PlanningStudioTab() {
   const currentProjectId = useTabsStore((s) => s.currentProjectId);
   const activeTabId = useTabsStore((s) => s.activeTabId);
@@ -232,7 +328,6 @@ export default function PlanningStudioTab() {
     : [];
 
   const [messages, setMessages] = useState<{ role: string; content: string }[]>(initialMessages);
-  const [inputValue, setInputValue] = useState('');
   const [isAiStreaming, setIsAiStreaming] = useState(false);
   const [selectedContextSnippet, setSelectedContextSnippet] = useState<string | null>(null);
 
@@ -498,22 +593,20 @@ ${markdownContent || '// Plan vacío'}
     }
   };
 
-  const handleSendMessage = async (customPrompt?: string) => {
-    const rawInput = customPrompt || inputValue;
-    if (!rawInput.trim() || isAiStreaming || !activeProjectId) return;
+  const handleSendMessage = async (textToSend: string) => {
+    if (!textToSend.trim() || isAiStreaming || !activeProjectId) return;
 
     const activeSelection = selectedContextSnippet;
     const promptToSend = activeSelection
-      ? `[SECCIÓN SELECCIONADA DEL PLAN A MODIFICAR/ANALIZAR]:\n"""${activeSelection}"""\n\n[INSTRUCCIÓN DEL USUARIO]:\n${rawInput}`
-      : rawInput;
+      ? `[SECCIÓN SELECCIONADA DEL PLAN A MODIFICAR/ANALIZAR]:\n"""${activeSelection}"""\n\n[INSTRUCCIÓN DEL USUARIO]:\n${textToSend}`
+      : textToSend;
 
     const displayContent = activeSelection
-      ? `📌 **Sobre la selección:**\n> *"${activeSelection.length > 80 ? activeSelection.slice(0, 80) + '...' : activeSelection}"*\n\n${rawInput}`
-      : rawInput;
+      ? `📌 **Sobre la selección:**\n> *"${activeSelection.length > 80 ? activeSelection.slice(0, 80) + '...' : activeSelection}"*\n\n${textToSend}`
+      : textToSend;
 
     const newMessages = [...messages, { role: 'user', content: displayContent }];
     setMessages(newMessages);
-    if (!customPrompt) setInputValue('');
     setSelectedContextSnippet(null);
     setIsAiStreaming(true);
     let assistantReply = '';
@@ -642,53 +735,16 @@ ${markdownContent || '// Plan vacío'}
               </div>
             )}
             {messages.map((m, idx) => (
-              <div key={idx} className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
-                <div className={`text-[11px] px-2 py-0.5 rounded mb-1 font-medium ${m.role === 'user' ? 'text-blue-400' : 'text-emerald-400'}`}>{m.role === 'user' ? 'Tú' : 'Agile Coach'}</div>
-                <div className={`max-w-[92%] rounded-xl p-3 text-xs leading-relaxed ${m.role === 'user' ? 'bg-blue-600 text-white shadow-md' : 'bg-[#18181d] border border-zinc-800 text-zinc-200'}`}>
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
-                </div>
-              </div>
+              <PlanningMessageItem key={idx} message={m} />
             ))}
             <div ref={messagesEndRef} />
           </div>
-          <div className="p-3 border-t border-zinc-800 bg-[#141418] shrink-0">
-            {selectedContextSnippet && (
-              <div className="mb-2 p-2 bg-gradient-to-r from-sky-950/60 to-purple-950/60 border border-sky-500/40 rounded-lg flex items-start justify-between gap-2 shadow-md animate-in fade-in slide-in-from-bottom-2 duration-150">
-                <div className="flex items-start gap-2 min-w-0">
-                  <Sparkles className="w-3.5 h-3.5 text-sky-400 mt-0.5 shrink-0" />
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] font-bold text-sky-300 uppercase tracking-wider">Contexto Seleccionado</span>
-                      <span className="text-[10px] text-zinc-500 font-mono">({selectedContextSnippet.length} caracteres)</span>
-                    </div>
-                    <p className="text-[11px] text-zinc-200 line-clamp-2 font-mono mt-0.5 bg-black/40 px-1.5 py-0.5 rounded border border-white/5">
-                      "{selectedContextSnippet}"
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setSelectedContextSnippet(null)}
-                  className="text-zinc-400 hover:text-zinc-200 p-1 rounded hover:bg-zinc-800 shrink-0"
-                  title="Quitar contexto"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            )}
-            <form onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }} className="flex items-center gap-2">
-              <Input
-                id="agile-coach-input"
-                placeholder={selectedContextSnippet ? "Qué hacemos con la selección..." : "Pide una nueva fase, épica o refactor..."}
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                disabled={isAiStreaming}
-                className="bg-[#1b1b22] border-zinc-700 text-xs focus-visible:border-sky-500"
-              />
-              <Button type="submit" size="sm" disabled={isAiStreaming || !inputValue.trim()} className="bg-sky-600 hover:bg-sky-500 text-white shadow-sm">
-                <Send className="w-4 h-4" />
-              </Button>
-            </form>
-          </div>
+          <PlanningChatInput
+            onSendMessage={handleSendMessage}
+            isAiStreaming={isAiStreaming}
+            selectedContextSnippet={selectedContextSnippet}
+            onClearContext={() => setSelectedContextSnippet(null)}
+          />
         </div>
 
         <div className="flex-1 min-w-0 flex flex-col bg-[#0d0d10] overflow-hidden">
