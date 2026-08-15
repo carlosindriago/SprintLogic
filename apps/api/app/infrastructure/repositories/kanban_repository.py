@@ -159,7 +159,7 @@ class SQLAlchemyKanbanRepository:
             report_id=payload.report_id,
             title=payload.title,
             type=payload.type,
-            status=TicketStatus.TODO,
+            status=payload.status or TicketStatus.TODO,
             priority=payload.priority,
             description=payload.description,
             created_at=now,

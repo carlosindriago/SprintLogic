@@ -136,7 +136,7 @@ export interface FileTreeNode {
 }
 
 export type TicketType = "Technical Debt" | "Security" | "Refactor" | "Feature";
-export type TicketStatus = "todo" | "in_progress" | "done" | "archived";
+export type TicketStatus = "icebox" | "todo" | "in_progress" | "done" | "archived";
 export type TicketPriority = "High" | "Medium" | "Low";
 
 export interface TicketNodeLink {
@@ -165,6 +165,7 @@ export interface KanbanTicket {
 export interface KanbanTicketCreate {
   title: string;
   type?: TicketType;
+  status?: TicketStatus;
   priority?: TicketPriority;
   description: string;
   report_id?: string;

@@ -291,6 +291,11 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
   const [quickAddText, setQuickAddText] = useState("");
   const [isQuickAdding, setIsQuickAdding] = useState(false);
 
+  // Icebox Drawer State
+  const [showIceboxDrawer, setShowIceboxDrawer] = useState(false);
+  const [quickAddIceboxText, setQuickAddIceboxText] = useState("");
+  const [isQuickAddingIcebox, setIsQuickAddingIcebox] = useState(false);
+
   const fetchConfig = useCallback(async () => {
     if (!projectId) return;
     try {
@@ -418,7 +423,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
 
     if (activeIdStr === overIdStr) return;
 
-    const isOverColumn = columns.some((c) => c.id === overIdStr);
+    const isOverColumn = columns.some((c) => c.id === overIdStr) || overIdStr === "icebox";
     const prevTasksState = [...tasks];
 
     const activeIndex = tasks.findIndex((t) => t.id === activeIdStr);
@@ -432,9 +437,13 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
     if (isOverColumn) {
       newStatus = overIdStr;
       activeTask.status = overIdStr;
-      const targetCol = columns.find((c) => c.id === overIdStr);
-      if (targetCol) {
-        activeTask.category = targetCol.title;
+      if (overIdStr === "icebox") {
+        activeTask.category = "Icebox";
+      } else {
+        const targetCol = columns.find((c) => c.id === overIdStr);
+        if (targetCol) {
+          activeTask.category = targetCol.title;
+        }
       }
       newTasks[activeIndex] = activeTask;
       
@@ -636,6 +645,10 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
     return filtered;
   }, [tasks, sprintFilter, epicFilter, rawTickets]);
 
+  const iceboxTasks = useMemo(() => {
+    return tasks.filter((t) => (t.status || "").toLowerCase() === "icebox");
+  }, [tasks]);
+
   // ⚡ Bolt: Performance Optimization
   // Groups tasks by status in a single pass O(N).
   // Prevents filtering the entire tasks array 3 times per column on every render,
@@ -707,6 +720,21 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
             </div>
           </div>
           <button 
+            onClick={() => setShowIceboxDrawer(!showIceboxDrawer)}
+            className={cn(
+              "flex items-center gap-1.5 text-xs px-3 py-1.5 rounded transition-all border shadow-sm font-medium",
+              showIceboxDrawer
+                ? "bg-cyan-950/80 text-cyan-200 border-cyan-500/60 ring-1 ring-cyan-500/30"
+                : "bg-[#18181b] text-cyan-400 hover:text-cyan-200 hover:bg-cyan-950/40 border-cyan-800/40"
+            )}
+          >
+            <span>🧊</span>
+            <span>Icebox</span>
+            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-cyan-900/60 text-cyan-300 font-mono">
+              {iceboxTasks.length}
+            </span>
+          </button>
+          <button 
             onClick={() => setShowManagerModal(true)}
             className="flex items-center gap-1.5 text-xs text-indigo-300 hover:text-white px-3 py-1.5 rounded bg-indigo-950/60 hover:bg-indigo-900/80 transition-colors border border-indigo-800/60 shadow-sm font-medium"
           >
@@ -747,9 +775,114 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
         </div>
       </div>
 
-      {/* Kanban Columns view */}
-      <div className="flex-1 flex p-6 gap-4 overflow-x-auto overflow-y-hidden custom-scrollbar bg-[#111112]">
+      {/* Main Board View with Left Drawer & Kanban Columns */}
+      <div className="flex-1 flex overflow-hidden relative bg-[#111112]">
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+          {/* Collapsible Left Icebox Drawer */}
+          {showIceboxDrawer && (
+            <div className="w-[320px] min-w-[300px] border-r border-zinc-800 bg-[#0e0e11] flex flex-col shrink-0 z-10 transition-all shadow-2xl">
+              <div className="p-3 border-b border-zinc-800/80 bg-[#141418] flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">🧊</span>
+                  <div className="flex flex-col">
+                    <span className="text-xs font-bold text-zinc-100 flex items-center gap-1.5">
+                      Icebox / Ideas
+                      <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-cyan-950 text-cyan-400 border border-cyan-800/50 font-mono">
+                        {iceboxTasks.length}
+                      </span>
+                    </span>
+                    <span className="text-[10px] text-zinc-500">Aparcadas fuera del sprint activo</span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowIceboxDrawer(false)}
+                  className="p-1 text-zinc-400 hover:text-zinc-200 rounded hover:bg-zinc-800 transition-colors"
+                  title="Cerrar Icebox"
+                  aria-label="Cerrar Icebox"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-3 border-b border-zinc-800/50 bg-[#101014]">
+                <input
+                  type="text"
+                  placeholder="+ Añadir idea al Icebox..."
+                  className="w-full bg-[#18181b] border border-cyan-900/40 rounded-md px-3 py-2 text-[11px] font-medium text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-cyan-500 disabled:opacity-50"
+                  value={quickAddIceboxText}
+                  onChange={(e) => setQuickAddIceboxText(e.target.value)}
+                  onKeyDown={async (e) => {
+                    if (e.key === "Enter" && quickAddIceboxText.trim() && projectId) {
+                      setIsQuickAddingIcebox(true);
+                      try {
+                        await createKanbanTicket(projectId, {
+                          title: quickAddIceboxText.trim(),
+                          type: "Feature",
+                          status: "icebox" as any,
+                          priority: "Low",
+                          description: "Idea estacionada en Icebox",
+                        });
+                        setQuickAddIceboxText("");
+                        await fetchTasks();
+                        toast.success("💡 Idea guardada en el Icebox");
+                      } catch (err) {
+                        console.error(err);
+                        toast.error("Error al crear idea");
+                      } finally {
+                        setIsQuickAddingIcebox(false);
+                      }
+                    }
+                  }}
+                  disabled={isQuickAddingIcebox}
+                />
+              </div>
+
+              <ScrollArea className="flex-1 p-3">
+                <SortableContext items={iceboxTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
+                  <DroppableColumn id="icebox">
+                    {iceboxTasks.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center p-6 text-center text-zinc-500 my-8 space-y-2">
+                        <span className="text-2xl opacity-40">🧊</span>
+                        <p className="text-xs text-zinc-400 font-medium">Icebox Vacío</p>
+                        <p className="text-[10px] text-zinc-600 max-w-[200px] leading-relaxed">
+                          Arrastra tarjetas aquí o escribe arriba para aparcar ideas sin contaminar el backlog activo.
+                        </p>
+                      </div>
+                    ) : (
+                      iceboxTasks.map(task => (
+                        <SortableTask
+                          key={task.id}
+                          task={task}
+                          onNodeClick={onNodeClick}
+                          onClick={() => {
+                            const isDbTicket = rawTickets.some(r => r.id === task.id);
+                            if (isDbTicket) {
+                              setActiveDrawerTicketId(task.id);
+                            }
+                          }}
+                          onMentorClick={(ticketId, nodeId) => {
+                            setActiveMentorTicket({ ticketId, projectId: projectId!, filePath: nodeId });
+                          }}
+                          onAutoFixClick={(ticketId, nodeId, instruction) => {
+                            const tabId = `autofix-${ticketId}-${nodeId}`;
+                            addTab({
+                              id: tabId,
+                              title: `Fix: ${nodeId.split('/').pop()}`,
+                              type: 'auto-fix',
+                              data: { hash: ticketId, filePath: nodeId, markdown: instruction }
+                            });
+                          }}
+                        />
+                      ))
+                    )}
+                  </DroppableColumn>
+                </SortableContext>
+              </ScrollArea>
+            </div>
+          )}
+
+          {/* Kanban Columns view */}
+          <div className="flex-1 flex p-6 gap-4 overflow-x-auto overflow-y-hidden custom-scrollbar bg-[#111112]">
           {columns.map((col, idx) => {
             const columnTasks = tasksByStatus[col.id] || [];
 
@@ -827,6 +960,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
               </div>
             );
           })}
+          </div>
 
           <DragOverlay>
             {activeTask ? (

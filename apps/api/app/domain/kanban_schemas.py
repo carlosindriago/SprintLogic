@@ -22,6 +22,7 @@ class TicketNodeLink(BaseModel):
 class KanbanTicketCreate(BaseModel):
     title: str
     type: TicketType = TicketType.TECHNICAL_DEBT
+    status: TicketStatus = TicketStatus.TODO
     priority: TicketPriority = TicketPriority.MEDIUM
     description: str
     report_id: UUID | None = None

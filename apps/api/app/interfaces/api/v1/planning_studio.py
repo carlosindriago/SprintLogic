@@ -33,11 +33,16 @@ from app.interfaces.api.v1.wbs_schemas import WBSHierarchicalResponse
 
 router = APIRouter()
 
-DEFAULT_WBS_MARKDOWN_TEMPLATE = """# 📋 Plan de Proyecto (WBS)
+DEFAULT_WBS_MARKDOWN_TEMPLATE = """# 🎯 Project Charter y Planificación WBS
 
-> **Documento Vivo de Planificación**: Este plan se sincroniza bidireccionalmente con el Sprint Center y sirve de contexto para la IA.
+## 1. Fundamentos del Proyecto
+- **Objetivo Principal:** [Define qué queremos lograr]
+- **Problema a Resolver:** [Qué dolor alivia este proyecto]
+- **Alcance y Naturaleza:** [Ej. MVP, Refactorización, Modernización Legacy, Feature]
+- **Stack Tecnológico Principal:** [Tecnologías involucradas]
 
 ---
+## 2. Plan de Ejecución (WBS)
 
 ## 🎯 Épica 1: Arquitectura & Setup Inicial
 
@@ -50,13 +55,8 @@ DEFAULT_WBS_MARKDOWN_TEMPLATE = """# 📋 Plan de Proyecto (WBS)
   - [ ] Ejecutar migraciones iniciales
 
 ---
-
-## 🚀 Épica 2: Funcionalidades Principales
-
-### 🏃 Sprint 2 (Desarrollo Core)
-- [ ] **Desarrollo de Endpoints y Lógica de Negocio** [Priority: Medium] [Type: Feature] [Hours: 8h] [Branch: feat/core-logic]
-  - [ ] Implementar rutas de API
-  - [ ] Conectar interfaz de usuario con servicios
+## 💡 3. Icebox (Backlog y Propuestas Futuras)
+- Idea: [Ideas que quedan fuera del alcance actual o propuestas para futuras iteraciones]
 """
 
 
@@ -436,28 +436,34 @@ async def process_planning_message(req: Request, request: PlanningRequest):
 
     base_system = (
         "Eres un Agile Coach y Tech Lead Senior en SprintLogic Planning Studio.\n"
-        "Tu misión es actuar sobre el 'Documento Vivo' de planificación (docs/planning/current_plan.md) con CIRUGÍA DE PRECISIÓN Y PERSISTENCIA INCREMENTAL ESTRICTA.\n\n"
-        "REGLAS CRÍTICAS DE PRESERVACIÓN (ZERO-DATA-LOSS):\n"
-        "1. PRESERVACIÓN TOTAL POR DEFECTO: El plan existente es la FUENTE DE LA VERDAD. NUNCA borres, recortes, omitas o resumas épicas, sprints o tareas existentes a menos que el usuario te dé una instrucción EXPLÍCITA E INEQUÍVOCA de borrar o eliminar algo específico (ej. 'elimina la épica 3').\n"
-        "2. DIRECTIVA DE SELECCIÓN ESPECÍFICA (SCOPE ESTRICTO):\n"
+        "Tu misión es actuar sobre el 'Documento Vivo' de planificación (docs/planning/current_plan.md) encabezado por un Project Charter, con CIRUGÍA DE PRECISIÓN, PERSISTENCIA INCREMENTAL ESTRICTA Y CONTROL DE ALCANCE.\n\n"
+        "REGLAS CRÍTICAS DEL GUARDIÁN DEL ALCANCE Y PRESERVACIÓN:\n"
+        "1. ESTRELLA POLAR (PROJECT CHARTER): Antes de generar Sprints o Tareas, revisa la sección '## 1. Fundamentos del Proyecto'. Si está vacía o es muy vaga, interactúa con el usuario para definir el objetivo, el problema y el alcance real (ej. si es un MVP o un refactor). Una vez definidos estos fundamentos, úsalos como tu 'Estrella Polar'.\n"
+        "2. CONTROL DE CORRUPCIÓN DE ALCANCE (SCOPE CREEP -> ICEBOX): Cualquier idea de tarea que exceda el 'Alcance y Naturaleza' definido debe ser catalogada como Corrupción de Alcance (Scope Creep) y enviada obligatoriamente a la sección '## 💡 3. Icebox (Backlog y Propuestas Futuras)' como viñeta simple ('- Idea: ...') SIN checkboxes ('- [ ]'), evitando que el Smart Parser la envíe al Sprint Center prematuramente.\n"
+        "3. PRESERVACIÓN TOTAL POR DEFECTO (ZERO-DATA-LOSS): El plan existente es la FUENTE DE LA VERDAD. NUNCA borres, recortes, omitas o resumas el Project Charter, épicas, sprints o tareas existentes a menos que el usuario te dé una instrucción EXPLÍCITA E INEQUÍVOCA de borrar o eliminar algo específico (ej. 'elimina la épica 3').\n"
+        "4. DIRECTIVA DE SELECCIÓN ESPECÍFICA (SCOPE ESTRICTO):\n"
         "   - Si el mensaje del usuario incluye un fragmento seleccionado ('[MODIFICACIÓN LOCALIZADA - EDITA ÚNICAMENTE ESTE FRAGMENTO SELECCIONADO]' o similar):\n"
         "     * Tu tarea se restringe EXCLUSIVAMENTE a ese fragmento seleccionado.\n"
         "     * NUNCA reescribas ni toques el resto del plan ni devuelvas el documento entero.\n"
         "     * Tu bloque de código Markdown debe contener ÚNICAMENTE la versión mejorada o modificada de ese fragmento seleccionado para que el sistema lo reemplace in-place.\n"
-        "3. EDICIÓN MODULAR Y QUIRÚRGICA:\n"
+        "5. EDICIÓN MODULAR Y QUIRÚRGICA:\n"
         "   - Si el usuario te pide 'revisar', 'ajustar' o 'mejorar' una sola épica o sprint específico (ej. 'revisa la épica 2'):\n"
         "     * Devuelve únicamente el bloque Markdown de esa épica específica iniciando con `## 🎯 Épica <N>: <Título>`.\n"
         "     * El motor de SprintLogic integrará quirúrgicamente tus cambios en esa épica sin tocar el resto del plan.\n"
         "   - Si el usuario te pide una revisión general o agregar una fase:\n"
-        "     * MANTÉN INTACTAS todas las fases y tareas previas con sus formatos, prioridades, tipos y horas.\n"
+        "     * MANTÉN INTACTAS todas las fases, el Project Charter, tareas previas y la sección de Icebox.\n"
         "   - NUNCA uses comentarios tipo '<!-- resto del plan igual -->' ni elimines el trabajo previo.\n"
-        "4. FORMATO ESTÁNDAR DEL DOCUMENTO:\n"
-        "   - # <Título del Plan>\n"
+        "6. ESTRUCTURA ESTÁNDAR DEL DOCUMENTO:\n"
+        "   - # 🎯 Project Charter y Planificación WBS\n"
+        "   - ## 1. Fundamentos del Proyecto\n"
+        "   - ## 2. Plan de Ejecución (WBS)\n"
         "   - ## 🎯 Épica <N>: <Nombre de Épica>\n"
         "   - ### 🏃 Sprint <N> (<Objetivo del Sprint>)\n"
         "   - - [ ] **<Título de Tarea>** [Priority: High|Medium|Low] [Type: Feature|Refactor|Technical Debt|Security] [Hours: <N>h] [Branch: feat/...]\n"
         "   -   - [ ] <Subtarea técnica>\n"
-        "5. RESPUESTA CONVERSACIONAL: Explica con claridad técnica qué cambios o mejoras estás proponiendo y por qué."
+        "   - ## 💡 3. Icebox (Backlog y Propuestas Futuras)\n"
+        "   - - Idea: <propuesta o idea estacionada>\n"
+        "7. RESPUESTA CONVERSACIONAL: Explica con claridad técnica qué cambios o mejoras estás proponiendo y por qué."
     )
 
     if request.current_markdown:

@@ -772,9 +772,49 @@ ${markdownContent || '// Plan vacío'}
 
   const customMarkdownComponents = useMemo(() => {
     return {
-      h1: ({ children, ...props }: any) => <h1 className="text-xl font-bold text-zinc-100 pb-2 mb-4 border-b border-zinc-800" {...props}>{children}</h1>,
-      h2: ({ children, ...props }: any) => <h2 className="text-lg font-semibold text-sky-400 mt-6 mb-3 flex items-center gap-2 border-b border-sky-900/30 pb-1" {...props}>{children}</h2>,
+      h1: ({ children, ...props }: any) => (
+        <h1 className="text-xl font-bold text-zinc-100 pb-2 mb-4 border-b border-zinc-800 flex items-center gap-2" {...props}>
+          {children}
+        </h1>
+      ),
+      h2: ({ children, ...props }: any) => {
+        const text = String(React.Children.toArray(children).join(''));
+        if (/fundamentos/i.test(text)) {
+          return (
+            <div className="mt-6 mb-3 p-3.5 bg-sky-950/20 border border-sky-500/30 rounded-xl shadow-sm">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 font-bold border border-sky-500/40 uppercase tracking-wider">
+                  Contrato Rector
+                </span>
+                <h2 className="text-base font-bold text-sky-200" {...props}>{children}</h2>
+              </div>
+            </div>
+          );
+        }
+        if (/icebox/i.test(text)) {
+          return (
+            <div className="mt-8 mb-3 p-3.5 bg-gradient-to-r from-purple-950/25 to-indigo-950/20 border border-purple-500/30 rounded-xl shadow-sm">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-bold border border-purple-500/40 uppercase tracking-wider">
+                  🧊 Backlog de Ideas
+                </span>
+                <h2 className="text-base font-bold text-purple-200" {...props}>{children}</h2>
+              </div>
+            </div>
+          );
+        }
+        return (
+          <h2 className="text-lg font-semibold text-sky-400 mt-6 mb-3 flex items-center gap-2 border-b border-sky-900/30 pb-1" {...props}>
+            {children}
+          </h2>
+        );
+      },
       h3: ({ children, ...props }: any) => <h3 className="text-base font-medium text-amber-400 mt-4 mb-2 flex items-center gap-2" {...props}>{children}</h3>,
+      blockquote: ({ children, ...props }: any) => (
+        <blockquote className="border-l-4 border-sky-500 bg-sky-950/20 p-3 my-3 rounded-r-lg text-zinc-300 italic text-xs leading-relaxed" {...props}>
+          {children}
+        </blockquote>
+      ),
       li: ({ children, ...props }: any) => {
         const childArray = React.Children.toArray(children);
         let taskTitle = '';
@@ -789,6 +829,17 @@ ${markdownContent || '// Plan vacío'}
             }
           }
         }
+
+        const rawText = String(childArray.map(c => (typeof c === 'string' ? c : (c as any)?.props?.children || '')).join(''));
+        if (/^idea:/i.test(rawText.trim())) {
+          return (
+            <li className="my-1.5 text-sm text-purple-200/90 leading-relaxed flex items-start gap-2 bg-purple-950/15 border border-purple-500/20 px-3 py-1.5 rounded-lg list-none" {...props}>
+              <span className="text-purple-400 text-xs shrink-0 mt-0.5">💡</span>
+              <div className="flex-1">{children}</div>
+            </li>
+          );
+        }
+
         const normTitle = taskTitle.toLowerCase().replace(/\s+/g, ' ').trim();
         const kanbanMatch = normTitle ? kanbanTaskMap.get(normTitle) : null;
         let isDone = kanbanMatch?.status?.includes('done') || kanbanMatch?.status === 'completed';
