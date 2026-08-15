@@ -906,34 +906,6 @@ ${markdownContent || '// Plan vacío'}
                       </ReactMarkdown>
                     </div>
                   )}
-
-                  {selectedContextSnippet && (
-                    <div className="sticky bottom-4 left-1/2 -translate-x-1/2 z-30 bg-[#16161f]/95 backdrop-blur-md border border-sky-500/40 rounded-xl px-4 py-2.5 shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-2 duration-150">
-                      <div className="flex items-center gap-2">
-                        <Highlighter className="w-4 h-4 text-sky-400" />
-                        <span className="text-xs text-zinc-200 font-medium">
-                          Selección lista ({selectedContextSnippet.length} caracteres)
-                        </span>
-                      </div>
-                      <Button
-                        size="sm"
-                        onClick={() => {
-                          const inputEl = document.getElementById('agile-coach-input');
-                          inputEl?.focus();
-                        }}
-                        className="bg-sky-600 hover:bg-sky-500 text-white text-xs h-7 px-3 font-medium gap-1.5 shadow-md shadow-sky-900/30"
-                      >
-                        <MessageSquare className="w-3.5 h-3.5" /> Enviar al Agile Coach
-                      </Button>
-                      <button
-                        onClick={() => setSelectedContextSnippet(null)}
-                        className="text-zinc-500 hover:text-zinc-300 p-1 rounded hover:bg-zinc-800 transition-colors"
-                        title="Deseleccionar"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  )}
                 </div>
               ) : viewMode === 'wbs_tree' ? (
                 <div className="flex-1 overflow-y-auto p-6 bg-[#0b0b0e] space-y-6">
