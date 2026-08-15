@@ -208,7 +208,7 @@ export function extractTicketsFromMarkdown(markdown: string): WBSImportTicket[] 
     }, [message.role, message.content]);
 
     return (
-      <div className={`flex flex-col ${message.role === 'user' ? 'items-end' : 'items-start'}`}>
+      <div className={`flex flex-col ${message.role === 'user' ? 'items-end' : 'items-start'} max-w-full min-w-0`}>
         <div
           className={`text-[11px] px-2 py-0.5 rounded mb-1 font-medium ${
             message.role === 'user' ? 'text-blue-400' : 'text-emerald-400'
@@ -217,19 +217,77 @@ export function extractTicketsFromMarkdown(markdown: string): WBSImportTicket[] 
           {message.role === 'user' ? 'Tú' : 'Agile Coach'}
         </div>
         <div
-          className={`max-w-[92%] rounded-xl p-3 text-xs leading-relaxed ${
+          className={`max-w-[95%] rounded-xl p-3 text-xs leading-relaxed break-words [overflow-wrap:anywhere] overflow-hidden ${
             message.role === 'user'
               ? 'bg-blue-600 text-white shadow-md'
               : 'bg-[#18181d] border border-zinc-800 text-zinc-200'
           }`}
         >
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+          <div className="w-full break-words [overflow-wrap:anywhere] overflow-hidden">
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                pre: ({ children, ...props }) => (
+                  <pre
+                    className="overflow-x-auto max-w-full bg-[#0d0d10] border border-zinc-800/80 rounded-lg p-2.5 my-2 text-[11px] font-mono leading-relaxed text-zinc-300 whitespace-pre-wrap break-all"
+                    {...props}
+                  >
+                    {children}
+                  </pre>
+                ),
+                code: ({ node, inline, className, children, ...props }: any) => {
+                  if (inline) {
+                    return (
+                      <code
+                        className="bg-zinc-850 text-sky-300 px-1 py-0.5 rounded text-[11px] font-mono break-all"
+                        {...props}
+                      >
+                        {children}
+                      </code>
+                    );
+                  }
+                  return (
+                    <code className="text-[11px] font-mono break-all whitespace-pre-wrap" {...props}>
+                      {children}
+                    </code>
+                  );
+                },
+                p: ({ children, ...props }) => (
+                  <p className="my-1 leading-relaxed break-words [overflow-wrap:anywhere]" {...props}>
+                    {children}
+                  </p>
+                ),
+                ul: ({ children, ...props }) => (
+                  <ul className="list-disc pl-4 my-1 space-y-0.5 break-words [overflow-wrap:anywhere]" {...props}>
+                    {children}
+                  </ul>
+                ),
+                ol: ({ children, ...props }) => (
+                  <ol className="list-decimal pl-4 my-1 space-y-0.5 break-words [overflow-wrap:anywhere]" {...props}>
+                    {children}
+                  </ol>
+                ),
+                li: ({ children, ...props }) => (
+                  <li className="break-words [overflow-wrap:anywhere]" {...props}>
+                    {children}
+                  </li>
+                ),
+                blockquote: ({ children, ...props }) => (
+                  <blockquote className="border-l-2 border-sky-500/50 pl-2.5 my-1.5 text-zinc-400 italic break-words [overflow-wrap:anywhere]" {...props}>
+                    {children}
+                  </blockquote>
+                ),
+              }}
+            >
+              {message.content}
+            </ReactMarkdown>
+          </div>
           {extracted && onApplySnippet && (
-            <div className="mt-2 pt-2 border-t border-zinc-800/80 flex items-center justify-end">
+            <div className="mt-2.5 pt-2 border-t border-zinc-800/80 flex items-center justify-end">
               <button
                 type="button"
                 onClick={() => onApplySnippet(extracted)}
-                className="text-[10px] px-2 py-1 bg-emerald-950/60 hover:bg-emerald-900 border border-emerald-500/40 text-emerald-300 rounded-md flex items-center gap-1 font-medium shadow-sm transition-colors"
+                className="text-[10px] px-2.5 py-1 bg-emerald-950/60 hover:bg-emerald-900 border border-emerald-500/40 text-emerald-300 rounded-md flex items-center gap-1 font-medium shadow-sm transition-colors"
               >
                 <Sparkles className="w-3 h-3 text-emerald-400" /> Aplicar al Espejo Mágico
               </button>
