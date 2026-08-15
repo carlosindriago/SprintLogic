@@ -78,6 +78,10 @@ export function parseEpicsFromMarkdown(markdown: string): {
   return { preamble, epics };
 }
 
+export function escapeRegex(string: string): string {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 /**
  * Performs a smart, non-destructive merge of an AI-generated snippet into the current plan.
  */
@@ -100,19 +104,53 @@ export function smartMergeWbsPlan(currentPlan: string, aiSnippet: string): strin
     return cleanSnippet;
   }
 
-  // If snippet contains NO level-2 epics, check if it's a level-3 sprint
+  // ─────────────────────────────────────────────────────────────
+  // 1. SPRINT & TASK LEVEL PATCHING (No Level-2 Heading)
+  // ─────────────────────────────────────────────────────────────
   if (snippetParsed.epics.length === 0) {
-    // Check if snippet is a sprint (### Sprint N)
+    // 1.1 Check if snippet is a sprint (### Sprint N)
     const sprintMatch = cleanSnippet.match(/^###\s+(?:🏃\s*)?sprint\s*(\d+)/im);
     if (sprintMatch) {
       const sprintNum = sprintMatch[1];
-      // Try to replace the matching sprint in currentPlan
       const sprintRegex = new RegExp(`(###\\s+(?:🏃\\s*)?sprint\\s*${sprintNum}[\\s\\S]*?)(?=(?:\\n###|\\n##|\\n---|$))`, 'i');
       if (sprintRegex.test(cleanCurrent)) {
         return cleanCurrent.replace(sprintRegex, cleanSnippet);
       }
     }
-    // If it doesn't match a known sprint, append it as a note or new section
+
+    // 1.2 Check if snippet is a single task (- [ ] **Task Title**)
+    const taskTitleMatch = cleanSnippet.match(/^-\s*\[[\sxX]?\]\s*\*\*([^\*]+)\*\*/m);
+    if (taskTitleMatch) {
+      const taskTitle = taskTitleMatch[1].trim();
+      const normTaskTitle = normalizeHeader(taskTitle);
+
+      // Exact match
+      const taskRegex = new RegExp(
+        `(-\\s*\\[[\\sxX]?\\]\\s*\\*\\*${escapeRegex(taskTitle)}\\*\\*[\\s\\S]*?)(?=(?:\\n-\\s*\\[[\\sxX]?\\]\\s*\\*\\*|\\n###|\\n##|\\n---|$))`,
+        'i'
+      );
+      if (taskRegex.test(cleanCurrent)) {
+        return cleanCurrent.replace(taskRegex, cleanSnippet);
+      }
+
+      // Fuzzy match across all task blocks in document
+      const allTaskMatches = Array.from(
+        cleanCurrent.matchAll(/(-\s*\[[\sxX]?\]\s*\*\*([^\*]+)\*\*[\s\S]*?)(?=(?:\n-\s*\[[\sxX]?\]\s*\*\*|\n###|\n##|\n---|$))/g)
+      );
+      for (const tm of allTaskMatches) {
+        const existingTitle = tm[2]?.trim() || '';
+        const normExisting = normalizeHeader(existingTitle);
+        if (
+          normExisting &&
+          normTaskTitle &&
+          (normExisting.includes(normTaskTitle) || normTaskTitle.includes(normExisting))
+        ) {
+          return cleanCurrent.replace(tm[0], cleanSnippet);
+        }
+      }
+    }
+
+    // Fallback: append as note or section
     return `${cleanCurrent}\n\n---\n\n${cleanSnippet}`;
   }
 
