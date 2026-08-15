@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import time
@@ -406,6 +407,24 @@ async def restore_planning_version(project_id: str, version_id: str):
 # ─────────────────────────────────────────────────────────────
 
 
+async def _stream_with_timeout(
+    response: Any, first_chunk_timeout: float = 5.0, chunk_timeout: float = 20.0
+) -> AsyncGenerator[Any, None]:
+    aiter = response.__aiter__()
+    try:
+        first_chunk = await asyncio.wait_for(aiter.__anext__(), timeout=first_chunk_timeout)
+        yield first_chunk
+    except StopAsyncIteration:
+        return
+
+    while True:
+        try:
+            chunk = await asyncio.wait_for(aiter.__anext__(), timeout=chunk_timeout)
+            yield chunk
+        except StopAsyncIteration:
+            break
+
+
 @router.post("/message")
 async def process_planning_message(req: Request, request: PlanningRequest):
     async with get_sessionmaker()() as session:
@@ -540,7 +559,7 @@ async def process_planning_message(req: Request, request: PlanningRequest):
 
                     tool_calls_buffer: dict[int, Any] = {}
 
-                    async for chunk in response:
+                    async for chunk in _stream_with_timeout(response, first_chunk_timeout=timeout):
                         choice = chunk.choices[0]
                         delta = choice.delta
 
