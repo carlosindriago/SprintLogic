@@ -288,21 +288,21 @@ export default function TicketDrawer({ ticket, allSprints, allEpics, columns, on
           <div className="flex items-center gap-2">
             <button
               onClick={handleAIMentorClick}
-              className="flex items-center gap-1.5 bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600/30 hover:text-indigo-300 text-xs font-semibold px-3 py-1.5 rounded-md transition-colors border border-indigo-600/30 whitespace-nowrap"
+              className="flex items-center gap-1.5 bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600/30 hover:text-indigo-300 text-xs font-semibold px-3 py-1.5 rounded-md transition-colors border border-indigo-600/30 whitespace-nowrap focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-indigo-500"
               title="Analizar con IA Mentor"
             >
-              <Bot size={14} />
+              <Bot size={14} aria-hidden="true" />
               <span>Mentor IA</span>
             </button>
             <button 
               onClick={handleSaveMain}
               disabled={isSaving}
-              className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-3 py-1.5 rounded-md transition-colors disabled:opacity-50"
+              className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-3 py-1.5 rounded-md transition-colors disabled:opacity-50 focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-blue-500"
             >
               {isSaving ? 'Guardando...' : 'Guardar'}
             </button>
-            <button onClick={onClose} className="p-1.5 text-zinc-400 hover:text-zinc-100 hover:bg-[#27272a] rounded-md transition-colors">
-              <X size={18} />
+            <button aria-label="Cerrar" onClick={onClose} className="p-1.5 text-zinc-400 hover:text-zinc-100 hover:bg-[#27272a] rounded-md transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-zinc-400">
+              <X size={18} aria-hidden="true" />
             </button>
           </div>
         </div>
@@ -436,14 +436,14 @@ export default function TicketDrawer({ ticket, allSprints, allEpics, columns, on
             <div className="space-y-2">
               {subtasks.map(st => (
                 <div key={st.id} className="flex items-center gap-3 group">
-                  <button onClick={() => toggleSubtask(st.id)} className="text-zinc-400 hover:text-blue-500 transition-colors shrink-0">
-                    {st.completed ? <CheckCircle2 size={18} className="text-blue-500" /> : <Circle size={18} />}
+                  <button aria-label={st.completed ? "Marcar como incompleta" : "Marcar como completada"} onClick={() => toggleSubtask(st.id)} className="text-zinc-400 hover:text-blue-500 transition-colors shrink-0 focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-blue-500 rounded-sm">
+                    {st.completed ? <CheckCircle2 size={18} className="text-blue-500" aria-hidden="true" /> : <Circle size={18} aria-hidden="true" />}
                   </button>
                   <span className={`text-sm flex-1 ${st.completed ? 'text-zinc-500 line-through' : 'text-zinc-200'}`}>
                     {st.title}
                   </span>
-                  <button onClick={() => deleteSubtask(st.id)} className="text-zinc-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                    <Trash2 size={16} />
+                  <button aria-label="Eliminar subtarea" onClick={() => deleteSubtask(st.id)} className="text-zinc-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-red-500 rounded-sm">
+                    <Trash2 size={16} aria-hidden="true" />
                   </button>
                 </div>
               ))}
@@ -459,10 +459,11 @@ export default function TicketDrawer({ ticket, allSprints, allEpics, columns, on
               />
               <button 
                 type="submit"
+                aria-label="Añadir subtarea"
                 disabled={!newSubtaskTitle.trim()}
-                className="p-1.5 text-zinc-400 hover:text-blue-500 disabled:opacity-50 transition-colors"
+                className="p-1.5 text-zinc-400 hover:text-blue-500 disabled:opacity-50 transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-blue-500 rounded-sm"
               >
-                <Plus size={18} />
+                <Plus size={18} aria-hidden="true" />
               </button>
             </form>
           </div>
@@ -472,8 +473,8 @@ export default function TicketDrawer({ ticket, allSprints, allEpics, columns, on
               <div className="flex items-center justify-between bg-red-950/30 border border-red-900/50 p-3 rounded-md">
                 <span className="text-xs text-red-400 font-medium">¿Estás seguro de eliminar este ticket?</span>
                 <div className="flex gap-2">
-                  <button onClick={() => setShowDeleteConfirm(false)} className="px-3 py-1.5 text-xs font-semibold text-zinc-400 hover:text-zinc-200 transition-colors">Cancelar</button>
-                  <button onClick={handleDelete} disabled={isDeleting} className="px-3 py-1.5 text-xs font-semibold bg-red-600 hover:bg-red-500 text-white rounded transition-colors disabled:opacity-50">
+                  <button onClick={() => setShowDeleteConfirm(false)} className="px-3 py-1.5 text-xs font-semibold text-zinc-400 hover:text-zinc-200 transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-zinc-400 rounded-md">Cancelar</button>
+                  <button onClick={handleDelete} disabled={isDeleting} className="px-3 py-1.5 text-xs font-semibold bg-red-600 hover:bg-red-500 text-white rounded transition-colors disabled:opacity-50 focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-red-500">
                     {isDeleting ? 'Eliminando...' : 'Sí, eliminar'}
                   </button>
                 </div>
@@ -481,9 +482,9 @@ export default function TicketDrawer({ ticket, allSprints, allEpics, columns, on
             ) : (
               <button 
                 onClick={() => setShowDeleteConfirm(true)}
-                className="flex items-center gap-2 text-xs font-semibold text-red-400 hover:text-red-300 transition-colors py-2 px-4 rounded-md hover:bg-red-950/30 w-full justify-center border border-transparent hover:border-red-900/50"
+                className="flex items-center gap-2 text-xs font-semibold text-red-400 hover:text-red-300 transition-colors py-2 px-4 rounded-md hover:bg-red-950/30 w-full justify-center border border-transparent hover:border-red-900/50 focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-red-500"
               >
-                <Trash2 size={16} />
+                <Trash2 size={16} aria-hidden="true" />
                 <span>Eliminar Ticket</span>
               </button>
             )}
