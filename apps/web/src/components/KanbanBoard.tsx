@@ -36,7 +36,8 @@ import {
   Loader2,
   GitCommit,
   FileCode,
-  Trash2
+  Trash2,
+  Lock
 } from "lucide-react";
 import TicketMentorDrawer from "./TicketMentorDrawer";
 import { useRouter } from "next/navigation";
@@ -46,18 +47,74 @@ interface KanbanBoardProps {
   onNodeClick?: (nodeId: string) => void;
 }
 
+function getTaskDependencies(task: Task, allTasks: Task[], rawTickets: KanbanTicket[]): {
+  isBlocked: boolean;
+  blockingTasks: string[];
+} {
+  const content = task.content || "";
+  const raw = rawTickets.find(r => r.id === task.id);
+  const desc = raw?.description || "";
+  const combinedText = `${content}\n${desc}`;
+
+  // Look for explicit dependency tags: [Depends: ...], [Deps: ...], [Depende de: ...], [Bloqueada por: ...], [Prereq: ...]
+  const depMatches = Array.from(combinedText.matchAll(/\[(?:Depends|Deps|Depende|Depende de|Bloqueada por|Prereq|Prerequisite):\s*([^\]]+)\]/gi));
+  
+  const explicitDepQueries: string[] = [];
+  for (const m of depMatches) {
+    const parts = m[1].split(/[,;]/).map(p => p.trim()).filter(Boolean);
+    explicitDepQueries.push(...parts);
+  }
+
+  const blockingTasks: string[] = [];
+
+  if (explicitDepQueries.length > 0) {
+    for (const query of explicitDepQueries) {
+      const qLower = query.toLowerCase().replace(/^[#]/, '').trim();
+      const target = allTasks.find(t => {
+        if (t.id === task.id) return false;
+        if (t.id.toLowerCase().startsWith(qLower) || t.id.toLowerCase().includes(qLower)) return true;
+        const firstLine = t.content.split('\n')[0].toLowerCase();
+        return firstLine.includes(qLower);
+      });
+
+      if (target) {
+        const isDone = (target.status || '').toLowerCase() === 'done';
+        if (!isDone) {
+          const targetTitle = target.content.split('\n')[0].replace(/^[#\s\-*\[\]]+/, '').trim().substring(0, 30);
+          blockingTasks.push(targetTitle || target.id.substring(0, 6));
+        }
+      }
+    }
+  }
+
+  return {
+    isBlocked: blockingTasks.length > 0,
+    blockingTasks,
+  };
+}
+
 function SortableTask({ 
   task, 
   onNodeClick,
   onMentorClick,
   onAutoFixClick,
-  onClick
+  onClick,
+  epic,
+  sprint,
+  orderIndex,
+  isBlocked,
+  blockingTasks,
 }: { 
   task: Task & { subtasks?: any[] }; 
   onNodeClick?: (nodeId: string) => void; 
   onMentorClick?: (ticketId: string, nodeId: string) => void;
   onAutoFixClick?: (ticketId: string, nodeId: string, instruction: string) => void;
   onClick?: () => void;
+  epic?: Epic;
+  sprint?: Sprint;
+  orderIndex?: number;
+  isBlocked?: boolean;
+  blockingTasks?: string[];
 }) {
   const router = useRouter();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id });
@@ -77,17 +134,36 @@ function SortableTask({
 
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners} onClick={onClick} className="mb-2 cursor-grab active:cursor-grabbing group w-full min-w-0">
-      <Card className="bg-zinc-800 border-zinc-700/50 hover:border-zinc-600 transition-colors w-full min-w-0 overflow-hidden">
+      <Card className={cn(
+        "bg-zinc-800 border transition-colors w-full min-w-0 overflow-hidden",
+        isBlocked ? "border-amber-700/60 hover:border-amber-500/80 bg-zinc-850" : "border-zinc-700/50 hover:border-zinc-600"
+      )}>
         <CardContent className="p-3 text-xs text-zinc-200 flex flex-col gap-2 min-w-0">
-          {/* Header with task ID and priority */}
-          <div className="flex items-center justify-between min-w-0 gap-1">
-            <span className="text-[9px] bg-zinc-900 text-zinc-300 font-mono px-1.5 py-0.5 rounded border border-zinc-700 font-semibold select-all shrink-0" title="Copiar ID para commit">
-              {task.id}
-            </span>
+          {/* Header with task Order, ID, Priority and Blocked status */}
+          <div className="flex items-center justify-between min-w-0 gap-1.5 flex-wrap">
             <div className="flex items-center gap-1.5 shrink-0">
+              {orderIndex !== undefined && (
+                <span className="text-[9px] bg-amber-950/50 text-amber-300 font-mono px-1.5 py-0.5 rounded border border-amber-800/50 font-bold" title="Orden sugerido de ejecución">
+                  #{orderIndex}
+                </span>
+              )}
+              <span className="text-[9px] bg-zinc-900 text-zinc-300 font-mono px-1.5 py-0.5 rounded border border-zinc-700 font-semibold select-all shrink-0" title="Copiar ID para commit">
+                {task.id.length > 8 ? task.id.substring(0, 8) : task.id}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+              {isBlocked && (
+                <span 
+                  className="text-[9px] px-1.5 py-0.5 rounded font-semibold bg-red-950/80 text-red-300 border border-red-800/80 flex items-center gap-1 shadow-sm"
+                  title={`🔒 Bloqueada. Requiere completar antes: ${blockingTasks?.join(", ")}`}
+                >
+                  <Lock className="w-2.5 h-2.5 text-red-400" /> Bloqueada
+                </span>
+              )}
               {task.priority && (
                 <span className={cn(
-                  "text-[9px] px-1.5 py-0.5 rounded font-medium",
+                  "text-[9px] px-1.5 py-0.5 rounded font-medium shrink-0",
                   task.priority === "High" ? "bg-red-950/40 text-red-400 border border-red-900/30" :
                   task.priority === "Medium" ? "bg-blue-950/40 text-blue-400 border border-blue-900/30" :
                   "bg-zinc-900 text-zinc-400 border border-zinc-700"
@@ -97,6 +173,37 @@ function SortableTask({
               )}
             </div>
           </div>
+
+          {/* Epics & Sprints Badges + Dependencies notification */}
+          {(epic || sprint || (isBlocked && blockingTasks && blockingTasks.length > 0)) && (
+            <div className="flex flex-wrap items-center gap-1 text-[10px] min-w-0">
+              {epic && (
+                <span 
+                  className={cn(
+                    "text-[9px] px-1.5 py-0.5 rounded font-medium truncate max-w-[140px] border",
+                    epic.color ? `${epic.color}/20 text-blue-300 border-blue-800/40` : "bg-blue-950/40 text-blue-300 border-blue-800/40"
+                  )} 
+                  title={`Épica: ${epic.name}`}
+                >
+                  🎯 {epic.name}
+                </span>
+              )}
+              {sprint && (
+                <span 
+                  className="text-[9px] px-1.5 py-0.5 rounded font-medium truncate max-w-[120px] bg-purple-950/40 text-purple-300 border border-purple-800/40" 
+                  title={`Sprint: ${sprint.name}`}
+                >
+                  🏃 {sprint.name}
+                </span>
+              )}
+              {isBlocked && blockingTasks && blockingTasks.length > 0 && (
+                <div className="w-full text-[9px] text-red-300 bg-red-950/40 border border-red-900/40 px-1.5 py-0.5 rounded flex items-center gap-1 truncate mt-0.5">
+                  <AlertTriangle className="w-2.5 h-2.5 shrink-0 text-red-400" />
+                  <span className="truncate">Requiere: {blockingTasks.join(", ")}</span>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="prose prose-invert prose-sm max-w-none prose-p:my-0 text-zinc-200 break-words [word-break:break-word] overflow-hidden">
             <ReactMarkdown>{task.content}</ReactMarkdown>
@@ -461,6 +568,18 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
           newTasks[activeIndex] = activeTask;
         }
         newTasks = arrayMove(newTasks, activeIndex, overIndex);
+      }
+    }
+
+    // Dependencies Guard: prevent moving blocked tasks into in_progress or done
+    if (newStatus !== originalStatus && (newStatus === "in_progress" || newStatus === "done")) {
+      const depInfo = getTaskDependencies(activeTask, tasks, rawTickets);
+      if (depInfo.isBlocked) {
+        toast.warning("🔒 Tarea Bloqueada", {
+          description: `No puedes avanzar esta tarea hasta completar primero sus dependencias pendientes: ${depInfo.blockingTasks.join(", ")}`,
+          duration: 5000,
+        });
+        return;
       }
     }
 
@@ -848,31 +967,44 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
                         </p>
                       </div>
                     ) : (
-                      iceboxTasks.map(task => (
-                        <SortableTask
-                          key={task.id}
-                          task={task}
-                          onNodeClick={onNodeClick}
-                          onClick={() => {
-                            const isDbTicket = rawTickets.some(r => r.id === task.id);
-                            if (isDbTicket) {
-                              setActiveDrawerTicketId(task.id);
-                            }
-                          }}
-                          onMentorClick={(ticketId, nodeId) => {
-                            setActiveMentorTicket({ ticketId, projectId: projectId!, filePath: nodeId });
-                          }}
-                          onAutoFixClick={(ticketId, nodeId, instruction) => {
-                            const tabId = `autofix-${ticketId}-${nodeId}`;
-                            addTab({
-                              id: tabId,
-                              title: `Fix: ${nodeId.split('/').pop()}`,
-                              type: 'auto-fix',
-                              data: { hash: ticketId, filePath: nodeId, markdown: instruction }
-                            });
-                          }}
-                        />
-                      ))
+                      iceboxTasks.map((task, idx) => {
+                        const raw = rawTickets.find(r => r.id === task.id);
+                        const epic = epics.find(e => e.id === raw?.epic_id);
+                        const sprint = sprints.find(s => s.id === raw?.sprint_id);
+                        const depInfo = getTaskDependencies(task, tasks, rawTickets);
+                        const orderIndex = tasks.findIndex(t => t.id === task.id) + 1;
+
+                        return (
+                          <SortableTask
+                            key={task.id}
+                            task={task}
+                            epic={epic}
+                            sprint={sprint}
+                            orderIndex={orderIndex > 0 ? orderIndex : idx + 1}
+                            isBlocked={depInfo.isBlocked}
+                            blockingTasks={depInfo.blockingTasks}
+                            onNodeClick={onNodeClick}
+                            onClick={() => {
+                              const isDbTicket = rawTickets.some(r => r.id === task.id);
+                              if (isDbTicket) {
+                                setActiveDrawerTicketId(task.id);
+                              }
+                            }}
+                            onMentorClick={(ticketId, nodeId) => {
+                              setActiveMentorTicket({ ticketId, projectId: projectId!, filePath: nodeId });
+                            }}
+                            onAutoFixClick={(ticketId, nodeId, instruction) => {
+                              const tabId = `autofix-${ticketId}-${nodeId}`;
+                              addTab({
+                                id: tabId,
+                                title: `Fix: ${nodeId.split('/').pop()}`,
+                                type: 'auto-fix',
+                                data: { hash: ticketId, filePath: nodeId, markdown: instruction }
+                              });
+                            }}
+                          />
+                        );
+                      })
                     )}
                   </DroppableColumn>
                 </SortableContext>
@@ -928,31 +1060,44 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
                 <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 custom-scrollbar min-h-0">
                   <SortableContext items={columnTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
                     <DroppableColumn id={col.id}>
-                      {columnTasks.map(task => (
-                        <SortableTask
-                          key={task.id}
-                          task={task}
-                          onNodeClick={onNodeClick}
-                          onClick={() => {
-                            const isDbTicket = rawTickets.some(r => r.id === task.id);
-                            if (isDbTicket) {
-                              setActiveDrawerTicketId(task.id);
-                            }
-                          }}
-                          onMentorClick={(ticketId, nodeId) => {
-                            setActiveMentorTicket({ ticketId, projectId: projectId!, filePath: nodeId });
-                          }}
-                          onAutoFixClick={(ticketId, nodeId, instruction) => {
-                            const tabId = `autofix-${ticketId}-${nodeId}`;
-                            addTab({
-                              id: tabId,
-                              title: `Fix: ${nodeId.split('/').pop()}`,
-                              type: 'auto-fix',
-                              data: { hash: ticketId, filePath: nodeId, markdown: instruction }
-                            });
-                          }}
-                        />
-                      ))}
+                      {columnTasks.map((task, taskIdx) => {
+                        const raw = rawTickets.find(r => r.id === task.id);
+                        const epic = epics.find(e => e.id === raw?.epic_id);
+                        const sprint = sprints.find(s => s.id === raw?.sprint_id);
+                        const depInfo = getTaskDependencies(task, tasks, rawTickets);
+                        const orderIndex = tasks.findIndex(t => t.id === task.id) + 1;
+
+                        return (
+                          <SortableTask
+                            key={task.id}
+                            task={task}
+                            epic={epic}
+                            sprint={sprint}
+                            orderIndex={orderIndex > 0 ? orderIndex : taskIdx + 1}
+                            isBlocked={depInfo.isBlocked}
+                            blockingTasks={depInfo.blockingTasks}
+                            onNodeClick={onNodeClick}
+                            onClick={() => {
+                              const isDbTicket = rawTickets.some(r => r.id === task.id);
+                              if (isDbTicket) {
+                                setActiveDrawerTicketId(task.id);
+                              }
+                            }}
+                            onMentorClick={(ticketId, nodeId) => {
+                              setActiveMentorTicket({ ticketId, projectId: projectId!, filePath: nodeId });
+                            }}
+                            onAutoFixClick={(ticketId, nodeId, instruction) => {
+                              const tabId = `autofix-${ticketId}-${nodeId}`;
+                              addTab({
+                                id: tabId,
+                                title: `Fix: ${nodeId.split('/').pop()}`,
+                                type: 'auto-fix',
+                                data: { hash: ticketId, filePath: nodeId, markdown: instruction }
+                              });
+                            }}
+                          />
+                        );
+                      })}
                     </DroppableColumn>
                   </SortableContext>
                 </div>

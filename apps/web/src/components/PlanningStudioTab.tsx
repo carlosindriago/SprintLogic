@@ -169,18 +169,25 @@ export function extractTicketsFromMarkdown(markdown: string): WBSImportTicket[] 
         const branchMatch = fullText.match(/\[(?:Branch|Rama):\s*([a-zA-Z0-9_\-\/]+)\]/i);
         if (branchMatch) branchName = branchMatch[1].trim();
 
+        const depMatch = fullText.match(/\[(?:Depends|Deps|Depende|Depende de|Bloqueada por|Prereq|Prerequisite):\s*([^\]]+)\]/i);
+        let depsTag = '';
+        if (depMatch) {
+          depsTag = ` [Depends: ${depMatch[1].trim()}]`;
+        }
+
         title = title
           .replace(/\[(?:Priority|Prioridad):[^\]]+\]/gi, '')
           .replace(/\[(?:Type|Tipo):[^\]]+\]/gi, '')
           .replace(/\[(?:Branch|Rama):[^\]]+\]/gi, '')
           .replace(/\[(?:Hours|Horas):[^\]]+\]/gi, '')
+          .replace(/\[(?:Depends|Deps|Depende|Depende de|Bloqueada por|Prereq|Prerequisite):[^\]]+\]/gi, '')
           .trim();
 
         currentTicket = {
           title,
           type,
           priority,
-          description: `Definido en el plan vivo WBS (${currentEpic} - ${currentSprint})`,
+          description: `Definido en el plan vivo WBS (${currentEpic} - ${currentSprint})${depsTag}`,
           branch_name: branchName,
           epic: currentEpic,
           sprint: currentSprint,
