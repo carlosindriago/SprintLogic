@@ -332,7 +332,7 @@ class KanbanTicketModel(Base):
     )
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     type: Mapped[TicketType] = mapped_column(
-        SQLAlchemyEnum(TicketType), nullable=False, default=TicketType.TECHNICAL_DEBT
+        SQLAlchemyEnum(TicketType), nullable=False, default=TicketType.FEATURE
     )
     status: Mapped[TicketStatus] = mapped_column(
         SQLAlchemyEnum(TicketStatus), nullable=False, default=TicketStatus.TODO

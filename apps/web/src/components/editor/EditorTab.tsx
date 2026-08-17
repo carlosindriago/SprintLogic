@@ -257,7 +257,7 @@ export function EditorTab({
   const { data: gitStatusData } = useQuery({
     queryKey: ['git-status', projectId],
     queryFn: () => getGitStatus(projectId),
-    refetchInterval: 5000,
+    refetchInterval: 30_000,
     enabled: !!projectId
   });
 
