@@ -137,15 +137,13 @@ async def extract_schema_from_orm(
         raw_response = await gateway.generate_completion(formatted_prompt, fallbacks=fallbacks)
     except Exception as llm_err:
         logger.error("LLM ORM schema extraction failed: %s", llm_err, exc_info=True)
-        with open("/tmp/db_studio_error.log", "w") as f:
-            f.write(f"LLM Failure: {str(llm_err)}\n")
+        logger.debug("LLM Failure: %s", str(llm_err))
         return SchemaIR(
             tables=[], orm_type=framework, extraction_level="orm", detected_framework=framework
         )
 
     # 4. Clean Markdown formatting & Backticks (Strict Guardrail)
-    with open("/tmp/db_studio.log", "a") as f:
-        f.write(f"LLM Success Raw response: {raw_response}\n")
+    logger.debug("LLM Success Raw response: %s", raw_response)
 
     cleaned = raw_response.strip()
     if cleaned.startswith("```"):
@@ -166,8 +164,7 @@ async def extract_schema_from_orm(
         return schema
     except Exception as parse_err:
         logger.warning("Failed to parse JSON response for ORM schema extraction: %s", parse_err)
-        with open("/tmp/db_studio.log", "a") as f:
-            f.write(f"JSON Parse failed: {str(parse_err)}\nRaw response: {raw_response}\n")
+        logger.debug("JSON Parse failed: %s\nRaw response: %s", str(parse_err), raw_response)
         return SchemaIR(
             tables=[], orm_type=framework, extraction_level="orm", detected_framework=framework
         )
