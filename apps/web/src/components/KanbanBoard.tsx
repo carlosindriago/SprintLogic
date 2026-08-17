@@ -6,7 +6,6 @@ import { DndContext, closestCenter, DragEndEvent, DragOverlay, DragStartEvent, u
 import { arrayMove, SortableContext, verticalListSortingStrategy, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Card, CardContent } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import ReactMarkdown from "react-markdown";
 import { getProjectTasks, saveProjectTasks, getKanbanConfig, saveKanbanConfig, syncKanbanCommits, KanbanColumn, fetchProjectTickets, updateKanbanTicket, deleteKanbanTicket, createKanbanTicket, createGitBranch, commitChanges, commitAndSwitchGitBranch, fetchEpics, fetchSprints, getGitStatus, discardGitChanges, checkoutGitBranch, deleteGitBranch } from '@/lib/api';
 import { KanbanTicket, Epic, Sprint } from '@/types';
@@ -77,15 +76,15 @@ function SortableTask({
   };
 
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners} onClick={onClick} className="mb-2 cursor-grab active:cursor-grabbing group">
-      <Card className="bg-zinc-800 border-zinc-700/50 hover:border-zinc-600 transition-colors">
-        <CardContent className="p-3 text-xs text-zinc-200 flex flex-col gap-2">
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners} onClick={onClick} className="mb-2 cursor-grab active:cursor-grabbing group w-full min-w-0">
+      <Card className="bg-zinc-800 border-zinc-700/50 hover:border-zinc-600 transition-colors w-full min-w-0 overflow-hidden">
+        <CardContent className="p-3 text-xs text-zinc-200 flex flex-col gap-2 min-w-0">
           {/* Header with task ID and priority */}
-          <div className="flex items-center justify-between">
-            <span className="text-[9px] bg-zinc-900 text-zinc-300 font-mono px-1.5 py-0.5 rounded border border-zinc-700 font-semibold select-all" title="Copiar ID para commit">
+          <div className="flex items-center justify-between min-w-0 gap-1">
+            <span className="text-[9px] bg-zinc-900 text-zinc-300 font-mono px-1.5 py-0.5 rounded border border-zinc-700 font-semibold select-all shrink-0" title="Copiar ID para commit">
               {task.id}
             </span>
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 shrink-0">
               {task.priority && (
                 <span className={cn(
                   "text-[9px] px-1.5 py-0.5 rounded font-medium",
@@ -99,26 +98,26 @@ function SortableTask({
             </div>
           </div>
 
-          <div className="prose prose-invert prose-sm max-w-none prose-p:my-0 text-zinc-200">
+          <div className="prose prose-invert prose-sm max-w-none prose-p:my-0 text-zinc-200 break-words [word-break:break-word] overflow-hidden">
             <ReactMarkdown>{task.content}</ReactMarkdown>
           </div>
 
           {/* Metadata badges: Pomodoros, Time, Commit, Tags */}
-          <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-zinc-400 mt-1">
+          <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-zinc-400 mt-1 min-w-0">
             {task.commit && (
-              <span className="flex items-center gap-1 bg-green-950/30 text-green-400 border border-green-900/40 px-1.5 py-0.5 rounded">
+              <span className="flex items-center gap-1 bg-green-950/30 text-green-400 border border-green-900/40 px-1.5 py-0.5 rounded shrink-0">
                 <GitBranch className="w-3 h-3" />
                 {task.commit.substring(0, 7)}
               </span>
             )}
             {task.time_spent ? (
-              <span className="flex items-center gap-1 bg-zinc-900 text-zinc-400 border border-zinc-700 px-1.5 py-0.5 rounded">
+              <span className="flex items-center gap-1 bg-zinc-900 text-zinc-400 border border-zinc-700 px-1.5 py-0.5 rounded shrink-0">
                 <Clock className="w-3 h-3 text-zinc-500" />
                 {task.time_spent ? ` (${formatTime(task.time_spent)})` : ""}
               </span>
             ) : null}
             {task.tags && task.tags.map(tag => (
-              <span key={tag} className="bg-zinc-900 text-zinc-500 px-1.5 py-0.5 rounded border border-zinc-700">
+              <span key={tag} className="bg-zinc-900 text-zinc-500 px-1.5 py-0.5 rounded border border-zinc-700 truncate max-w-full">
                 #{tag}
               </span>
             ))}
@@ -134,9 +133,9 @@ function SortableTask({
           )}
 
           {task.affected_nodes && task.affected_nodes.length > 0 && (
-            <div className="flex flex-col gap-1 border-t border-zinc-700/30 pt-2 mt-1">
+            <div className="flex flex-col gap-1 border-t border-zinc-700/30 pt-2 mt-1 min-w-0">
               {task.affected_nodes.map((node) => (
-                <div key={node} className="flex items-center gap-1 group/node">
+                <div key={node} className="flex items-center gap-1 group/node min-w-0">
                   <span
                     onClick={(e) => {
                       e.stopPropagation();
@@ -148,7 +147,7 @@ function SortableTask({
                     {node}
                   </span>
                   {task.has_id && (
-                    <div className="flex items-center gap-1 opacity-0 group-hover/node:opacity-100 transition-opacity">
+                    <div className="flex items-center gap-1 opacity-0 group-hover/node:opacity-100 transition-opacity shrink-0">
                       <button 
                         onClick={(e) => { e.stopPropagation(); onMentorClick?.(task.id, node); }}
                         className="p-1 rounded hover:bg-indigo-900/50 text-indigo-400"
@@ -195,7 +194,7 @@ function SortableTask({
 function DroppableColumn({ id, children }: { id: string, children: React.ReactNode }) {
   const { setNodeRef } = useDroppable({ id });
   return (
-    <div ref={setNodeRef} id={id} className="min-h-[300px]">
+    <div ref={setNodeRef} id={id} className="min-h-[150px] w-full flex flex-col">
       {children}
     </div>
   );
@@ -780,7 +779,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
           {/* Collapsible Left Icebox Drawer */}
           {showIceboxDrawer && (
-            <div className="w-[320px] min-w-[300px] border-r border-zinc-800 bg-[#0e0e11] flex flex-col shrink-0 z-10 transition-all shadow-2xl">
+            <div className="w-[320px] min-w-[300px] border-r border-zinc-800 bg-[#0e0e11] flex flex-col shrink-0 z-10 transition-all shadow-2xl h-full max-h-full min-h-0">
               <div className="p-3 border-b border-zinc-800/80 bg-[#141418] flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-2">
                   <span className="text-base">🧊</span>
@@ -804,7 +803,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
                 </button>
               </div>
 
-              <div className="p-3 border-b border-zinc-800/50 bg-[#101014]">
+              <div className="p-3 border-b border-zinc-800/50 bg-[#101014] shrink-0">
                 <input
                   type="text"
                   placeholder="+ Añadir idea al Icebox..."
@@ -837,7 +836,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
                 />
               </div>
 
-              <ScrollArea className="flex-1 p-3">
+              <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 custom-scrollbar min-h-0">
                 <SortableContext items={iceboxTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
                   <DroppableColumn id="icebox">
                     {iceboxTasks.length === 0 ? (
@@ -877,25 +876,25 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
                     )}
                   </DroppableColumn>
                 </SortableContext>
-              </ScrollArea>
+              </div>
             </div>
           )}
 
           {/* Kanban Columns view */}
-          <div className="flex-1 flex p-6 gap-4 overflow-x-auto overflow-y-hidden custom-scrollbar bg-[#111112]">
+          <div className="flex-1 flex p-6 gap-4 overflow-x-auto overflow-y-hidden custom-scrollbar bg-[#111112] h-full min-h-0 items-stretch">
           {columns.map((col, idx) => {
             const columnTasks = tasksByStatus[col.id] || [];
 
             return (
-              <div key={col.id} className={cn("flex flex-col bg-zinc-900 rounded-lg min-w-[280px] max-w-[320px] border-t-2 shrink-0 border-zinc-800", col.color)}>
-                <div className="p-3 font-semibold text-zinc-300 text-sm border-b border-zinc-800/50 flex items-center justify-between">
+              <div key={col.id} className={cn("flex flex-col bg-zinc-900 rounded-lg min-w-[280px] max-w-[320px] w-[300px] border-t-2 shrink-0 border-zinc-800 h-full max-h-full min-h-0 overflow-hidden shadow-lg", col.color)}>
+                <div className="p-3 font-semibold text-zinc-300 text-sm border-b border-zinc-800/50 flex items-center justify-between shrink-0">
                   <span>{col.title}</span>
                   <span className="text-xs bg-zinc-850 px-2 py-0.5 rounded-full text-zinc-500 font-medium">
                     {columnTasks.length}
                   </span>
                 </div>
                 {idx === 0 && (
-                  <div className="px-3 pt-3">
+                  <div className="px-3 pt-3 shrink-0">
                     <input
                       type="text"
                       placeholder="+ Añadir tarea..."
@@ -926,7 +925,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
                     />
                   </div>
                 )}
-                <ScrollArea className="flex-1 p-3">
+                <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 custom-scrollbar min-h-0">
                   <SortableContext items={columnTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
                     <DroppableColumn id={col.id}>
                       {columnTasks.map(task => (
@@ -956,7 +955,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
                       ))}
                     </DroppableColumn>
                   </SortableContext>
-                </ScrollArea>
+                </div>
               </div>
             );
           })}
