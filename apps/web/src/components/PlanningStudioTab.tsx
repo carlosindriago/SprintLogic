@@ -567,16 +567,20 @@ ${markdownContent || '// Plan vacío'}
    - \`## 2. Plan de Ejecución (WBS)\`
    - \`## 🎯 Épica <N>: <Nombre de Épica>\`
    - \`### 🏃 Sprint <N> (<Objetivo del Sprint>)\`
-   - \`- [ ] **<Título de Tarea>** [Priority: High|Medium|Low] [Type: Feature|Refactor|Technical Debt|Security] [Hours: <N>h] [Branch: feat/...]\`
+   - \`- [ ] **<Título de Tarea>** [Priority: High|Medium|Low] [Type: Feature|Refactor|Technical Debt|Security] [Depends: None|#<N>|<Título Previo>] [Hours: <N>h] [Branch: feat/...]\`
    - \`  - [ ] <Subtarea técnica>\`
    - \`## 💡 3. Icebox (Backlog y Propuestas Futuras)\`
    - \`- Idea: <ideas o propuestas que quedan fuera del alcance actual>\`
 
-2. GUARDIÁN DEL ALCANCE (SCOPE GUARDIAN):
+2. ORDEN DE EJECUCIÓN Y DEPENDENCIAS TÉCNICAS (DEPENDS TAG):
+   - Cada tarea DEBE incluir obligatoriamente la etiqueta \`[Depends: None]\` (si no requiere tareas previas) o \`[Depends: #<N>]\` / \`[Depends: <Título de Tarea Previa>]\` referenciando las dependencias que deben estar terminadas antes de iniciarla.
+   - Esto es CRÍTICO para que el Sprint Center calcule el orden sugerido y bloquee tareas dependientes hasta que sus prerrequisitos estén listos.
+
+3. GUARDIÁN DEL ALCANCE (SCOPE GUARDIAN):
    - Revisa '1. Fundamentos del Proyecto' y úsalo como tu 'Estrella Polar'.
    - Cualquier idea o funcionalidad que exceda el 'Alcance y Naturaleza' definido debe ser catalogada como Corrupción de Alcance (Scope Creep) y colocada obligatoriamente en la sección '3. Icebox' como viñeta simple (\`- Idea: ...\`) SIN checkboxes (\`- [ ]\`), evitando que el Smart Parser la envíe al Sprint Center prematuramente.
 
-3. PRESERVACIÓN INCREMENTAL (ZERO-DATA-LOSS):
+4. PRESERVACIÓN INCREMENTAL (ZERO-DATA-LOSS):
    - Conserva el Project Charter, épicas, sprints y tareas existentes.
    - Devuelve ÚNICAMENTE el bloque Markdown completo del plan actualizado.
 `;

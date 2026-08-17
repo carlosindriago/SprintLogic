@@ -87,7 +87,7 @@ export function stripMarkdownFormatting(text: string): string {
   return text
     .replace(/[#*_\`~]/g, '')
     .replace(/\[[ xX]\]/g, '')
-    .replace(/\[(?:Priority|Prioridad|Type|Tipo|Hours|Horas|Branch|Rama):[^\]]+\]/gi, '')
+    .replace(/\[(?:Priority|Prioridad|Type|Tipo|Hours|Horas|Branch|Rama|Depends|Deps|Depende|Depende de|Bloqueada por|Prereq|Prerequisite):[^\]]+\]/gi, '')
     .replace(/\s+/g, ' ')
     .trim()
     .toLowerCase();

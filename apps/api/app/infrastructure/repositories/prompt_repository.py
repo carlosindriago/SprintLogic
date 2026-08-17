@@ -453,7 +453,7 @@ ESTRUCTURA OBLIGATORIA DEL DOCUMENTO:
 ## 2. Plan de Ejecución (WBS)
 ## 🎯 Épica <N>: <Nombre de Épica>
 ### 🏃 Sprint <N> (<Objetivo del Sprint>)
-- [ ] **<Título de Tarea>** [Priority: High|Medium|Low] [Type: Feature|Refactor|Technical Debt|Security] [Hours: <N>h] [Branch: feat/...]
+- [ ] **<Título de Tarea>** [Priority: High|Medium|Low] [Type: Feature|Refactor|Technical Debt|Security] [Depends: None|#<N>|<Título Previo>] [Hours: <N>h] [Branch: feat/...]
   - [ ] <Subtarea técnica>
 
 ---
@@ -462,11 +462,12 @@ ESTRUCTURA OBLIGATORIA DEL DOCUMENTO:
 
 DIRECTIVAS CRÍTICAS DE REEMPLAZO TOTAL Y GUARDIÁN DEL ALCANCE:
 1. REEMPLAZO DE ESTADO COMPLETO (FULL STATE REPLACEMENT): Cuando el usuario te pida modificar, reordenar, agregar fundamentos, crear tareas o actualizar el plan, TIENES PROHIBIDO devolver fragmentos sueltos, notas parciales o épicas aisladas (a menos que haya una selección explícita y localizada de un solo fragmento). Debes procesar el cambio mentalmente y luego devolver SIEMPRE EL DOCUMENTO MARKDOWN COMPLETO y actualizado, envuelto obligatoriamente en un bloque de código ```markdown ... ```.
-2. PRESERVACIÓN DE LAS 3 SECCIONES PRINCIPALES: El documento Markdown completo devuelto SIEMPRE debe mantener exactamente las 3 secciones estructuradas: '1. Fundamentos del Proyecto', '2. Plan de Ejecución (WBS)', y '3. Icebox'.
-3. ESTRELLA POLAR (PROJECT CHARTER): Antes de generar Sprints o Tareas, revisa la sección '1. Fundamentos del Proyecto'. Si está vacía o es muy vaga, interactúa con el usuario para definir el objetivo, el problema y el alcance real (ej. si es un MVP o un refactor). Una vez definidos estos fundamentos, úsalos como tu 'Estrella Polar'.
-4. CONTROL DE CORRUPCIÓN DE ALCANCE (SCOPE CREEP -> ICEBOX): Cualquier idea de tarea que exceda el 'Alcance y Naturaleza' definido debe ser catalogada como Corrupción de Alcance (Scope Creep) y colocada obligatoriamente en la sección '3. Icebox' como viñeta simple ('- Idea: ...') SIN checkboxes ('- [ ]'), evitando que el Smart Parser la envíe al Sprint Center prematuramente.
-5. PERSISTENCIA INCREMENTAL (ZERO-DATA-LOSS): Conserva el Project Charter, épicas, sprints y tareas existentes. No borres ni resumas trabajo previo a menos que el usuario te lo ordene explícitamente.
-6. Ofrece una breve explicación conversacional previa o posterior al bloque de código de tus decisiones técnicas."""
+2. ORDEN DE EJECUCIÓN Y DEPENDENCIAS (DEPENDS TAG): Cada tarea DEBE incluir obligatoriamente la etiqueta `[Depends: None]` (si es inicial/independiente) o `[Depends: #<N>]` / `[Depends: <Título de Tarea Previa>]` indicando explícitamente de qué tarea previa depende para poder ejecutarse. Esto es INDISPENSABLE para que el Sprint Center calcule el orden sugerido y bloquee tareas dependientes hasta que sus prerrequisitos estén completados.
+3. PRESERVACIÓN DE LAS 3 SECCIONES PRINCIPALES: El documento Markdown completo devuelto SIEMPRE debe mantener exactamente las 3 secciones estructuradas: '1. Fundamentos del Proyecto', '2. Plan de Ejecución (WBS)', y '3. Icebox'.
+4. ESTRELLA POLAR (PROJECT CHARTER): Antes de generar Sprints o Tareas, revisa la sección '1. Fundamentos del Proyecto'. Si está vacía o es muy vaga, interactúa con el usuario para definir el objetivo, el problema y el alcance real (ej. si es un MVP o un refactor). Una vez definidos estos fundamentos, úsalos como tu 'Estrella Polar'.
+5. CONTROL DE CORRUPCIÓN DE ALCANCE (SCOPE CREEP -> ICEBOX): Cualquier idea de tarea que exceda el 'Alcance y Naturaleza' definido debe ser catalogada como Corrupción de Alcance (Scope Creep) y colocada obligatoriamente en la sección '3. Icebox' como viñeta simple ('- Idea: ...') SIN checkboxes ('- [ ]'), evitando que el Smart Parser la envíe al Sprint Center prematuramente.
+6. PERSISTENCIA INCREMENTAL (ZERO-DATA-LOSS): Conserva el Project Charter, épicas, sprints y tareas existentes. No borres ni resumas trabajo previo a menos que el usuario te lo ordene explícitamente.
+7. Ofrece una breve explicación conversacional previa o posterior al bloque de código de tus decisiones técnicas."""
 PLANNING_STUDIO_VARS: list[str] = []
 
 CHAT_TITLE_GEN_ID = "chat_title_generator"
