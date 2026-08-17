@@ -902,7 +902,7 @@ ${markdownContent || '// Plan vacío'}
           <Button size="sm" variant="outline" onClick={() => setShowInjectModal(true)} className="border-zinc-700 hover:bg-zinc-800 text-zinc-300 text-xs gap-1.5"><Download className="w-3.5 h-3.5 text-purple-400" /> Inyectar</Button>
           <Button size="sm" variant={showHistoryDrawer ? 'default' : 'outline'} onClick={() => setShowHistoryDrawer(!showHistoryDrawer)} className="text-xs gap-1.5"><History className="w-3.5 h-3.5 text-amber-400" /> Historial</Button>
           <Button size="sm" variant="outline" onClick={() => handleSaveDocument()} disabled={isSaving || !hasUnsavedChanges} className="border-zinc-700 hover:bg-zinc-800 text-zinc-300 text-xs gap-1.5"><Save className="w-3.5 h-3.5 text-emerald-400" /> Guardar</Button>
-          <Button size="sm" onClick={handleSmartHandoffToKanban} disabled={isExporting || parsedTickets.length === 0} className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium gap-1.5"><Kanban className="w-3.5 h-3.5" /> Exportar Kanban</Button>
+          <Button size="sm" onClick={handleSmartHandoffToKanban} disabled={isExporting || parsedTickets.length === 0} className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium gap-1.5"><Kanban className="w-3.5 h-3.5" /> Sprint Center</Button>
         </div>
       </div>
 

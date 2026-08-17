@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from app.domain.kanban_models import (
     EpicStatus,
@@ -81,7 +81,7 @@ class KanbanTicketResponse(BaseModel):
 
 class WBSImportTicket(BaseModel):
     title: str
-    type: TicketType = TicketType.TECHNICAL_DEBT
+    type: TicketType = TicketType.FEATURE
     priority: TicketPriority = TicketPriority.MEDIUM
     description: str
     report_id: UUID | None = None
@@ -90,6 +90,44 @@ class WBSImportTicket(BaseModel):
     epic: str | None = None
     sprint: str | None = None
     subtasks: list[dict] = []
+
+    @field_validator("type", mode="before")
+    @classmethod
+    def coerce_type(cls, v: object) -> TicketType:
+        """Map arbitrary strings from the WBS Markdown parser to valid TicketType values."""
+        if isinstance(v, TicketType):
+            return v
+        mapping: dict[str, TicketType] = {
+            "feature": TicketType.FEATURE,
+            "security": TicketType.SECURITY,
+            "refactor": TicketType.REFACTOR,
+            "technical debt": TicketType.TECHNICAL_DEBT,
+            "debt": TicketType.TECHNICAL_DEBT,
+            "bug": TicketType.REFACTOR,
+            "fix": TicketType.REFACTOR,
+            "task": TicketType.FEATURE,
+            "user story": TicketType.FEATURE,
+            "improvement": TicketType.FEATURE,
+            "chore": TicketType.TECHNICAL_DEBT,
+        }
+        return mapping.get(str(v).lower(), TicketType.FEATURE)
+
+    @field_validator("priority", mode="before")
+    @classmethod
+    def coerce_priority(cls, v: object) -> TicketPriority:
+        """Map arbitrary priority strings to valid TicketPriority values."""
+        if isinstance(v, TicketPriority):
+            return v
+        mapping: dict[str, TicketPriority] = {
+            "high": TicketPriority.HIGH,
+            "critical": TicketPriority.HIGH,
+            "urgent": TicketPriority.HIGH,
+            "medium": TicketPriority.MEDIUM,
+            "normal": TicketPriority.MEDIUM,
+            "low": TicketPriority.LOW,
+            "minor": TicketPriority.LOW,
+        }
+        return mapping.get(str(v).lower(), TicketPriority.MEDIUM)
 
 
 class KanbanTicketPatch(BaseModel):
