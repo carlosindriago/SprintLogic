@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,19 +23,29 @@ import {
   CheckCircle2,
   XCircle,
   Wand2,
+  Activity,
+  Zap,
+  Square,
+  RotateCcw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useFimStore } from "@/store/fimStore";
 import { useSettingsStore } from "@/store/settingsStore";
+import { useLLMConfigStore } from "@/store/llmConfigStore";
 import {
   getCuratedModels,
   verifyAndSaveProviderKey,
   fetchToolModels,
   updateToolModel,
   deleteToolModel,
+  fetchModelHealthMetrics,
+  diagnoseModelsStream,
   type CuratedProvider,
   type GlobalDefaultEntry,
+  type ModelHealthMetric,
 } from "@/lib/api";
+import { ModelSearchableSelect, type ModelOption } from "@/components/ModelSearchableSelect";
+import { ModelHealthBadge } from "@/components/ModelHealthBadge";
 import { toast } from "sonner";
 
 // ─────────────────────────────────────────────
@@ -112,6 +122,26 @@ const NATIVE_PRESETS: NativePreset[] = [
     ],
   },
   {
+    id: "github",
+    name: "GitHub Copilot / Models",
+    icon: "🐙",
+    color: "text-purple-300",
+    keyLabel: "GitHub Personal Access Token (PAT)",
+    keyPlaceholder: "ghp_... o github_pat_...",
+    defaultModels: [
+      "github/gpt-4o",
+      "github/gpt-4o-mini",
+      "github/o1-preview",
+      "github/o1-mini",
+      "github/o3-mini",
+      "github/Meta-Llama-3.1-70B-Instruct",
+      "github/Mistral-Large-2407",
+      "github/Phi-3.5-MoE-instruct",
+    ],
+    description:
+      "Catálogo oficial de GitHub Models para desarrolladores (Copilot Engine). Accede a GPT-4o, o1, Llama 3.1 y Mistral con tu GitHub Personal Access Token (PAT).",
+  },
+  {
     id: "opencode-zen",
     name: "OpenCode Zen",
     icon: "⌥",
@@ -176,6 +206,33 @@ const NATIVE_PRESETS: NativePreset[] = [
     description:
       "Potencia el Autocompletado Predictivo (FIM). Groq ofrece inferencia de ultra-baja latencia, ideal para sugerencias en tiempo real.",
   },
+  {
+    id: "zai",
+    name: "Z.AI (GLM)",
+    icon: "🧠",
+    color: "text-rose-400",
+    keyLabel: "ZAI_API_KEY",
+    keyPlaceholder: "Bearer token o API Key...",
+    defaultModels: ["glm-5.2", "glm-4-plus", "glm-4-air", "glm-4-flash"],
+    description:
+      "Modelos GLM oficiales de Z.AI / Zhipu AI para chat y razonamiento avanzado.",
+  },
+  {
+    id: "cerebras",
+    name: "Cerebras AI",
+    icon: "⚡",
+    color: "text-amber-400",
+    keyLabel: "CEREBRAS_API_KEY",
+    keyPlaceholder: "csk-...",
+    defaultModels: [
+      "llama-3.3-70b",
+      "llama-3.1-70b",
+      "llama-3.1-8b",
+      "deepseek-r1-distill-llama-70b",
+    ],
+    description:
+      "Inferencia de velocidad extrema basada en Wafer-Scale Engine para Llama y DeepSeek R1.",
+  },
 ];
 
 // ─────────────────────────────────────────────
@@ -186,11 +243,19 @@ interface PresetCardProps {
   preset: NativePreset;
   configuredModelId: string | undefined;
   backendProviderData: CuratedProvider | undefined;
+  healthMetrics?: Record<string, ModelHealthMetric>;
   onModelConfigured: (presetId: string, modelId: string) => void;
   onRefreshCurated: () => void;
 }
 
-function PresetCard({ preset, configuredModelId, backendProviderData, onModelConfigured, onRefreshCurated }: PresetCardProps) {
+function PresetCard({
+  preset,
+  configuredModelId,
+  backendProviderData,
+  healthMetrics = {},
+  onModelConfigured,
+  onRefreshCurated,
+}: PresetCardProps) {
   const isConfigured = backendProviderData?.is_configured ?? false;
   
   const [keyValue, setKeyValue] = useState("");
@@ -207,6 +272,8 @@ function PresetCard({ preset, configuredModelId, backendProviderData, onModelCon
   const setFimModel = useFimStore((s) => s.setFimModel);
   const setGroqApiKey = useFimStore((s) => s.setGroqApiKey);
 
+  const setStoreApiKey = useLLMConfigStore((s) => s.setApiKey);
+
   // Sync selected model down from props if changed externally
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -216,9 +283,22 @@ function PresetCard({ preset, configuredModelId, backendProviderData, onModelCon
   const masked = "•".repeat(16);
   
   const backendModels = backendProviderData?.models || [];
-  const displayModels = backendModels.length > 0 
-    ? backendModels.map(m => m.id) 
-    : preset.defaultModels;
+  const presetModelOptions: ModelOption[] = useMemo(() => {
+    if (backendModels.length > 0) {
+      return backendModels.map((m) => ({
+        id: m.id,
+        name: m.name || m.id,
+        provider: preset.name,
+        provider_id: preset.id,
+      }));
+    }
+    return preset.defaultModels.map((mId) => ({
+      id: mId,
+      name: mId,
+      provider: preset.name,
+      provider_id: preset.id,
+    }));
+  }, [backendModels, preset.defaultModels, preset.name, preset.id]);
 
   const handleFetchModels = useCallback(async () => {
     if (!keyValue) return;
@@ -228,6 +308,7 @@ function PresetCard({ preset, configuredModelId, backendProviderData, onModelCon
       const fetched = await verifyAndSaveProviderKey(preset.id, keyValue);
       if (fetched.length > 0) {
         setFetchStatus("ok");
+        setStoreApiKey(preset.id, keyValue);
         onRefreshCurated(); // Refreshes the top-level state
         const firstId = fetched[0].id;
         setSelectedModel(firstId);
@@ -236,11 +317,12 @@ function PresetCard({ preset, configuredModelId, backendProviderData, onModelCon
     } catch {
       setFetchStatus("error");
     }
-  }, [preset.id, keyValue, setFimModel, preset.isFimProvider, onRefreshCurated]);
+  }, [preset.id, keyValue, setFimModel, preset.isFimProvider, onRefreshCurated, setStoreApiKey]);
 
   const handleSave = async () => {
     if (keyValue) {
       await handleFetchModels();
+      setStoreApiKey(preset.id, keyValue);
     }
     if (preset.isFimProvider && keyValue) {
       setGroqApiKey(keyValue);
@@ -254,106 +336,101 @@ function PresetCard({ preset, configuredModelId, backendProviderData, onModelCon
   const activeModel = preset.isFimProvider ? fimModel || selectedModel : selectedModel;
 
   return (
-    <div
-      className={cn(
-        "border rounded-xl transition-all duration-200",
-        isConfigured
-          ? "border-zinc-700 bg-zinc-900/80"
-          : "border-zinc-800/60 bg-zinc-900/40"
-      )}
-    >
-      {/* Header */}
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between px-4 py-3 text-left"
+    <div className="border border-zinc-800 rounded-xl bg-zinc-900 overflow-hidden transition-colors">
+      {/* Header row */}
+      <div
+        className="flex items-center justify-between p-4 cursor-pointer hover:bg-zinc-800/40 select-none"
+        onClick={() => setExpanded((p) => !p)}
       >
         <div className="flex items-center gap-3">
-          <span className={cn("text-lg font-mono leading-none", preset.color)}>
-            {preset.icon}
-          </span>
+          <span className="text-xl">{preset.icon}</span>
           <div>
-            <p className="text-sm font-semibold text-zinc-200">{preset.name}</p>
-            <p className="text-xs text-zinc-500 mt-0.5">
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-sm text-zinc-100">{preset.name}</span>
               {isConfigured ? (
-                <span className="text-emerald-500">● Configurado · {activeModel}</span>
+                <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded-full font-medium flex items-center gap-1">
+                  <CheckCircle2 className="w-2.5 h-2.5" /> Configurado
+                </span>
               ) : (
-                <span className="text-zinc-600">○ Sin configurar</span>
+                <span className="text-[10px] bg-zinc-800 text-zinc-500 px-1.5 py-0.5 rounded-full font-medium">
+                  Sin configurar
+                </span>
               )}
-            </p>
+            </div>
+            {preset.description && (
+              <p className="text-xs text-zinc-500 mt-0.5">{preset.description}</p>
+            )}
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          {preset.isFimProvider && (
-            <span className="text-[10px] bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 px-2 py-0.5 rounded font-mono">
-              FIM
+
+        <div className="flex items-center gap-3">
+          {/* Active model pill when collapsed */}
+          {!expanded && (
+            <span className="text-xs font-mono text-zinc-400 bg-zinc-950 px-2 py-1 rounded border border-zinc-800 hidden sm:inline">
+              {activeModel}
             </span>
           )}
           {expanded ? (
-            <ChevronUp className="w-4 h-4 text-zinc-500" />
+            <ChevronUp className="w-4 h-4 text-zinc-400" />
           ) : (
-            <ChevronDown className="w-4 h-4 text-zinc-500" />
+            <ChevronDown className="w-4 h-4 text-zinc-400" />
           )}
         </div>
-      </button>
+      </div>
 
-      {/* Expanded */}
+      {/* Expanded body */}
       {expanded && (
-        <div className="px-4 pb-4 space-y-3 border-t border-zinc-800/60 pt-3">
-          {preset.description && (
-            <p className="text-xs text-zinc-500 leading-relaxed">{preset.description}</p>
-          )}
-
-          {/* FIM toggle (Groq only) */}
+        <div className="px-4 pb-4 pt-1 border-t border-zinc-800/60 space-y-4">
+          {/* FIM toggle if applicable */}
           {preset.isFimProvider && (
-            <div className="flex items-center justify-between p-3 bg-zinc-950/60 rounded-lg border border-zinc-800/60">
-              <div className="flex items-center gap-2">
-                <Wand2 className="w-3.5 h-3.5 text-emerald-400" />
-                <Label className="text-xs text-zinc-300 cursor-pointer">
-                  Activar Autocompletado Predictivo (FIM)
+            <div className="flex items-center justify-between py-2 border-b border-zinc-800/40">
+              <div>
+                <Label className="text-xs font-medium text-zinc-200">
+                  Autocompletado de Código (FIM)
                 </Label>
+                <p className="text-[11px] text-zinc-500">
+                  Usa este proveedor para sugerencias ultra-rápidas en el editor (Ghost Text).
+                </p>
               </div>
               <Switch
                 checked={fimEnabled}
                 onCheckedChange={setFimEnabled}
-                className="data-checked:bg-emerald-600 data-unchecked:bg-zinc-800"
               />
             </div>
           )}
 
-          {/* API Key / URL */}
+          {/* Key input */}
           <div className="space-y-1.5">
-            <Label className="text-xs text-zinc-400">{isConfigured ? "Reemplazar " + preset.keyLabel : preset.keyLabel}</Label>
-            <div className="relative">
+            <Label className="text-xs text-zinc-400">{preset.keyLabel}</Label>
+            <div className="relative flex items-center">
               <Input
                 type={visible ? "text" : "password"}
+                placeholder={isConfigured ? masked : preset.keyPlaceholder}
                 value={keyValue}
                 onChange={(e) => setKeyValue(e.target.value)}
-                placeholder={isConfigured ? "Ya configurado. Escribí para sobreescribir..." : preset.keyPlaceholder}
-                className="bg-zinc-950 border-zinc-800 text-sm text-zinc-200 pr-10 font-mono"
-                autoComplete="off"
+                className="bg-zinc-950 border-zinc-800 text-zinc-200 text-xs pr-20 font-mono"
               />
-              <button
-                type="button"
-                onClick={() => setVisible(!visible)}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
-                aria-label={visible ? "Ocultar clave" : "Mostrar clave"}
-              >
-                {visible ? <EyeOff className="w-3.5 h-3.5" aria-hidden="true" /> : <Eye className="w-3.5 h-3.5" aria-hidden="true" />}
-              </button>
+              <div className="absolute right-2 flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setVisible((p) => !p)}
+                  className="text-zinc-500 hover:text-zinc-300 p-1"
+                >
+                  {visible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                </button>
+              </div>
             </div>
-            {isConfigured && !keyValue && !visible && (
-              <p className="text-[10px] text-zinc-600 font-mono">{masked}</p>
-            )}
           </div>
 
-          {/* Model selector */}
+          {/* Model selection with Searchable Wide Select */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <Label className="text-xs text-zinc-400">Modelo activo</Label>
+              <Label className="text-xs text-zinc-400">Modelo Activo</Label>
               <button
+                type="button"
                 onClick={handleFetchModels}
-                disabled={!keyValue || fetchStatus === "loading"}
-                className="flex items-center gap-1 text-[10px] text-zinc-500 hover:text-zinc-300 disabled:opacity-40 transition-colors"
+                disabled={fetchStatus === "loading" || !keyValue}
+                className="text-[11px] text-blue-400 hover:text-blue-300 flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {fetchStatus === "loading" ? (
                   <Loader2 className="w-3 h-3 animate-spin" />
@@ -370,31 +447,20 @@ function PresetCard({ preset, configuredModelId, backendProviderData, onModelCon
               </button>
             </div>
 
-            <Select
-              value={preset.isFimProvider ? fimModel || selectedModel : selectedModel}
-              onValueChange={(v) => {
-                if (v === null) return;
-                setSelectedModel(v);
-                if (preset.isFimProvider) setFimModel(v);
-                // Also auto-save the selection
-                onModelConfigured(preset.id, v);
+            <ModelSearchableSelect
+              value={activeModel}
+              onChange={(v) => {
+                if (!v) return;
+                const mId = v.includes("/") ? v.split("/").slice(1).join("/") : v;
+                setSelectedModel(mId);
+                if (preset.isFimProvider) setFimModel(mId);
+                onModelConfigured(preset.id, mId);
               }}
-            >
-              <SelectTrigger className="bg-zinc-950 border-zinc-800 text-zinc-200 text-sm w-full">
-                <SelectValue placeholder="Selecciona un modelo..." />
-              </SelectTrigger>
-              <SelectContent className="min-w-[var(--anchor-width)] w-auto max-w-[80vw]">
-                {displayModels.map((m) => {
-                  // Some logic to nice-format if it's an ID
-                  const mName = backendModels.find(bm => bm.id === m)?.name || m;
-                  return (
-                    <SelectItem key={m} value={m}>
-                      {mName}
-                    </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
+              models={presetModelOptions}
+              healthMetrics={healthMetrics}
+              placeholder="Selecciona un modelo..."
+              popoverWidthClass="w-[480px]"
+            />
           </div>
 
           {/* Save */}
@@ -423,6 +489,7 @@ export default function AIProvidersSection() {
   const [curatedProviders, setCuratedProviders] = useState<CuratedProvider[]>([]);
   const [globalDefault, setGlobalDefault] = useState<GlobalDefaultEntry | null>(null);
   const [globalDefaultSaving, setGlobalDefaultSaving] = useState(false);
+  const [healthMetrics, setHealthMetrics] = useState<Record<string, ModelHealthMetric>>({});
   const [showCustomForm, setShowCustomForm] = useState(false);
   const [customProviders, setCustomProviders] = useState<CustomProvider[]>([]);
   const [customTestStatus, setCustomTestStatus] = useState<
@@ -436,7 +503,38 @@ export default function AIProvidersSection() {
     modelSlug: "",
   });
 
-  const allModels = useMemo(
+  const [isDiagnosing, setIsDiagnosing] = useState(false);
+  const [diagnosticScope, setDiagnosticScope] = useState<string>("active");
+  const [diagnosticProgress, setDiagnosticProgress] = useState<{
+    tested: number;
+    total: number;
+    healthy: number;
+    degraded: number;
+    failing: number;
+  } | null>(null);
+  const [isRefreshingCatalog, setIsRefreshingCatalog] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  const handleRefreshModelCatalog = async () => {
+    setIsRefreshingCatalog(true);
+    try {
+      const [provs, data] = await Promise.all([
+        getCuratedModels(true),
+        fetchToolModels(),
+      ]);
+      setCuratedProviders(provs);
+      setGlobalDefault(data.global_default ?? null);
+      const totalModels = provs.reduce((acc, p) => acc + (p.models?.length || 0), 0);
+      toast.success(`Catálogo sincronizado (${totalModels} modelos disponibles)`);
+    } catch (e: unknown) {
+      const err = e as { message?: string };
+      toast.error(`Error al sincronizar modelos: ${err?.message || String(e)}`);
+    } finally {
+      setIsRefreshingCatalog(false);
+    }
+  };
+
+  const allModels: ModelOption[] = useMemo(
     () =>
       curatedProviders.flatMap((p) =>
         p.models.map((m) => ({
@@ -449,14 +547,40 @@ export default function AIProvidersSection() {
     [curatedProviders]
   );
 
+  const configuredProviders = useMemo(
+    () => curatedProviders.filter((p) => p.is_configured),
+    [curatedProviders]
+  );
+
+  const configuredModelOptions: ModelOption[] = useMemo(
+    () =>
+      configuredProviders.flatMap((p) =>
+        p.models.map((m) => ({
+          id: m.id,
+          name: m.name,
+          provider: p.provider,
+          provider_id: p.provider_id,
+        }))
+      ),
+    [configuredProviders]
+  );
+
   const loadBackendProviders = useCallback(async () => {
     try {
-      const [data, provs] = await Promise.all([
+      const [data, provs, health] = await Promise.all([
         fetchToolModels(),
         getCuratedModels(),
+        fetchModelHealthMetrics().catch(() => [] as ModelHealthMetric[]),
       ]);
       setGlobalDefault(data.global_default ?? null);
       setCuratedProviders(provs);
+
+      const hMap: Record<string, ModelHealthMetric> = {};
+      for (const h of health) {
+        hMap[h.model_id] = h;
+        if (h.provider) hMap[`${h.provider}/${h.model_id}`] = h;
+      }
+      setHealthMetrics(hMap);
     } catch (e) {
       console.error("Failed to load providers or global default", e);
     }
@@ -548,16 +672,283 @@ export default function AIProvidersSection() {
     ? `${globalDefault.provider}/${globalDefault.model}`
     : "DEFAULT_LLM_MODEL";
 
+  const handleRunDiagnostic = async () => {
+    let targets: ModelOption[] = [];
+
+    if (diagnosticScope === "active") {
+      if (globalDefault) {
+        if (globalDefault.model) {
+          const mName = globalDefault.model;
+          const pName = globalDefault.provider || mName.split("/")[0] || "";
+          const found = allModels.find(
+            (m) =>
+              m.id === mName ||
+              m.id === mName.split("/").slice(1).join("/") ||
+              `${m.provider_id}/${m.id}` === mName
+          );
+          if (found) {
+            targets.push(found);
+          } else {
+            targets.push({
+              id: mName.includes("/") ? mName.split("/").slice(1).join("/") : mName,
+              name: mName,
+              provider: pName,
+              provider_id: pName,
+            });
+          }
+        }
+        if (globalDefault.fallback_models) {
+          globalDefault.fallback_models.forEach((f) => {
+            if (!f || f === "__none__") return;
+            const pName = f.includes("/") ? f.split("/")[0] : "";
+            const mId = f.includes("/") ? f.split("/").slice(1).join("/") : f;
+            const found = allModels.find(
+              (m) => m.id === f || m.id === mId || `${m.provider_id}/${m.id}` === f
+            );
+            if (found) {
+              if (!targets.some((t) => t.id === found.id && t.provider_id === found.provider_id)) {
+                targets.push(found);
+              }
+            } else {
+              targets.push({
+                id: mId,
+                name: f,
+                provider: pName,
+                provider_id: pName,
+              });
+            }
+          });
+        }
+      }
+      if (targets.length === 0 && allModels.length > 0) {
+        targets = allModels.slice(0, 5);
+      }
+    } else if (diagnosticScope.startsWith("provider:")) {
+      const provId = diagnosticScope.replace("provider:", "");
+      targets = configuredModelOptions.filter((m) => m.provider_id === provId || m.provider === provId);
+    } else {
+      targets = configuredModelOptions;
+    }
+
+    if (targets.length === 0) {
+      toast.error("No hay modelos disponibles para el alcance seleccionado");
+      return;
+    }
+
+    setIsDiagnosing(true);
+    setDiagnosticProgress({
+      tested: 0,
+      total: targets.length,
+      healthy: 0,
+      degraded: 0,
+      failing: 0,
+    });
+
+    const ac = new AbortController();
+    abortControllerRef.current = ac;
+
+    try {
+      await diagnoseModelsStream(
+        targets,
+        (evt) => {
+          setDiagnosticProgress({
+            tested: evt.tested,
+            total: evt.total,
+            healthy: evt.healthy,
+            degraded: evt.degraded,
+            failing: evt.failing,
+          });
+
+          if (evt.result) {
+            const res = evt.result;
+            setHealthMetrics((prev) => {
+              const updated = { ...prev };
+              const metricItem: ModelHealthMetric = {
+                model_id: res.model_id,
+                provider: res.provider,
+                total_calls: 1,
+                success_calls: res.success ? 1 : 0,
+                failed_calls: res.success ? 0 : 1,
+                timeout_calls: res.error && res.error.toLowerCase().includes("timeout") ? 1 : 0,
+                success_rate: res.success ? 100.0 : 0.0,
+                avg_latency_ms: res.latency_ms,
+                last_latency_ms: res.latency_ms,
+                last_error: res.error,
+                status: res.status,
+                last_called_at: new Date().toISOString(),
+              };
+              updated[res.model_id] = metricItem;
+              updated[`${res.provider}/${res.model_id}`] = metricItem;
+              return updated;
+            });
+          }
+        },
+        ac.signal,
+        3,
+        6
+      );
+      toast.success("Diagnóstico de modelos completado");
+    } catch (e: unknown) {
+      const err = e as { name?: string; message?: string };
+      if (err?.name !== "AbortError") {
+        toast.error(`Error durante el diagnóstico: ${err?.message || String(e)}`);
+      }
+    } finally {
+      setIsDiagnosing(false);
+      abortControllerRef.current = null;
+    }
+  };
+
+  const handleCancelDiagnostic = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+      setIsDiagnosing(false);
+      toast.info("Diagnóstico cancelado por el usuario");
+    }
+  };
+
   return (
     <div className="flex flex-col gap-8 h-full">
-      <div>
-        <h2 className="text-2xl font-semibold text-white">Modelos & LLMs</h2>
-        <p className="text-sm text-zinc-400 mt-1">
-          Gestiona proveedores oficiales, endpoints personalizados y el modelo predeterminado global.
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-semibold text-white">Modelos & LLMs</h2>
+          <p className="text-sm text-zinc-400 mt-1">
+            Gestiona proveedores oficiales, endpoints personalizados y el modelo predeterminado global con telemetría en tiempo real.
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={handleRefreshModelCatalog}
+          disabled={isRefreshingCatalog || isDiagnosing}
+          className="border-zinc-800 bg-zinc-900/90 hover:bg-zinc-800 text-zinc-200 text-xs flex items-center gap-2 h-9 px-3.5 shrink-0 shadow-sm"
+        >
+          <RotateCcw
+            className={cn("w-3.5 h-3.5", isRefreshingCatalog && "animate-spin text-blue-400")}
+          />
+          <span>{isRefreshingCatalog ? "Sincronizando..." : "Sincronizar Modelos"}</span>
+        </Button>
       </div>
 
       <div className="space-y-8 flex-1 overflow-y-auto pr-1 pb-8">
+        {/* ── DIAGNOSTIC SUITE BANNER ── */}
+        <section className="p-4 bg-gradient-to-r from-zinc-900 via-zinc-900/95 to-blue-950/30 border border-zinc-800 rounded-xl space-y-3 shadow-lg">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 shrink-0">
+                <Activity className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-zinc-100 flex items-center gap-2">
+                  Diagnóstico de Salud & Latencia en Vivo
+                </h3>
+                <p className="text-xs text-zinc-400">
+                  Ejecuta pings ultra-ligeros (1 token) en lotes controlados para medir latencia y salud sin saturar APIs.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              {/* Scope Selector: only configured providers */}
+              <select
+                value={diagnosticScope}
+                onChange={(e) => setDiagnosticScope(e.target.value)}
+                disabled={isDiagnosing || configuredProviders.length === 0}
+                className="bg-zinc-950 text-zinc-200 border border-zinc-800 rounded-md px-2.5 py-1.5 text-xs focus:outline-none focus:border-blue-500 [color-scheme:dark] cursor-pointer"
+              >
+                <option value="active">⚡ Solo Modelos Activos</option>
+                {configuredModelOptions.length > 0 && (
+                  <option value="all">🌐 Todos los configurados ({configuredModelOptions.length})</option>
+                )}
+                {configuredProviders.map((p) => (
+                  <option key={p.provider_id} value={`provider:${p.provider_id}`}>
+                    🏢 Proveedor: {p.provider} ({p.models.length})
+                  </option>
+                ))}
+              </select>
+
+              {isDiagnosing ? (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleCancelDiagnostic}
+                  className="text-xs flex items-center gap-1.5 h-8"
+                >
+                  <Square className="w-3.5 h-3.5 fill-current" /> Cancelar
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  onClick={handleRunDiagnostic}
+                  className="bg-blue-600 hover:bg-blue-500 text-white text-xs flex items-center gap-1.5 h-8 shadow-sm"
+                >
+                  <Zap className="w-3.5 h-3.5" /> Iniciar Test
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {/* Progress / Status feedback */}
+          {diagnosticProgress && (
+            <div className="pt-2.5 border-t border-zinc-800/80 space-y-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                <div className="flex items-center gap-2 font-mono text-zinc-300">
+                  {isDiagnosing ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-400" />
+                  ) : (
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                  )}
+                  <span>
+                    {isDiagnosing ? "Diagnosticando:" : "Diagnóstico completado:"}{" "}
+                    <strong className="text-white">
+                      {diagnosticProgress.tested ?? diagnosticProgress.total}
+                    </strong>{" "}
+                    / {diagnosticProgress.total} modelos
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 font-mono text-[11px] flex-wrap">
+                  <span className="text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                    🟢 {diagnosticProgress.healthy} saludables
+                  </span>
+                  <span className="text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                    🟡 {diagnosticProgress.degraded} degradados
+                  </span>
+                  <span className="text-red-400 bg-red-500/10 px-2 py-0.5 rounded border border-red-500/20">
+                    🔴 {diagnosticProgress.failing} caídos
+                  </span>
+                </div>
+              </div>
+
+              {/* Progress bar */}
+              <div className="w-full bg-zinc-950 rounded-full h-2 overflow-hidden border border-zinc-800">
+                <div
+                  className={cn(
+                    "h-full transition-all duration-300 rounded-full",
+                    !isDiagnosing
+                      ? "bg-emerald-500 shadow-sm shadow-emerald-500/50"
+                      : "bg-blue-500"
+                  )}
+                  style={{
+                    width: `${
+                      diagnosticProgress.total > 0
+                        ? Math.min(
+                            100,
+                            ((diagnosticProgress.tested ?? diagnosticProgress.total) /
+                              diagnosticProgress.total) *
+                              100
+                          )
+                        : 0
+                    }%`,
+                  }}
+                />
+              </div>
+            </div>
+          )}
+        </section>
+
         {/* ── BLOCK 1: Global Default ── */}
         <section>
           <div className="flex items-center gap-2 mb-3">
@@ -579,54 +970,20 @@ export default function AIProvidersSection() {
               {!globalDefault && allModels.length === 0 ? (
                 <Loader2 className="w-4 h-4 animate-spin text-zinc-500" />
               ) : (
-                <Select
+                <ModelSearchableSelect
                   value={
                     globalDefault?.is_overridden
                       ? `${globalDefault.provider}/${globalDefault.model}`
                       : "__default__"
                   }
-                  onValueChange={(v) => { if (v) handleGlobalDefaultChange(v); }}
+                  onChange={handleGlobalDefaultChange}
+                  models={allModels}
+                  healthMetrics={healthMetrics}
+                  allowDefault={globalDefault?.is_overridden}
+                  defaultLabel={`Restablecer a ${defaultLabel}`}
                   disabled={globalDefaultSaving}
-                >
-                  <SelectTrigger className="w-full bg-zinc-950 border-zinc-800 text-zinc-200 text-sm">
-                    {globalDefaultSaving ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin text-zinc-400" />
-                    ) : globalDefault?.is_overridden ? (
-                      <span className="truncate">
-                        <span className="text-blue-400">{globalDefault.provider}</span>
-                        <span className="text-zinc-500 mx-1">/</span>
-                        <span className="text-zinc-300">{globalDefault.model}</span>
-                      </span>
-                    ) : (
-                      <span className="text-zinc-400 truncate">{defaultLabel}</span>
-                    )}
-                  </SelectTrigger>
-                  <SelectContent className="bg-zinc-900 border-zinc-800 text-zinc-200 max-h-[320px]">
-                    {globalDefault?.is_overridden && (
-                      <SelectItem value="__default__" className="cursor-pointer py-2 text-zinc-400">
-                        Restablecer a {defaultLabel}
-                      </SelectItem>
-                    )}
-                    {[...new Set(allModels.map((m) => m.provider))].map((provider) => (
-                      <div key={provider}>
-                        <div className="px-2 py-1 text-xs text-zinc-500 font-semibold uppercase bg-zinc-950">
-                          {provider}
-                        </div>
-                        {allModels
-                          .filter((m) => m.provider === provider)
-                          .map((m) => (
-                            <SelectItem
-                              key={m.id}
-                              value={m.id}
-                              className="cursor-pointer py-1.5 pl-6"
-                            >
-                              {m.name}
-                            </SelectItem>
-                          ))}
-                      </div>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  popoverWidthClass="w-[500px]"
+                />
               )}
             </div>
 
@@ -639,39 +996,21 @@ export default function AIProvidersSection() {
               <div className="space-y-3">
                 {[0, 1, 2].map((index) => (
                   <div key={index} className="flex items-center gap-3">
-                    <span className="text-xs font-mono text-zinc-500 w-16">Fallback {index + 1}</span>
-                    <Select
+                    <span className="text-xs font-mono text-zinc-500 w-20 shrink-0">Fallback {index + 1}</span>
+                    <ModelSearchableSelect
                       value={globalDefault?.fallback_models?.[index] || "__none__"}
-                      onValueChange={(v) => { if (v) handleFallbackChange(index, v); }}
-                      disabled={globalDefaultSaving || (!globalDefault && allModels.length === 0) || (index > 0 && !globalDefault?.fallback_models?.[index - 1])}
-                    >
-                      <SelectTrigger className="w-full bg-zinc-950 border-zinc-800 text-zinc-300 text-xs h-8">
-                        <SelectValue placeholder="Ninguno" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-zinc-900 border-zinc-800 text-zinc-200 max-h-[320px]">
-                        <SelectItem value="__none__" className="cursor-pointer py-1.5 text-zinc-400 text-xs">
-                          Ninguno
-                        </SelectItem>
-                        {[...new Set(allModels.map((m) => m.provider))].map((provider) => (
-                          <div key={provider}>
-                            <div className="px-2 py-1 text-[10px] text-zinc-500 font-semibold uppercase bg-zinc-950">
-                              {provider}
-                            </div>
-                            {allModels
-                              .filter((m) => m.provider === provider)
-                              .map((m) => (
-                                <SelectItem
-                                  key={m.id}
-                                  value={m.id}
-                                  className="cursor-pointer py-1 pl-6 text-xs"
-                                >
-                                  {m.name}
-                                </SelectItem>
-                              ))}
-                          </div>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      onChange={(v) => handleFallbackChange(index, v)}
+                      models={allModels}
+                      healthMetrics={healthMetrics}
+                      allowNone={true}
+                      noneLabel="Ninguno (Sin fallback)"
+                      disabled={
+                        globalDefaultSaving ||
+                        (!globalDefault && allModels.length === 0) ||
+                        (index > 0 && !globalDefault?.fallback_models?.[index - 1])
+                      }
+                      popoverWidthClass="w-[500px]"
+                    />
                   </div>
                 ))}
               </div>
@@ -696,6 +1035,7 @@ export default function AIProvidersSection() {
                   preset={preset}
                   configuredModelId={configuredModels[preset.id]}
                   backendProviderData={backendData}
+                  healthMetrics={healthMetrics}
                   onModelConfigured={setConfiguredModel}
                   onRefreshCurated={loadBackendProviders}
                 />

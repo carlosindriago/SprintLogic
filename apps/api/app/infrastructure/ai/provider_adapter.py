@@ -15,7 +15,7 @@ class ProviderAdapter:
     """Adapts a model identifier and API key for LiteLLM invocation."""
 
     # Registry of custom providers that require explicit routing.
-    CUSTOM_PROVIDERS: dict[str, dict[str, str]] = {
+    CUSTOM_PROVIDERS: dict[str, dict[str, Any]] = {
         "opencode-zen": {
             "litellm_provider": "openai",
             "api_base": "https://opencode.ai/zen/v1",
@@ -23,6 +23,24 @@ class ProviderAdapter:
         "opencode-go": {
             "litellm_provider": "openai",
             "api_base": "https://opencode.ai/zen/go/v1",
+        },
+        "zai": {
+            "litellm_provider": "openai",
+            "api_base": "https://api.z.ai/api/paas/v4",
+            "extra_headers": {"Accept-Language": "en-US,en"},
+        },
+        "z-ai": {
+            "litellm_provider": "openai",
+            "api_base": "https://api.z.ai/api/paas/v4",
+            "extra_headers": {"Accept-Language": "en-US,en"},
+        },
+        "cerebras": {
+            "litellm_provider": "openai",
+            "api_base": "https://api.cerebras.ai/v1",
+        },
+        "github": {
+            "litellm_provider": "openai",
+            "api_base": "https://models.github.ai/inference",
         },
     }
 
@@ -41,6 +59,10 @@ class ProviderAdapter:
         if provider:
             if provider == "nvidia_nim":
                 return "nvidia"
+            if provider in ("z-ai", "zai"):
+                return "zai"
+            if provider in ("github", "github_models", "copilot"):
+                return "github"
             return provider
 
         model_lower = model.lower()
@@ -54,6 +76,12 @@ class ProviderAdapter:
             return "openrouter"
         if "nvidia" in model_lower or "_nim" in model_lower:
             return "nvidia"
+        if "z-ai" in model_lower or "zai" in model_lower or "glm" in model_lower:
+            return "zai"
+        if "cerebras" in model_lower:
+            return "cerebras"
+        if "github" in model_lower or "copilot" in model_lower:
+            return "github"
         return "gemini"
 
     @classmethod
@@ -91,9 +119,14 @@ class ProviderAdapter:
         if config.get("api_base"):
             kwargs["api_base"] = config["api_base"]
 
+        if config.get("extra_headers"):
+            kwargs["extra_headers"] = config["extra_headers"]
+
         # NVIDIA NIM expects its key via an environment variable.
         if internal_provider == "nvidia" and api_key:
             os.environ["NVIDIA_NIM_API_KEY"] = api_key
+        if internal_provider == "cerebras" and api_key:
+            os.environ["CEREBRAS_API_KEY"] = api_key
 
         return {
             "model": litellm_model,

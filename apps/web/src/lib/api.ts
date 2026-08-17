@@ -173,7 +173,15 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     const responseText = await response.text();
     try {
       const errorData = JSON.parse(responseText);
-      errorMessage = errorData.detail || errorData.message || errorMessage;
+      if (typeof errorData.detail === 'string') {
+        errorMessage = errorData.detail;
+      } else if (errorData.detail) {
+        errorMessage = JSON.stringify(errorData.detail);
+      } else if (typeof errorData.message === 'string') {
+        errorMessage = errorData.message;
+      } else if (errorData.message) {
+        errorMessage = JSON.stringify(errorData.message);
+      }
     } catch {
       errorMessage = responseText || errorMessage;
     }
@@ -357,7 +365,8 @@ export const verifyAndSaveProviderKey = (provider: string, apiKey: string) =>
   api.post<ModelResult[]>(`/settings/providers/${provider}/keys`, { api_key: apiKey });
 export const checkApiKeyStatus = (provider: string) => api.get<{ is_configured: boolean }>(`/settings/api-key/${provider}`);
 export const deleteProviderKey = (provider: string) => api.delete<{ status: string }>(`/settings/api-key/${provider}`);
-export const getCuratedModels = () => api.get<CuratedProvider[]>('/ai/models');
+export const getCuratedModels = (forceRefresh = false) => 
+  api.get<CuratedProvider[]>(`/ai/models${forceRefresh ? '?force_refresh=true' : ''}`);
 
 // --- Tool Model Mappings ---
 export interface ToolModelEntry {
@@ -394,6 +403,124 @@ export const updateToolModel = (toolName: string, providerId: string, modelName:
   );
 export const deleteToolModel = (toolName: string) =>
   api.delete<{ status: string; tool_name: string }>(`/settings/tool-models/${toolName}`);
+
+export interface ModelHealthMetric {
+  model_id: string;
+  provider: string;
+  total_calls: number;
+  success_calls: number;
+  failed_calls: number;
+  timeout_calls: number;
+  success_rate: number;
+  avg_latency_ms: number;
+  last_latency_ms: number;
+  last_error: string | null;
+  status: 'healthy' | 'degraded' | 'failing' | 'untested';
+  last_called_at: string | null;
+}
+
+export const fetchModelHealthMetrics = () => api.get<ModelHealthMetric[]>('/settings/model-health');
+export const resetModelHealthMetric = (modelId: string) =>
+  api.delete<{ status: string; model_id: string }>(`/settings/model-health/${encodeURIComponent(modelId)}`);
+
+export interface DiagnoseEventPayload {
+  type: 'progress' | 'complete';
+  tested: number;
+  total: number;
+  healthy: number;
+  degraded: number;
+  failing: number;
+  result?: {
+    model_id: string;
+    provider: string;
+    success: boolean;
+    latency_ms: number;
+    status: 'healthy' | 'degraded' | 'failing';
+    error: string | null;
+  };
+}
+
+export async function diagnoseModelsStream(
+  models: Array<{ id: string; provider?: string; provider_id?: string }>,
+  onEvent: (event: DiagnoseEventPayload) => void,
+  signal?: AbortSignal,
+  concurrency = 3,
+  timeoutSeconds = 12
+): Promise<void> {
+  const sanitizedModels = models
+    .filter((m) => Boolean(m && m.id))
+    .map((m) => ({
+      id: String(m.id),
+      provider: m.provider || m.provider_id || undefined,
+      provider_id: m.provider_id || m.provider || undefined,
+    }));
+
+  const res = await fetch(`${API_BASE_URL}/settings/model-health/diagnose`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      models: sanitizedModels,
+      concurrency,
+      timeout_seconds: timeoutSeconds,
+    }),
+    signal,
+  });
+
+  if (!res.ok) {
+    let errorDetail = `Error HTTP ${res.status}`;
+    try {
+      const errorText = await res.text();
+      try {
+        const errorJson = JSON.parse(errorText);
+        if (Array.isArray(errorJson.detail)) {
+          errorDetail = errorJson.detail
+            .map((d: { loc?: string[]; msg?: string }) => `${d.loc?.join('.')}: ${d.msg}`)
+            .join(', ');
+        } else if (typeof errorJson.detail === 'string') {
+          errorDetail = errorJson.detail;
+        } else if (errorJson.message) {
+          errorDetail = String(errorJson.message);
+        }
+      } catch {
+        if (errorText) errorDetail = errorText;
+      }
+    } catch {
+      // fallback
+    }
+    throw new Error(errorDetail);
+  }
+
+  if (!res.body) return;
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      if (line.startsWith('data: ')) {
+        const jsonStr = line.slice(6).trim();
+        if (jsonStr) {
+          try {
+            const data: DiagnoseEventPayload = JSON.parse(jsonStr);
+            onEvent(data);
+          } catch {
+            // ignore partial json
+          }
+        }
+      }
+    }
+  }
+}
+
+
 
 // --- AI / Analysis ---
 export const getGlobalFlowInsights = () => api.get<ProjectFlowInsights>('/insights/flow');
@@ -623,10 +750,59 @@ export const updatePrompt = (id: string, current_content: string) =>
 export const restorePrompt = (id: string) => 
   api.post<PromptRegistryItem>(`/prompts/${id}/restore`);
 
+export interface PlanningDocument {
+  id: string;
+  project_id: string;
+  file_path: string;
+  markdown_content: string;
+  version: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PlanningVersion {
+  id: string;
+  project_id: string;
+  version: number;
+  change_summary: string | null;
+  markdown_content: string;
+  created_at: string;
+}
+
+export const getPlanningDocument = (projectId: string) =>
+  api.get<PlanningDocument>(`/planning-studio/projects/${projectId}/document`);
+
+export const savePlanningDocument = (
+  projectId: string,
+  markdownContent: string,
+  changeSummary?: string,
+  filePath?: string
+) =>
+  api.post<PlanningDocument>(`/planning-studio/projects/${projectId}/document`, {
+    markdown_content: markdownContent,
+    change_summary: changeSummary,
+    file_path: filePath,
+  });
+
+export const getPlanningHistory = (projectId: string) =>
+  api.get<PlanningVersion[]>(`/planning-studio/projects/${projectId}/history`);
+
+export const restorePlanningVersion = (projectId: string, versionId: string) =>
+  api.post<PlanningDocument>(`/planning-studio/projects/${projectId}/history/${versionId}/restore`);
+
+export const getProjectGraphMd = async (projectId: string): Promise<string> => {
+  const res = await fetch(`${API_BASE_URL}/projects/${projectId}/graph/export/md`);
+  if (!res.ok) {
+    throw new Error("Failed to export project topological graph markdown");
+  }
+  return res.text();
+};
+
 export interface PlanningMessagePayload {
   messages: { role: string; content: string }[];
   project_id: string;
   model?: string;
+  current_markdown?: string;
 }
 
 export const sendPlanningMessage = async (
@@ -673,6 +849,10 @@ export const sendPlanningMessage = async (
         try {
           const parsed = JSON.parse(jsonStr);
 
+          if (parsed.error) {
+            throw new Error(parsed.error);
+          }
+
           if (parsed.text) {
             accumulatedText += parsed.text;
             onTextUpdate?.(accumulatedText);
@@ -687,6 +867,9 @@ export const sendPlanningMessage = async (
             // Done
           }
         } catch (e) {
+          if (e instanceof Error && e.message && !e.message.startsWith("Unexpected token") && !e.message.startsWith("JSON.parse")) {
+            throw e;
+          }
           console.warn("Failed to parse SSE line", e, "Line:", line);
         }
       }

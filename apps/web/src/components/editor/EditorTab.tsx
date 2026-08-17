@@ -257,7 +257,7 @@ export function EditorTab({
   const { data: gitStatusData } = useQuery({
     queryKey: ['git-status', projectId],
     queryFn: () => getGitStatus(projectId),
-    refetchInterval: 5000,
+    refetchInterval: 30_000,
     enabled: !!projectId
   });
 
@@ -448,14 +448,18 @@ export function EditorTab({
         onCut={async () => {
           const selection = editorRef.current?.getSelection();
           if (selection && !selection.isEmpty()) {
-            await navigator.clipboard.writeText(editorRef.current?.getModel()?.getValueInRange(selection) ?? '');
+            try {
+              await navigator.clipboard.writeText(editorRef.current?.getModel()?.getValueInRange(selection) ?? '');
+            } catch {}
             editorRef.current?.executeEdits('cut', [{ range: selection, text: '', forceMoveMarkers: true }]);
           }
         }}
         onCopy={async () => {
           const selection = editorRef.current?.getSelection();
           if (selection && !selection.isEmpty()) {
-            await navigator.clipboard.writeText(editorRef.current?.getModel()?.getValueInRange(selection) ?? '');
+            try {
+              await navigator.clipboard.writeText(editorRef.current?.getModel()?.getValueInRange(selection) ?? '');
+            } catch {}
           }
         }}
         onPaste={async () => {

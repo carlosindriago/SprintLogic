@@ -6,7 +6,6 @@ import { DndContext, closestCenter, DragEndEvent, DragOverlay, DragStartEvent, u
 import { arrayMove, SortableContext, verticalListSortingStrategy, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Card, CardContent } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import ReactMarkdown from "react-markdown";
 import { getProjectTasks, saveProjectTasks, getKanbanConfig, saveKanbanConfig, syncKanbanCommits, KanbanColumn, fetchProjectTickets, updateKanbanTicket, deleteKanbanTicket, createKanbanTicket, createGitBranch, commitChanges, commitAndSwitchGitBranch, fetchEpics, fetchSprints, getGitStatus, discardGitChanges, checkoutGitBranch, deleteGitBranch } from '@/lib/api';
 import { KanbanTicket, Epic, Sprint } from '@/types';
@@ -37,7 +36,8 @@ import {
   Loader2,
   GitCommit,
   FileCode,
-  Trash2
+  Trash2,
+  Lock
 } from "lucide-react";
 import TicketMentorDrawer from "./TicketMentorDrawer";
 import { useRouter } from "next/navigation";
@@ -47,18 +47,74 @@ interface KanbanBoardProps {
   onNodeClick?: (nodeId: string) => void;
 }
 
+function getTaskDependencies(task: Task, allTasks: Task[], rawTickets: KanbanTicket[]): {
+  isBlocked: boolean;
+  blockingTasks: string[];
+} {
+  const content = task.content || "";
+  const raw = rawTickets.find(r => r.id === task.id);
+  const desc = raw?.description || "";
+  const combinedText = `${content}\n${desc}`;
+
+  // Look for explicit dependency tags: [Depends: ...], [Deps: ...], [Depende de: ...], [Bloqueada por: ...], [Prereq: ...]
+  const depMatches = Array.from(combinedText.matchAll(/\[(?:Depends|Deps|Depende|Depende de|Bloqueada por|Prereq|Prerequisite):\s*([^\]]+)\]/gi));
+  
+  const explicitDepQueries: string[] = [];
+  for (const m of depMatches) {
+    const parts = m[1].split(/[,;]/).map(p => p.trim()).filter(Boolean);
+    explicitDepQueries.push(...parts);
+  }
+
+  const blockingTasks: string[] = [];
+
+  if (explicitDepQueries.length > 0) {
+    for (const query of explicitDepQueries) {
+      const qLower = query.toLowerCase().replace(/^[#]/, '').trim();
+      const target = allTasks.find(t => {
+        if (t.id === task.id) return false;
+        if (t.id.toLowerCase().startsWith(qLower) || t.id.toLowerCase().includes(qLower)) return true;
+        const firstLine = t.content.split('\n')[0].toLowerCase();
+        return firstLine.includes(qLower);
+      });
+
+      if (target) {
+        const isDone = (target.status || '').toLowerCase() === 'done';
+        if (!isDone) {
+          const targetTitle = target.content.split('\n')[0].replace(/^[#\s\-*\[\]]+/, '').trim().substring(0, 30);
+          blockingTasks.push(targetTitle || target.id.substring(0, 6));
+        }
+      }
+    }
+  }
+
+  return {
+    isBlocked: blockingTasks.length > 0,
+    blockingTasks,
+  };
+}
+
 function SortableTask({ 
   task, 
   onNodeClick,
   onMentorClick,
   onAutoFixClick,
-  onClick
+  onClick,
+  epic,
+  sprint,
+  orderIndex,
+  isBlocked,
+  blockingTasks,
 }: { 
   task: Task & { subtasks?: any[] }; 
   onNodeClick?: (nodeId: string) => void; 
   onMentorClick?: (ticketId: string, nodeId: string) => void;
   onAutoFixClick?: (ticketId: string, nodeId: string, instruction: string) => void;
   onClick?: () => void;
+  epic?: Epic;
+  sprint?: Sprint;
+  orderIndex?: number;
+  isBlocked?: boolean;
+  blockingTasks?: string[];
 }) {
   const router = useRouter();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id });
@@ -77,18 +133,37 @@ function SortableTask({
   };
 
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners} onClick={onClick} className="mb-2 cursor-grab active:cursor-grabbing group">
-      <Card className="bg-zinc-800 border-zinc-700/50 hover:border-zinc-600 transition-colors">
-        <CardContent className="p-3 text-xs text-zinc-200 flex flex-col gap-2">
-          {/* Header with task ID and priority */}
-          <div className="flex items-center justify-between">
-            <span className="text-[9px] bg-zinc-900 text-zinc-300 font-mono px-1.5 py-0.5 rounded border border-zinc-700 font-semibold select-all" title="Copiar ID para commit">
-              {task.id}
-            </span>
-            <div className="flex items-center gap-1.5">
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners} onClick={onClick} className="mb-2 cursor-grab active:cursor-grabbing group w-full min-w-0">
+      <Card className={cn(
+        "bg-zinc-800 border transition-colors w-full min-w-0 overflow-hidden",
+        isBlocked ? "border-amber-700/60 hover:border-amber-500/80 bg-zinc-850" : "border-zinc-700/50 hover:border-zinc-600"
+      )}>
+        <CardContent className="p-3 text-xs text-zinc-200 flex flex-col gap-2 min-w-0">
+          {/* Header with task Order, ID, Priority and Blocked status */}
+          <div className="flex items-center justify-between min-w-0 gap-1.5 flex-wrap">
+            <div className="flex items-center gap-1.5 shrink-0">
+              {orderIndex !== undefined && (
+                <span className="text-[9px] bg-amber-950/50 text-amber-300 font-mono px-1.5 py-0.5 rounded border border-amber-800/50 font-bold" title="Orden sugerido de ejecución">
+                  #{orderIndex}
+                </span>
+              )}
+              <span className="text-[9px] bg-zinc-900 text-zinc-300 font-mono px-1.5 py-0.5 rounded border border-zinc-700 font-semibold select-all shrink-0" title="Copiar ID para commit">
+                {task.id.length > 8 ? task.id.substring(0, 8) : task.id}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+              {isBlocked && (
+                <span 
+                  className="text-[9px] px-1.5 py-0.5 rounded font-semibold bg-red-950/80 text-red-300 border border-red-800/80 flex items-center gap-1 shadow-sm"
+                  title={`🔒 Bloqueada. Requiere completar antes: ${blockingTasks?.join(", ")}`}
+                >
+                  <Lock className="w-2.5 h-2.5 text-red-400" /> Bloqueada
+                </span>
+              )}
               {task.priority && (
                 <span className={cn(
-                  "text-[9px] px-1.5 py-0.5 rounded font-medium",
+                  "text-[9px] px-1.5 py-0.5 rounded font-medium shrink-0",
                   task.priority === "High" ? "bg-red-950/40 text-red-400 border border-red-900/30" :
                   task.priority === "Medium" ? "bg-blue-950/40 text-blue-400 border border-blue-900/30" :
                   "bg-zinc-900 text-zinc-400 border border-zinc-700"
@@ -99,26 +174,57 @@ function SortableTask({
             </div>
           </div>
 
-          <div className="prose prose-invert prose-sm max-w-none prose-p:my-0 text-zinc-200">
+          {/* Epics & Sprints Badges + Dependencies notification */}
+          {(epic || sprint || (isBlocked && blockingTasks && blockingTasks.length > 0)) && (
+            <div className="flex flex-wrap items-center gap-1 text-[10px] min-w-0">
+              {epic && (
+                <span 
+                  className={cn(
+                    "text-[9px] px-1.5 py-0.5 rounded font-medium truncate max-w-[140px] border",
+                    epic.color ? `${epic.color}/20 text-blue-300 border-blue-800/40` : "bg-blue-950/40 text-blue-300 border-blue-800/40"
+                  )} 
+                  title={`Épica: ${epic.name}`}
+                >
+                  🎯 {epic.name}
+                </span>
+              )}
+              {sprint && (
+                <span 
+                  className="text-[9px] px-1.5 py-0.5 rounded font-medium truncate max-w-[120px] bg-purple-950/40 text-purple-300 border border-purple-800/40" 
+                  title={`Sprint: ${sprint.name}`}
+                >
+                  🏃 {sprint.name}
+                </span>
+              )}
+              {isBlocked && blockingTasks && blockingTasks.length > 0 && (
+                <div className="w-full text-[9px] text-red-300 bg-red-950/40 border border-red-900/40 px-1.5 py-0.5 rounded flex items-center gap-1 truncate mt-0.5">
+                  <AlertTriangle className="w-2.5 h-2.5 shrink-0 text-red-400" />
+                  <span className="truncate">Requiere: {blockingTasks.join(", ")}</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="prose prose-invert prose-sm max-w-none prose-p:my-0 text-zinc-200 break-words [word-break:break-word] overflow-hidden">
             <ReactMarkdown>{task.content}</ReactMarkdown>
           </div>
 
           {/* Metadata badges: Pomodoros, Time, Commit, Tags */}
-          <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-zinc-400 mt-1">
+          <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-zinc-400 mt-1 min-w-0">
             {task.commit && (
-              <span className="flex items-center gap-1 bg-green-950/30 text-green-400 border border-green-900/40 px-1.5 py-0.5 rounded">
+              <span className="flex items-center gap-1 bg-green-950/30 text-green-400 border border-green-900/40 px-1.5 py-0.5 rounded shrink-0">
                 <GitBranch className="w-3 h-3" />
                 {task.commit.substring(0, 7)}
               </span>
             )}
             {task.time_spent ? (
-              <span className="flex items-center gap-1 bg-zinc-900 text-zinc-400 border border-zinc-700 px-1.5 py-0.5 rounded">
+              <span className="flex items-center gap-1 bg-zinc-900 text-zinc-400 border border-zinc-700 px-1.5 py-0.5 rounded shrink-0">
                 <Clock className="w-3 h-3 text-zinc-500" />
                 {task.time_spent ? ` (${formatTime(task.time_spent)})` : ""}
               </span>
             ) : null}
             {task.tags && task.tags.map(tag => (
-              <span key={tag} className="bg-zinc-900 text-zinc-500 px-1.5 py-0.5 rounded border border-zinc-700">
+              <span key={tag} className="bg-zinc-900 text-zinc-500 px-1.5 py-0.5 rounded border border-zinc-700 truncate max-w-full">
                 #{tag}
               </span>
             ))}
@@ -134,9 +240,9 @@ function SortableTask({
           )}
 
           {task.affected_nodes && task.affected_nodes.length > 0 && (
-            <div className="flex flex-col gap-1 border-t border-zinc-700/30 pt-2 mt-1">
+            <div className="flex flex-col gap-1 border-t border-zinc-700/30 pt-2 mt-1 min-w-0">
               {task.affected_nodes.map((node) => (
-                <div key={node} className="flex items-center gap-1 group/node">
+                <div key={node} className="flex items-center gap-1 group/node min-w-0">
                   <span
                     onClick={(e) => {
                       e.stopPropagation();
@@ -148,7 +254,7 @@ function SortableTask({
                     {node}
                   </span>
                   {task.has_id && (
-                    <div className="flex items-center gap-1 opacity-0 group-hover/node:opacity-100 transition-opacity">
+                    <div className="flex items-center gap-1 opacity-0 group-hover/node:opacity-100 transition-opacity shrink-0">
                       <button 
                         onClick={(e) => { e.stopPropagation(); onMentorClick?.(task.id, node); }}
                         className="p-1 rounded hover:bg-indigo-900/50 text-indigo-400"
@@ -195,7 +301,7 @@ function SortableTask({
 function DroppableColumn({ id, children }: { id: string, children: React.ReactNode }) {
   const { setNodeRef } = useDroppable({ id });
   return (
-    <div ref={setNodeRef} id={id} className="min-h-[300px]">
+    <div ref={setNodeRef} id={id} className="min-h-[150px] w-full flex flex-col">
       {children}
     </div>
   );
@@ -290,6 +396,11 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
   // Quick Add State
   const [quickAddText, setQuickAddText] = useState("");
   const [isQuickAdding, setIsQuickAdding] = useState(false);
+
+  // Icebox Drawer State
+  const [showIceboxDrawer, setShowIceboxDrawer] = useState(false);
+  const [quickAddIceboxText, setQuickAddIceboxText] = useState("");
+  const [isQuickAddingIcebox, setIsQuickAddingIcebox] = useState(false);
 
   const fetchConfig = useCallback(async () => {
     if (!projectId) return;
@@ -418,7 +529,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
 
     if (activeIdStr === overIdStr) return;
 
-    const isOverColumn = columns.some((c) => c.id === overIdStr);
+    const isOverColumn = columns.some((c) => c.id === overIdStr) || overIdStr === "icebox";
     const prevTasksState = [...tasks];
 
     const activeIndex = tasks.findIndex((t) => t.id === activeIdStr);
@@ -432,9 +543,13 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
     if (isOverColumn) {
       newStatus = overIdStr;
       activeTask.status = overIdStr;
-      const targetCol = columns.find((c) => c.id === overIdStr);
-      if (targetCol) {
-        activeTask.category = targetCol.title;
+      if (overIdStr === "icebox") {
+        activeTask.category = "Icebox";
+      } else {
+        const targetCol = columns.find((c) => c.id === overIdStr);
+        if (targetCol) {
+          activeTask.category = targetCol.title;
+        }
       }
       newTasks[activeIndex] = activeTask;
       
@@ -453,6 +568,18 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
           newTasks[activeIndex] = activeTask;
         }
         newTasks = arrayMove(newTasks, activeIndex, overIndex);
+      }
+    }
+
+    // Dependencies Guard: prevent moving blocked tasks into in_progress or done
+    if (newStatus !== originalStatus && (newStatus === "in_progress" || newStatus === "done")) {
+      const depInfo = getTaskDependencies(activeTask, tasks, rawTickets);
+      if (depInfo.isBlocked) {
+        toast.warning("🔒 Tarea Bloqueada", {
+          description: `No puedes avanzar esta tarea hasta completar primero sus dependencias pendientes: ${depInfo.blockingTasks.join(", ")}`,
+          duration: 5000,
+        });
+        return;
       }
     }
 
@@ -644,6 +771,10 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
     return filtered;
   }, [tasks, sprintFilter, epicFilter, rawTicketsMap]);
 
+  const iceboxTasks = useMemo(() => {
+    return tasks.filter((t) => (t.status || "").toLowerCase() === "icebox");
+  }, [tasks]);
+
   // ⚡ Bolt: Performance Optimization
   // Groups tasks by status in a single pass O(N).
   // Prevents filtering the entire tasks array 3 times per column on every render,
@@ -715,6 +846,21 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
             </div>
           </div>
           <button 
+            onClick={() => setShowIceboxDrawer(!showIceboxDrawer)}
+            className={cn(
+              "flex items-center gap-1.5 text-xs px-3 py-1.5 rounded transition-all border shadow-sm font-medium",
+              showIceboxDrawer
+                ? "bg-cyan-950/80 text-cyan-200 border-cyan-500/60 ring-1 ring-cyan-500/30"
+                : "bg-[#18181b] text-cyan-400 hover:text-cyan-200 hover:bg-cyan-950/40 border-cyan-800/40"
+            )}
+          >
+            <span>🧊</span>
+            <span>Icebox</span>
+            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-cyan-900/60 text-cyan-300 font-mono">
+              {iceboxTasks.length}
+            </span>
+          </button>
+          <button 
             onClick={() => setShowManagerModal(true)}
             className="flex items-center gap-1.5 text-xs text-indigo-300 hover:text-white px-3 py-1.5 rounded bg-indigo-950/60 hover:bg-indigo-900/80 transition-colors border border-indigo-800/60 shadow-sm font-medium"
           >
@@ -755,22 +901,140 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
         </div>
       </div>
 
-      {/* Kanban Columns view */}
-      <div className="flex-1 flex p-6 gap-4 overflow-x-auto overflow-y-hidden custom-scrollbar bg-[#111112]">
+      {/* Main Board View with Left Drawer & Kanban Columns */}
+      <div className="flex-1 flex overflow-hidden relative bg-[#111112]">
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+          {/* Collapsible Left Icebox Drawer */}
+          {showIceboxDrawer && (
+            <div className="w-[320px] min-w-[300px] border-r border-zinc-800 bg-[#0e0e11] flex flex-col shrink-0 z-10 transition-all shadow-2xl h-full max-h-full min-h-0">
+              <div className="p-3 border-b border-zinc-800/80 bg-[#141418] flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">🧊</span>
+                  <div className="flex flex-col">
+                    <span className="text-xs font-bold text-zinc-100 flex items-center gap-1.5">
+                      Icebox / Ideas
+                      <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-cyan-950 text-cyan-400 border border-cyan-800/50 font-mono">
+                        {iceboxTasks.length}
+                      </span>
+                    </span>
+                    <span className="text-[10px] text-zinc-500">Aparcadas fuera del sprint activo</span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowIceboxDrawer(false)}
+                  className="p-1 text-zinc-400 hover:text-zinc-200 rounded hover:bg-zinc-800 transition-colors"
+                  title="Cerrar Icebox"
+                  aria-label="Cerrar Icebox"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-3 border-b border-zinc-800/50 bg-[#101014] shrink-0">
+                <input
+                  type="text"
+                  placeholder="+ Añadir idea al Icebox..."
+                  className="w-full bg-[#18181b] border border-cyan-900/40 rounded-md px-3 py-2 text-[11px] font-medium text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-cyan-500 disabled:opacity-50"
+                  value={quickAddIceboxText}
+                  onChange={(e) => setQuickAddIceboxText(e.target.value)}
+                  onKeyDown={async (e) => {
+                    if (e.key === "Enter" && quickAddIceboxText.trim() && projectId) {
+                      setIsQuickAddingIcebox(true);
+                      try {
+                        await createKanbanTicket(projectId, {
+                          title: quickAddIceboxText.trim(),
+                          type: "Feature",
+                          status: "icebox" as any,
+                          priority: "Low",
+                          description: "Idea estacionada en Icebox",
+                        });
+                        setQuickAddIceboxText("");
+                        await fetchTasks();
+                        toast.success("💡 Idea guardada en el Icebox");
+                      } catch (err) {
+                        console.error(err);
+                        toast.error("Error al crear idea");
+                      } finally {
+                        setIsQuickAddingIcebox(false);
+                      }
+                    }
+                  }}
+                  disabled={isQuickAddingIcebox}
+                />
+              </div>
+
+              <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 custom-scrollbar min-h-0">
+                <SortableContext items={iceboxTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
+                  <DroppableColumn id="icebox">
+                    {iceboxTasks.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center p-6 text-center text-zinc-500 my-8 space-y-2">
+                        <span className="text-2xl opacity-40">🧊</span>
+                        <p className="text-xs text-zinc-400 font-medium">Icebox Vacío</p>
+                        <p className="text-[10px] text-zinc-600 max-w-[200px] leading-relaxed">
+                          Arrastra tarjetas aquí o escribe arriba para aparcar ideas sin contaminar el backlog activo.
+                        </p>
+                      </div>
+                    ) : (
+                      iceboxTasks.map((task, idx) => {
+                        const raw = rawTickets.find(r => r.id === task.id);
+                        const epic = epics.find(e => e.id === raw?.epic_id);
+                        const sprint = sprints.find(s => s.id === raw?.sprint_id);
+                        const depInfo = getTaskDependencies(task, tasks, rawTickets);
+                        const orderIndex = tasks.findIndex(t => t.id === task.id) + 1;
+
+                        return (
+                          <SortableTask
+                            key={task.id}
+                            task={task}
+                            epic={epic}
+                            sprint={sprint}
+                            orderIndex={orderIndex > 0 ? orderIndex : idx + 1}
+                            isBlocked={depInfo.isBlocked}
+                            blockingTasks={depInfo.blockingTasks}
+                            onNodeClick={onNodeClick}
+                            onClick={() => {
+                              const isDbTicket = rawTickets.some(r => r.id === task.id);
+                              if (isDbTicket) {
+                                setActiveDrawerTicketId(task.id);
+                              }
+                            }}
+                            onMentorClick={(ticketId, nodeId) => {
+                              setActiveMentorTicket({ ticketId, projectId: projectId!, filePath: nodeId });
+                            }}
+                            onAutoFixClick={(ticketId, nodeId, instruction) => {
+                              const tabId = `autofix-${ticketId}-${nodeId}`;
+                              addTab({
+                                id: tabId,
+                                title: `Fix: ${nodeId.split('/').pop()}`,
+                                type: 'auto-fix',
+                                data: { hash: ticketId, filePath: nodeId, markdown: instruction }
+                              });
+                            }}
+                          />
+                        );
+                      })
+                    )}
+                  </DroppableColumn>
+                </SortableContext>
+              </div>
+            </div>
+          )}
+
+          {/* Kanban Columns view */}
+          <div className="flex-1 flex p-6 gap-4 overflow-x-auto overflow-y-hidden custom-scrollbar bg-[#111112] h-full min-h-0 items-stretch">
           {columns.map((col, idx) => {
             const columnTasks = tasksByStatus[col.id] || [];
 
             return (
-              <div key={col.id} className={cn("flex flex-col bg-zinc-900 rounded-lg min-w-[280px] max-w-[320px] border-t-2 shrink-0 border-zinc-800", col.color)}>
-                <div className="p-3 font-semibold text-zinc-300 text-sm border-b border-zinc-800/50 flex items-center justify-between">
+              <div key={col.id} className={cn("flex flex-col bg-zinc-900 rounded-lg min-w-[280px] max-w-[320px] w-[300px] border-t-2 shrink-0 border-zinc-800 h-full max-h-full min-h-0 overflow-hidden shadow-lg", col.color)}>
+                <div className="p-3 font-semibold text-zinc-300 text-sm border-b border-zinc-800/50 flex items-center justify-between shrink-0">
                   <span>{col.title}</span>
                   <span className="text-xs bg-zinc-850 px-2 py-0.5 rounded-full text-zinc-500 font-medium">
                     {columnTasks.length}
                   </span>
                 </div>
                 {idx === 0 && (
-                  <div className="px-3 pt-3">
+                  <div className="px-3 pt-3 shrink-0">
                     <input
                       type="text"
                       placeholder="+ Añadir tarea..."
@@ -801,40 +1065,54 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
                     />
                   </div>
                 )}
-                <ScrollArea className="flex-1 p-3">
+                <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 custom-scrollbar min-h-0">
                   <SortableContext items={columnTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
                     <DroppableColumn id={col.id}>
-                      {columnTasks.map(task => (
-                        <SortableTask
-                          key={task.id}
-                          task={task}
-                          onNodeClick={onNodeClick}
-                          onClick={() => {
-                            const isDbTicket = rawTickets.some(r => r.id === task.id);
-                            if (isDbTicket) {
-                              setActiveDrawerTicketId(task.id);
-                            }
-                          }}
-                          onMentorClick={(ticketId, nodeId) => {
-                            setActiveMentorTicket({ ticketId, projectId: projectId!, filePath: nodeId });
-                          }}
-                          onAutoFixClick={(ticketId, nodeId, instruction) => {
-                            const tabId = `autofix-${ticketId}-${nodeId}`;
-                            addTab({
-                              id: tabId,
-                              title: `Fix: ${nodeId.split('/').pop()}`,
-                              type: 'auto-fix',
-                              data: { hash: ticketId, filePath: nodeId, markdown: instruction }
-                            });
-                          }}
-                        />
-                      ))}
+                      {columnTasks.map((task, taskIdx) => {
+                        const raw = rawTickets.find(r => r.id === task.id);
+                        const epic = epics.find(e => e.id === raw?.epic_id);
+                        const sprint = sprints.find(s => s.id === raw?.sprint_id);
+                        const depInfo = getTaskDependencies(task, tasks, rawTickets);
+                        const orderIndex = tasks.findIndex(t => t.id === task.id) + 1;
+
+                        return (
+                          <SortableTask
+                            key={task.id}
+                            task={task}
+                            epic={epic}
+                            sprint={sprint}
+                            orderIndex={orderIndex > 0 ? orderIndex : taskIdx + 1}
+                            isBlocked={depInfo.isBlocked}
+                            blockingTasks={depInfo.blockingTasks}
+                            onNodeClick={onNodeClick}
+                            onClick={() => {
+                              const isDbTicket = rawTickets.some(r => r.id === task.id);
+                              if (isDbTicket) {
+                                setActiveDrawerTicketId(task.id);
+                              }
+                            }}
+                            onMentorClick={(ticketId, nodeId) => {
+                              setActiveMentorTicket({ ticketId, projectId: projectId!, filePath: nodeId });
+                            }}
+                            onAutoFixClick={(ticketId, nodeId, instruction) => {
+                              const tabId = `autofix-${ticketId}-${nodeId}`;
+                              addTab({
+                                id: tabId,
+                                title: `Fix: ${nodeId.split('/').pop()}`,
+                                type: 'auto-fix',
+                                data: { hash: ticketId, filePath: nodeId, markdown: instruction }
+                              });
+                            }}
+                          />
+                        );
+                      })}
                     </DroppableColumn>
                   </SortableContext>
-                </ScrollArea>
+                </div>
               </div>
             );
           })}
+          </div>
 
           <DragOverlay>
             {activeTask ? (

@@ -32,20 +32,39 @@ class LiteLLMGateway:
 
         for fb_model in fallbacks:
             fb_provider = ProviderAdapter.get_provider(fb_model)
-            fb_api_key = self.cred_manager.get_api_key(fb_provider)
-            if fb_api_key:
-                fb_adapted = ProviderAdapter.adapt(fb_model, fb_api_key)
-                fallback_params.append(
-                    {"model": fb_adapted["model"], "api_key": fb_adapted.get("api_key")}
-                )
+            fb_api_key = (
+                self.cred_manager.get_api_key(f"sprintlogic_{fb_provider}")
+                or self.cred_manager.get_api_key(fb_provider)
+                or self.cred_manager.get_api_key("sprintlogic_openrouter")
+                or self.cred_manager.get_api_key("openrouter")
+            )
+            if fb_api_key or "ollama" in fb_model.lower():
+                try:
+                    fb_adapted = ProviderAdapter.adapt(fb_model, fb_api_key)
+                    entry: dict[str, Any] = {
+                        "model": fb_adapted["model"],
+                        "api_key": fb_adapted.get("api_key"),
+                    }
+                    if fb_adapted.get("kwargs"):
+                        entry.update(fb_adapted["kwargs"])
+                    fallback_params.append(entry)
+                except Exception as adapt_err:
+                    logger.debug("Failed to adapt fallback %s: %s", fb_model, adapt_err)
         return fallback_params if fallback_params else None
+
 
     async def generate_completion(
         self, prompt: str, lang_code: str = "en", fallbacks: list[str] | None = None
     ) -> str:
         prompt += self._build_language_clause(lang_code)
         adapted = self._get_adapted_params()
+        from app.infrastructure.ai.model_health_tracker import ModelHealthTracker
+        from app.infrastructure.ai.provider_adapter import ProviderAdapter
 
+        provider = ProviderAdapter.get_provider(self.model_name)
+        import time
+
+        t0 = time.perf_counter()
         try:
             response = await acompletion(
                 model=adapted["model"],
@@ -56,8 +75,25 @@ class LiteLLMGateway:
                 timeout=120,
                 **adapted.get("kwargs", {}),
             )
+            latency_ms = int((time.perf_counter() - t0) * 1000)
+            ModelHealthTracker.record_call_background(
+                model_id=self.model_name,
+                provider=provider,
+                latency_ms=latency_ms,
+                success=True,
+            )
             return response.choices[0].message.content or ""
         except Exception as e:
+            latency_ms = int((time.perf_counter() - t0) * 1000)
+            is_timeout = "timeout" in str(e).lower() or "socket" in str(e).lower()
+            ModelHealthTracker.record_call_background(
+                model_id=self.model_name,
+                provider=provider,
+                latency_ms=latency_ms,
+                success=False,
+                error=str(e),
+                is_timeout=is_timeout,
+            )
             logger.debug("Unhandled exception: %s", e, exc_info=True)
             # Propagate specific exceptions to the router so it can return 429/401 instead of 500
             error_msg = str(e)
@@ -70,6 +106,7 @@ class LiteLLMGateway:
                 )
             elif "AuthenticationError" in error_msg:
                 from fastapi import HTTPException
+
 
                 raise HTTPException(
                     status_code=401,

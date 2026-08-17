@@ -189,7 +189,7 @@ export default function InsightDashboard({ projectId }: { projectId: string }) {
         ? getGlobalFlowInsights()
         : getProjectFlowInsights(projectId),
     staleTime: 2000,
-    refetchInterval: windowFocused ? 5000 : false,
+    refetchInterval: windowFocused ? 60_000 : false,
     placeholderData: keepPreviousData,
     enabled: scope === 'global' || !!projectId,
   });

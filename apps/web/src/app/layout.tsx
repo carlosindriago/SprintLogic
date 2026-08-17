@@ -31,22 +31,125 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} dark h-full antialiased`}
     >
       <body className="h-screen w-screen flex flex-col overflow-hidden bg-zinc-950 text-zinc-50">
         <Script
           id="unhandled-rejections"
+          strategy="beforeInteractive"
           dangerouslySetInnerHTML={{
             __html: `
-              window.addEventListener('unhandledrejection', function(event) {
-                var r = event.reason;
-                if (!r) return;
-                var n = r.name || '';
-                var m = r.message || '';
-                if (n === 'Canceled' || m === 'Canceled' || m.includes('disposed') || m.includes('TextModel') || n === 'AbortError') {
-                  event.preventDefault();
+              (function() {
+                // 1. Intercept console.error to filter out benign platform/cancellation errors in development
+                if (typeof window !== 'undefined' && console && console.error) {
+                  var origError = console.error;
+                  console.error = function() {
+                    var args = Array.prototype.slice.call(arguments);
+                    var text = args.map(function(a) { return (a && a.message) ? a.message : String(a); }).join(' ');
+                    if (
+                      text.indexOf('NotAllowedError') !== -1 ||
+                      text.indexOf('denied permission') !== -1 ||
+                      text.indexOf('user agent or the platform in the current context') !== -1 ||
+                      text.indexOf('Canceled: Canceled') !== -1 ||
+                      text.indexOf('Canceled') !== -1 && text.indexOf('monaco') !== -1
+                    ) {
+                      return;
+                    }
+                    origError.apply(console, arguments);
+                  };
                 }
-              });
+
+                // 2. Safe monkey-patch for navigator.clipboard
+                if (typeof window !== 'undefined' && window.navigator && window.navigator.clipboard) {
+                  var clip = window.navigator.clipboard;
+                  if (clip.writeText) {
+                    var origWriteText = clip.writeText;
+                    clip.writeText = function(text) {
+                      return origWriteText.call(clip, text).catch(function(err) {
+                        try {
+                          var ta = document.createElement('textarea');
+                          ta.value = text;
+                          ta.style.position = 'fixed';
+                          ta.style.top = '-9999px';
+                          ta.style.left = '-9999px';
+                          document.body.appendChild(ta);
+                          ta.select();
+                          document.execCommand('copy');
+                          document.body.removeChild(ta);
+                          return Promise.resolve();
+                        } catch (e) {
+                          return Promise.resolve();
+                        }
+                      });
+                    };
+                  }
+
+                  if (clip.write) {
+                    var origWrite = clip.write;
+                    clip.write = function(data) {
+                      return origWrite.call(clip, data).catch(function(err) {
+                        return Promise.resolve();
+                      });
+                    };
+                  }
+
+                  if (clip.readText) {
+                    var origReadText = clip.readText;
+                    clip.readText = function() {
+                      return origReadText.call(clip).catch(function(err) {
+                        return Promise.resolve('');
+                      });
+                    };
+                  }
+                }
+
+                // 3. Window event listeners for unhandledrejection & error
+                window.addEventListener('unhandledrejection', function(event) {
+                  var r = event.reason;
+                  if (!r) return;
+                  var n = (r && r.name) ? String(r.name) : '';
+                  var m = (r && r.message) ? String(r.message) : String(r);
+                  var s = String(r);
+                  if (
+                    n === 'Canceled' ||
+                    m === 'Canceled' ||
+                    s === 'Canceled' ||
+                    s === 'Canceled: Canceled' ||
+                    n === 'NotAllowedError' ||
+                    m.includes('NotAllowedError') ||
+                    m.includes('user agent or the platform in the current context') ||
+                    m.includes('denied permission') ||
+                    m.includes('disposed') ||
+                    m.includes('TextModel') ||
+                    n === 'AbortError' ||
+                    m.includes('AbortError')
+                  ) {
+                    event.preventDefault();
+                    if (typeof event.stopImmediatePropagation === 'function') {
+                      event.stopImmediatePropagation();
+                    }
+                  }
+                });
+
+                window.addEventListener('error', function(event) {
+                  var m = (event && event.message) ? String(event.message) : '';
+                  var err = event && event.error;
+                  var n = (err && err.name) ? String(err.name) : '';
+                  if (
+                    n === 'NotAllowedError' ||
+                    m.includes('NotAllowedError') ||
+                    m.includes('user agent or the platform in the current context') ||
+                    m.includes('denied permission') ||
+                    m.includes('Canceled: Canceled') ||
+                    m.includes('disposed')
+                  ) {
+                    event.preventDefault();
+                    if (typeof event.stopImmediatePropagation === 'function') {
+                      event.stopImmediatePropagation();
+                    }
+                  }
+                });
+              })();
             `,
           }}
         />

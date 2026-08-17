@@ -197,10 +197,12 @@ export const initializeTelemetry = () => {
   };
   document.addEventListener('visibilitychange', handleVisibility);
 
-  // 3. Tick de Tiempo Constante a 1 FPS (Actualiza estado, NO dispara re-renders si la UI usa Transient Updates)
+  // 3. Tick de Tiempo cada 10s — resolución más que suficiente para métricas de uso.
+  //    El sync al backend ocurre en batches de 5 minutos; bajar de 1s a 10s no
+  //    afecta la precisión de las métricas y reduce drásticamente la sobrecarga de JS.
   const tickInterval = setInterval(() => {
     useTelemetryStore.getState().tick();
-  }, 1000);
+  }, 10_000);
 
   // 4. Batched Sync: Volcado al Backend cada 5 Minutos
   const syncInterval = setInterval(() => {

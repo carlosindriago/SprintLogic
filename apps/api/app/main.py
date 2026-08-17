@@ -66,9 +66,11 @@ async def lifespan(app: FastAPI):
         threading.Thread(target=kill_zombie_on_parent_death, daemon=True).start()
 
     # Startup
-
-    from app.infrastructure.db.database import get_sessionmaker
+    from app.infrastructure.db.database import Base, get_engine, get_sessionmaker
     from app.infrastructure.repositories.prompt_repository import initialize_prompts
+
+    async with get_engine().begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
 
     sessionmaker = get_sessionmaker()
     async with sessionmaker() as session:

@@ -53,7 +53,14 @@ class ProviderFetchError(Exception):
         self.status_code = status_code
 
 
-async def fetch_provider_models(provider: str, api_key: str) -> list[ProviderModel]:
+def clear_model_cache() -> None:
+    """Clears the in-memory provider models TTL cache."""
+    _model_cache.clear()
+
+
+async def fetch_provider_models(
+    provider: str, api_key: str, force_refresh: bool = False
+) -> list[ProviderModel]:
     """Fetch the available models for a provider using the supplied API key.
 
     Returns a list of `ProviderModel`. Raises `ProviderFetchError` on
@@ -61,7 +68,7 @@ async def fetch_provider_models(provider: str, api_key: str) -> list[ProviderMod
     that don't need a per-user key (openrouter) — once we have a result
     we cache it regardless of provider for a 5 minute TTL.
     """
-    if provider in _model_cache:
+    if not force_refresh and provider in _model_cache:
         return list(_model_cache[provider])
 
     models: list[ProviderModel] = []
@@ -237,6 +244,124 @@ async def fetch_provider_models(provider: str, api_key: str) -> list[ProviderMod
                     )
                     for m in data.get("data", [])
                 ]
+            elif provider in ("zai", "z-ai"):
+                headers["Authorization"] = f"Bearer {api_key}"
+                headers["Accept-Language"] = "en-US,en"
+                try:
+                    res = await client.get(
+                        "https://api.z.ai/api/paas/v4/models", headers=headers
+                    )
+                    if res.status_code == 200:
+                        data = res.json()
+                        models = [
+                            ProviderModel(
+                                id=f"zai/{m.get('id', m.get('name'))}"
+                                if not str(m.get("id", "")).startswith("zai/")
+                                else str(m.get("id")),
+                                name=str(m.get("id", m.get("name"))),
+                            )
+                            for m in data.get("data", data.get("models", []))
+                            if m.get("id") or m.get("name")
+                        ]
+                except Exception:
+                    pass
+
+                if not models:
+                    models = [
+                        ProviderModel(id="zai/glm-5.2", name="GLM-5.2"),
+                        ProviderModel(id="zai/glm-4-plus", name="GLM-4 Plus"),
+                        ProviderModel(id="zai/glm-4-air", name="GLM-4 Air"),
+                        ProviderModel(id="zai/glm-4-flash", name="GLM-4 Flash"),
+                        ProviderModel(id="zai/glm-4-long", name="GLM-4 Long"),
+                        ProviderModel(id="zai/glm-4v-plus", name="GLM-4V Plus"),
+                    ]
+
+            elif provider == "cerebras":
+                headers["Authorization"] = f"Bearer {api_key}"
+                res = await client.get(
+                    "https://api.cerebras.ai/v1/models", headers=headers
+                )
+                if res.status_code == 200:
+                    data = res.json()
+                    models = [
+                        ProviderModel(
+                            id=f"cerebras/{m.get('id', m.get('name'))}"
+                            if not str(m.get("id", "")).startswith("cerebras/")
+                            else str(m.get("id")),
+                            name=str(m.get("id", m.get("name"))),
+                        )
+                        for m in data.get("data", data.get("models", []))
+                        if m.get("id") or m.get("name")
+                    ]
+                elif res.status_code in (401, 403):
+                    raise ProviderFetchError(
+                        "Invalid Cerebras API Key", status_code=res.status_code
+                    )
+
+                if not models:
+                    models = [
+                        ProviderModel(id="cerebras/llama-3.3-70b", name="Llama 3.3 70B"),
+                        ProviderModel(id="cerebras/llama-3.1-70b", name="Llama 3.1 70B"),
+                        ProviderModel(id="cerebras/llama-3.1-8b", name="Llama 3.1 8B"),
+                        ProviderModel(
+                            id="cerebras/deepseek-r1-distill-llama-70b",
+                            name="DeepSeek R1 Distill 70B",
+                        ),
+                        ProviderModel(
+                            id="cerebras/qwen-2.5-coder-32b",
+                            name="Qwen 2.5 Coder 32B",
+                        ),
+                    ]
+
+            elif provider in ("github", "github_models"):
+                headers["Authorization"] = f"Bearer {api_key}"
+                headers["User-Agent"] = "SprintLogic/1.0"
+                try:
+                    res = await client.get(
+                        "https://models.github.ai/inference/models", headers=headers
+                    )
+                    if res.status_code != 200:
+                        res = await client.get(
+                            "https://models.inference.ai.azure.com/models", headers=headers
+                        )
+
+                    if res.status_code == 200:
+                        data = res.json()
+                        raw_list = data if isinstance(data, list) else data.get("data", data.get("models", []))
+                        models = [
+                            ProviderModel(
+                                id=f"github/{m.get('name', m.get('id'))}"
+                                if not str(m.get('name', m.get('id', ''))).startswith("github/")
+                                else str(m.get('name', m.get('id'))),
+                                name=str(m.get('name', m.get('id'))),
+                            )
+                            for m in raw_list
+                            if m.get("name") or m.get("id")
+                        ]
+                    elif res.status_code in (401, 403):
+                        raise ProviderFetchError(
+                            "Invalid GitHub Personal Access Token (PAT)", status_code=res.status_code
+                        )
+                except ProviderFetchError:
+                    raise
+                except Exception:
+                    pass
+
+                if not models:
+                    models = [
+                        ProviderModel(id="github/gpt-4o", name="GPT-4o"),
+                        ProviderModel(id="github/gpt-4o-mini", name="GPT-4o mini"),
+                        ProviderModel(id="github/o1-preview", name="o1-preview"),
+                        ProviderModel(id="github/o1-mini", name="o1-mini"),
+                        ProviderModel(id="github/o3-mini", name="o3-mini"),
+                        ProviderModel(id="github/Meta-Llama-3.1-405B-Instruct", name="Meta Llama 3.1 405B"),
+                        ProviderModel(id="github/Meta-Llama-3.1-70B-Instruct", name="Meta Llama 3.1 70B"),
+                        ProviderModel(id="github/Meta-Llama-3.1-8B-Instruct", name="Meta Llama 3.1 8B"),
+                        ProviderModel(id="github/Mistral-Large-2407", name="Mistral Large 2407"),
+                        ProviderModel(id="github/Mistral-Nemo", name="Mistral Nemo"),
+                        ProviderModel(id="github/Phi-3.5-MoE-instruct", name="Phi-3.5 MoE"),
+                        ProviderModel(id="github/Phi-3.5-mini-instruct", name="Phi-3.5 mini"),
+                    ]
 
             else:
                 raise ProviderFetchError(f"Unsupported provider: {provider}")
@@ -352,6 +477,28 @@ CURATED_MODELS = {
             id="nvidia_nim/nvidia/nemotron-4-340b-instruct", name="Nemotron 4 340B (NIM)"
         ),
     ],
+    "zai": [
+        ProviderModel(id="zai/glm-5.2", name="GLM-5.2"),
+        ProviderModel(id="zai/glm-4-plus", name="GLM-4 Plus"),
+        ProviderModel(id="zai/glm-4-air", name="GLM-4 Air"),
+        ProviderModel(id="zai/glm-4-flash", name="GLM-4 Flash"),
+    ],
+    "cerebras": [
+        ProviderModel(id="cerebras/llama-3.3-70b", name="Llama 3.3 70B"),
+        ProviderModel(id="cerebras/llama-3.1-8b", name="Llama 3.1 8B"),
+        ProviderModel(
+            id="cerebras/deepseek-r1-distill-llama-70b",
+            name="DeepSeek R1 Distill 70B",
+        ),
+    ],
+    "github": [
+        ProviderModel(id="github/gpt-4o", name="GPT-4o"),
+        ProviderModel(id="github/gpt-4o-mini", name="GPT-4o mini"),
+        ProviderModel(id="github/o1-preview", name="o1-preview"),
+        ProviderModel(id="github/o1-mini", name="o1-mini"),
+        ProviderModel(id="github/Meta-Llama-3.1-70B-Instruct", name="Meta Llama 3.1 70B"),
+        ProviderModel(id="github/Mistral-Large-2407", name="Mistral Large 2407"),
+    ],
 }
 
 PROVIDER_LABELS = {
@@ -365,6 +512,9 @@ PROVIDER_LABELS = {
     "ollama_cloud": "Ollama Cloud",
     "ollama": "Ollama Local",
     "nvidia": "Nvidia NIM",
+    "zai": "Z.AI (GLM)",
+    "cerebras": "Cerebras AI",
+    "github": "GitHub Models (Copilot)",
 }
 
 
@@ -457,8 +607,134 @@ async def remove_tool_model_mapping(
     session: AsyncSession = Depends(get_db_session),
 ):
     """Remove the model override for a tool, reverting it to the global default."""
-    deleted = await delete_tool_mapping(session, tool_name)
-    if not deleted:
-        raise HTTPException(status_code=404, detail=f"No override found for tool '{tool_name}'")
+    await delete_tool_mapping(session, tool_name)
     await session.commit()
     return {"status": "deleted", "tool_name": tool_name}
+
+
+@router.get("/model-health")
+async def get_model_health_metrics(
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Return health and reliability metrics for all tracked AI models."""
+    from app.infrastructure.ai.model_health_tracker import ModelHealthTracker
+
+    return await ModelHealthTracker.get_all_metrics(session)
+
+
+@router.delete("/model-health/{model_id:path}")
+async def reset_model_health_metrics(
+    model_id: str,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Reset health metrics for a specific AI model."""
+    from app.infrastructure.ai.model_health_tracker import ModelHealthTracker
+
+    deleted = await ModelHealthTracker.delete_metric(session, model_id)
+    return {"status": "deleted" if deleted else "not_found", "model_id": model_id}
+
+
+class DiagnoseModelItem(BaseModel):
+    model_config = {"extra": "ignore"}
+    id: str | None = None
+    model: str | None = None
+    slug: str | None = None
+    name: str | None = None
+    provider: str | None = None
+    provider_id: str | None = None
+
+
+class DiagnoseModelsRequest(BaseModel):
+    model_config = {"extra": "ignore"}
+    models: list[DiagnoseModelItem] = []
+    concurrency: int = 3
+    timeout_seconds: int = 12
+
+
+@router.post("/model-health/diagnose")
+async def diagnose_models_stream(
+    request: DiagnoseModelsRequest,
+):
+    """Executes a controlled concurrent diagnostic ping across models and streams progress."""
+    import asyncio
+    import json
+
+    from fastapi.responses import StreamingResponse
+
+    from app.infrastructure.ai.model_health_tracker import ModelHealthTracker
+
+    target_models = [m for m in (request.models or []) if (m.id or m.model or m.slug or m.name)]
+    concurrency = min(max(1, request.concurrency), 6)
+    timeout_seconds = min(max(2, request.timeout_seconds), 20)
+
+    async def event_generator():
+        total = len(target_models)
+        if total == 0:
+            yield f"data: {json.dumps({'type': 'complete', 'total': 0, 'tested': 0, 'healthy': 0, 'degraded': 0, 'failing': 0})}\n\n"
+            return
+
+        semaphore = asyncio.Semaphore(concurrency)
+        tested_count = 0
+        healthy_count = 0
+        degraded_count = 0
+        failing_count = 0
+
+        async def test_single_model(m_info: DiagnoseModelItem):
+            nonlocal tested_count, healthy_count, degraded_count, failing_count
+            m_id = m_info.id or m_info.model or m_info.slug or m_info.name or ""
+            m_provider = m_info.provider or m_info.provider_id
+            async with semaphore:
+                try:
+                    res = await ModelHealthTracker.ping_model(
+                        model_id=m_id,
+                        provider=m_provider,
+                        timeout_seconds=timeout_seconds,
+                    )
+                except Exception as exc:
+                    res = {
+                        "model_id": m_id,
+                        "provider": m_provider or "unknown",
+                        "success": False,
+                        "latency_ms": 0,
+                        "status": "failing",
+                        "error": str(exc)[:250],
+                    }
+                tested_count += 1
+                if res["status"] == "healthy":
+                    healthy_count += 1
+                elif res["status"] == "degraded":
+                    degraded_count += 1
+                else:
+                    failing_count += 1
+                return res
+
+        tasks = [test_single_model(m) for m in target_models]
+        for coro in asyncio.as_completed(tasks):
+            try:
+                result = await coro
+            except Exception as exc:
+                result = {
+                    "model_id": "unknown",
+                    "provider": "unknown",
+                    "success": False,
+                    "latency_ms": 0,
+                    "status": "failing",
+                    "error": str(exc)[:250],
+                }
+            event_payload = {
+                "type": "progress",
+                "tested": tested_count,
+                "total": total,
+                "healthy": healthy_count,
+                "degraded": degraded_count,
+                "failing": failing_count,
+                "result": result,
+            }
+            yield f"data: {json.dumps(event_payload)}\n\n"
+
+        yield f"data: {json.dumps({'type': 'complete', 'total': total, 'tested': total, 'healthy': healthy_count, 'degraded': degraded_count, 'failing': failing_count})}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+

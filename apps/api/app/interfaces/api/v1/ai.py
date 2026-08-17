@@ -20,6 +20,7 @@ from app.interfaces.api.v1.settings import (
     CURATED_MODELS,
     PROVIDER_LABELS,
     ProviderFetchError,
+    clear_model_cache,
     fetch_provider_models,
 )
 
@@ -88,6 +89,9 @@ class APIKeysPayload(BaseModel):
     opencode_zen_key: str | None = None
     opencode_go_key: str | None = None
     nvidia_key: str | None = None
+    zai_key: str | None = None
+    cerebras_key: str | None = None
+    github_key: str | None = None
 
 
 class CodeCoachRequest(BaseModel):
@@ -144,21 +148,25 @@ class TechScanResponse(BaseModel):
 
 
 @router.get("/models")
-async def get_ai_models():
+async def get_ai_models(force_refresh: bool = False):
     """Returns the curated model catalog grouped by provider.
 
     Each provider includes an is_configured flag indicating whether an
-    API key has been stored for it. No external APIs are queried.
+    API key has been stored for it. When force_refresh is True, the TTL
+    cache is cleared and fresh models are fetched from provider APIs.
     """
+    if force_refresh:
+        clear_model_cache()
+
     results: list[dict] = []
     for provider, fallback_models in CURATED_MODELS.items():
         key = CredentialManager.get_api_key(provider)
         is_configured = key is not None and key != ""
 
         models = fallback_models
-        if is_configured:
+        if is_configured and key is not None:
             try:
-                models = await fetch_provider_models(provider, key)
+                models = await fetch_provider_models(provider, key, force_refresh=force_refresh)
             except ProviderFetchError:
                 pass
 
@@ -186,6 +194,9 @@ async def get_active_models(payload: APIKeysPayload):
         "opencode-zen": payload.opencode_zen_key,
         "opencode-go": payload.opencode_go_key,
         "nvidia": payload.nvidia_key,
+        "zai": payload.zai_key,
+        "cerebras": payload.cerebras_key,
+        "github": payload.github_key,
     }
 
     for provider, fallback_models in CURATED_MODELS.items():

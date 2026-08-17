@@ -32,11 +32,14 @@ import dynamic from "next/dynamic";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { scanProject, getProjects, updateProject, deleteProject, rescanProject, analyzeProject, renameFile, duplicateFile, deleteFile, initSidecarPort } from "@/lib/api";
 import { Switch } from "@/components/ui/switch";
-import SprintLogicChat from "@/components/SprintLogicChat";
-import KanbanBoard from "@/components/KanbanBoard";
 import LLMSettingsPanel from "@/components/LLMSettingsPanel";
 import SettingsTab from "@/components/Settings/SettingsTab";
-import PlanningStudioTab from "@/components/PlanningStudioTab";
+
+// Heavy UI panels — lazy-loaded so they never bloat the initial bundle
+// or waste memory when the user hasn't opened them yet.
+const SprintLogicChat = dynamic(() => import('@/components/SprintLogicChat'), { ssr: false });
+const KanbanBoard = dynamic(() => import('@/components/KanbanBoard'), { ssr: false });
+const PlanningStudioTab = dynamic(() => import('@/components/PlanningStudioTab'), { ssr: false });
 
 import { useTabsStore, TabType } from '@/store/tabsStore';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -53,7 +56,7 @@ import { useLayoutStore } from '@/store/layoutStore';
 
 
 import GitGraphTab from '@/components/GitGraphTab';
-import InsightDashboard from '@/components/InsightDashboard';
+const InsightDashboard = dynamic(() => import('@/components/InsightDashboard'), { ssr: false });
 
 import NewFileDialog from "@/components/NewFileDialog";
 
@@ -685,15 +688,19 @@ export default function Home() {
             </div>
           </div>
           <div className="flex-1 relative overflow-hidden">
-            <SprintLogicChat
-              projectId={projectId}
-              onOpenSettings={() => {
-                // The CTA in the chat always invites the user to configure
-                // their LLM provider, so land them on the 'llms' tab even
-                // if the dialog was last closed on 'appearance'.
-                addTab({ id: 'settings', title: '⚙️ Configuración', type: 'settings' });
-              }}
-            />
+            {/* Conditional mount: unmount entirely when closed to free memory.
+                Chat history is persisted server-side and reloaded on each mount. */}
+            {rightSidebarOpen && (
+              <SprintLogicChat
+                projectId={projectId}
+                onOpenSettings={() => {
+                  // The CTA in the chat always invites the user to configure
+                  // their LLM provider, so land them on the 'llms' tab even
+                  // if the dialog was last closed on 'appearance'.
+                  addTab({ id: 'settings', title: '⚙️ Configuración', type: 'settings' });
+                }}
+              />
+            )}
           </div>
         </div>
       </div>

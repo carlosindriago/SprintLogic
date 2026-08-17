@@ -944,21 +944,53 @@ class AIAgent:
             try:
                 import litellm
 
+                from app.infrastructure.ai.provider_adapter import ProviderAdapter
+                from app.infrastructure.config import DEFAULT_EMBEDDING_MODEL
                 from app.infrastructure.security.credential_manager import CredentialManager
 
-                api_key = CredentialManager.get_api_key("gemini")
-                if api_key:
-                    from app.infrastructure.config import DEFAULT_EMBEDDING_MODEL
+                emb_provider = ProviderAdapter.get_provider(DEFAULT_EMBEDDING_MODEL)
+                emb_api_key = (
+                    CredentialManager.get_api_key(f"sprintlogic_{emb_provider}")
+                    or CredentialManager.get_api_key(emb_provider)
+                    or CredentialManager.get_api_key("sprintlogic_openrouter")
+                    or CredentialManager.get_api_key("openrouter")
+                    or CredentialManager.get_api_key("gemini")
+                )
 
-                    embed_resp = await litellm.aembedding(
-                        model=DEFAULT_EMBEDDING_MODEL, input=[user_query], api_key=api_key
-                    )
-                    query_vector = embed_resp.data[0]["embedding"]
+                query_vector: list[float] | None = None
+                if emb_api_key or "ollama" in DEFAULT_EMBEDDING_MODEL.lower():
+                    try:
+                        adapted = ProviderAdapter.adapt(DEFAULT_EMBEDDING_MODEL, emb_api_key)
+                        embed_resp = await litellm.aembedding(
+                            model=adapted["model"],
+                            input=[user_query],
+                            api_key=adapted["api_key"],
+                            **adapted["kwargs"],
+                        )
+                        if embed_resp and embed_resp.data:
+                            query_vector = embed_resp.data[0]["embedding"]
+                    except Exception as emb_err:
+                        logger.debug(f"Query embedding attempt ({DEFAULT_EMBEDDING_MODEL}) failed: {emb_err}")
+                        gemini_key = CredentialManager.get_api_key("gemini")
+                        if gemini_key and DEFAULT_EMBEDDING_MODEL != "gemini/embedding-001":
+                            try:
+                                embed_resp = await litellm.aembedding(
+                                    model="gemini/embedding-001",
+                                    input=[user_query],
+                                    api_key=gemini_key,
+                                )
+                                if embed_resp and embed_resp.data:
+                                    query_vector = embed_resp.data[0]["embedding"]
+                            except Exception as fallback_err:
+                                logger.debug(f"Query fallback embedding failed: {fallback_err}")
 
+                if query_vector:
                     import numpy as np
                     from sqlalchemy.future import select
 
                     from app.infrastructure.db.models import DeveloperInsightModel
+
+
 
                     try:
                         async with get_sessionmaker()() as insight_session:
