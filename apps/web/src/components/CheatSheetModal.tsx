@@ -65,10 +65,10 @@ export function CheatSheetModal({ isOpen, onClose }: CheatSheetModalProps) {
           </h2>
           <button 
             onClick={onClose}
-            className="p-1.5 rounded-md text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 transition-colors"
+            className="p-1.5 rounded-md text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-blue-500"
             aria-label="Cerrar modal"
           >
-            <X size={18} />
+            <X size={18} aria-hidden="true" />
           </button>
         </div>
 
