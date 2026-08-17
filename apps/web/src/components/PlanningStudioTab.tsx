@@ -545,7 +545,7 @@ export default function PlanningStudioTab() {
     if (!activeProjectId) return;
     setIsCopyingPrompt(true);
     try {
-      let topologicalMap = await getProjectGraphMd(activeProjectId).catch(() => '');
+      const topologicalMap = await getProjectGraphMd(activeProjectId).catch(() => '');
       const megaPrompt = `# DIRECTIVA DE PLANIFICACIÓN ÁGIL (SPRINTLOGIC PLANNING STUDIO)
 
 Eres un Agile Coach y Tech Lead Senior. Analiza la topología del proyecto y el 'Documento Vivo' de planificación para estructurar o expandir un plan estructurado Docs-as-Code.
@@ -872,7 +872,7 @@ ${markdownContent || '// Plan vacío'}
 
         const normTitle = taskTitle.toLowerCase().replace(/\s+/g, ' ').trim();
         const kanbanMatch = normTitle ? kanbanTaskMap.get(normTitle) : null;
-        let isDone = kanbanMatch?.status?.includes('done') || kanbanMatch?.status === 'completed';
+        const isDone = kanbanMatch?.status?.includes('done') || kanbanMatch?.status === 'completed';
         return (
           <li className={`my-1 text-sm text-zinc-300 leading-relaxed ${isDone ? 'line-through opacity-70' : ''}`} {...props}>
             {children}
