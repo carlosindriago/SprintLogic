@@ -164,7 +164,7 @@ async def get_ai_models(force_refresh: bool = False):
         is_configured = key is not None and key != ""
 
         models = fallback_models
-        if is_configured:
+        if is_configured and key is not None:
             try:
                 models = await fetch_provider_models(provider, key, force_refresh=force_refresh)
             except ProviderFetchError:
