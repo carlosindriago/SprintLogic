@@ -47,12 +47,12 @@ interface KanbanBoardProps {
   onNodeClick?: (nodeId: string) => void;
 }
 
-function getTaskDependencies(task: Task, allTasks: Task[], rawTickets: KanbanTicket[]): {
+function getTaskDependencies(task: Task, allTasks: Task[], rawTicketsMap: Map<string, KanbanTicket>): {
   isBlocked: boolean;
   blockingTasks: string[];
 } {
   const content = task.content || "";
-  const raw = rawTickets.find(r => r.id === task.id);
+  const raw = rawTicketsMap.get(task.id);
   const desc = raw?.description || "";
   const combinedText = `${content}\n${desc}`;
 
@@ -573,7 +573,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
 
     // Dependencies Guard: prevent moving blocked tasks into in_progress or done
     if (newStatus !== originalStatus && (newStatus === "in_progress" || newStatus === "done")) {
-      const depInfo = getTaskDependencies(activeTask, tasks, rawTickets);
+      const depInfo = getTaskDependencies(activeTask, tasks, rawTicketsMap);
       if (depInfo.isBlocked) {
         toast.warning("🔒 Tarea Bloqueada", {
           description: `No puedes avanzar esta tarea hasta completar primero sus dependencias pendientes: ${depInfo.blockingTasks.join(", ")}`,
@@ -597,7 +597,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
       // To Do Interceptor (moving backwards)
       if (targetIndex < prevIndex) {
         try {
-          const raw = rawTickets.find(r => r.id === activeIdStr);
+          const raw = rawTicketsMap.get(activeIdStr);
           if (raw && projectId) {
             const gitStatus = await getGitStatus(projectId);
             const ticketIdPrefix = raw.id.substring(0, 6).toUpperCase();
@@ -650,7 +650,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
         const targetCol = columns.find(c => c.id === newStatus);
         if (targetCol) {
           if (targetCol.rule === 'create_ephemeral_branch') {
-            const raw = rawTickets.find(r => r.id === activeIdStr);
+            const raw = rawTicketsMap.get(activeIdStr);
             if (raw && projectId) {
               const gitStatus = await getGitStatus(projectId);
               const isBaseBranch = ['main', 'master', 'develop'].includes(gitStatus.branch);
@@ -662,7 +662,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
               }
             }
           } else if (targetCol.rule === 'prompt_commit_push') {
-            const raw = rawTickets.find(r => r.id === activeIdStr);
+            const raw = rawTicketsMap.get(activeIdStr);
             if (raw) {
               setCommitPrompt({ ticketId: activeIdStr, title: raw.title });
               setCommitMessage(`${raw.type.toLowerCase()}(SL-${raw.id.substring(0,6).toUpperCase()}): ${raw.title}`);
@@ -753,6 +753,22 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
     }
     return map;
   }, [rawTickets]);
+
+  const epicsMap = useMemo(() => {
+    const map = new Map<string, Epic>();
+    for (const e of epics) {
+      map.set(e.id, e);
+    }
+    return map;
+  }, [epics]);
+
+  const sprintsMap = useMemo(() => {
+    const map = new Map<string, Sprint>();
+    for (const s of sprints) {
+      map.set(s.id, s);
+    }
+    return map;
+  }, [sprints]);
 
   const filteredTasks = useMemo(() => {
     let filtered = tasks;
@@ -976,10 +992,10 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
                       </div>
                     ) : (
                       iceboxTasks.map((task, idx) => {
-                        const raw = rawTickets.find(r => r.id === task.id);
-                        const epic = epics.find(e => e.id === raw?.epic_id);
-                        const sprint = sprints.find(s => s.id === raw?.sprint_id);
-                        const depInfo = getTaskDependencies(task, tasks, rawTickets);
+                        const raw = rawTicketsMap.get(task.id);
+                        const epic = raw?.epic_id ? epicsMap.get(raw.epic_id) : undefined;
+                        const sprint = raw?.sprint_id ? sprintsMap.get(raw.sprint_id) : undefined;
+                        const depInfo = getTaskDependencies(task, tasks, rawTicketsMap);
                         const orderIndex = tasks.findIndex(t => t.id === task.id) + 1;
 
                         return (
@@ -1069,10 +1085,10 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
                   <SortableContext items={columnTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
                     <DroppableColumn id={col.id}>
                       {columnTasks.map((task, taskIdx) => {
-                        const raw = rawTickets.find(r => r.id === task.id);
-                        const epic = epics.find(e => e.id === raw?.epic_id);
-                        const sprint = sprints.find(s => s.id === raw?.sprint_id);
-                        const depInfo = getTaskDependencies(task, tasks, rawTickets);
+                        const raw = rawTicketsMap.get(task.id);
+                        const epic = raw?.epic_id ? epicsMap.get(raw.epic_id) : undefined;
+                        const sprint = raw?.sprint_id ? sprintsMap.get(raw.sprint_id) : undefined;
+                        const depInfo = getTaskDependencies(task, tasks, rawTicketsMap);
                         const orderIndex = tasks.findIndex(t => t.id === task.id) + 1;
 
                         return (
@@ -1299,7 +1315,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
       {/* Ticket Drawer */}
       {activeDrawerTicketId && (
         <TicketDrawer
-          ticket={rawTickets.find(r => r.id === activeDrawerTicketId)!}
+          ticket={rawTicketsMap.get(activeDrawerTicketId)!}
           allSprints={sprints}
           allEpics={epics}
           columns={columns}
