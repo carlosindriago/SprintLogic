@@ -288,7 +288,7 @@ export default function TicketDrawer({ ticket, allSprints, allEpics, columns, on
           <div className="flex items-center gap-2">
             <button
               onClick={handleAIMentorClick}
-              className="flex items-center gap-1.5 bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600/30 hover:text-indigo-300 text-xs font-semibold px-3 py-1.5 rounded-md transition-colors border border-indigo-600/30 whitespace-nowrap"
+              className="flex items-center gap-1.5 bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600/30 hover:text-indigo-300 text-xs font-semibold px-3 py-1.5 rounded-md transition-colors border border-indigo-600/30 whitespace-nowrap focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-indigo-500"
               title="Analizar con IA Mentor"
             >
               <Bot size={14} aria-hidden="true" />
@@ -297,7 +297,7 @@ export default function TicketDrawer({ ticket, allSprints, allEpics, columns, on
             <button 
               onClick={handleSaveMain}
               disabled={isSaving}
-              className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-3 py-1.5 rounded-md transition-colors disabled:opacity-50"
+              className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-3 py-1.5 rounded-md transition-colors disabled:opacity-50 focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-blue-500"
             >
               {isSaving ? 'Guardando...' : 'Guardar'}
             </button>
@@ -473,8 +473,8 @@ export default function TicketDrawer({ ticket, allSprints, allEpics, columns, on
               <div className="flex items-center justify-between bg-red-950/30 border border-red-900/50 p-3 rounded-md">
                 <span className="text-xs text-red-400 font-medium">¿Estás seguro de eliminar este ticket?</span>
                 <div className="flex gap-2">
-                  <button onClick={() => setShowDeleteConfirm(false)} className="px-3 py-1.5 text-xs font-semibold text-zinc-400 hover:text-zinc-200 transition-colors">Cancelar</button>
-                  <button onClick={handleDelete} disabled={isDeleting} className="px-3 py-1.5 text-xs font-semibold bg-red-600 hover:bg-red-500 text-white rounded transition-colors disabled:opacity-50">
+                  <button onClick={() => setShowDeleteConfirm(false)} className="px-3 py-1.5 text-xs font-semibold text-zinc-400 hover:text-zinc-200 transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-zinc-400">Cancelar</button>
+                  <button onClick={handleDelete} disabled={isDeleting} className="px-3 py-1.5 text-xs font-semibold bg-red-600 hover:bg-red-500 text-white rounded transition-colors disabled:opacity-50 focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-red-500">
                     {isDeleting ? 'Eliminando...' : 'Sí, eliminar'}
                   </button>
                 </div>
@@ -482,7 +482,7 @@ export default function TicketDrawer({ ticket, allSprints, allEpics, columns, on
             ) : (
               <button 
                 onClick={() => setShowDeleteConfirm(true)}
-                className="flex items-center gap-2 text-xs font-semibold text-red-400 hover:text-red-300 transition-colors py-2 px-4 rounded-md hover:bg-red-950/30 w-full justify-center border border-transparent hover:border-red-900/50"
+                className="flex items-center gap-2 text-xs font-semibold text-red-400 hover:text-red-300 transition-colors py-2 px-4 rounded-md hover:bg-red-950/30 w-full justify-center border border-transparent hover:border-red-900/50 focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-red-500"
               >
                 <Trash2 size={16} aria-hidden="true" />
                 <span>Eliminar Ticket</span>
