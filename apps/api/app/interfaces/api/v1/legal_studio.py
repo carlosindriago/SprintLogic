@@ -206,10 +206,15 @@ def _extract_topological_summary(project_root: Path) -> str:
 
 
 def _sanitize_doc_filename(name: str) -> str:
-    """Ensure safe markdown filename without path traversal."""
+    """Ensure safe markdown or license filename without path traversal."""
     clean_name = os.path.basename(name.strip())
     if not clean_name:
         clean_name = "legal_document.md"
+
+    # Handle standard LICENSE file (root file)
+    if clean_name.upper() in ("LICENSE", "LICENSE.MD", "LICENSE.TXT"):
+        return "LICENSE.md" if clean_name.lower().endswith(".md") else "LICENSE"
+
     if not (clean_name.endswith(".md") or clean_name.endswith(".markdown")):
         clean_name += ".md"
     # Replace dangerous or unwanted chars
@@ -272,6 +277,7 @@ async def audit_project_compliance(
         )
 
     suggested_docs = [
+        "LICENSE",
         "privacy_policy.md",
         "terms_of_service.md",
         "cookie_policy.md",
@@ -294,14 +300,21 @@ async def save_legal_document(
     payload: SaveLegalDocRequest,
     session: AsyncSession = Depends(get_db_session),
 ) -> SaveLegalDocResponse:
-    """Save or update legal document physically on disk under docs/legal/."""
+    """Save or update legal document physically on disk under docs/legal/ or at project root if LICENSE."""
     _, project_root = await _get_project_and_path(session, project_id)
 
     safe_filename = _sanitize_doc_filename(payload.doc_name)
-    legal_dir = project_root / "docs" / "legal"
-    legal_dir.mkdir(parents=True, exist_ok=True)
+    is_root_license = safe_filename.upper() in ("LICENSE", "LICENSE.MD", "LICENSE.TXT")
 
-    target_file = legal_dir / safe_filename
+    if is_root_license:
+        target_file = project_root / safe_filename
+        rel_path = safe_filename
+    else:
+        legal_dir = project_root / "docs" / "legal"
+        legal_dir.mkdir(parents=True, exist_ok=True)
+        target_file = legal_dir / safe_filename
+        rel_path = f"docs/legal/{safe_filename}"
+
     try:
         target_file.write_text(payload.content, encoding="utf-8")
         saved_bytes = len(payload.content.encode("utf-8"))
@@ -312,7 +325,6 @@ async def save_legal_document(
             detail=f"No se pudo guardar el archivo en disco: {e!s}",
         )
 
-    rel_path = f"docs/legal/{safe_filename}"
     return SaveLegalDocResponse(
         status="success",
         file_path=rel_path,
@@ -326,12 +338,32 @@ async def list_legal_documents(
     project_id: str,
     session: AsyncSession = Depends(get_db_session),
 ) -> LegalDocsListResponse:
-    """List all existing legal documents under docs/legal/ in the project directory."""
+    """List all existing legal documents under docs/legal/ and root LICENSE in the project directory."""
     _, project_root = await _get_project_and_path(session, project_id)
 
-    legal_dir = project_root / "docs" / "legal"
     documents: list[LegalDocItem] = []
 
+    # Check for root LICENSE / LICENSE.md
+    for license_candidate in ("LICENSE", "LICENSE.md", "LICENSE.txt"):
+        root_license = project_root / license_candidate
+        if root_license.is_file():
+            try:
+                content = root_license.read_text(encoding="utf-8", errors="replace")
+                stat_info = root_license.stat()
+                documents.append(
+                    LegalDocItem(
+                        name=root_license.name,
+                        relative_path=root_license.name,
+                        content=content,
+                        modified_at=stat_info.st_mtime,
+                        size_bytes=stat_info.st_size,
+                    )
+                )
+                break
+            except Exception as e:
+                logger.warning("Error reading root license %s: %s", root_license, e)
+
+    legal_dir = project_root / "docs" / "legal"
     if legal_dir.exists() and legal_dir.is_dir():
         for file_path in sorted(legal_dir.iterdir()):
             if file_path.is_file() and (file_path.suffix.lower() in (".md", ".markdown")):

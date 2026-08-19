@@ -26,6 +26,7 @@ import {
   ShieldCheck,
   Briefcase,
   ShoppingCart,
+  Copyright,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
@@ -49,6 +50,7 @@ interface ChatMessage {
 }
 
 const DEFAULT_DOC_PRESETS = [
+  { id: 'LICENSE', label: 'Licencia de Software (LICENSE en raíz)', icon: Copyright },
   { id: 'privacy_policy.md', label: 'Privacy Policy (GDPR / CCPA / Latam)', icon: ShieldAlert },
   { id: 'terms_of_service.md', label: 'Términos de Servicio (ToS)', icon: FileText },
   { id: 'cookie_policy.md', label: 'Política de Cookies', icon: FileCode },
@@ -456,6 +458,29 @@ export default function LegalStudioTab() {
                 </p>
               </div>
             </div>
+
+            {/* ⚖️ Licencia de Software Icon Button + Rich Tooltip */}
+            <div className="relative group">
+              <button
+                onClick={() => {
+                  setActiveDocName('LICENSE');
+                  handleSendAudit('Evalúa la compatibilidad de licencias de mis dependencias y ayúdame a generar el archivo LICENSE correcto (Open Source o Propietario) para la raíz de mi repositorio.', 'LICENSE');
+                }}
+                disabled={isAuditing}
+                className="w-8 h-8 rounded-lg bg-zinc-800/90 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-zinc-700/60 flex items-center justify-center transition-colors shrink-0"
+                aria-label="Licencia de Software"
+              >
+                <Copyright className="w-4 h-4 text-rose-400" />
+              </button>
+              <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity duration-200 z-50 w-56 p-2.5 bg-[#18181b] border border-zinc-700/80 rounded-lg shadow-2xl shadow-black/80 text-left">
+                <div className="text-xs font-semibold text-zinc-100 flex items-center gap-1.5 mb-1">
+                  <span>⚖️</span> Licencia de Software
+                </div>
+                <p className="text-[11px] text-zinc-400 leading-tight">
+                  Evaluar tipo y generar archivo LICENSE en la raíz del repositorio.
+                </p>
+              </div>
+            </div>
           </div>
 
           {/* Messages Area */}
@@ -507,6 +532,15 @@ export default function LegalStudioTab() {
                     className="p-3 rounded-lg bg-zinc-900/80 border border-zinc-800/80 hover:border-purple-500/40 text-xs text-zinc-300 cursor-pointer transition-all hover:bg-purple-950/10"
                   >
                     🏢 <strong>SaaS B2B Enterprise:</strong> DPA Art. 28 & SLAs
+                  </div>
+                  <div
+                    onClick={() => {
+                      setActiveDocName('LICENSE');
+                      handleSendAudit('Evalúa la compatibilidad de licencias de mis dependencias y ayúdame a generar el archivo LICENSE correcto (Open Source o Propietario) para la raíz de mi repositorio.', 'LICENSE');
+                    }}
+                    className="p-3 rounded-lg bg-zinc-900/80 border border-zinc-800/80 hover:border-rose-500/40 text-xs text-zinc-300 cursor-pointer transition-all hover:bg-rose-950/10 col-span-1 sm:col-span-2"
+                  >
+                    ⚖️ <strong>Licencia de Software:</strong> Evaluar copyleft viral y generar LICENSE en raíz
                   </div>
                 </div>
               </div>

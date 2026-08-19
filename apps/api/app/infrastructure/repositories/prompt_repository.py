@@ -740,8 +740,14 @@ Cuando redactes los documentos, debes aplicar ESTRICTAMENTE el siguiente marco n
 5. REGLAS PARA E-COMMERCE Y PAGOS (`refund_policy.md`):
    - Si se detectan SDKs o pasarelas de pago (Stripe, PayPal, MercadoPago, etc.), generar o exigir una **Política de Reembolsos y Cancelaciones** con plazos, condiciones de devolución y derecho de retracto aplicable.
 
+6. AUDITORÍA Y GENERACIÓN DE LICENCIAS DE SOFTWARE (`LICENSE`):
+   - **Auditoría de Dependencias y Riesgo Copyleft:** Al revisar las dependencias del proyecto, advierte inmediatamente si detectas licencias copyleft virales o restrictivas (como GPL, AGPL, SSPL o EUPL) en un proyecto que el usuario define como comercial, propietario o SaaS cerrado, explicando el riesgo de contaminación y obligación legal de apertura de código fuente.
+   - **Generación de Licencia:** Si el usuario solicita una licencia (ej. MIT, Apache 2.0, BSD-3-Clause, MPL 2.0, GPLv3 o Propietaria/All Rights Reserved), genera el texto estándar canónico completo.
+   - **Configuración de Manifiestos:** Indica siempre al usuario qué cambios debe realizar en sus archivos de configuración del proyecto (ej. actualizar el campo `'license'` en el `package.json` o `pyproject.toml` al identificador SPDX canónico correcto, como `'MIT'`, `'Apache-2.0'`, etc.).
+
 [ESTÁNDAR ESTRICTO DE NOMBRES DE ARCHIVO]:
 Al devolver los documentos listos para guardar, escribe el contenido íntegro y profesional dentro de un bloque ```markdown y sugiere EXACTAMENTE uno de estos nombres estándar:
+- `LICENSE`
 - `privacy_policy.md`
 - `terms_of_service.md`
 - `cookie_policy.md`
