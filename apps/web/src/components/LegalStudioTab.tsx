@@ -27,6 +27,7 @@ import {
   Briefcase,
   ShoppingCart,
   Copyright,
+  ChevronDown,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
@@ -635,21 +636,24 @@ export default function LegalStudioTab() {
           <div className="p-3 border-b border-zinc-800/80 bg-[#141414] flex flex-wrap items-center justify-between gap-3 shrink-0">
             {/* Document Selector & Mode Toggle */}
             <div className="flex flex-wrap items-center gap-2 shrink-0">
-              <select
-                value={activeDocName}
-                onChange={(e) => {
-                  setActiveDocName(e.target.value);
-                  const found = savedDocs.find((d) => d.name === e.target.value);
-                  if (found) setDocContent(found.content);
-                }}
-                className="bg-zinc-900 border border-zinc-700 text-zinc-100 focus:ring-1 focus:ring-sky-500 focus:border-sky-500 rounded-lg px-3 py-1.5 text-xs font-medium outline-none cursor-pointer shrink-0 transition-colors shadow-inner"
-              >
-                {DEFAULT_DOC_PRESETS.map((preset) => (
-                  <option key={preset.id} value={preset.id} className="bg-zinc-900 text-zinc-100 py-1">
-                    {preset.id} — {preset.label}
-                  </option>
-                ))}
-              </select>
+              <div className="relative inline-flex items-center">
+                <select
+                  value={activeDocName}
+                  onChange={(e) => {
+                    setActiveDocName(e.target.value);
+                    const found = savedDocs.find((d) => d.name === e.target.value);
+                    if (found) setDocContent(found.content);
+                  }}
+                  className="h-8 appearance-none rounded-lg border border-zinc-700 bg-[#18181b] pl-3 pr-8 text-xs font-medium text-zinc-200 hover:bg-zinc-800 hover:border-zinc-600 focus:outline-none focus:ring-1 focus:ring-purple-500 cursor-pointer shadow-inner transition-colors"
+                >
+                  {DEFAULT_DOC_PRESETS.map((preset) => (
+                    <option key={preset.id} value={preset.id} className="bg-[#18181b] text-zinc-200 py-1.5">
+                      {preset.id} — {preset.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-2.5 h-3.5 w-3.5 text-zinc-400" />
+              </div>
 
               {/* View / Edit Toggle */}
               <div className="flex items-center bg-zinc-900 rounded-lg border border-zinc-800 p-0.5 shrink-0">
