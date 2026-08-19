@@ -1170,3 +1170,97 @@ export async function createSecurityTicketFromFinding(
   );
 }
 
+// --- Legal Studio API ---
+export interface LegalAuditRequest {
+  user_query: string;
+  conversation_history?: Array<{ role: 'user' | 'assistant'; content: string }>;
+  target_doc?: string | null;
+}
+
+export interface LegalAuditResponse {
+  response: string;
+  model_used: string;
+  detected_dependencies: string[];
+  suggested_docs: string[];
+}
+
+export interface SaveLegalDocRequest {
+  doc_name: string;
+  content: string;
+}
+
+export interface SaveLegalDocResponse {
+  status: string;
+  file_path: string;
+  doc_name: string;
+  saved_bytes: number;
+}
+
+export interface LegalDocItem {
+  name: string;
+  relative_path: string;
+  content: string;
+  modified_at: number;
+  size_bytes: number;
+}
+
+export interface LegalDocsListResponse {
+  documents: LegalDocItem[];
+}
+
+export interface LegalMitigationTaskItem {
+  title: string;
+  description?: string;
+  priority?: string;
+  category?: string;
+}
+
+export interface LegalMitigationHandoffRequest {
+  tasks: LegalMitigationTaskItem[];
+}
+
+export interface LegalMitigationHandoffResponse {
+  status: string;
+  created_count: number;
+  ticket_ids: string[];
+}
+
+export async function auditLegalCompliance(
+  projectId: string,
+  payload: LegalAuditRequest
+): Promise<LegalAuditResponse> {
+  return await api.post<LegalAuditResponse>(
+    `/projects/${projectId}/legal/audit`,
+    payload
+  );
+}
+
+export async function saveLegalDoc(
+  projectId: string,
+  payload: SaveLegalDocRequest
+): Promise<SaveLegalDocResponse> {
+  return await api.post<SaveLegalDocResponse>(
+    `/projects/${projectId}/legal/save-docs`,
+    payload
+  );
+}
+
+export async function getLegalDocs(
+  projectId: string
+): Promise<LegalDocsListResponse> {
+  return await api.get<LegalDocsListResponse>(
+    `/projects/${projectId}/legal/docs`
+  );
+}
+
+export async function createLegalMitigationTasks(
+  projectId: string,
+  payload: LegalMitigationHandoffRequest
+): Promise<LegalMitigationHandoffResponse> {
+  return await api.post<LegalMitigationHandoffResponse>(
+    `/projects/${projectId}/legal/mitigation-tasks`,
+    payload
+  );
+}
+
+

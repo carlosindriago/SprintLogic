@@ -94,6 +94,10 @@ KNOWN_TOOLS: dict[str, ToolDef] = {
         "display_name": "Security Studio (Juez de Seguridad)",
         "description": "Juez probabilístico de vulnerabilidades SAST y descarte inteligente de falsos positivos",
     },
+    "legal_studio": {
+        "display_name": "Legal Studio (Auditor Legal & Docs-as-Code)",
+        "description": "Auditor de cumplimiento normativo (GDPR, CCPA, TOS, Cookies) y redactor de documentos legales persistentes",
+    },
 }
 
 
