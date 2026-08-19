@@ -324,7 +324,7 @@ export default function LegalStudioTab() {
         {/* ========================================================================= */}
         <section className="w-1/2 flex flex-col border-r border-zinc-800/80 bg-[#0d0d0d]">
           {/* Quick Actions Bar */}
-          <div className="p-3 border-b border-zinc-800/60 bg-[#121212]/70 flex items-center gap-2 overflow-x-auto shrink-0">
+          <div className="p-3 border-b border-zinc-800/60 bg-[#121212]/70 flex flex-wrap items-center gap-2 shrink-0">
             <button
               onClick={() => handleSendAudit('Realiza la auditoría integral de cumplimiento (Descubrimiento y Matriz de Riesgo) analizando las dependencias y arquitectura.')}
               disabled={isAuditing}
@@ -525,9 +525,9 @@ export default function LegalStudioTab() {
         {/* ========================================================================= */}
         <section className="w-1/2 flex flex-col bg-[#111111]">
           {/* Workspace Header Controls */}
-          <div className="p-3 border-b border-zinc-800/80 bg-[#141414] flex items-center justify-between gap-2 shrink-0">
-            {/* Document Selector */}
-            <div className="flex items-center gap-2">
+          <div className="p-3 border-b border-zinc-800/80 bg-[#141414] flex flex-wrap items-center justify-between gap-3 shrink-0">
+            {/* Document Selector & Mode Toggle */}
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
               <select
                 value={activeDocName}
                 onChange={(e) => {
@@ -535,21 +535,21 @@ export default function LegalStudioTab() {
                   const found = savedDocs.find((d) => d.name === e.target.value);
                   if (found) setDocContent(found.content);
                 }}
-                className="bg-zinc-900 border border-zinc-700 text-xs text-zinc-200 rounded px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                className="bg-zinc-900 border border-zinc-700 text-zinc-100 focus:ring-1 focus:ring-sky-500 focus:border-sky-500 rounded-lg px-3 py-1.5 text-xs font-medium outline-none cursor-pointer shrink-0 transition-colors shadow-inner"
               >
                 {DEFAULT_DOC_PRESETS.map((preset) => (
-                  <option key={preset.id} value={preset.id}>
+                  <option key={preset.id} value={preset.id} className="bg-zinc-900 text-zinc-100 py-1">
                     {preset.id} — {preset.label}
                   </option>
                 ))}
               </select>
 
               {/* View / Edit Toggle */}
-              <div className="flex items-center bg-zinc-900 rounded border border-zinc-800 p-0.5">
+              <div className="flex items-center bg-zinc-900 rounded-lg border border-zinc-800 p-0.5 shrink-0">
                 <button
                   onClick={() => setIsEditorMode(false)}
                   className={cn(
-                    'px-2 py-0.5 text-[11px] rounded transition-colors flex items-center gap-1',
+                    'px-2.5 py-1 text-[11px] rounded transition-colors flex items-center gap-1 shrink-0',
                     !isEditorMode ? 'bg-zinc-800 text-zinc-100 font-medium' : 'text-zinc-400 hover:text-zinc-200'
                   )}
                 >
@@ -558,7 +558,7 @@ export default function LegalStudioTab() {
                 <button
                   onClick={() => setIsEditorMode(true)}
                   className={cn(
-                    'px-2 py-0.5 text-[11px] rounded transition-colors flex items-center gap-1',
+                    'px-2.5 py-1 text-[11px] rounded transition-colors flex items-center gap-1 shrink-0',
                     isEditorMode ? 'bg-zinc-800 text-zinc-100 font-medium' : 'text-zinc-400 hover:text-zinc-200'
                   )}
                 >
@@ -568,11 +568,11 @@ export default function LegalStudioTab() {
             </div>
 
             {/* Action Buttons */}
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2.5 shrink-0">
               <button
                 onClick={handleCopyMarkdown}
                 title="Copiar Markdown"
-                className="p-1.5 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded transition-colors"
+                className="p-1.5 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-lg transition-colors shrink-0"
               >
                 {copiedText ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
               </button>
@@ -580,7 +580,7 @@ export default function LegalStudioTab() {
               <button
                 onClick={handleCreateMitigationTasks}
                 disabled={isCreatingMitigation}
-                className="px-2.5 py-1.5 bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 text-white text-xs font-medium rounded shadow-sm flex items-center gap-1.5 transition-colors"
+                className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 text-white text-xs font-medium rounded-lg shadow-sm flex items-center gap-1.5 transition-colors shrink-0"
               >
                 {isCreatingMitigation ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Rocket className="w-3.5 h-3.5" />}
                 🚀 Crear Tareas de Mitigación
@@ -589,10 +589,10 @@ export default function LegalStudioTab() {
               <button
                 onClick={handleSaveDocToDisk}
                 disabled={isSavingDoc || !docContent.trim()}
-                className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-xs font-medium rounded shadow-sm flex items-center gap-1.5 transition-colors"
+                className="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-xs font-medium rounded-lg shadow-sm flex items-center gap-1.5 transition-colors shrink-0"
               >
                 {isSavingDoc ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                💾 Guardar en docs/legal/
+                💾 Guardar Documento
               </button>
             </div>
           </div>
