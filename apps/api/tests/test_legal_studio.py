@@ -7,13 +7,16 @@ from uuid import uuid4
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from app.infrastructure.db.database import get_sessionmaker
-from app.infrastructure.db.models import ProjectModel
+from app.infrastructure.db.database import get_engine, get_sessionmaker
+from app.infrastructure.db.models import Base, ProjectModel
 from app.main import app
 
 
 @pytest.mark.asyncio
 async def test_legal_studio_tool_model_override():
+    async with get_engine().begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         # Check tool model mapping deletion is idempotent for legal_studio
@@ -26,6 +29,9 @@ async def test_legal_studio_tool_model_override():
 
 @pytest.mark.asyncio
 async def test_legal_studio_save_and_list_docs():
+    async with get_engine().begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
     tmp_dir = tempfile.mkdtemp()
     project_id = uuid4()
 
