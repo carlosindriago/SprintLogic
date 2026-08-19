@@ -127,9 +127,10 @@ export function SprintEpicManagerModal({ projectId, isOpen, onClose, onDataChang
           <h2 className="text-lg font-semibold text-gray-200">Manage Sprints & Epics</h2>
           <button
             onClick={onClose}
-            className="p-1 hover:bg-[#333] rounded-md transition-colors"
+            className="p-1 hover:bg-[#333] rounded-md transition-colors focus-visible:ring-2 focus-visible:outline-none"
+            aria-label="Close modal"
           >
-            <span className="text-gray-400">✕</span>
+            <span className="text-gray-400" aria-hidden="true">✕</span>
           </button>
         </div>
 
@@ -168,8 +169,9 @@ export function SprintEpicManagerModal({ projectId, isOpen, onClose, onDataChang
                 <h3 className="text-sm font-medium text-gray-300">Create New Sprint</h3>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2">
-                    <label className="block text-xs text-gray-400 mb-1">Name</label>
+                    <label htmlFor="sprint-name" className="block text-xs text-gray-400 mb-1">Name</label>
                     <input
+                      id="sprint-name"
                       type="text"
                       required
                       value={sprintName}
@@ -179,8 +181,9 @@ export function SprintEpicManagerModal({ projectId, isOpen, onClose, onDataChang
                     />
                   </div>
                   <div className="col-span-2">
-                    <label className="block text-xs text-gray-400 mb-1">Goal</label>
+                    <label htmlFor="sprint-goal" className="block text-xs text-gray-400 mb-1">Goal</label>
                     <input
+                      id="sprint-goal"
                       type="text"
                       value={sprintGoal}
                       onChange={e => setSprintGoal(e.target.value)}
