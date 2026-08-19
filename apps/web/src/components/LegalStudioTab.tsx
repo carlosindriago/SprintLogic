@@ -44,10 +44,12 @@ interface ChatMessage {
 }
 
 const DEFAULT_DOC_PRESETS = [
-  { id: 'privacy_policy.md', label: 'Privacy Policy (GDPR / CCPA)', icon: ShieldAlert },
-  { id: 'terms_of_service.md', label: 'Términos de Servicio', icon: FileText },
+  { id: 'privacy_policy.md', label: 'Privacy Policy (GDPR / CCPA / Latam)', icon: ShieldAlert },
+  { id: 'terms_of_service.md', label: 'Términos de Servicio (ToS)', icon: FileText },
   { id: 'cookie_policy.md', label: 'Política de Cookies', icon: FileCode },
-  { id: 'security_policy.md', label: 'Divulgación de Seguridad & DPA', icon: Scale },
+  { id: 'refund_policy.md', label: 'Política de Reembolsos (E-commerce)', icon: Scale },
+  { id: 'dpa.md', label: 'DPA (Data Processing Agreement B2B)', icon: Scale },
+  { id: 'acceptable_use_policy.md', label: 'Política de Uso Aceptable (AUP)', icon: ShieldAlert },
 ];
 
 export default function LegalStudioTab() {
@@ -329,28 +331,47 @@ export default function LegalStudioTab() {
               className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-xs font-medium rounded-md shadow-sm flex items-center gap-1.5 shrink-0 transition-colors"
             >
               {isAuditing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-              ⚡ Iniciar Auditoría Completa
+              ⚡ Auditoría
             </button>
             <button
-              onClick={() => handleSendAudit('Por favor redacta la Política de Privacidad (Privacy Policy) completa bajo estándares GDPR y CCPA.', 'privacy_policy.md')}
+              onClick={() => {
+                setActiveDocName('privacy_policy.md');
+                handleSendAudit('Mi empresa opera desde Perú/Chile. Analiza mi código y genera la Política de Privacidad y Términos exigidos por la Ley 29733/21.719.', 'privacy_policy.md');
+              }}
               disabled={isAuditing}
-              className="px-2.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs rounded-md border border-zinc-700/60 shrink-0 transition-colors"
+              className="px-2.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs rounded-md border border-zinc-700/60 shrink-0 transition-colors flex items-center gap-1"
             >
-              📜 Privacy Policy
+              🇵🇪 Latam (Perú/Chile)
             </button>
             <button
-              onClick={() => handleSendAudit('Por favor redacta los Términos y Condiciones de Servicio (Terms of Service) para la plataforma.', 'terms_of_service.md')}
+              onClick={() => {
+                setActiveDocName('privacy_policy.md');
+                handleSendAudit('Mi plataforma opera en la Unión Europea. Analiza el código y genera la Política de Privacidad (GDPR) y Política de Cookies requeridas.', 'privacy_policy.md');
+              }}
               disabled={isAuditing}
-              className="px-2.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs rounded-md border border-zinc-700/60 shrink-0 transition-colors"
+              className="px-2.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs rounded-md border border-zinc-700/60 shrink-0 transition-colors flex items-center gap-1"
             >
-              ⚖️ Términos
+              🇪🇺 GDPR (Europa)
             </button>
             <button
-              onClick={() => handleSendAudit('Por favor redacta la Política de Cookies (Cookie Policy) y los requisitos técnicos del banner.', 'cookie_policy.md')}
+              onClick={() => {
+                setActiveDocName('dpa.md');
+                handleSendAudit('Genera un borrador de DPA y Términos de Servicio B2B para mis clientes corporativos.', 'dpa.md');
+              }}
               disabled={isAuditing}
-              className="px-2.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs rounded-md border border-zinc-700/60 shrink-0 transition-colors"
+              className="px-2.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs rounded-md border border-zinc-700/60 shrink-0 transition-colors flex items-center gap-1"
             >
-              🍪 Cookies
+              🏢 SaaS B2B Enterprise
+            </button>
+            <button
+              onClick={() => {
+                setActiveDocName('refund_policy.md');
+                handleSendAudit('Detecta los procesadores de pago en el código y genera la Política de Reembolsos y Términos de Compra.', 'refund_policy.md');
+              }}
+              disabled={isAuditing}
+              className="px-2.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs rounded-md border border-zinc-700/60 shrink-0 transition-colors flex items-center gap-1"
+            >
+              🛍️ E-commerce & Pagos
             </button>
           </div>
 
@@ -362,23 +383,47 @@ export default function LegalStudioTab() {
                   <Scale className="w-6 h-6" />
                 </div>
                 <h3 className="text-sm font-semibold text-zinc-200 mb-1">
-                  Auditoría Legal y Redacción Docs-as-Code
+                  Auditoría Legal Multijurisdiccional & Docs-as-Code
                 </h3>
                 <p className="text-xs text-zinc-400 max-w-md leading-relaxed mb-6">
-                  El Asesor Legal inspeccionará automáticamente tus archivos de dependencias y el mapa topológico del proyecto para evaluar riesgos y redactar borradores normativos.
+                  Selecciona un diagnóstico guiado por jurisdicción o solicita a la IA la redacción y auditoría de los documentos legales de tu repositorio.
                 </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-md text-left">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full max-w-lg text-left">
                   <div
-                    onClick={() => handleSendAudit('¿Qué servicios de terceros y procesadores de datos se detectan en el repositorio?')}
-                    className="p-2.5 rounded-lg bg-zinc-900/80 border border-zinc-800/80 hover:border-purple-500/40 text-xs text-zinc-300 cursor-pointer transition-all"
+                    onClick={() => {
+                      setActiveDocName('privacy_policy.md');
+                      handleSendAudit('Mi empresa opera desde Perú/Chile. Analiza mi código y genera la Política de Privacidad y Términos exigidos por la Ley 29733/21.719.', 'privacy_policy.md');
+                    }}
+                    className="p-3 rounded-lg bg-zinc-900/80 border border-zinc-800/80 hover:border-purple-500/40 text-xs text-zinc-300 cursor-pointer transition-all hover:bg-purple-950/10"
                   >
-                    🔍 <strong>Descubrimiento:</strong> Deduce terceros usados
+                    🇵🇪 <strong>Diagnóstico Latam:</strong> Ley 29733 (PE) / Ley 21.719 (CL)
                   </div>
                   <div
-                    onClick={() => handleSendAudit('Genera una Matriz de Riesgos normativos (GDPR, CCPA, Cookies) para el proyecto.')}
-                    className="p-2.5 rounded-lg bg-zinc-900/80 border border-zinc-800/80 hover:border-purple-500/40 text-xs text-zinc-300 cursor-pointer transition-all"
+                    onClick={() => {
+                      setActiveDocName('privacy_policy.md');
+                      handleSendAudit('Mi plataforma opera en la Unión Europea. Analiza el código y genera la Política de Privacidad (GDPR) y Política de Cookies requeridas.', 'privacy_policy.md');
+                    }}
+                    className="p-3 rounded-lg bg-zinc-900/80 border border-zinc-800/80 hover:border-purple-500/40 text-xs text-zinc-300 cursor-pointer transition-all hover:bg-purple-950/10"
                   >
-                    📊 <strong>Matriz de Riesgo:</strong> Evaluación de brechas
+                    🇪🇺 <strong>Diagnóstico GDPR:</strong> RGPD, Cookies & Consentimiento
+                  </div>
+                  <div
+                    onClick={() => {
+                      setActiveDocName('dpa.md');
+                      handleSendAudit('Genera un borrador de DPA y Términos de Servicio B2B para mis clientes corporativos.', 'dpa.md');
+                    }}
+                    className="p-3 rounded-lg bg-zinc-900/80 border border-zinc-800/80 hover:border-purple-500/40 text-xs text-zinc-300 cursor-pointer transition-all hover:bg-purple-950/10"
+                  >
+                    🏢 <strong>SaaS B2B Enterprise:</strong> DPA Art. 28 & SLAs
+                  </div>
+                  <div
+                    onClick={() => {
+                      setActiveDocName('refund_policy.md');
+                      handleSendAudit('Detecta los procesadores de pago en el código y genera la Política de Reembolsos y Términos de Compra.', 'refund_policy.md');
+                    }}
+                    className="p-3 rounded-lg bg-zinc-900/80 border border-zinc-800/80 hover:border-purple-500/40 text-xs text-zinc-300 cursor-pointer transition-all hover:bg-purple-950/10"
+                  >
+                    🛍️ <strong>E-commerce & Pagos:</strong> Reembolsos y Deslinde
                   </div>
                 </div>
               </div>

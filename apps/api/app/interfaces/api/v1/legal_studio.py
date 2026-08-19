@@ -271,7 +271,14 @@ async def audit_project_compliance(
             detail=f"Error en el asistente legal IA: {e!s}",
         )
 
-    suggested_docs = ["privacy_policy.md", "terms_of_service.md", "cookie_policy.md", "security_policy.md", "dpa.md"]
+    suggested_docs = [
+        "privacy_policy.md",
+        "terms_of_service.md",
+        "cookie_policy.md",
+        "refund_policy.md",
+        "dpa.md",
+        "acceptable_use_policy.md",
+    ]
 
     return LegalAuditResponse(
         response=ai_response,
