@@ -640,33 +640,66 @@ export default function LegalStudioTab() {
               </div>
             </div>
 
-            {/* Action Buttons */}
-            <div className="flex flex-wrap items-center gap-2.5 shrink-0">
-              <button
-                onClick={handleCopyMarkdown}
-                title="Copiar Markdown"
-                className="p-1.5 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-lg transition-colors shrink-0"
-              >
-                {copiedText ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-              </button>
+            {/* Action Buttons with Rich Tooltips */}
+            <div className="flex items-center gap-2 shrink-0">
+              {/* Copy Markdown */}
+              <div className="relative group">
+                <button
+                  onClick={handleCopyMarkdown}
+                  aria-label="Copiar Markdown"
+                  className="w-8 h-8 rounded-lg bg-zinc-800/90 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-zinc-700/60 flex items-center justify-center transition-colors shrink-0"
+                >
+                  {copiedText ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                </button>
+                <div className="absolute top-full mt-2 right-0 opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity duration-200 z-50 w-48 p-2.5 bg-[#18181b] border border-zinc-700/80 rounded-lg shadow-2xl shadow-black/80 text-left">
+                  <div className="text-xs font-semibold text-zinc-100 flex items-center gap-1.5 mb-1">
+                    <Copy className="w-3.5 h-3.5 text-zinc-400" /> Copiar Markdown
+                  </div>
+                  <p className="text-[11px] text-zinc-400 leading-tight">
+                    Copia el contenido íntegro del documento al portapapeles.
+                  </p>
+                </div>
+              </div>
 
-              <button
-                onClick={handleCreateMitigationTasks}
-                disabled={isCreatingMitigation}
-                className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 text-white text-xs font-medium rounded-lg shadow-sm flex items-center gap-1.5 transition-colors shrink-0"
-              >
-                {isCreatingMitigation ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Rocket className="w-3.5 h-3.5" />}
-                🚀 Crear Tareas de Mitigación
-              </button>
+              {/* Create Mitigation Tasks */}
+              <div className="relative group">
+                <button
+                  onClick={handleCreateMitigationTasks}
+                  disabled={isCreatingMitigation}
+                  aria-label="Crear Tareas de Mitigación"
+                  className="w-8 h-8 rounded-lg bg-emerald-700/90 hover:bg-emerald-600 disabled:opacity-50 text-white border border-emerald-600/50 flex items-center justify-center transition-colors shrink-0 shadow-sm"
+                >
+                  {isCreatingMitigation ? <Loader2 className="w-4 h-4 animate-spin" /> : <Rocket className="w-4 h-4 text-emerald-100" />}
+                </button>
+                <div className="absolute top-full mt-2 right-0 opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity duration-200 z-50 w-56 p-2.5 bg-[#18181b] border border-zinc-700/80 rounded-lg shadow-2xl shadow-black/80 text-left">
+                  <div className="text-xs font-semibold text-zinc-100 flex items-center gap-1.5 mb-1">
+                    <Rocket className="w-3.5 h-3.5 text-emerald-400" /> Crear Tareas de Mitigación
+                  </div>
+                  <p className="text-[11px] text-zinc-400 leading-tight">
+                    Genera tickets técnicos en el Sprint Center (Backlog) para el equipo de desarrollo.
+                  </p>
+                </div>
+              </div>
 
-              <button
-                onClick={handleSaveDocToDisk}
-                disabled={isSavingDoc || !docContent.trim()}
-                className="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-xs font-medium rounded-lg shadow-sm flex items-center gap-1.5 transition-colors shrink-0"
-              >
-                {isSavingDoc ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                💾 Guardar Documento
-              </button>
+              {/* Save Document to Disk */}
+              <div className="relative group">
+                <button
+                  onClick={handleSaveDocToDisk}
+                  disabled={isSavingDoc || !docContent.trim()}
+                  aria-label="Guardar Documento"
+                  className="w-8 h-8 rounded-lg bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white border border-purple-500/50 flex items-center justify-center transition-colors shrink-0 shadow-sm shadow-purple-950/40"
+                >
+                  {isSavingDoc ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 text-white" />}
+                </button>
+                <div className="absolute top-full mt-2 right-0 opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity duration-200 z-50 w-56 p-2.5 bg-[#18181b] border border-zinc-700/80 rounded-lg shadow-2xl shadow-black/80 text-left">
+                  <div className="text-xs font-semibold text-zinc-100 flex items-center gap-1.5 mb-1">
+                    <Save className="w-3.5 h-3.5 text-purple-400" /> Guardar en docs/legal/
+                  </div>
+                  <p className="text-[11px] text-zinc-400 leading-tight">
+                    Persiste físicamente el documento en el repositorio bajo la filosofía Docs-as-Code.
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
 
