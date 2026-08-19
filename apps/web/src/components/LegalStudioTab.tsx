@@ -21,6 +21,11 @@ import {
   AlertTriangle,
   FileCode,
   ArrowRight,
+  Globe,
+  Flag,
+  ShieldCheck,
+  Briefcase,
+  ShoppingCart,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
@@ -323,66 +328,134 @@ export default function LegalStudioTab() {
         {/* LEFT PANEL: AUDITORÍA & CHAT INTERACTIVO                                 */}
         {/* ========================================================================= */}
         <section className="w-1/2 flex flex-col border-r border-zinc-800/80 bg-[#0d0d0d]">
-          {/* Quick Actions Bar */}
-          <div className="p-3 border-b border-zinc-800/60 bg-[#121212]/70 flex flex-wrap items-center gap-2 shrink-0">
+          {/* Quick Actions Bar - Progressive Disclosure */}
+          <div className="p-2.5 border-b border-zinc-800/60 bg-[#121212]/90 flex items-center gap-2 shrink-0">
+            {/* Primary Action Button */}
             <button
               onClick={() => handleSendAudit('Realiza la auditoría integral de cumplimiento (Descubrimiento y Matriz de Riesgo) analizando las dependencias y arquitectura.')}
               disabled={isAuditing}
-              className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-xs font-medium rounded-md shadow-sm flex items-center gap-1.5 shrink-0 transition-colors"
+              className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-xs font-medium rounded-lg shadow-sm flex items-center gap-1.5 shrink-0 transition-colors"
             >
               {isAuditing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-              ⚡ Auditoría
+              <span>⚡ Auditoría</span>
             </button>
-            <button
-              onClick={() => {
-                setActiveDocName('privacy_policy.md');
-                handleSendAudit('Mi empresa opera en varios países de Hispanoamérica. Analiza mi código y genera políticas que cumplan con la Ley 29733, Ley 21.719, Ley 1581 y Ley 25.326.', 'privacy_policy.md');
-              }}
-              disabled={isAuditing}
-              className="px-2.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs rounded-md border border-zinc-700/60 shrink-0 transition-colors flex items-center gap-1"
-            >
-              🌎 Latam (AR/CL/CO/PE/VE)
-            </button>
-            <button
-              onClick={() => {
-                setActiveDocName('privacy_policy.md');
-                handleSendAudit('Mi empresa tiene usuarios en Brasil. Genera los documentos legales estrictamente bajo la LGPD (Ley 13.709).', 'privacy_policy.md');
-              }}
-              disabled={isAuditing}
-              className="px-2.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs rounded-md border border-zinc-700/60 shrink-0 transition-colors flex items-center gap-1"
-            >
-              🇧🇷 Brasil (LGPD)
-            </button>
-            <button
-              onClick={() => {
-                setActiveDocName('privacy_policy.md');
-                handleSendAudit('Mi plataforma opera en la Unión Europea. Analiza el código y genera la Política de Privacidad (GDPR) y Política de Cookies requeridas.', 'privacy_policy.md');
-              }}
-              disabled={isAuditing}
-              className="px-2.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs rounded-md border border-zinc-700/60 shrink-0 transition-colors flex items-center gap-1"
-            >
-              🇪🇺 GDPR (Europa)
-            </button>
-            <button
-              onClick={() => {
-                setActiveDocName('dpa.md');
-                handleSendAudit('Genera un borrador de DPA y Términos de Servicio B2B para mis clientes corporativos.', 'dpa.md');
-              }}
-              disabled={isAuditing}
-              className="px-2.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs rounded-md border border-zinc-700/60 shrink-0 transition-colors flex items-center gap-1"
-            >
-              🏢 SaaS B2B Enterprise
-            </button>
-            <button
-              onClick={() => {
-                setActiveDocName('refund_policy.md');
-                handleSendAudit('Detecta los procesadores de pago en el código y genera la Política de Reembolsos y Términos de Compra.', 'refund_policy.md');
-              }}
-              disabled={isAuditing}
-              className="px-2.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs rounded-md border border-zinc-700/60 shrink-0 transition-colors flex items-center gap-1"
-            >
-              🛍️ E-commerce & Pagos
-            </button>
+
+            <div className="h-4 w-px bg-zinc-800 shrink-0 mx-0.5" />
+
+            {/* 🌎 Latam Icon Button + Rich Tooltip */}
+            <div className="relative group">
+              <button
+                onClick={() => {
+                  setActiveDocName('privacy_policy.md');
+                  handleSendAudit('Mi empresa opera en varios países de Hispanoamérica. Analiza mi código y genera políticas que cumplan con la Ley 29733, Ley 21.719, Ley 1581 y Ley 25.326.', 'privacy_policy.md');
+                }}
+                disabled={isAuditing}
+                className="w-8 h-8 rounded-lg bg-zinc-800/90 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-zinc-700/60 flex items-center justify-center transition-colors shrink-0"
+                aria-label="Diagnóstico Latam"
+              >
+                <Globe className="w-4 h-4 text-emerald-400" />
+              </button>
+              <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity duration-200 z-50 w-52 p-2.5 bg-[#18181b] border border-zinc-700/80 rounded-lg shadow-2xl shadow-black/80 text-left">
+                <div className="text-xs font-semibold text-zinc-100 flex items-center gap-1.5 mb-1">
+                  <span>🌎</span> Latam (AR/CL/CO/PE/VE)
+                </div>
+                <p className="text-[11px] text-zinc-400 leading-tight">
+                  Leyes 29733 (PE), 21.719 (CL), 1581 (CO) y 25.326 (AR) con derechos ARCO y Habeas Data.
+                </p>
+              </div>
+            </div>
+
+            {/* 🇧🇷 Brasil Icon Button + Rich Tooltip */}
+            <div className="relative group">
+              <button
+                onClick={() => {
+                  setActiveDocName('privacy_policy.md');
+                  handleSendAudit('Mi empresa tiene usuarios en Brasil. Genera los documentos legales estrictamente bajo la LGPD (Ley 13.709).', 'privacy_policy.md');
+                }}
+                disabled={isAuditing}
+                className="w-8 h-8 rounded-lg bg-zinc-800/90 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-zinc-700/60 flex items-center justify-center transition-colors shrink-0"
+                aria-label="Diagnóstico Brasil (LGPD)"
+              >
+                <Flag className="w-4 h-4 text-yellow-400" />
+              </button>
+              <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity duration-200 z-50 w-52 p-2.5 bg-[#18181b] border border-zinc-700/80 rounded-lg shadow-2xl shadow-black/80 text-left">
+                <div className="text-xs font-semibold text-zinc-100 flex items-center gap-1.5 mb-1">
+                  <span>🇧🇷</span> Brasil (LGPD)
+                </div>
+                <p className="text-[11px] text-zinc-400 leading-tight">
+                  Auditoría bajo la Ley 13.709 exigiendo bases legales, derechos del titular y figura del DPO.
+                </p>
+              </div>
+            </div>
+
+            {/* 🇪🇺 GDPR Icon Button + Rich Tooltip */}
+            <div className="relative group">
+              <button
+                onClick={() => {
+                  setActiveDocName('privacy_policy.md');
+                  handleSendAudit('Mi plataforma opera en la Unión Europea. Analiza el código y genera la Política de Privacidad (GDPR) y Política de Cookies requeridas.', 'privacy_policy.md');
+                }}
+                disabled={isAuditing}
+                className="w-8 h-8 rounded-lg bg-zinc-800/90 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-zinc-700/60 flex items-center justify-center transition-colors shrink-0"
+                aria-label="Diagnóstico GDPR (Europa)"
+              >
+                <ShieldCheck className="w-4 h-4 text-sky-400" />
+              </button>
+              <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity duration-200 z-50 w-52 p-2.5 bg-[#18181b] border border-zinc-700/80 rounded-lg shadow-2xl shadow-black/80 text-left">
+                <div className="text-xs font-semibold text-zinc-100 flex items-center gap-1.5 mb-1">
+                  <span>🇪🇺</span> GDPR (Unión Europea)
+                </div>
+                <p className="text-[11px] text-zinc-400 leading-tight">
+                  Cumplimiento RGPD (Arts. 13/14), bases legales del Art. 6 y Política de Cookies con consentimiento.
+                </p>
+              </div>
+            </div>
+
+            {/* 🏢 SaaS B2B Enterprise Icon Button + Rich Tooltip */}
+            <div className="relative group">
+              <button
+                onClick={() => {
+                  setActiveDocName('dpa.md');
+                  handleSendAudit('Genera un borrador de DPA y Términos de Servicio B2B para mis clientes corporativos.', 'dpa.md');
+                }}
+                disabled={isAuditing}
+                className="w-8 h-8 rounded-lg bg-zinc-800/90 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-zinc-700/60 flex items-center justify-center transition-colors shrink-0"
+                aria-label="SaaS B2B Enterprise"
+              >
+                <Briefcase className="w-4 h-4 text-purple-400" />
+              </button>
+              <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity duration-200 z-50 w-52 p-2.5 bg-[#18181b] border border-zinc-700/80 rounded-lg shadow-2xl shadow-black/80 text-left">
+                <div className="text-xs font-semibold text-zinc-100 flex items-center gap-1.5 mb-1">
+                  <span>🏢</span> SaaS B2B Enterprise
+                </div>
+                <p className="text-[11px] text-zinc-400 leading-tight">
+                  Acuerdo de Tratamiento de Datos (DPA Art. 28) y cláusulas de SLA corporativas.
+                </p>
+              </div>
+            </div>
+
+            {/* 🛍️ E-commerce & Pagos Icon Button + Rich Tooltip */}
+            <div className="relative group">
+              <button
+                onClick={() => {
+                  setActiveDocName('refund_policy.md');
+                  handleSendAudit('Detecta los procesadores de pago en el código y genera la Política de Reembolsos y Términos de Compra.', 'refund_policy.md');
+                }}
+                disabled={isAuditing}
+                className="w-8 h-8 rounded-lg bg-zinc-800/90 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-zinc-700/60 flex items-center justify-center transition-colors shrink-0"
+                aria-label="E-commerce & Pagos"
+              >
+                <ShoppingCart className="w-4 h-4 text-amber-400" />
+              </button>
+              <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity duration-200 z-50 w-52 p-2.5 bg-[#18181b] border border-zinc-700/80 rounded-lg shadow-2xl shadow-black/80 text-left">
+                <div className="text-xs font-semibold text-zinc-100 flex items-center gap-1.5 mb-1">
+                  <span>🛍️</span> E-commerce & Pagos
+                </div>
+                <p className="text-[11px] text-zinc-400 leading-tight">
+                  Detección de Stripe/PayPal y redacción de Política de Reembolsos y Términos de Compra.
+                </p>
+              </div>
+            </div>
           </div>
 
           {/* Messages Area */}
