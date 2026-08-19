@@ -336,12 +336,22 @@ export default function LegalStudioTab() {
             <button
               onClick={() => {
                 setActiveDocName('privacy_policy.md');
-                handleSendAudit('Mi empresa opera desde Perú/Chile. Analiza mi código y genera la Política de Privacidad y Términos exigidos por la Ley 29733/21.719.', 'privacy_policy.md');
+                handleSendAudit('Mi empresa opera en varios países de Hispanoamérica. Analiza mi código y genera políticas que cumplan con la Ley 29733, Ley 21.719, Ley 1581 y Ley 25.326.', 'privacy_policy.md');
               }}
               disabled={isAuditing}
               className="px-2.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs rounded-md border border-zinc-700/60 shrink-0 transition-colors flex items-center gap-1"
             >
-              🇵🇪 Latam (Perú/Chile)
+              🌎 Latam (AR/CL/CO/PE/VE)
+            </button>
+            <button
+              onClick={() => {
+                setActiveDocName('privacy_policy.md');
+                handleSendAudit('Mi empresa tiene usuarios en Brasil. Genera los documentos legales estrictamente bajo la LGPD (Ley 13.709).', 'privacy_policy.md');
+              }}
+              disabled={isAuditing}
+              className="px-2.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs rounded-md border border-zinc-700/60 shrink-0 transition-colors flex items-center gap-1"
+            >
+              🇧🇷 Brasil (LGPD)
             </button>
             <button
               onClick={() => {
@@ -383,7 +393,7 @@ export default function LegalStudioTab() {
                   <Scale className="w-6 h-6" />
                 </div>
                 <h3 className="text-sm font-semibold text-zinc-200 mb-1">
-                  Auditoría Legal Multijurisdiccional & Docs-as-Code
+                  Auditoría Legal Continental & Docs-as-Code
                 </h3>
                 <p className="text-xs text-zinc-400 max-w-md leading-relaxed mb-6">
                   Selecciona un diagnóstico guiado por jurisdicción o solicita a la IA la redacción y auditoría de los documentos legales de tu repositorio.
@@ -392,11 +402,20 @@ export default function LegalStudioTab() {
                   <div
                     onClick={() => {
                       setActiveDocName('privacy_policy.md');
-                      handleSendAudit('Mi empresa opera desde Perú/Chile. Analiza mi código y genera la Política de Privacidad y Términos exigidos por la Ley 29733/21.719.', 'privacy_policy.md');
+                      handleSendAudit('Mi empresa opera en varios países de Hispanoamérica. Analiza mi código y genera políticas que cumplan con la Ley 29733, Ley 21.719, Ley 1581 y Ley 25.326.', 'privacy_policy.md');
                     }}
                     className="p-3 rounded-lg bg-zinc-900/80 border border-zinc-800/80 hover:border-purple-500/40 text-xs text-zinc-300 cursor-pointer transition-all hover:bg-purple-950/10"
                   >
-                    🇵🇪 <strong>Diagnóstico Latam:</strong> Ley 29733 (PE) / Ley 21.719 (CL)
+                    🌎 <strong>Diagnóstico Latam:</strong> AR (25.326), CL (21.719), CO (1581), PE (29733), VE
+                  </div>
+                  <div
+                    onClick={() => {
+                      setActiveDocName('privacy_policy.md');
+                      handleSendAudit('Mi empresa tiene usuarios en Brasil. Genera los documentos legales estrictamente bajo la LGPD (Ley 13.709).', 'privacy_policy.md');
+                    }}
+                    className="p-3 rounded-lg bg-zinc-900/80 border border-zinc-800/80 hover:border-purple-500/40 text-xs text-zinc-300 cursor-pointer transition-all hover:bg-purple-950/10"
+                  >
+                    🇧🇷 <strong>Diagnóstico Brasil:</strong> LGPD (Lei 13.709), Bases & DPO
                   </div>
                   <div
                     onClick={() => {
@@ -415,15 +434,6 @@ export default function LegalStudioTab() {
                     className="p-3 rounded-lg bg-zinc-900/80 border border-zinc-800/80 hover:border-purple-500/40 text-xs text-zinc-300 cursor-pointer transition-all hover:bg-purple-950/10"
                   >
                     🏢 <strong>SaaS B2B Enterprise:</strong> DPA Art. 28 & SLAs
-                  </div>
-                  <div
-                    onClick={() => {
-                      setActiveDocName('refund_policy.md');
-                      handleSendAudit('Detecta los procesadores de pago en el código y genera la Política de Reembolsos y Términos de Compra.', 'refund_policy.md');
-                    }}
-                    className="p-3 rounded-lg bg-zinc-900/80 border border-zinc-800/80 hover:border-purple-500/40 text-xs text-zinc-300 cursor-pointer transition-all hover:bg-purple-950/10"
-                  >
-                    🛍️ <strong>E-commerce & Pagos:</strong> Reembolsos y Deslinde
                   </div>
                 </div>
               </div>
