@@ -1,7 +1,7 @@
 import React from 'react';
 import { useLayoutStore } from '@/store/layoutStore';
 import { useTabsStore } from '@/store/tabsStore';
-import { Folder, Search, GitBranch, Settings, BarChart3, Network, Layout, FolderGit2, Bot, Play, Database, Beaker, BookOpen, ShieldAlert } from 'lucide-react';
+import { Folder, Search, GitBranch, Settings, BarChart3, Network, Layout, FolderGit2, Bot, Play, Database, Beaker, BookOpen, ShieldAlert, Scale } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export default function ActivityBar() {
@@ -87,6 +87,9 @@ export default function ActivityBar() {
         </button>
         <button onClick={() => launchStudio('security-studio', 'Security Studio', 'security-studio')} aria-label="Security Studio" title="Security Studio (SAST + Tribunal IA)" className="w-10 h-10 rounded-lg mx-auto flex items-center justify-center transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-blue-500 text-zinc-600 hover:text-red-400 hover:bg-red-500/10">
           <ShieldAlert className="w-5 h-5 text-red-500/80" aria-hidden="true" />
+        </button>
+        <button onClick={() => launchStudio('legal-studio', 'Legal Studio', 'legal-studio')} aria-label="Legal Studio" title="Legal Studio (Auditoría de Cumplimiento & Docs-as-Code)" className="w-10 h-10 rounded-lg mx-auto flex items-center justify-center transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-blue-500 text-zinc-600 hover:text-purple-400 hover:bg-purple-500/10">
+          <Scale className="w-5 h-5 text-purple-400/80" aria-hidden="true" />
         </button>
       </div>
 

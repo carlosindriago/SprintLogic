@@ -12,6 +12,7 @@ from app.interfaces.api.v1.editor import router as editor_router
 from app.interfaces.api.v1.execution import router as execution_router
 from app.interfaces.api.v1.git import router as git_router
 from app.interfaces.api.v1.kanban import router as kanban_router
+from app.interfaces.api.v1.legal_studio import router as legal_studio_router
 from app.interfaces.api.v1.lsp import router as lsp_router
 from app.interfaces.api.v1.omni_pad import router as omni_pad_router
 from app.interfaces.api.v1.planning_studio import router as planning_studio_router
@@ -142,6 +143,7 @@ app.include_router(db_studio_router, prefix="/api/v1")
 app.include_router(test_studio_router, prefix="/api/v1")
 app.include_router(doc_studio_router, prefix="/api/v1")
 app.include_router(security_studio_router, prefix="/api/v1")
+app.include_router(legal_studio_router, prefix="/api/v1")
 app.include_router(omni_pad_router, prefix="/api/v1")
 app.include_router(execution_router, prefix="/api/v1")
 
