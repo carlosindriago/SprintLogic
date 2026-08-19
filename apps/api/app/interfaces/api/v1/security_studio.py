@@ -27,6 +27,7 @@ from app.infrastructure.repositories.tool_model_repository import (
 )
 from app.infrastructure.security.sast_runner import SecurityEngine, SecurityFinding
 from app.infrastructure.security.toolchain import global_toolchain
+from app.utils.security import resolve_project_path
 
 logger = logging.getLogger(__name__)
 
@@ -146,7 +147,7 @@ async def evaluate_finding(
     # Read source code from disk if not provided
     source_code = request.source_code
     if not source_code and request.file_path:
-        full_file_path = os.path.join(project.path, request.file_path)
+        full_file_path = resolve_project_path(project.path, request.file_path)
         if os.path.isfile(full_file_path):
             try:
                 with open(full_file_path, encoding="utf-8", errors="ignore") as f:
