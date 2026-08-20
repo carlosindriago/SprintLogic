@@ -1313,7 +1313,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
       )}
 
       {/* Ticket Drawer */}
-      {activeDrawerTicketId && (
+      {activeDrawerTicketId && rawTicketsMap.get(activeDrawerTicketId) && (
         <TicketDrawer
           ticket={rawTicketsMap.get(activeDrawerTicketId)!}
           allSprints={sprints}
