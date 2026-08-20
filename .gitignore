@@ -20,6 +20,8 @@ __pycache__/
 .venv/
 venv/
 env/
+*.egg-info/
+.egg-info/
 
 # Build artifacts (PyInstaller output and static Next.js bundle are runtime artifacts)
 apps/api/build/
