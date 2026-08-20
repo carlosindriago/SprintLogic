@@ -11,6 +11,7 @@ import logging
 import os
 import uuid
 from collections.abc import AsyncGenerator
+from pathlib import Path
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -346,7 +347,7 @@ class AnalyzeProjectGraphUseCase:
             project_path = os.path.abspath(self.project.path)  # type: ignore[attr-defined]
 
             filtered_nodes = [
-                n for n in all_nodes if os.path.abspath(n.file_path).startswith(project_path)
+                n for n in all_nodes if Path(n.file_path).resolve().is_relative_to(Path(project_path).resolve())
             ]
             valid_ids = {n.id for n in filtered_nodes}
             filtered_edges = [
