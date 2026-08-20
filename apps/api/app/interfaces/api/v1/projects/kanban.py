@@ -344,7 +344,7 @@ async def sync_project_commits(project_id: str, session: AsyncSession = Depends(
             id_match = short_id in c_msg.lower() or sl_tag in c_msg.lower()
 
             if branch_match or id_match:
-                target_db_status = TicketStatus.DONE if tests_passing else TicketStatus.IN_PROGRESS
+                target_db_status = TicketStatus.DONE if tests_passing else TicketStatus.TEST
                 if t.status != target_db_status:
                     await db_repo.update_ticket(t.id, KanbanTicketUpdate(status=target_db_status))
                     ticket_label = f"SL-{str(t.id)[:6].upper()}"
