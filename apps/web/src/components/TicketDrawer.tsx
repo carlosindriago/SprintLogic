@@ -508,9 +508,13 @@ export default function TicketDrawer({ ticket, allSprints, allEpics, columns, al
                       }`}
                     >
                       {isDone ? (
-                        <Check size={12} className="text-emerald-400 shrink-0" title="Dependencia completada" />
+                        <span title="Dependencia completada" className="inline-flex items-center">
+                          <Check size={12} className="text-emerald-400 shrink-0" aria-hidden="true" />
+                        </span>
                       ) : (
-                        <AlertCircle size={12} className="text-amber-400 shrink-0" title="Dependencia pendiente" />
+                        <span title="Dependencia pendiente" className="inline-flex items-center">
+                          <AlertCircle size={12} className="text-amber-400 shrink-0" aria-hidden="true" />
+                        </span>
                       )}
                       <span className="truncate max-w-[280px]" title={matchedTicket ? matchedTicket.title : dep}>
                         {matchedTicket ? `${matchedTicket.title}` : dep}
