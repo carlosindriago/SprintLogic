@@ -820,6 +820,14 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
     return map;
   }, [tasks]);
 
+  const taskIndexMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (let i = 0; i < tasks.length; i++) {
+      map.set(tasks[i].id, i);
+    }
+    return map;
+  }, [tasks]);
+
   if (!projectId) {
     return <div className="h-full flex items-center justify-center text-zinc-500">Selecciona un proyecto para ver el Sprint Center.</div>;
   }
@@ -996,7 +1004,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
                         const epic = raw?.epic_id ? epicsMap.get(raw.epic_id) : undefined;
                         const sprint = raw?.sprint_id ? sprintsMap.get(raw.sprint_id) : undefined;
                         const depInfo = getTaskDependencies(task, tasks, rawTicketsMap);
-                        const orderIndex = tasks.findIndex(t => t.id === task.id) + 1;
+                        const orderIndex = (taskIndexMap.get(task.id) ?? -1) + 1;
 
                         return (
                           <SortableTask
@@ -1089,7 +1097,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
                         const epic = raw?.epic_id ? epicsMap.get(raw.epic_id) : undefined;
                         const sprint = raw?.sprint_id ? sprintsMap.get(raw.sprint_id) : undefined;
                         const depInfo = getTaskDependencies(task, tasks, rawTicketsMap);
-                        const orderIndex = tasks.findIndex(t => t.id === task.id) + 1;
+                        const orderIndex = (taskIndexMap.get(task.id) ?? -1) + 1;
 
                         return (
                           <SortableTask
