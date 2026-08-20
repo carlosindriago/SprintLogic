@@ -12,6 +12,7 @@ class TicketStatus(StrEnum):
     ICEBOX = "icebox"
     TODO = "todo"
     IN_PROGRESS = "in_progress"
+    TEST = "test"
     DONE = "done"
     ARCHIVED = "archived"
 

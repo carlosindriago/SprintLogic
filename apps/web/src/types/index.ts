@@ -117,6 +117,7 @@ export interface ProjectRepoInsights {
   tasks_by_state: {
     todo: number;
     "in_progress": number;
+    test?: number;
     done: number;
   };
   language_distribution: LanguageDistributionItem[];
@@ -136,7 +137,7 @@ export interface FileTreeNode {
 }
 
 export type TicketType = "Technical Debt" | "Security" | "Refactor" | "Feature";
-export type TicketStatus = "icebox" | "todo" | "in_progress" | "done" | "archived";
+export type TicketStatus = "icebox" | "todo" | "in_progress" | "test" | "done" | "archived";
 export type TicketPriority = "High" | "Medium" | "Low";
 
 export interface TicketNodeLink {

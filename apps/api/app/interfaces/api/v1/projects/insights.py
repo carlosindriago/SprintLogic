@@ -207,14 +207,15 @@ async def get_project_repo_insights(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    tasks_by_state = {"todo": 0, "in-progress": 0, "done": 0}
+    tasks_by_state = {"todo": 0, "in_progress": 0, "test": 0, "done": 0}
     try:
         import asyncio
 
         tasks = await asyncio.to_thread(kanban_sync.read_tasks, project.path)
         for t in tasks:
-            if t["status"] in tasks_by_state:
-                tasks_by_state[t["status"]] += 1
+            st = "in_progress" if t.get("status") == "in-progress" else t.get("status")
+            if st in tasks_by_state:
+                tasks_by_state[st] += 1
     except Exception:
         logger.warning("Unhandled exception", exc_info=True)
 

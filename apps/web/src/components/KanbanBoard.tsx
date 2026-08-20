@@ -104,6 +104,10 @@ function SortableTask({
   orderIndex,
   isBlocked,
   blockingTasks,
+  selectable,
+  selected,
+  onToggleSelect,
+  onDeleteClick,
 }: { 
   task: Task & { subtasks?: any[] }; 
   onNodeClick?: (nodeId: string) => void; 
@@ -115,6 +119,10 @@ function SortableTask({
   orderIndex?: number;
   isBlocked?: boolean;
   blockingTasks?: string[];
+  selectable?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (taskId: string) => void;
+  onDeleteClick?: (taskId: string) => void;
 }) {
   const router = useRouter();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id });
@@ -136,12 +144,25 @@ function SortableTask({
     <div ref={setNodeRef} style={style} {...attributes} {...listeners} onClick={onClick} className="mb-2 cursor-grab active:cursor-grabbing group w-full min-w-0">
       <Card className={cn(
         "bg-zinc-800 border transition-colors w-full min-w-0 overflow-hidden",
-        isBlocked ? "border-amber-700/60 hover:border-amber-500/80 bg-zinc-850" : "border-zinc-700/50 hover:border-zinc-600"
+        selected ? "border-blue-500/80 bg-blue-950/20" : isBlocked ? "border-amber-700/60 hover:border-amber-500/80 bg-zinc-850" : "border-zinc-700/50 hover:border-zinc-600"
       )}>
         <CardContent className="p-3 text-xs text-zinc-200 flex flex-col gap-2 min-w-0">
           {/* Header with task Order, ID, Priority and Blocked status */}
           <div className="flex items-center justify-between min-w-0 gap-1.5 flex-wrap">
             <div className="flex items-center gap-1.5 shrink-0">
+              {selectable && (
+                <input
+                  type="checkbox"
+                  checked={!!selected}
+                  onChange={(e) => {
+                    e.stopPropagation();
+                    if (onToggleSelect) onToggleSelect(task.id);
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                  className="w-3.5 h-3.5 rounded border-zinc-700 bg-zinc-900 text-blue-600 focus:ring-0 focus:ring-offset-0 cursor-pointer accent-blue-600 shrink-0"
+                  title="Seleccionar tarea"
+                />
+              )}
               {orderIndex !== undefined && (
                 <span className="text-[9px] bg-amber-950/50 text-amber-300 font-mono px-1.5 py-0.5 rounded border border-amber-800/50 font-bold" title="Orden sugerido de ejecución">
                   #{orderIndex}
@@ -170,6 +191,20 @@ function SortableTask({
                 )}>
                   {task.priority}
                 </span>
+              )}
+              {selectable && onDeleteClick && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDeleteClick(task.id);
+                  }}
+                  className="text-zinc-500 hover:text-red-400 p-0.5 rounded hover:bg-red-950/30 transition-colors opacity-60 hover:opacity-100 group-hover:opacity-100"
+                  title="Eliminar tarea de To Do"
+                  aria-label="Eliminar tarea"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
               )}
             </div>
           </div>
@@ -397,6 +432,14 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
   const [quickAddText, setQuickAddText] = useState("");
   const [isQuickAdding, setIsQuickAdding] = useState(false);
 
+  // To Do Selection & Batch Delete State
+  const [selectedTodoIds, setSelectedTodoIds] = useState<Set<string>>(new Set());
+  const [deleteConfirmModal, setDeleteConfirmModal] = useState<{
+    ticketIds: string[];
+    confirmInput: string;
+    isDeleting: boolean;
+  } | null>(null);
+
   // Icebox Drawer State
   const [showIceboxDrawer, setShowIceboxDrawer] = useState(false);
   const [quickAddIceboxText, setQuickAddIceboxText] = useState("");
@@ -470,6 +513,71 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
       console.error("Failed to save tasks", e);
     }
   }, [projectId]);
+
+  const handleToggleSelectTodo = useCallback((taskId: string) => {
+    setSelectedTodoIds(prev => {
+      const next = new Set(prev);
+      if (next.has(taskId)) {
+        next.delete(taskId);
+      } else {
+        next.add(taskId);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleSelectAllTodo = useCallback((todoTasks: Task[]) => {
+    setSelectedTodoIds(prev => {
+      if (prev.size === todoTasks.length && todoTasks.length > 0) {
+        return new Set();
+      } else {
+        return new Set(todoTasks.map(t => t.id));
+      }
+    });
+  }, []);
+
+  const handleOpenDeleteModal = useCallback((ids: string[]) => {
+    if (ids.length === 0) return;
+    setDeleteConfirmModal({
+      ticketIds: ids,
+      confirmInput: '',
+      isDeleting: false
+    });
+  }, []);
+
+  const handleExecuteDelete = useCallback(async () => {
+    if (!deleteConfirmModal || !projectId) return;
+    setDeleteConfirmModal(prev => prev ? { ...prev, isDeleting: true } : null);
+    
+    const idsToDelete = new Set(deleteConfirmModal.ticketIds);
+    try {
+      for (const id of deleteConfirmModal.ticketIds) {
+        const isDbTicket = rawTickets.some(r => r.id === id);
+        if (isDbTicket) {
+          try {
+            await deleteKanbanTicket(id);
+          } catch (err) {
+            console.error(`Failed to delete DB ticket ${id}`, err);
+          }
+        }
+      }
+
+      // Also remove from tasks.md file-based tasks if present
+      const remainingTasks = tasks.filter(t => !idsToDelete.has(t.id));
+      if (remainingTasks.length !== tasks.length) {
+        await saveProjectTasks(projectId, remainingTasks);
+      }
+
+      toast.success(`${deleteConfirmModal.ticketIds.length} ${deleteConfirmModal.ticketIds.length === 1 ? 'tarea eliminada' : 'tareas eliminadas'} de To Do`);
+      setSelectedTodoIds(new Set());
+      setDeleteConfirmModal(null);
+      await fetchTasks();
+    } catch (error) {
+      console.error('Error deleting tasks', error);
+      toast.error('Error al eliminar las tareas seleccionadas');
+      setDeleteConfirmModal(prev => prev ? { ...prev, isDeleting: false } : null);
+    }
+  }, [deleteConfirmModal, projectId, rawTickets, tasks, fetchTasks]);
 
   useEffect(() => {
     let active = true;
@@ -1040,14 +1148,40 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
           <div className="flex-1 flex p-6 gap-4 overflow-x-auto overflow-y-hidden custom-scrollbar bg-[#111112] h-full min-h-0 items-stretch">
           {columns.map((col, idx) => {
             const columnTasks = tasksByStatus[col.id] || [];
+            const isTodoCol = idx === 0 || col.id.toLowerCase() === 'todo';
 
             return (
               <div key={col.id} className={cn("flex flex-col bg-zinc-900 rounded-lg min-w-[280px] max-w-[320px] w-[300px] border-t-2 shrink-0 border-zinc-800 h-full max-h-full min-h-0 overflow-hidden shadow-lg", col.color)}>
                 <div className="p-3 font-semibold text-zinc-300 text-sm border-b border-zinc-800/50 flex items-center justify-between shrink-0">
-                  <span>{col.title}</span>
-                  <span className="text-xs bg-zinc-850 px-2 py-0.5 rounded-full text-zinc-500 font-medium">
-                    {columnTasks.length}
-                  </span>
+                  <div className="flex items-center gap-2 min-w-0">
+                    {isTodoCol && columnTasks.length > 0 && (
+                      <input
+                        type="checkbox"
+                        checked={columnTasks.length > 0 && columnTasks.every(t => selectedTodoIds.has(t.id))}
+                        onChange={() => handleSelectAllTodo(columnTasks)}
+                        className="w-3.5 h-3.5 rounded border-zinc-700 bg-zinc-900 text-blue-600 focus:ring-0 focus:ring-offset-0 cursor-pointer accent-blue-600 shrink-0"
+                        title={columnTasks.every(t => selectedTodoIds.has(t.id)) ? "Deseleccionar todas" : "Seleccionar todas las tareas de To Do"}
+                      />
+                    )}
+                    <span className="truncate">{col.title}</span>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {isTodoCol && selectedTodoIds.size > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => handleOpenDeleteModal(Array.from(selectedTodoIds))}
+                        className="flex items-center gap-1 bg-red-950/80 hover:bg-red-900 text-red-300 border border-red-800/80 text-[10px] font-semibold px-2 py-0.5 rounded transition-colors shadow-sm"
+                        title="Eliminar tareas seleccionadas"
+                      >
+                        <Trash2 className="w-3 h-3 text-red-400" />
+                        <span>Eliminar ({selectedTodoIds.size})</span>
+                      </button>
+                    )}
+                    <span className="text-xs bg-zinc-850 px-2 py-0.5 rounded-full text-zinc-500 font-medium">
+                      {columnTasks.length}
+                    </span>
+                  </div>
                 </div>
                 {idx === 0 && (
                   <div className="px-3 pt-3 shrink-0">
@@ -1100,6 +1234,10 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
                             orderIndex={orderIndex > 0 ? orderIndex : taskIdx + 1}
                             isBlocked={depInfo.isBlocked}
                             blockingTasks={depInfo.blockingTasks}
+                            selectable={isTodoCol}
+                            selected={selectedTodoIds.has(task.id)}
+                            onToggleSelect={handleToggleSelectTodo}
+                            onDeleteClick={(id) => handleOpenDeleteModal([id])}
                             onNodeClick={onNodeClick}
                             onClick={() => {
                               const isDbTicket = rawTickets.some(r => r.id === task.id);
@@ -1313,12 +1451,13 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
       )}
 
       {/* Ticket Drawer */}
-      {activeDrawerTicketId && (
+      {activeDrawerTicketId && rawTicketsMap.get(activeDrawerTicketId) && (
         <TicketDrawer
           ticket={rawTicketsMap.get(activeDrawerTicketId)!}
           allSprints={sprints}
           allEpics={epics}
           columns={columns}
+          allTickets={rawTickets}
           onClose={() => setActiveDrawerTicketId(null)}
           onUpdate={(updated) => {
             fetchTasks();
@@ -1681,6 +1820,75 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
                 className="w-full px-4 py-2 rounded bg-transparent text-zinc-400 hover:text-zinc-200 text-sm font-semibold transition-colors mt-2"
               >
                 Cancelar movimiento
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Double Confirmation Delete Tasks Modal */}
+      {deleteConfirmModal && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#1a1a1c] border border-red-900/50 rounded-xl shadow-2xl max-w-md w-full p-5 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3 text-red-400">
+              <div className="p-2 bg-red-950/60 border border-red-900/60 rounded-lg shrink-0">
+                <Trash2 className="w-5 h-5 text-red-400" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-zinc-100">
+                  Eliminar {deleteConfirmModal.ticketIds.length === 1 ? 'tarea' : `${deleteConfirmModal.ticketIds.length} tareas`} de To Do
+                </h3>
+                <p className="text-xs text-zinc-400">Esta acción no se puede deshacer.</p>
+              </div>
+            </div>
+
+            <div className="bg-[#121214] border border-zinc-800 rounded-lg p-3 max-h-36 overflow-y-auto custom-scrollbar space-y-1.5 text-xs text-zinc-300">
+              {deleteConfirmModal.ticketIds.map((id) => {
+                const raw = rawTicketsMap.get(id);
+                const task = tasks.find(t => t.id === id);
+                const title = raw?.title || (task ? task.content.split('\n')[0].replace(/^[#\s\-*\[\]]+/, '') : id);
+                return (
+                  <div key={id} className="flex items-center justify-between gap-2 border-b border-zinc-800/40 pb-1 last:border-0 last:pb-0">
+                    <span className="truncate font-medium text-zinc-200">{title}</span>
+                    <span className="text-[10px] text-zinc-500 font-mono shrink-0">#{id.substring(0, 6)}</span>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs text-zinc-300 font-medium block">
+                Para confirmar la eliminación, escribe <strong className="text-red-400 font-mono bg-red-950/50 px-1.5 py-0.5 rounded border border-red-900/60">delete</strong> a continuación:
+              </label>
+              <input
+                type="text"
+                value={deleteConfirmModal.confirmInput}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setDeleteConfirmModal(prev => prev ? { ...prev, confirmInput: val } : null);
+                }}
+                placeholder='Escribe "delete" para confirmar'
+                autoFocus
+                className="w-full bg-[#121214] border border-zinc-700 rounded-md px-3 py-2 text-xs font-mono text-zinc-100 placeholder-zinc-600 focus:border-red-500 focus:ring-1 focus:ring-red-500"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-800">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmModal(null)}
+                disabled={deleteConfirmModal.isDeleting}
+                className="px-3 py-1.5 text-xs font-semibold text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded-md transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteDelete}
+                disabled={deleteConfirmModal.confirmInput.trim().toLowerCase() !== 'delete' || deleteConfirmModal.isDeleting}
+                className="px-3 py-1.5 text-xs font-semibold bg-red-600 hover:bg-red-500 disabled:bg-zinc-800 disabled:text-zinc-600 disabled:border-zinc-700 text-white rounded-md transition-colors flex items-center gap-1.5 border border-red-500 disabled:border-transparent"
+              >
+                {deleteConfirmModal.isDeleting ? 'Eliminando...' : 'Eliminar definitivamente'}
               </button>
             </div>
           </div>
