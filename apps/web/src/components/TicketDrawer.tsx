@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { X, Plus, Trash2, CheckCircle2, Circle, Bot } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, Plus, Trash2, CheckCircle2, Circle, Bot, Link2, AlertCircle, Check } from 'lucide-react';
 import { updateKanbanTicket, deleteKanbanTicket } from '@/lib/api';
 import { KanbanTicket, KanbanTicketUpdate, Epic, Sprint } from '@/types';
 import { useTabsStore } from '@/store/tabsStore';
@@ -12,11 +12,33 @@ export interface SubtaskItem {
   completed: boolean;
 }
 
+export function parseDependencyTags(rawDesc: string = ''): { deps: string[]; cleanDesc: string } {
+  const regex = /\[(?:Depends|Deps|Depende|Depende de|Bloqueada por|Prereq|Prerequisite):\s*([^\]]+)\]/gi;
+  const deps: string[] = [];
+  let match;
+  while ((match = regex.exec(rawDesc)) !== null) {
+    const parts = match[1].split(/[,;]/).map(p => p.trim()).filter(Boolean);
+    deps.push(...parts);
+  }
+  const cleanDesc = rawDesc
+    .replace(/\[(?:Depends|Deps|Depende|Depende de|Bloqueada por|Prereq|Prerequisite):[^\]]*\]/gi, '')
+    .trim();
+  return { deps: Array.from(new Set(deps)), cleanDesc };
+}
+
+export function serializeDependencyTags(deps: string[], cleanDesc: string): string {
+  const base = cleanDesc.trim();
+  if (deps.length === 0) return base;
+  const depTag = `[Depends: ${deps.join(', ')}]`;
+  return base ? `${base}\n\n${depTag}` : depTag;
+}
+
 interface TicketDrawerProps {
   ticket: KanbanTicket;
   allSprints: Sprint[];
   allEpics: Epic[];
   columns: KanbanColumn[];
+  allTickets?: KanbanTicket[];
   onClose: () => void;
   onUpdate: (ticket: KanbanTicket) => void;
 }
@@ -128,9 +150,15 @@ function CreatableCombobox({
   );
 }
 
-export default function TicketDrawer({ ticket, allSprints, allEpics, columns, onClose, onUpdate }: TicketDrawerProps) {
+export default function TicketDrawer({ ticket, allSprints, allEpics, columns, allTickets = [], onClose, onUpdate }: TicketDrawerProps) {
+  const initialParsed = parseDependencyTags(ticket.description || '');
   const [title, setTitle] = useState(ticket.title);
-  const [description, setDescription] = useState(ticket.description);
+  const [description, setDescription] = useState(initialParsed.cleanDesc);
+  const [dependencies, setDependencies] = useState<string[]>(initialParsed.deps);
+  const [depSearch, setDepSearch] = useState('');
+  const [isDepDropdownOpen, setIsDepDropdownOpen] = useState(false);
+  const depWrapperRef = useRef<HTMLDivElement>(null);
+
   const [type, setType] = useState(ticket.type);
   const [status, setStatus] = useState(ticket.status);
   const [priority, setPriority] = useState(ticket.priority);
@@ -144,8 +172,10 @@ export default function TicketDrawer({ ticket, allSprints, allEpics, columns, on
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
+    const parsed = parseDependencyTags(ticket.description || '');
     setTitle(ticket.title);
-    setDescription(ticket.description);
+    setDescription(parsed.cleanDesc);
+    setDependencies(parsed.deps);
     setType(ticket.type);
     setStatus(ticket.status);
     setPriority(ticket.priority);
@@ -154,6 +184,16 @@ export default function TicketDrawer({ ticket, allSprints, allEpics, columns, on
     setSprintId(ticket.sprint_id || '');
     setSubtasks(ticket.subtasks || []);
   }, [ticket]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (depWrapperRef.current && !depWrapperRef.current.contains(e.target as Node)) {
+        setIsDepDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const [localEpics, setLocalEpics] = useState<Epic[]>(allEpics);
   const [localSprints, setLocalSprints] = useState<Sprint[]>(allSprints);
@@ -182,6 +222,20 @@ export default function TicketDrawer({ ticket, allSprints, allEpics, columns, on
     return newSprint.id;
   };
 
+  const handleAddDependency = (depValue: string) => {
+    const clean = depValue.trim();
+    if (!clean) return;
+    if (!dependencies.includes(clean)) {
+      setDependencies(prev => [...prev, clean]);
+    }
+    setDepSearch('');
+    setIsDepDropdownOpen(false);
+  };
+
+  const handleRemoveDependency = (depValue: string) => {
+    setDependencies(prev => prev.filter(d => d !== depValue));
+  };
+
   const addTab = useTabsStore(s => s.addTab);
   const setPendingQuery = useChatStore(s => s.setPendingQuery);
 
@@ -198,9 +252,10 @@ export default function TicketDrawer({ ticket, allSprints, allEpics, columns, on
   const handleSaveMain = async () => {
     setIsSaving(true);
     try {
+      const fullDescription = serializeDependencyTags(dependencies, description);
       const updatePayload: KanbanTicketUpdate = {
         title,
-        description,
+        description: fullDescription,
         type,
         status: status as any,
         priority,
@@ -412,6 +467,150 @@ export default function TicketDrawer({ ticket, allSprints, allEpics, columns, on
               rows={4}
               className="w-full bg-[#131315] border border-[#27272a] rounded-md p-3 text-sm text-zinc-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 resize-y"
             />
+          </div>
+
+          <hr className="border-[#27272a]" />
+
+          {/* Sección de Dependencias / Bloqueos */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Link2 size={16} className="text-amber-400 shrink-0" />
+                <label className="text-sm font-semibold text-zinc-200">Dependencias / Bloqueada por</label>
+              </div>
+              <span className="text-xs text-zinc-500 font-medium">
+                {dependencies.length === 0 ? 'Sin bloqueo' : `${dependencies.length} ${dependencies.length === 1 ? 'bloqueo' : 'bloqueos'}`}
+              </span>
+            </div>
+            <p className="text-[11px] text-zinc-400">
+              Esta tarea mostrará un borde ámbar de advertencia hasta que las tareas que la bloquean estén en columna <strong>Done</strong>.
+            </p>
+
+            {/* Lista de dependencias actuales */}
+            {dependencies.length > 0 && (
+              <div className="flex flex-wrap gap-2 pt-1">
+                {dependencies.map((dep, idx) => {
+                  // Buscar si coincide con algún ticket real
+                  const matchedTicket = allTickets.find(t => 
+                    t.id.toLowerCase().startsWith(dep.toLowerCase().replace(/^[#]/, '')) ||
+                    t.id.toLowerCase().includes(dep.toLowerCase().replace(/^[#]/, '')) ||
+                    t.title.toLowerCase().includes(dep.toLowerCase())
+                  );
+                  const isDone = matchedTicket ? (matchedTicket.status || '').toLowerCase() === 'done' : false;
+
+                  return (
+                    <div 
+                      key={idx} 
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${
+                        isDone 
+                          ? 'bg-emerald-950/40 border-emerald-800/50 text-emerald-300' 
+                          : 'bg-amber-950/40 border-amber-800/60 text-amber-300'
+                      }`}
+                    >
+                      {isDone ? (
+                        <Check size={12} className="text-emerald-400 shrink-0" title="Dependencia completada" />
+                      ) : (
+                        <AlertCircle size={12} className="text-amber-400 shrink-0" title="Dependencia pendiente" />
+                      )}
+                      <span className="truncate max-w-[280px]" title={matchedTicket ? matchedTicket.title : dep}>
+                        {matchedTicket ? `${matchedTicket.title}` : dep}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveDependency(dep)}
+                        className="text-zinc-400 hover:text-red-400 p-0.5 rounded transition-colors ml-0.5"
+                        title="Quitar dependencia"
+                        aria-label={`Quitar dependencia ${dep}`}
+                      >
+                        <X size={13} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Input / Dropdown para añadir nueva dependencia */}
+            <div ref={depWrapperRef} className="relative mt-2">
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={depSearch}
+                  onChange={(e) => {
+                    setDepSearch(e.target.value);
+                    if (!isDepDropdownOpen) setIsDepDropdownOpen(true);
+                  }}
+                  onFocus={() => setIsDepDropdownOpen(true)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      if (depSearch.trim()) {
+                        handleAddDependency(depSearch.trim());
+                      }
+                    }
+                  }}
+                  placeholder="Buscar tarea bloqueante o escribir título/ID..."
+                  className="flex-1 bg-[#131315] border border-[#27272a] rounded-md px-3 py-1.5 text-xs text-zinc-100 placeholder-zinc-500 focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (depSearch.trim()) {
+                      handleAddDependency(depSearch.trim());
+                    }
+                  }}
+                  disabled={!depSearch.trim()}
+                  className="bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-600/40 text-xs font-semibold px-3 py-1.5 rounded-md transition-colors disabled:opacity-40 flex items-center gap-1 shrink-0"
+                >
+                  <Plus size={14} />
+                  <span>Añadir</span>
+                </button>
+              </div>
+
+              {isDepDropdownOpen && (
+                <div className="absolute z-50 w-full mt-1 bg-[#18181b] border border-[#27272a] rounded-md shadow-xl max-h-48 overflow-y-auto custom-scrollbar">
+                  {allTickets
+                    .filter(t => t.id !== ticket.id && !dependencies.includes(t.title) && !dependencies.includes(t.id))
+                    .filter(t => 
+                      !depSearch.trim() || 
+                      t.title.toLowerCase().includes(depSearch.toLowerCase()) || 
+                      t.id.toLowerCase().includes(depSearch.toLowerCase())
+                    )
+                    .slice(0, 10)
+                    .map(t => (
+                      <div
+                        key={t.id}
+                        onClick={() => handleAddDependency(t.title)}
+                        className="px-3 py-2 text-xs text-zinc-200 hover:bg-[#27272a] cursor-pointer flex items-center justify-between gap-2 border-b border-zinc-800/50 last:border-0"
+                      >
+                        <div className="flex flex-col min-w-0">
+                          <span className="font-medium truncate">{t.title}</span>
+                          <span className="text-[10px] text-zinc-500 font-mono">SL-{t.id.substring(0,6).toUpperCase()} • {t.status}</span>
+                        </div>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded shrink-0 font-medium ${
+                          (t.status || '').toLowerCase() === 'done' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-zinc-800 text-zinc-400'
+                        }`}>
+                          {t.status}
+                        </span>
+                      </div>
+                    ))}
+                  
+                  {depSearch.trim() && (
+                    <div
+                      onClick={() => handleAddDependency(depSearch.trim())}
+                      className="px-3 py-2 text-xs text-amber-400 hover:bg-amber-950/30 cursor-pointer font-medium flex items-center gap-2 border-t border-[#27272a]"
+                    >
+                      <Plus size={14} />
+                      <span>Añadir personalizada: "{depSearch.trim()}"</span>
+                    </div>
+                  )}
+
+                  {!depSearch.trim() && allTickets.filter(t => t.id !== ticket.id).length === 0 && (
+                    <div className="px-3 py-2 text-xs text-zinc-500">No hay otras tareas en el proyecto</div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           <hr className="border-[#27272a]" />

@@ -1319,6 +1319,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
           allSprints={sprints}
           allEpics={epics}
           columns={columns}
+          allTickets={rawTickets}
           onClose={() => setActiveDrawerTicketId(null)}
           onUpdate={(updated) => {
             fetchTasks();
