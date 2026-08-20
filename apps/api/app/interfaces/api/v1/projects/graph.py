@@ -96,7 +96,7 @@ async def get_project_graph(
     project_path = os.path.abspath(project.path)
 
     # Filter nodes by project path to ensure we don't mix projects
-    filtered_nodes = [n for n in nodes if os.path.abspath(n.file_path).startswith(project_path)]
+    filtered_nodes = [n for n in nodes if Path(n.file_path).resolve().is_relative_to(Path(project_path))]
     valid_node_ids = {n.id for n in filtered_nodes}
 
     # Filter edges to only include those between valid nodes
