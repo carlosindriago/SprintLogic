@@ -240,7 +240,7 @@ export default function AIAuditPanel({ projectId }: AIAuditPanelProps) {
             onClick={handleBack}
             className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-white transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-blue-500"
           >
-            <ArrowLeft className="w-3.5 h-3.5" />
+            <ArrowLeft className="w-3.5 h-3.5" aria-hidden="true" />
             Volver
           </button>
           <div className="w-px h-4 bg-zinc-700/50" />
