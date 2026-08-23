@@ -28,10 +28,10 @@ export default function FimHintBar() {
       </span>
       <button
         onClick={() => setExplanation(null)}
-        className="ml-auto text-zinc-500 hover:text-zinc-300 text-[10px] shrink-0"
+        className="ml-auto text-zinc-500 hover:text-zinc-300 text-[10px] shrink-0 focus-visible:ring-2 focus-visible:outline-none rounded"
         aria-label="Cerrar explicación"
       >
-        ✕
+        <span aria-hidden="true">✕</span>
       </button>
     </div>
   );
