@@ -47,6 +47,11 @@ interface KanbanBoardProps {
   onNodeClick?: (nodeId: string) => void;
 }
 
+// ⚡ Bolt: Performance Optimization
+// Cache lowercased strings in a WeakMap outside the component to prevent
+// string allocations inside the high-frequency getTaskDependencies render loop.
+const taskLowerCache = new WeakMap<Task, { idLower: string; firstLineLower: string }>();
+
 function getTaskDependencies(task: Task, allTasks: Task[], rawTicketsMap: Map<string, KanbanTicket>): {
   isBlocked: boolean;
   blockingTasks: string[];
@@ -72,9 +77,18 @@ function getTaskDependencies(task: Task, allTasks: Task[], rawTicketsMap: Map<st
       const qLower = query.toLowerCase().replace(/^[#]/, '').trim();
       const target = allTasks.find(t => {
         if (t.id === task.id) return false;
-        if (t.id.toLowerCase().startsWith(qLower) || t.id.toLowerCase().includes(qLower)) return true;
-        const firstLine = t.content.split('\n')[0].toLowerCase();
-        return firstLine.includes(qLower);
+
+        let cache = taskLowerCache.get(t);
+        if (!cache) {
+          cache = {
+            idLower: t.id.toLowerCase(),
+            firstLineLower: (t.content || "").split('\n')[0].toLowerCase()
+          };
+          taskLowerCache.set(t, cache);
+        }
+
+        if (cache.idLower.startsWith(qLower) || cache.idLower.includes(qLower)) return true;
+        return cache.firstLineLower.includes(qLower);
       });
 
       if (target) {
