@@ -51,7 +51,7 @@ export default function ProposalCard({
   return (
     <div className="my-3 rounded-lg border border-zinc-700/50 bg-zinc-900/80 overflow-hidden">
       <div className="flex items-center gap-2 px-3 py-2 bg-zinc-800/50 border-b border-zinc-700/30">
-        <FileCode className="w-4 h-4 text-blue-400" />
+        <FileCode className="w-4 h-4 text-blue-400" aria-hidden="true" />
         <span className="text-xs font-medium text-zinc-300 truncate flex-1">
           {filePath}
         </span>
@@ -76,16 +76,16 @@ export default function ProposalCard({
         <div className="flex gap-2 px-3 py-2 bg-zinc-800/30 border-t border-zinc-700/30">
           <button
             onClick={handleApply}
-            className="flex items-center gap-1 px-3 py-1 text-xs font-medium bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30 rounded transition-colors"
+            className="flex items-center gap-1 px-3 py-1 text-xs font-medium bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30 rounded transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-emerald-500"
           >
-            <Check className="w-3 h-3" />
+            <Check className="w-3 h-3" aria-hidden="true" />
             Aplicar
           </button>
           <button
             onClick={handleReject}
-            className="flex items-center gap-1 px-3 py-1 text-xs font-medium bg-zinc-700/50 text-zinc-400 hover:bg-zinc-600/50 rounded transition-colors"
+            className="flex items-center gap-1 px-3 py-1 text-xs font-medium bg-zinc-700/50 text-zinc-400 hover:bg-zinc-600/50 rounded transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-zinc-500"
           >
-            <X className="w-3 h-3" />
+            <X className="w-3 h-3" aria-hidden="true" />
             Rechazar
           </button>
         </div>
