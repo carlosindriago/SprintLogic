@@ -198,7 +198,11 @@ class SecurityToolchainManager:
             with zipfile.ZipFile(io.BytesIO(content)) as z:
                 for zip_member in z.infolist():
                     # Zip slip prevention
-                    zip_member_path = (target_dir / zip_member.filename).resolve()
+                    safe_name = zip_member.filename.lstrip('/')
+                    if not safe_name:
+                        continue
+                    zip_member.filename = safe_name
+                    zip_member_path = (target_dir / safe_name).resolve()
                     if not zip_member_path.is_relative_to(target_dir.resolve()):
                         continue
                     z.extract(zip_member, target_dir)
@@ -206,7 +210,11 @@ class SecurityToolchainManager:
             with tarfile.open(fileobj=io.BytesIO(content), mode="r:*") as t:
                 for tar_member in t.getmembers():
                     # Tar slip prevention
-                    tar_member_path = (target_dir / tar_member.name).resolve()
+                    safe_name = tar_member.name.lstrip('/')
+                    if not safe_name:
+                        continue
+                    tar_member.name = safe_name
+                    tar_member_path = (target_dir / safe_name).resolve()
                     if not tar_member_path.is_relative_to(target_dir.resolve()):
                         continue
                     t.extract(tar_member, target_dir)
