@@ -242,14 +242,26 @@ class SQLAlchemyKanbanRepository:
         result = await self.session.execute(query)
         tickets = result.scalars().all()
 
+        ticket_ids = [t.id for t in tickets]
+        nodes_by_ticket: dict[UUID, list[TicketNodeLink]] = {}
+
+        if ticket_ids:
+            nodes_query = select(KanbanTicketNodeModel).where(
+                KanbanTicketNodeModel.ticket_id.in_(ticket_ids)
+            )
+            nodes_res = await self.session.execute(nodes_query)
+            all_nodes = nodes_res.scalars().all()
+
+            for n in all_nodes:
+                if n.ticket_id not in nodes_by_ticket:
+                    nodes_by_ticket[n.ticket_id] = []
+                nodes_by_ticket[n.ticket_id].append(
+                    TicketNodeLink(node_id=n.node_id, file_path=n.file_path)
+                )
+
         response_list: list[KanbanTicketResponse] = []
         for t in tickets:
-            node_query = select(KanbanTicketNodeModel).where(
-                KanbanTicketNodeModel.ticket_id == t.id
-            )
-            nodes_res = await self.session.execute(node_query)
-            nodes = nodes_res.scalars().all()
-            links = [TicketNodeLink(node_id=n.node_id, file_path=n.file_path) for n in nodes]
+            links = nodes_by_ticket.get(t.id, [])
             response_list.append(
                 KanbanTicketResponse(
                     id=t.id,
