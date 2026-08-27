@@ -198,17 +198,21 @@ class SecurityToolchainManager:
             with zipfile.ZipFile(io.BytesIO(content)) as z:
                 for zip_member in z.infolist():
                     # Zip slip prevention
-                    zip_member_path = (target_dir / zip_member.filename).resolve()
+                    safe_filename = zip_member.filename.lstrip("/")
+                    zip_member_path = (target_dir / safe_filename).resolve()
                     if not zip_member_path.is_relative_to(target_dir.resolve()):
                         continue
+                    zip_member.filename = safe_filename
                     z.extract(zip_member, target_dir)
         elif url.endswith((".tar.gz", ".tgz")) or tarfile.is_tarfile(io.BytesIO(content)):
             with tarfile.open(fileobj=io.BytesIO(content), mode="r:*") as t:
                 for tar_member in t.getmembers():
                     # Tar slip prevention
-                    tar_member_path = (target_dir / tar_member.name).resolve()
+                    safe_name = tar_member.name.lstrip("/")
+                    tar_member_path = (target_dir / safe_name).resolve()
                     if not tar_member_path.is_relative_to(target_dir.resolve()):
                         continue
+                    tar_member.name = safe_name
                     t.extract(tar_member, target_dir)
         else:
             # Single binary file
