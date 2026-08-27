@@ -47,51 +47,7 @@ interface KanbanBoardProps {
   onNodeClick?: (nodeId: string) => void;
 }
 
-function getTaskDependencies(task: Task, allTasks: Task[], rawTicketsMap: Map<string, KanbanTicket>): {
-  isBlocked: boolean;
-  blockingTasks: string[];
-} {
-  const content = task.content || "";
-  const raw = rawTicketsMap.get(task.id);
-  const desc = raw?.description || "";
-  const combinedText = `${content}\n${desc}`;
 
-  // Look for explicit dependency tags: [Depends: ...], [Deps: ...], [Depende de: ...], [Bloqueada por: ...], [Prereq: ...]
-  const depMatches = Array.from(combinedText.matchAll(/\[(?:Depends|Deps|Depende|Depende de|Bloqueada por|Prereq|Prerequisite):\s*([^\]]+)\]/gi));
-  
-  const explicitDepQueries: string[] = [];
-  for (const m of depMatches) {
-    const parts = m[1].split(/[,;]/).map(p => p.trim()).filter(Boolean);
-    explicitDepQueries.push(...parts);
-  }
-
-  const blockingTasks: string[] = [];
-
-  if (explicitDepQueries.length > 0) {
-    for (const query of explicitDepQueries) {
-      const qLower = query.toLowerCase().replace(/^[#]/, '').trim();
-      const target = allTasks.find(t => {
-        if (t.id === task.id) return false;
-        if (t.id.toLowerCase().startsWith(qLower) || t.id.toLowerCase().includes(qLower)) return true;
-        const firstLine = t.content.split('\n')[0].toLowerCase();
-        return firstLine.includes(qLower);
-      });
-
-      if (target) {
-        const isDone = (target.status || '').toLowerCase() === 'done';
-        if (!isDone) {
-          const targetTitle = target.content.split('\n')[0].replace(/^[#\s\-*\[\]]+/, '').trim().substring(0, 30);
-          blockingTasks.push(targetTitle || target.id.substring(0, 6));
-        }
-      }
-    }
-  }
-
-  return {
-    isBlocked: blockingTasks.length > 0,
-    blockingTasks,
-  };
-}
 
 function SortableTask({ 
   task, 
@@ -681,7 +637,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
 
     // Dependencies Guard: prevent moving blocked tasks into in_progress or done
     if (newStatus !== originalStatus && (newStatus === "in_progress" || newStatus === "done")) {
-      const depInfo = getTaskDependencies(activeTask, tasks, rawTicketsMap);
+      const depInfo = taskDependenciesMap.get(activeTask.id) || { isBlocked: false, blockingTasks: [] };
       if (depInfo.isBlocked) {
         toast.warning("🔒 Tarea Bloqueada", {
           description: `No puedes avanzar esta tarea hasta completar primero sus dependencias pendientes: ${depInfo.blockingTasks.join(", ")}`,
@@ -899,6 +855,50 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
     return tasks.filter((t) => (t.status || "").toLowerCase() === "icebox");
   }, [tasks]);
 
+  const taskDependenciesMap = useMemo(() => {
+    const map = new Map<string, { isBlocked: boolean; blockingTasks: string[] }>();
+    tasks.forEach(task => {
+      const content = task.content || "";
+      const raw = rawTicketsMap.get(task.id);
+      const desc = raw?.description || "";
+      const combinedText = `${content}\n${desc}`;
+
+      const depMatches = Array.from(combinedText.matchAll(/\[(?:Depends|Deps|Depende|Depende de|Bloqueada por|Prereq|Prerequisite):\s*([^\]]+)\]/gi));
+      const explicitDepQueries: string[] = [];
+      for (const m of depMatches) {
+        const parts = m[1].split(/[,;]/).map(p => p.trim()).filter(Boolean);
+        explicitDepQueries.push(...parts);
+      }
+
+      const blockingTasks: string[] = [];
+      if (explicitDepQueries.length > 0) {
+        for (const query of explicitDepQueries) {
+          const qLower = query.toLowerCase().replace(/^[#]/, '').trim();
+          const target = tasks.find(t => {
+            if (t.id === task.id) return false;
+            if (t.id.toLowerCase().startsWith(qLower) || t.id.toLowerCase().includes(qLower)) return true;
+            const firstLine = t.content.split('\n')[0].toLowerCase();
+            return firstLine.includes(qLower);
+          });
+
+          if (target) {
+            const isDone = (target.status || '').toLowerCase() === 'done';
+            if (!isDone) {
+              const targetTitle = target.content.split('\n')[0].replace(/^[#\s\-*\[\]]+/, '').trim().substring(0, 30);
+              blockingTasks.push(targetTitle || target.id.substring(0, 6));
+            }
+          }
+        }
+      }
+
+      map.set(task.id, {
+        isBlocked: blockingTasks.length > 0,
+        blockingTasks,
+      });
+    });
+    return map;
+  }, [tasks, rawTicketsMap]);
+
   // ⚡ Bolt: Performance Optimization
   // Groups tasks by status in a single pass O(N).
   // Prevents filtering the entire tasks array 3 times per column on every render,
@@ -1111,7 +1111,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
                         const raw = rawTicketsMap.get(task.id);
                         const epic = raw?.epic_id ? epicsMap.get(raw.epic_id) : undefined;
                         const sprint = raw?.sprint_id ? sprintsMap.get(raw.sprint_id) : undefined;
-                        const depInfo = getTaskDependencies(task, tasks, rawTicketsMap);
+                        const depInfo = taskDependenciesMap.get(task.id) || { isBlocked: false, blockingTasks: [] };
                         const orderIndex = (taskIndexMap.get(task.id) ?? -1) + 1;
 
                         return (
@@ -1230,7 +1230,7 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
                         const raw = rawTicketsMap.get(task.id);
                         const epic = raw?.epic_id ? epicsMap.get(raw.epic_id) : undefined;
                         const sprint = raw?.sprint_id ? sprintsMap.get(raw.sprint_id) : undefined;
-                        const depInfo = getTaskDependencies(task, tasks, rawTicketsMap);
+                        const depInfo = taskDependenciesMap.get(task.id) || { isBlocked: false, blockingTasks: [] };
                         const orderIndex = (taskIndexMap.get(task.id) ?? -1) + 1;
 
                         return (
