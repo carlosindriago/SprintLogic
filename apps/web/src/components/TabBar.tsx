@@ -447,7 +447,7 @@ export default function TabBar({ onToggleAi, aiOpen, onNewFile, projectId }: Tab
               <button
                 onClick={onNewFile}
                 aria-label="Nuevo archivo"
-                className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800"
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-blue-500"
                 title="Nuevo Archivo (Ctrl+N)"
               >
                 <FilePlus className="w-3.5 h-3.5" aria-hidden="true" />
@@ -457,7 +457,7 @@ export default function TabBar({ onToggleAi, aiOpen, onNewFile, projectId }: Tab
             <button
               onClick={() => useOmniPadStore.getState().toggle()}
               aria-label="Alternar Omni-Pad"
-              className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors border-l border-zinc-800/50 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800"
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors border-l border-zinc-800/50 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-blue-500"
               title="Omni-Pad"
             >
               <NotebookPen className="w-3.5 h-3.5" aria-hidden="true" />
@@ -470,8 +470,8 @@ export default function TabBar({ onToggleAi, aiOpen, onNewFile, projectId }: Tab
                 className={cn(
                   "flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors border-l border-zinc-800/50",
                   aiOpen
-                    ? "bg-blue-600/20 text-blue-400"
-                    : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800"
+                    ? "bg-blue-600/20 text-blue-400 focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-blue-500"
+                    : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-blue-500"
                 )}
                 title="SprintLogic AI"
               >
