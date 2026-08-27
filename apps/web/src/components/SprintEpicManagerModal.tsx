@@ -192,8 +192,9 @@ export function SprintEpicManagerModal({ projectId, isOpen, onClose, onDataChang
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-400 mb-1">Start Date</label>
+                    <label htmlFor="sprint-start" className="block text-xs text-gray-400 mb-1">Start Date</label>
                     <input
+                      id="sprint-start"
                       type="datetime-local"
                       required
                       value={sprintStart}
@@ -202,8 +203,9 @@ export function SprintEpicManagerModal({ projectId, isOpen, onClose, onDataChang
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-400 mb-1">End Date</label>
+                    <label htmlFor="sprint-end" className="block text-xs text-gray-400 mb-1">End Date</label>
                     <input
+                      id="sprint-end"
                       type="datetime-local"
                       required
                       value={sprintEnd}
@@ -259,8 +261,9 @@ export function SprintEpicManagerModal({ projectId, isOpen, onClose, onDataChang
                 <h3 className="text-sm font-medium text-gray-300">Create New Epic</h3>
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-xs text-gray-400 mb-1">Name</label>
+                    <label htmlFor="epic-name" className="block text-xs text-gray-400 mb-1">Name</label>
                     <input
+                      id="epic-name"
                       type="text"
                       required
                       value={epicName}
@@ -270,8 +273,9 @@ export function SprintEpicManagerModal({ projectId, isOpen, onClose, onDataChang
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-400 mb-1">Description</label>
+                    <label htmlFor="epic-desc" className="block text-xs text-gray-400 mb-1">Description</label>
                     <input
+                      id="epic-desc"
                       type="text"
                       value={epicDesc}
                       onChange={e => setEpicDesc(e.target.value)}
@@ -286,6 +290,7 @@ export function SprintEpicManagerModal({ projectId, isOpen, onClose, onDataChang
                         <button
                           key={color}
                           type="button"
+                          aria-label={`Select ${color} color theme`}
                           onClick={() => setEpicColor(color)}
                           className={`w-6 h-6 rounded-full ${color} ${epicColor === color ? 'ring-2 ring-white ring-offset-2 ring-offset-[#222]' : 'opacity-60 hover:opacity-100'}`}
                         />
