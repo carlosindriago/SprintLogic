@@ -50,17 +50,17 @@ export default function DrawerPanel(props: DrawerPanelProps) {
           <span>{getTitle()}</span>
           {activeSidebarPanel === 'explorer' && (
             <div className="flex items-center gap-1">
-              <Button variant="ghost" size="icon" className="h-6 w-6 text-zinc-400 hover:text-white hover:bg-zinc-700" onClick={() => props.onNewFile()} title="Nuevo Archivo">
-                <FilePlus className="h-3.5 w-3.5" />
+              <Button variant="ghost" size="icon" className="h-6 w-6 text-zinc-400 hover:text-white hover:bg-zinc-700" onClick={() => props.onNewFile()} title="Nuevo Archivo" aria-label="Nuevo Archivo">
+                <FilePlus className="h-3.5 w-3.5" aria-hidden="true" />
               </Button>
-              <Button variant="ghost" size="icon" className="h-6 w-6 text-zinc-400 hover:text-white hover:bg-zinc-700" onClick={props.onRefreshFileTree} title="Refrescar Explorador">
-                <RefreshCw className="h-3.5 w-3.5" />
+              <Button variant="ghost" size="icon" className="h-6 w-6 text-zinc-400 hover:text-white hover:bg-zinc-700" onClick={props.onRefreshFileTree} title="Refrescar Explorador" aria-label="Refrescar Explorador">
+                <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
               </Button>
-              <Button variant="ghost" size="icon" className="h-6 w-6 text-zinc-400 hover:text-white hover:bg-zinc-700" onClick={props.onRescanProject} title="Re-escanear Proyecto">
-                <RotateCcw className="h-3.5 w-3.5" />
+              <Button variant="ghost" size="icon" className="h-6 w-6 text-zinc-400 hover:text-white hover:bg-zinc-700" onClick={props.onRescanProject} title="Re-escanear Proyecto" aria-label="Re-escanear Proyecto">
+                <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
               </Button>
-              <Button variant="ghost" size="icon" className="h-6 w-6 text-zinc-400 hover:text-white hover:bg-zinc-700" onClick={props.onAnalyzeProject} title="Analizar Proyecto">
-                <ScanSearch className="h-3.5 w-3.5" />
+              <Button variant="ghost" size="icon" className="h-6 w-6 text-zinc-400 hover:text-white hover:bg-zinc-700" onClick={props.onAnalyzeProject} title="Analizar Proyecto" aria-label="Analizar Proyecto">
+                <ScanSearch className="h-3.5 w-3.5" aria-hidden="true" />
               </Button>
             </div>
           )}
