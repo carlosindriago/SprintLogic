@@ -51,17 +51,29 @@ async def run_insight_worker_loop():
                 result = await session.execute(stmt)
                 unprocessed_convs = result.scalars().all()
 
+                if not unprocessed_convs:
+                    await asyncio.sleep(1)
+                    continue
+
+                conv_ids = [c.id for c in unprocessed_convs]
+                msg_stmt = (
+                    select(MessageModel)
+                    .where(MessageModel.conversation_id.in_(conv_ids))
+                    .order_by(asc(MessageModel.created_at))
+                )
+                msgs_res = await session.execute(msg_stmt)
+                all_messages = msgs_res.scalars().all()
+
+                from collections import defaultdict
+                messages_by_conv = defaultdict(list)
+                for msg in all_messages:
+                    messages_by_conv[msg.conversation_id].append(msg)
+
                 for conv in unprocessed_convs:
                     if shutdown_event.is_set():
                         break
 
-                    msg_stmt = (
-                        select(MessageModel)
-                        .where(MessageModel.conversation_id == conv.id)
-                        .order_by(asc(MessageModel.created_at))
-                    )
-                    msgs_res = await session.execute(msg_stmt)
-                    messages = msgs_res.scalars().all()
+                    messages = messages_by_conv[conv.id]
 
                     if len(messages) < 2:
                         conv.insight_extracted = True
