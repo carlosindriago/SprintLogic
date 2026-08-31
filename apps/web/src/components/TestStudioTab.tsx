@@ -216,7 +216,7 @@ export default function TestStudioTab() {
                       onClick={handleGenerate}
                       className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium rounded-md transition-colors"
                     >
-                      <Play className="h-3 w-3" />
+                      <Play className="h-3 w-3" aria-hidden="true" />
                       Generar Pruebas
                     </button>
                   )}
@@ -225,7 +225,7 @@ export default function TestStudioTab() {
                       onClick={handleAudit}
                       className="flex items-center gap-2 px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white text-xs font-medium rounded-md transition-colors"
                     >
-                      <GraduationCap className="h-3 w-3" />
+                      <GraduationCap className="h-3 w-3" aria-hidden="true" />
                       Auditar con QA Mentor
                     </button>
                   )}
@@ -235,7 +235,7 @@ export default function TestStudioTab() {
                     onClick={handleHandoff}
                     className="flex items-center gap-2 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium rounded-md transition-colors shadow-lg shadow-emerald-500/20"
                   >
-                    <Send className="h-3 w-3" />
+                    <Send className="h-3 w-3" aria-hidden="true" />
                     Llevar al Planning Studio
                   </button>
                 )}
@@ -277,7 +277,7 @@ export default function TestStudioTab() {
                           }}
                           className="flex items-center gap-2 px-3 py-1.5 text-xs bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 rounded transition-colors"
                         >
-                          <Pencil className="w-3.5 h-3.5" />
+                          <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
                           Abrir en Editor
                         </button>
                       </div>
