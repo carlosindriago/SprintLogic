@@ -4,6 +4,8 @@ import logging
 import os
 from typing import Any
 
+import aiofiles
+
 from app.domain.git_models import GitBranch
 
 _audit_log = logging.getLogger("sprintlogic.audit")
@@ -439,8 +441,8 @@ class LocalGitGateway:
             diff_output = await self._run_command(repo_path, "diff", "HEAD", "--", file_path)
             original = await self._run_command(repo_path, "show", f"HEAD:{file_path}")
             full_path = os.path.join(repo_path, file_path)
-            with open(full_path, encoding="utf-8") as f:
-                modified = f.read()
+            async with aiofiles.open(full_path, encoding="utf-8") as f:
+                modified = await f.read()
             return {
                 "diff": diff_output,
                 "original_content": original,
@@ -450,8 +452,8 @@ class LocalGitGateway:
         except RuntimeError:
             try:
                 full_path = os.path.join(repo_path, file_path)
-                with open(full_path, encoding="utf-8") as f:
-                    modified = f.read()
+                async with aiofiles.open(full_path, encoding="utf-8") as f:
+                    modified = await f.read()
                 return {
                     "diff": "",
                     "original_content": "",
