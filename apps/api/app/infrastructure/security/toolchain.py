@@ -199,6 +199,8 @@ class SecurityToolchainManager:
                 for zip_member in z.infolist():
                     # Zip slip prevention
                     safe_filename = zip_member.filename.lstrip("/")
+                    if not safe_filename:
+                        continue
                     zip_member_path = (target_dir / safe_filename).resolve()
                     if not zip_member_path.is_relative_to(target_dir.resolve()):
                         continue
@@ -209,6 +211,8 @@ class SecurityToolchainManager:
                 for tar_member in t.getmembers():
                     # Tar slip prevention
                     safe_name = tar_member.name.lstrip("/")
+                    if not safe_name:
+                        continue
                     tar_member_path = (target_dir / safe_name).resolve()
                     if not tar_member_path.is_relative_to(target_dir.resolve()):
                         continue
