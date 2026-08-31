@@ -415,8 +415,9 @@ function PresetCard({
                   type="button"
                   onClick={() => setVisible((p) => !p)}
                   className="text-zinc-500 hover:text-zinc-300 p-1"
+                  aria-label={visible ? "Ocultar clave de API" : "Mostrar clave de API"}
                 >
-                  {visible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  {visible ? <EyeOff className="w-3.5 h-3.5" aria-hidden="true" /> : <Eye className="w-3.5 h-3.5" aria-hidden="true" />}
                 </button>
               </div>
             </div>
