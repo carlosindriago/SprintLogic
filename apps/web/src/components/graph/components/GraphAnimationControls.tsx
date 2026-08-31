@@ -32,8 +32,9 @@ export function GraphAnimationControls({
         }}
         className="p-1.5 rounded transition-colors text-zinc-400 hover:text-white hover:bg-[#3f3f46]"
         title={animating ? "Pausar" : "Animar"}
+        aria-label={animating ? "Pausar" : "Animar"}
       >
-        {animating ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+        {animating ? <Pause className="w-3.5 h-3.5" aria-hidden="true" /> : <Play className="w-3.5 h-3.5" aria-hidden="true" />}
       </button>
       <input
         type="range"
@@ -49,6 +50,7 @@ export function GraphAnimationControls({
       <button
         onClick={() => { setAnimating(false); setAnimProgress(1); }}
         className="text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors"
+        aria-label="Ir al final (100%)"
       >
         {Math.round(animProgress * 100)}%
       </button>
