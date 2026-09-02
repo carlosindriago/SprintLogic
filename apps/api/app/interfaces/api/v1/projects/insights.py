@@ -195,7 +195,6 @@ async def _compute_flow_insights(
 async def get_project_repo_insights(
     project_id: str, session: AsyncSession = Depends(get_db_session)
 ):
-    from app.infrastructure.db.models import GraphEdgeModel
 
     try:
         project_uuid = UUID(project_id)
@@ -276,28 +275,48 @@ async def get_project_repo_insights(
     # Calculate Top Hotspots
     top_hotspots: list[dict[str, Any]] = []
     try:
-        edges_res = await session.execute(
-            select(GraphEdgeModel.source_id, GraphEdgeModel.target_id).where(
-                GraphEdgeModel.project_id == project_uuid
-            )
-        )
-        edge_counts: dict[Any, int] = {}
-        for row in edges_res:
-            edge_counts[row.source_id] = edge_counts.get(row.source_id, 0) + 1
-            edge_counts[row.target_id] = edge_counts.get(row.target_id, 0) + 1
+        from sqlalchemy import func, union_all
 
-        nodes_res = await session.execute(
-            select(GraphNodeModel.id, GraphNodeModel.file_path).where(
-                GraphNodeModel.project_id == project_uuid
-            )
-        )
-        node_paths = {row.id: row.file_path for row in nodes_res}
+        from app.infrastructure.db.models import GraphEdgeModel
 
-        for node_id, count in sorted(edge_counts.items(), key=lambda x: x[1], reverse=True):
-            if node_id in node_paths and len(top_hotspots) < 5:
-                top_hotspots.append(
-                    {"path": node_paths[node_id], "impact_score": count, "friction": 0}
+        q1 = select(
+            GraphEdgeModel.source_id.label("node_id"),
+            func.count(GraphEdgeModel.target_id).label("count")
+        ).where(
+            GraphEdgeModel.project_id == project_uuid
+        ).group_by(GraphEdgeModel.source_id)
+
+        q2 = select(
+            GraphEdgeModel.target_id.label("node_id"),
+            func.count(GraphEdgeModel.source_id).label("count")
+        ).where(
+            GraphEdgeModel.project_id == project_uuid
+        ).group_by(GraphEdgeModel.target_id)
+
+        subq = union_all(q1, q2).subquery()
+
+        edges_query = select(
+            subq.c.node_id,
+            func.sum(subq.c.count).label("impact_score")
+        ).group_by(subq.c.node_id).order_by(func.sum(subq.c.count).desc()).limit(5)
+
+        edges_res = await session.execute(edges_query)
+        top_node_counts = {row.node_id: row.impact_score for row in edges_res.fetchall()}
+
+        if top_node_counts:
+            nodes_res = await session.execute(
+                select(GraphNodeModel.id, GraphNodeModel.file_path).where(
+                    GraphNodeModel.project_id == project_uuid,
+                    GraphNodeModel.id.in_(list(top_node_counts.keys()))
                 )
+            )
+            node_paths = {row.id: row.file_path for row in nodes_res}
+
+            for node_id, count in sorted(top_node_counts.items(), key=lambda x: x[1], reverse=True):
+                if node_id in node_paths:
+                    top_hotspots.append(
+                        {"path": node_paths[node_id], "impact_score": count, "friction": 0}
+                    )
     except Exception:
         logger.warning("Unhandled exception", exc_info=True)
 
