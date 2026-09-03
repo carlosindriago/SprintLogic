@@ -214,7 +214,7 @@ interface Note {
             mode === "write" ? "text-blue-400 underline decoration-2 underline-offset-4" : "text-zinc-500 hover:text-zinc-300"
           }`}
         >
-          ✍️ Escribir
+          <span aria-hidden="true">✍️</span> Escribir
         </button>
         <button
           onClick={() => setMode("history")}
@@ -222,7 +222,7 @@ interface Note {
             mode === "history" ? "text-blue-400 underline decoration-2 underline-offset-4" : "text-zinc-500 hover:text-zinc-300"
           }`}
         >
-          📚 Historial
+          <span aria-hidden="true">📚</span> Historial
         </button>
       </div>
 
@@ -280,7 +280,7 @@ interface Note {
                 isListening ? "bg-red-600/20 text-red-500 hover:bg-red-600/30 border border-red-900" : "bg-zinc-800 text-white hover:bg-zinc-700"
               }`}
             >
-              {isTranscribing ? "⏳ Transcribiendo..." : isListening ? "⏹️ Detener Dictado" : "🎙️ Dictar"}
+              {isTranscribing ? <><span aria-hidden="true">⏳</span> Transcribiendo...</> : isListening ? <><span aria-hidden="true">⏹️</span> Detener Dictado</> : <><span aria-hidden="true">🎙️</span> Dictar</>}
             </button>
 
             <button
@@ -297,7 +297,7 @@ interface Note {
               onClick={handleHandoff}
               className="w-full bg-blue-600 hover:bg-blue-500 text-white rounded py-2 text-sm font-bold shadow-lg mt-2 flex items-center justify-center gap-2 transition-all focus-visible:ring-2 focus-visible:outline-none"
             >
-              🚀 Llevar al Planning Studio
+              <span aria-hidden="true">🚀</span> Llevar al Planning Studio
             </button>
           )}
         </div>
