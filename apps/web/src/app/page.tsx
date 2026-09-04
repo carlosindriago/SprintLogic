@@ -30,7 +30,7 @@ import { cn } from "@/lib/utils";
 import { Settings, ChevronRight, Edit2, Trash2, PlusCircle, FilePlus, RefreshCw, RotateCcw, ScanSearch, Layout, Network, GitBranch, BarChart3, HelpCircle, FolderOpen, Loader2 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { scanProject, getProjects, updateProject, deleteProject, rescanProject, analyzeProject, renameFile, duplicateFile, deleteFile, initSidecarPort } from "@/lib/api";
+import { scanProject, getProjects, updateProject, deleteProject, rescanProject, analyzeProject, renameFile, duplicateFile, deleteFile, initSidecarPort, API_BASE_URL } from "@/lib/api";
 import { Switch } from "@/components/ui/switch";
 import LLMSettingsPanel from "@/components/LLMSettingsPanel";
 import SettingsTab from "@/components/Settings/SettingsTab";
@@ -465,7 +465,7 @@ export default function Home() {
   const handleKanbanNodeClick = async (nodeId: string) => {
     if (!projectId) return;
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/v1/projects/${projectId}/nodes/${encodeURIComponent(nodeId)}`);
+      const res = await fetch(`${API_BASE_URL}/projects/${projectId}/nodes/${encodeURIComponent(nodeId)}`);
       if (res.ok) {
         const node = await res.json();
         handleNodeClick(node);

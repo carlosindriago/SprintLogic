@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { apiWsUrl } from '@/lib/api';
 
 /** WebSocket payloads dispatched through the unified socket channel. */
 export interface ChatChunkEvent {
@@ -149,7 +150,7 @@ export const useSenseiStore = create<SenseiStore>((set, get) => ({
     const { socket } = get();
     if (socket) return; // Already connected or connecting
 
-    const wsUrl = `ws://localhost:8000/api/v1/sync/ws`;
+    const wsUrl = apiWsUrl('/sync/ws');
     const ws = new window.WebSocket(wsUrl);
 
     ws.onopen = () => {
