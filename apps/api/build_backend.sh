@@ -40,6 +40,8 @@ pyinstaller --noconfirm --onefile --console \
     --collect-data "litellm" \
     --copy-metadata "litellm" \
     --add-binary ".venv/lib/python3.14/site-packages/sqlite_vec/vec0.so:sqlite_vec" \
+    --add-data "migrations:migrations" \
+    --add-data "alembic.ini:." \
     app/main.py
 
 echo "[4/4] Copiando binario al directorio de Tauri Sidecars..."
