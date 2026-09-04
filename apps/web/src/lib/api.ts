@@ -76,6 +76,20 @@ import { invoke } from "@tauri-apps/api/core";
 export let API_BASE_URL: string =
   process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000/api/v1";
 
+/**
+ * Builds a WebSocket URL against the current (possibly dynamically
+ * resolved, see initSidecarPort) API base, e.g. apiWsUrl("/sync/ws").
+ *
+ * Never hardcode ws://.../8000/... directly in call sites: the backend
+ * sidecar binds a random free port on purpose (see app/main.py), so a
+ * fixed port breaks whenever it doesn't happen to land on 8000 - and must
+ * never assume a "default" port another project the developer is working
+ * on might already be using.
+ */
+export function apiWsUrl(path: string): string {
+  return `${API_BASE_URL.replace(/^http/, "ws")}${path}`;
+}
+
 export async function initSidecarPort() {
   for (let i = 0; i < 50; i++) {
     try {
