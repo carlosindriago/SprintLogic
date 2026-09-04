@@ -86,22 +86,67 @@ then
 fi
 
 # 2. Cleanup stray and orphaned processes -----------------------------------
+#
+# SprintLogic runs *alongside* whatever project the developer is actively
+# working on. It must never claim or evict a port (or kill a process) that
+# might belong to that other project — only reap a process that is
+# unambiguously a leftover SprintLogic instance from a previous run.
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# reap_stray_port PORT
+# Kills whatever is listening on PORT only if it is provably a SprintLogic
+# process from this exact checkout — otherwise it refuses and exits, so
+# the developer can decide. Never silently evicts a foreign process.
+#
+# Identity is checked via the process's *working directory*
+# (/proc/PID/cwd), not its command line: our own processes are launched
+# with relative-path binaries (e.g. ".venv/bin/uvicorn" from within
+# apps/api), so argv never contains this repo's absolute path — cwd is the
+# only reliable signal here.
+reap_stray_port() {
+    local port="$1"
+    local pids
+    pids=$(fuser "${port}/tcp" 2>/dev/null) || return 0
+
+    local pid pid_cwd
+    for pid in $pids; do
+        pid_cwd=$(readlink -f "/proc/${pid}/cwd" 2>/dev/null || true)
+        if [[ -n "$pid_cwd" && "$pid_cwd" == "$REPO_ROOT"* ]]; then
+            echo "[start_dev] Reaping stray SprintLogic process on port ${port} (pid ${pid}, cwd ${pid_cwd})."
+            kill -9 "$pid" 2>/dev/null || true
+        else
+            echo "[!] Port ${port} is already in use by another process (pid ${pid}), and it does" >&2
+            echo "    not belong to this SprintLogic checkout. Refusing to kill it automatically —" >&2
+            echo "    it may be a project you're actively working on." >&2
+            echo "    Free the port yourself (or stop that process) and re-run this script." >&2
+            exit 1
+        fi
+    done
+}
 
 echo -e "\nChecking for stray or orphaned SprintLogic processes..."
-pkill -f "target/debug/app" 2>/dev/null || true
-pkill -f "apps/web/.next/dev/build/postcss.js" 2>/dev/null || true
+pkill -f "${REPO_ROOT}/apps/web/src-tauri/target/debug/app" 2>/dev/null || true
+pkill -f "${REPO_ROOT}/apps/web/.next/dev/build/postcss.js" 2>/dev/null || true
 
-if fuser 8000/tcp >/dev/null 2>&1; then
-    echo "[!] Port 8000 is occupied. Cleaning it up..."
-    fuser -k -9 8000/tcp >/dev/null 2>&1 || true
-    sleep 1
-fi
+# Tauri's devUrl is fixed at build/config time (tauri.conf.json), so the
+# frontend dev port can't be made dynamic here — but we still refuse to
+# evict a foreign process on it (see reap_stray_port above).
+reap_stray_port 3420
 
-if fuser 3420/tcp >/dev/null 2>&1; then
-    echo "[!] Port 3420 is occupied. Cleaning it up..."
-    fuser -k -9 3420/tcp >/dev/null 2>&1 || true
-    sleep 1
+# The backend has no such constraint outside Tauri (Tauri itself spawns its
+# own sidecar on a random OS-assigned port, see app/main.py). In --web
+# fallback mode, probe for the first free port instead of assuming 8000 is
+# free; BACKEND_PORT is exported so the web-mode branch below (and the
+# frontend, via NEXT_PUBLIC_API_URL) can pick it up.
+BACKEND_PORT=8000
+while fuser "${BACKEND_PORT}/tcp" >/dev/null 2>&1; do
+    BACKEND_PORT=$((BACKEND_PORT + 1))
+done
+if [[ "$BACKEND_PORT" != 8000 ]]; then
+    echo "[start_dev] Port 8000 is in use by another process; using ${BACKEND_PORT} for the backend instead."
 fi
+export BACKEND_PORT
 
 # 3. Start Application -------------------------------------------------------
 
@@ -114,23 +159,23 @@ if command -v cargo &> /dev/null && [[ "$1" != "--web" ]]; then
     cd ../..
     echo "[start_dev] Desktop Tauri PID: ${FRONTEND_PID}"
 else
-    echo -e "\nStarting SprintLogic Backend (FastAPI)..."
+    echo -e "\nStarting SprintLogic Backend (FastAPI) on port ${BACKEND_PORT}..."
     cd apps/api
-    .venv/bin/uvicorn app.main:app --reload --port 8000 &
+    .venv/bin/uvicorn app.main:app --reload --port "$BACKEND_PORT" &
     BACKEND_PID=$!
     CHILD_PIDS+=("$BACKEND_PID")
     cd ../..
     echo "[start_dev] Backend PID: ${BACKEND_PID}"
 
-    echo "[start_dev] Waiting for backend to start listening on port 8000..."
-    while ! bash -c 'true < /dev/tcp/127.0.0.1/8000' 2>/dev/null; do
+    echo "[start_dev] Waiting for backend to start listening on port ${BACKEND_PORT}..."
+    while ! bash -c "true < /dev/tcp/127.0.0.1/${BACKEND_PORT}" 2>/dev/null; do
         sleep 1
     done
-    echo "[start_dev] Backend is up and listening on port 8000!"
+    echo "[start_dev] Backend is up and listening on port ${BACKEND_PORT}!"
 
     echo -e "\nStarting SprintLogic Frontend (Web Mode)..."
     cd apps/web
-    npm run dev &
+    NEXT_PUBLIC_API_URL="http://127.0.0.1:${BACKEND_PORT}/api/v1" npm run dev &
     FRONTEND_PID=$!
     CHILD_PIDS+=("$FRONTEND_PID")
     cd ../..
