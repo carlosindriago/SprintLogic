@@ -37,6 +37,72 @@ import signal
 import threading
 from concurrent.futures import ProcessPoolExecutor
 from contextlib import asynccontextmanager
+from pathlib import Path
+
+# Determine base directory (PyInstaller vs Dev). Used both by the Alembic
+# migration bootstrap below and to locate the bundled frontend static
+# assets further down this file.
+if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+    # Running in a PyInstaller bundle (--onedir uses sys._MEIPASS too)
+    base_dir = Path(sys._MEIPASS)
+else:
+    # Running in normal Python environment
+    base_dir = Path(__file__).resolve().parent.parent
+
+
+def _run_migrations_bootstrap_sync(base_dir: Path, database_url: str) -> None:
+    """Bring the SQLite schema up to Alembic's ``head``.
+
+    ``Base.metadata.create_all`` (run just before this, in ``lifespan``)
+    only ever creates tables that don't exist yet — it never applies the
+    column/table changes tracked in migrations/versions/. Without this
+    step, updating the app on top of an existing user database can leave
+    it missing columns that a later revision added (e.g.
+    add_test_status_to_kanban_tickets), causing "no such column" errors.
+
+    The existing revision chain has no root "create everything" migration:
+    every revision only ALTERs a schema that create_all already produced.
+    So a database with no ``alembic_version`` table yet (a brand new
+    install, or a pre-existing "legacy" database from before this fix) is,
+    by construction, already shaped like ``head`` once create_all has run —
+    it just needs to be *stamped* there, not have every ALTER replayed
+    (which would fail on columns that already exist). Once a database is
+    stamped, this function's ``upgrade head`` naturally applies any real
+    future migrations on subsequent app updates.
+    """
+    from alembic import command
+    from alembic.config import Config
+    from sqlalchemy.engine import make_url
+
+    alembic_ini = base_dir / "alembic.ini"
+    if not alembic_ini.exists():
+        logging.warning(
+            "alembic.ini not found at %s — skipping migration bootstrap", alembic_ini
+        )
+        return
+
+    cfg = Config(str(alembic_ini))
+    cfg.set_main_option("script_location", str(base_dir / "migrations"))
+    cfg.set_main_option("sqlalchemy.url", database_url)
+
+    db_path = make_url(database_url).database
+    already_versioned = False
+    if db_path and os.path.exists(db_path):
+        import sqlite3
+
+        conn = sqlite3.connect(db_path)
+        try:
+            row = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='alembic_version'"
+            ).fetchone()
+            already_versioned = row is not None
+        finally:
+            conn.close()
+
+    if already_versioned:
+        command.upgrade(cfg, "head")
+    else:
+        command.stamp(cfg, "head")
 
 
 def kill_zombie_on_parent_death():
@@ -67,11 +133,17 @@ async def lifespan(app: FastAPI):
         threading.Thread(target=kill_zombie_on_parent_death, daemon=True).start()
 
     # Startup
-    from app.infrastructure.db.database import Base, get_engine, get_sessionmaker
+    import asyncio
+
+    from app.infrastructure.db.database import DATABASE_URL, Base, get_engine, get_sessionmaker
     from app.infrastructure.repositories.prompt_repository import initialize_prompts
 
     async with get_engine().begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+    # Run in a thread: Alembic's env.py drives its own asyncio.run(), which
+    # cannot be nested inside this already-running event loop.
+    await asyncio.to_thread(_run_migrations_bootstrap_sync, base_dir, DATABASE_URL)
 
     sessionmaker = get_sessionmaker()
     async with sessionmaker() as session:
@@ -148,8 +220,6 @@ app.include_router(omni_pad_router, prefix="/api/v1")
 app.include_router(execution_router, prefix="/api/v1")
 
 
-from pathlib import Path
-
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -158,14 +228,6 @@ from fastapi.staticfiles import StaticFiles
 async def healthcheck() -> dict[str, str]:
     return {"status": "ok"}
 
-
-# Determine base directory (PyInstaller vs Dev)
-if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
-    # Running in a PyInstaller bundle (--onedir uses sys._MEIPASS too)
-    base_dir = Path(sys._MEIPASS)
-else:
-    # Running in normal Python environment
-    base_dir = Path(__file__).resolve().parent.parent
 
 static_dir = base_dir / "static"
 next_assets_dir = static_dir / "_next"
