@@ -10,6 +10,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     LargeBinary,
     String,
@@ -258,6 +259,15 @@ class AdrChunkModel(Base):
 
 class TelemetryPingModel(Base):
     __tablename__ = "telemetry_pings"
+    __table_args__ = (
+        # Every insights-dashboard query filters on timestamp (always) and
+        # project_id (when a project is selected) — see
+        # interfaces/api/v1/projects/insights.py. Without these, every read
+        # is a full scan of a table that only ever grows (a background
+        # telemetry daemon inserts into it continuously).
+        Index("ix_telemetry_pings_project_id_timestamp", "project_id", "timestamp"),
+        Index("ix_telemetry_pings_timestamp", "timestamp"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
