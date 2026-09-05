@@ -6,7 +6,7 @@ Legend: **Area** = which app; **Effort** = rough size (S = under an hour, M = a 
 
 ## Progress at a glance
 
-**17 / 25 done** — all of Critical, all of High, and items 11–17 of Medium. Next up: item #18.
+**18 / 25 done** — all of Critical, all of High, and all of Medium. Next up: item #19 (Low tier starts).
 
 | # | Status | PR |
 |---|---|---|
@@ -27,7 +27,8 @@ Legend: **Area** = which app; **Effort** = rough size (S = under an hour, M = a 
 | 15 | ✅ Done | [#222](https://github.com/carlosindriago/SprintLogic/pull/222) |
 | 16 | ✅ Done | [#224](https://github.com/carlosindriago/SprintLogic/pull/224) |
 | 17 | ✅ Done | [#226](https://github.com/carlosindriago/SprintLogic/pull/226) |
-| 18–25 | ⬜ Not started | — |
+| 18 | ✅ Done | [#228](https://github.com/carlosindriago/SprintLogic/pull/228) |
+| 19–25 | ⬜ Not started | — |
 
 All merges land on `develop` (not `main`): each item gets its own ephemeral branch, a PR into `develop`, and is deleted after merge.
 
@@ -130,9 +131,9 @@ All merges land on `develop` (not `main`): each item gets its own ephemeral bran
   Area: Frontend · Effort: S
   Packages: `@gitgraph/react`, `react-force-graph-3d`, `force-graph`, `@microsoft/fetch-event-source` — removed (chat's manual SSE already has working cancellation from item #3).
 
-- [ ] **18. Collapse the duplicate error-silencing mechanism**
+- [x] **18. Collapse the duplicate error-silencing mechanism** — ✅ [PR #228](https://github.com/carlosindriago/SprintLogic/pull/228)
   Area: Frontend · Effort: M
-  Files: `src/app/layout.tsx:37-155`, `src/components/ErrorSilencer.tsx` — keep one, scope the substring filtering narrowly.
+  Files: `src/app/layout.tsx:37-155`, `src/components/ErrorSilencer.tsx` — turned out `ErrorSilencer.tsx` was dead code (never imported), removed. Narrowed `layout.tsx`'s `disposed`/`TextModel` checks to require both words together, grounded in Monaco's actual source error messages.
 
 ---
 
