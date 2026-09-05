@@ -50,6 +50,17 @@ else:
     base_dir = Path(__file__).resolve().parent.parent
 
 
+# The last revision whose upgrade() only ALTERs a schema that
+# Base.metadata.create_all() already fully produces from the current ORM
+# models. Update this when (and only when) a new migration is added that
+# also fits that pattern *and* every migration after it up to the new one
+# does too — the moment a migration does something create_all cannot
+# (creates a FTS5 virtual table, drops a column SQLAlchemy can't express,
+# etc.), leave this constant where it is so that migration keeps running
+# for real instead of being silently stamped past on a fresh install.
+_CREATE_ALL_BASELINE_REVISION = "5f7aa4b1b973"
+
+
 def _run_migrations_bootstrap_sync(base_dir: Path, database_url: str) -> None:
     """Bring the SQLite schema up to Alembic's ``head``.
 
@@ -60,15 +71,20 @@ def _run_migrations_bootstrap_sync(base_dir: Path, database_url: str) -> None:
     it missing columns that a later revision added (e.g.
     add_test_status_to_kanban_tickets), causing "no such column" errors.
 
-    The existing revision chain has no root "create everything" migration:
-    every revision only ALTERs a schema that create_all already produced.
-    So a database with no ``alembic_version`` table yet (a brand new
-    install, or a pre-existing "legacy" database from before this fix) is,
-    by construction, already shaped like ``head`` once create_all has run —
-    it just needs to be *stamped* there, not have every ALTER replayed
-    (which would fail on columns that already exist). Once a database is
-    stamped, this function's ``upgrade head`` naturally applies any real
-    future migrations on subsequent app updates.
+    Revisions up to and including ``_CREATE_ALL_BASELINE_REVISION`` only
+    ever ALTER a schema that create_all already produced (add a column/
+    table matching the current ORM models) — so a database with no
+    ``alembic_version`` table yet (a brand new install, or a pre-existing
+    "legacy" database from before this fix) is, by construction, already
+    shaped like that baseline once create_all has run, and gets *stamped*
+    there rather than having every ALTER replayed (which would fail on
+    columns that already exist). Any revision *after* the baseline may do
+    something create_all cannot (e.g. 7ce3aee9d476 creates FTS5 virtual
+    tables, which aren't representable as ORM models at all) and must
+    actually run via ``upgrade head`` even on a fresh database — stamping
+    straight to "head" would silently skip it, leaving those tables never
+    created. Once a database is fully stamped/upgraded, subsequent app
+    updates naturally apply any further migration via ``upgrade head``.
     """
     from alembic import command
     from alembic.config import Config
@@ -102,7 +118,8 @@ def _run_migrations_bootstrap_sync(base_dir: Path, database_url: str) -> None:
     if already_versioned:
         command.upgrade(cfg, "head")
     else:
-        command.stamp(cfg, "head")
+        command.stamp(cfg, _CREATE_ALL_BASELINE_REVISION)
+        command.upgrade(cfg, "head")
 
 
 def kill_zombie_on_parent_death():

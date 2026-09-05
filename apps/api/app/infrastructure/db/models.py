@@ -226,25 +226,18 @@ class AnalysisReportModel(Base):
 
 
 
-class SearchIndexModel(Base):
-    __tablename__ = "search_index"
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    type: Mapped[str | None] = mapped_column(String, nullable=True)
-    name: Mapped[str | None] = mapped_column(String, nullable=True)
-    path: Mapped[str | None] = mapped_column(String, nullable=True)
-    content: Mapped[str | None] = mapped_column(String, nullable=True)
-    line: Mapped[int | None] = mapped_column(Integer, nullable=True)
-
-
-class ProjectMemoryModel(Base):
-    __tablename__ = "project_memories"
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    project_id: Mapped[str | None] = mapped_column(String, nullable=True)
-    agent_name: Mapped[str | None] = mapped_column(String, nullable=True)
-    context_type: Mapped[str | None] = mapped_column(String, nullable=True)
-    memory_content: Mapped[str | None] = mapped_column(String, nullable=True)
+## NOTE: search_index and project_memories are NOT declared here.
+##
+## They are real SQLite FTS5 virtual tables (see migration
+## 7ce3aee9d476_convert_search_tables_to_fts5.py), created and owned
+## exclusively by Alembic via raw `CREATE VIRTUAL TABLE ... USING fts5(...)`
+## DDL - FTS5 virtual tables cannot be expressed as ordinary SQLAlchemy
+## declarative models with typed columns, and Base.metadata.create_all()
+## would otherwise recreate them as plain tables, breaking every `MATCH`
+## query against them (exactly the bug this migration fixes). All access to
+## these two tables goes through raw text() SQL - see
+## interfaces/api/v1/projects/memory.py, infrastructure/ai/context_builder.py,
+## and application/ai_agent.py's search_codebase tool.
 
 
 class AdrChunkModel(Base):
