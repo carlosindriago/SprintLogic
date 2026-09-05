@@ -59,12 +59,16 @@ def apply_delta(content: str, change: dict) -> str:
 
 async def debounced_lint(websocket: WebSocket, state: DocumentState):
     """
-    Waits 2000ms. If not cancelled by a new delta, runs the AST linter.
+    Waits 2000ms. If not cancelled by a new delta, runs the linter.
+
+    Reuses run_lint_immediate's heuristic (the same one already applied on
+    full_sync/handshake) rather than the tree-sitter AST auditing the
+    original TODO here described - building that out is a real feature in
+    its own right, not a drop-in replacement for this stub.
     """
     try:
         await asyncio.sleep(2.0)
-        # TODO: Run actual tree-sitter AST auditing here.
-        pass
+        await run_lint_immediate(websocket, state)
     except asyncio.CancelledError:
         # Expected when a new delta arrives before 2000ms
         pass
