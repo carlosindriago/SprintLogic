@@ -115,7 +115,14 @@ def discover_db_url_from_project(project_path: str) -> str | None:
     driver = sanitize_db_driver(raw_driver, port)
 
     if driver == "sqlite":
-        sqlite_path = root / database if not database.startswith("/") else Path(database)
+        # Allow legitimate absolute paths, but prevent traversal for relative paths
+        if Path(database).is_absolute():
+            sqlite_path = Path(database)
+        else:
+            sqlite_path = (root / database).resolve()
+            if not sqlite_path.is_relative_to(root.resolve()):
+                logger.warning("Path traversal attempt detected in sqlite db path: %s", database)
+                return None
         return f"sqlite:///{sqlite_path}"
 
     auth_part = ""
