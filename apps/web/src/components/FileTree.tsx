@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { ChevronRight, ChevronDown, Folder, FilePlus, FolderPlus, AlertCircle, AlertTriangle, Pencil, Copy, Trash2 } from 'lucide-react';
-import { getProjectFiles } from '@/lib/api';
+import { ApiError, getProjectFiles } from '@/lib/api';
 import { FileTreeNode } from '@/types';
 import FileIcon from './FileIcon';
 import { useMarkersStore, type MarkerData } from '@/store/markersStore';
@@ -278,10 +278,19 @@ function FileMarkerBadge({ filePath, onToggle, expanded }: { filePath: string; o
   );
 }
 
+// A raw fetch failure (e.g. WebKit's "Load failed") most likely means the
+// backend sidecar wasn't listening yet - retry with backoff before giving
+// up. A response the backend actually sent (ApiError, e.g. "Project path
+// not found on disk") is final: retrying won't make a deleted directory
+// reappear, so those surface immediately with no retry loop.
+const FILE_TREE_LOAD_MAX_RETRIES = 3;
+const FILE_TREE_LOAD_RETRY_DELAY_MS = 800;
+
 export default function FileTree({ projectId, onFileSelect, onNewFile, refreshKey, onNavigateToMarker, onFileRename, onFileDuplicate, onFileDelete }: FileTreeProps & { onNavigateToMarker?: (filePath: string, line: number, column: number) => void }) {
   const [tree, setTree] = useState<FileTreeNode | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [retryToken, setRetryToken] = useState(0);
   const allFiles = useMarkersStore((s) => s.files);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -298,33 +307,53 @@ export default function FileTree({ projectId, onFileSelect, onNewFile, refreshKe
     if (!projectId) return;
     
     let isMounted = true;
-    
+
     const loadFiles = async () => {
-      if (isMounted) setLoading(true);
-      try {
-        const data = await getProjectFiles(projectId);
-        if (isMounted) {
-          setTree(data);
-          setError(null);
-        }
-      } catch (err) {
-        if (isMounted) {
-          setError(err instanceof Error ? err.message : String(err));
-        }
-      } finally {
-        if (isMounted) {
-          setLoading(false);
+      if (isMounted) {
+        setLoading(true);
+        setError(null);
+      }
+
+      for (let attempt = 0; attempt <= FILE_TREE_LOAD_MAX_RETRIES; attempt++) {
+        try {
+          const data = await getProjectFiles(projectId);
+          if (isMounted) {
+            setTree(data);
+            setError(null);
+          }
+          return;
+        } catch (err) {
+          const isFinal = err instanceof ApiError || attempt === FILE_TREE_LOAD_MAX_RETRIES;
+          if (isFinal) {
+            if (isMounted) {
+              setError(err instanceof Error ? err.message : String(err));
+            }
+            return;
+          }
+          await new Promise((resolve) => setTimeout(resolve, FILE_TREE_LOAD_RETRY_DELAY_MS));
         }
       }
     };
 
-    loadFiles();
-      
+    loadFiles().finally(() => {
+      if (isMounted) setLoading(false);
+    });
+
     return () => { isMounted = false; };
-  }, [projectId, refreshKey]);
+  }, [projectId, refreshKey, retryToken]);
 
   if (loading) return <div className="p-4 text-xs text-zinc-500">Cargando explorador...</div>;
-  if (error) return <div className="p-4 text-xs text-red-400">Error: {error}</div>;
+  if (error) return (
+    <div className="p-4 text-xs text-red-400 flex flex-col items-start gap-2">
+      <span>Error: {error}</span>
+      <button
+        onClick={() => setRetryToken((v) => v + 1)}
+        className="text-zinc-300 hover:text-white underline underline-offset-2"
+      >
+        Reintentar
+      </button>
+    </div>
+  );
   if (!tree) return null;
 
   return (

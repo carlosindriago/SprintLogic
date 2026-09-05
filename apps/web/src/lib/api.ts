@@ -90,16 +90,28 @@ export function apiWsUrl(path: string): string {
   return `${API_BASE_URL.replace(/^http/, "ws")}${path}`;
 }
 
+const SIDECAR_PORT_MAX_ATTEMPTS = 50;
+const SIDECAR_PORT_RETRY_DELAY_MS = 100;
+// A cold start with pending Alembic migrations can take well past a few
+// seconds. This used to cap at 5s (20 x 250ms) and show the app regardless
+// of whether the backend answered - the file explorer (and every other
+// first request) would then fail with a raw network error ("Load failed"
+// in WebKitGTK) that never recovered on its own. ~30s gives slow first
+// runs enough room without hanging indefinitely if the backend genuinely
+// never comes up.
+const BACKEND_READY_MAX_ATTEMPTS = 120;
+const BACKEND_READY_RETRY_DELAY_MS = 250;
+
 export async function initSidecarPort() {
-  for (let i = 0; i < 50; i++) {
+  for (let i = 0; i < SIDECAR_PORT_MAX_ATTEMPTS; i++) {
     try {
       const port = await invoke<number>("get_sidecar_port");
       if (port) {
         API_BASE_URL = `http://127.0.0.1:${port}/api/v1`;
-        
+
         // Wait for backend to be fully responsive before proceeding
         let backendReady = false;
-        for (let j = 0; j < 20; j++) {
+        for (let j = 0; j < BACKEND_READY_MAX_ATTEMPTS; j++) {
           try {
             const res = await fetch(`${API_BASE_URL}/projects`, { method: 'GET' });
             if (res.ok) {
@@ -109,21 +121,22 @@ export async function initSidecarPort() {
           } catch {
             // Backend not accepting connections yet
           }
-          await new Promise((resolve) => setTimeout(resolve, 250));
+          await new Promise((resolve) => setTimeout(resolve, BACKEND_READY_RETRY_DELAY_MS));
         }
 
         if (!backendReady) {
-          console.warn("[Tauri] Backend port is open, but API is not responding after 5 seconds.");
+          const seconds = (BACKEND_READY_MAX_ATTEMPTS * BACKEND_READY_RETRY_DELAY_MS) / 1000;
+          console.warn(`[Tauri] Backend port is open, but API is not responding after ${seconds}s.`);
         }
 
         await invoke("show_main_window");
         return;
       }
     } catch (err) {
-      if (i === 49) {
+      if (i === SIDECAR_PORT_MAX_ATTEMPTS - 1) {
         console.warn("Failed to get sidecar port from Tauri:", err);
       }
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, SIDECAR_PORT_RETRY_DELAY_MS));
     }
   }
 }
