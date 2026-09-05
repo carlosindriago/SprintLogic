@@ -6,7 +6,7 @@ Legend: **Area** = which app; **Effort** = rough size (S = under an hour, M = a 
 
 ## Progress at a glance
 
-**16 / 25 done** — all of Critical, all of High, and items 11–16 of Medium. Next up: item #17.
+**17 / 25 done** — all of Critical, all of High, and items 11–17 of Medium. Next up: item #18.
 
 | # | Status | PR |
 |---|---|---|
@@ -26,7 +26,8 @@ Legend: **Area** = which app; **Effort** = rough size (S = under an hour, M = a 
 | 14 | ✅ Done | [#220](https://github.com/carlosindriago/SprintLogic/pull/220) |
 | 15 | ✅ Done | [#222](https://github.com/carlosindriago/SprintLogic/pull/222) |
 | 16 | ✅ Done | [#224](https://github.com/carlosindriago/SprintLogic/pull/224) |
-| 17–25 | ⬜ Not started | — |
+| 17 | ✅ Done | [#226](https://github.com/carlosindriago/SprintLogic/pull/226) |
+| 18–25 | ⬜ Not started | — |
 
 All merges land on `develop` (not `main`): each item gets its own ephemeral branch, a PR into `develop`, and is deleted after merge.
 
@@ -125,9 +126,9 @@ All merges land on `develop` (not `main`): each item gets its own ephemeral bran
   Area: Frontend · Effort: S
   File: `src/components/git-studio/CommitGraph.tsx:91-94` — added `role="button"`, `tabIndex={0}`, `onKeyDown`, plus `aria-label` and a visible focus outline.
 
-- [ ] **17. Remove dead dependencies (or adopt them)**
+- [x] **17. Remove dead dependencies (or adopt them)** — ✅ [PR #226](https://github.com/carlosindriago/SprintLogic/pull/226)
   Area: Frontend · Effort: S
-  Packages: `@gitgraph/react`, `react-force-graph-3d`, `force-graph`, `@microsoft/fetch-event-source` — drop from `package.json`, or migrate the manual SSE code in `SprintLogicChat.tsx` to `@microsoft/fetch-event-source` if the reconnection/cancellation semantics are wanted.
+  Packages: `@gitgraph/react`, `react-force-graph-3d`, `force-graph`, `@microsoft/fetch-event-source` — removed (chat's manual SSE already has working cancellation from item #3).
 
 - [ ] **18. Collapse the duplicate error-silencing mechanism**
   Area: Frontend · Effort: M
