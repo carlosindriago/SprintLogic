@@ -235,8 +235,14 @@ async def stream_chat_response(
                     },
                     websocket,
                 )
-            except:
-                pass
+            except (json.JSONDecodeError, AttributeError, TypeError) as exc:
+                # A single malformed chunk (invalid JSON, or valid JSON that
+                # isn't the expected {"text": ..., "is_done": ...} shape)
+                # shouldn't kill the whole stream — but it must be logged,
+                # not silently dropped, and a bare `except:` here previously
+                # also swallowed asyncio.CancelledError, which broke
+                # cooperative cancellation of this task on disconnect/shutdown.
+                logging.warning("Skipping malformed chat stream chunk: %s", exc)
         await websocket.send_json(
             {
                 "type": "chat_response",
