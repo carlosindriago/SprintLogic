@@ -136,6 +136,25 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
   // Referencia para limpiar el intervalo del "Manual Clutch" si el componente se desmonta
   const flushIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // ── Stream cancellation ────────────────────────────────────────────────
+  // Guards against a previous turn's response (HTTP stream or WebSocket
+  // listener) writing into the wrong conversation after the user starts a
+  // new chat, switches conversation, or the component unmounts mid-stream.
+  // streamGenerationRef is bumped on every cancellation; any callback from
+  // an older turn compares against it and no-ops instead of touching state.
+  const streamGenerationRef = useRef(0);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const activeSocketCleanupRef = useRef<(() => void) | null>(null);
+
+  const cancelActiveStream = () => {
+    streamGenerationRef.current += 1;
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+    activeSocketCleanupRef.current?.();
+    activeSocketCleanupRef.current = null;
+    setLoading(false);
+  };
+
   // Smart Auto-Scroll Refs
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -158,12 +177,18 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
     return () => {
       // Limpiamos la memoria al desmontar para evitar el memory leak
       if (flushIntervalRef.current) clearInterval(flushIntervalRef.current);
+      // Stop any in-flight stream from writing into an unmounted component.
+      cancelActiveStream();
     };
   }, []);
 
   useEffect(() => {
+    // A conversation switch mid-stream must not let the previous
+    // conversation's response land in the one we're switching to.
+    // eslint-disable-next-line
+    cancelActiveStream();
+
     if (activeConversationId && projectId) {
-      // eslint-disable-next-line
       setLoading(true);
       fetch(`${API_BASE_URL}/chat/conversations/messages/${activeConversationId}`)
         .then(res => res.json())
@@ -193,6 +218,8 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
   }, [pendingQuery, activeModel]);
 
   const handleNewChat = () => {
+    // A response still streaming for the old chat must not land in the new one.
+    cancelActiveStream();
     setActiveConversationId(null);
     setMessages([{ role: "assistant", content: "Hola, soy SprintLogic AI. ¿En qué te ayudo hoy?" }]);
   };
@@ -355,6 +382,11 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
     setLoading(true);
     setUsage(null);
 
+    // This turn's identity: any callback that fires after cancelActiveStream()
+    // bumps streamGenerationRef past this value must recognize it's stale and
+    // no-op instead of touching messages/loading state.
+    const generation = ++streamGenerationRef.current;
+
     try {
       const socket = useSenseiStore.getState().socket;
       if (isThisSensei && socket && socket.readyState === WebSocket.OPEN) {
@@ -387,19 +419,27 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
         }, 100);
 
         const removeListener = useSenseiStore.getState().addSocketListener((data) => {
+          // This turn was cancelled (new chat / conversation switch / unmount):
+          // deregister and stop touching state, even if is_done never arrives.
+          if (streamGenerationRef.current !== generation) {
+            removeListener();
+            return;
+          }
+
           if (data.type === 'chat_chunk' && data.message_id === messageId) {
             // Llenamos el embudo sin despertar a React
             bufferedText = data.text;
-            
+
             if (data.is_done) {
               isDone = true;
               removeListener();
+              activeSocketCleanupRef.current = null;
               setLoading(false);
-              
+
               if (data.conversation_id && !activeConversationId) {
                 setActiveConversationId(data.conversation_id);
               }
-              
+
               // Flush Final (El antídoto para el Token Fantasma)
               setMessages((prev) => {
                 const next = [...prev];
@@ -414,6 +454,7 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
             }
           }
         });
+        activeSocketCleanupRef.current = removeListener;
 
         socket.send(JSON.stringify({
           type: 'chat_request',
@@ -430,6 +471,9 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
         return; // Skip HTTP fallback
       }
 
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+
       const res = await fetch(`${API_BASE_URL}/chat/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -441,6 +485,7 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
           editor_context: apiEditorContext,
           conversation_id: activeConversationId || undefined
         }),
+        signal: controller.signal,
       });
       if (!res.ok) throw new Error("Chat request failed");
       const reader = res.body?.getReader();
@@ -450,6 +495,9 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
       const streamBuffer = { text: "", isError: false };
 
       while (true) {
+        // Cancelled (new chat / conversation switch / unmount): stop reading
+        // and stop touching messages state for this now-stale turn.
+        if (streamGenerationRef.current !== generation) break;
         const { done, value } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
@@ -544,10 +592,23 @@ export default function SprintLogicChat({ projectId, onOpenSettings }: SprintLog
         }
       }
     } catch (error) {
-      console.error("Chat error:", error);
-      setMessages((prev) => [...prev, { role: "system", content: "Hubo un error al procesar el mensaje. Por favor intenta de nuevo." }]);
+      // Deliberate cancellation (new chat / conversation switch / unmount),
+      // not a real failure — nothing to report, and streamGenerationRef
+      // already moved on so no state below should be touched either way.
+      const wasCancelled = error instanceof DOMException && error.name === "AbortError";
+      if (!wasCancelled) {
+        console.error("Chat error:", error);
+        if (streamGenerationRef.current === generation) {
+          setMessages((prev) => [...prev, { role: "system", content: "Hubo un error al procesar el mensaje. Por favor intenta de nuevo." }]);
+        }
+      }
     } finally {
-      setLoading(false);
+      // A stale controller left in the ref after a turn finishes normally is
+      // harmless: cancelActiveStream() would just call .abort() on an
+      // already-settled request, which is a no-op.
+      if (streamGenerationRef.current === generation) {
+        setLoading(false);
+      }
     }
   };
 

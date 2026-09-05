@@ -90,7 +90,16 @@ export default function CommitGraph({
               <ContextMenuTrigger>
                 <div
                   onClick={() => handleCommitClick(row.commit.hash)}
-                  className="flex items-center justify-between h-full px-4 border border-zinc-700/50 rounded-lg cursor-pointer transition-colors hover:border-zinc-500"
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Ver commit ${row.commit.hash.substring(0, 7)}: ${row.commit.subject}`}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      handleCommitClick(row.commit.hash);
+                    }
+                  }}
+                  className="flex items-center justify-between h-full px-4 border border-zinc-700/50 rounded-lg cursor-pointer transition-colors hover:border-zinc-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500"
                   style={{ background: !row.isLatest ? '#1a1a1a' : '#141414', boxSizing: 'border-box' }}
                 >
                   <div className="flex flex-col gap-1 min-w-0 flex-1">

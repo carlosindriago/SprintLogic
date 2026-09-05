@@ -1,4 +1,6 @@
+import asyncio
 import logging
+import os
 import uuid
 from pathlib import Path
 from typing import Any
@@ -12,9 +14,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.infrastructure.db.database import get_db_session
 from app.infrastructure.db.models import UniversalBookmarkModel
 from app.infrastructure.db.project_repository import SQLAlchemyProjectRepository
-from app.infrastructure.doc_inspector.doc_scanner import scan_markdown_docs, scan_undocumented_code
+from app.infrastructure.doc_inspector.doc_scanner import (
+    GLOBAL_IGNORED_DIRS,
+    scan_markdown_docs,
+    scan_undocumented_code,
+)
 from app.infrastructure.llm.litellm_gateway import LiteLLMGateway
 from app.infrastructure.repositories import prompt_repository
+from app.utils.async_io import async_read_text, async_write_text
 from app.utils.security import resolve_project_path
 
 logger = logging.getLogger(__name__)
@@ -62,8 +69,8 @@ async def discover_docs(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    markdown_files = scan_markdown_docs(project.path)
-    undocumented_code = scan_undocumented_code(project.path)
+    markdown_files = await asyncio.to_thread(scan_markdown_docs, project.path)
+    undocumented_code = await asyncio.to_thread(scan_undocumented_code, project.path)
 
     return {"markdown_files": markdown_files, "undocumented_code": undocumented_code}
 
@@ -84,7 +91,7 @@ async def chat_with_docs(
         raise HTTPException(status_code=404, detail="Project not found")
 
     # Light RAG: Concat all markdown files
-    markdown_files = scan_markdown_docs(project.path)
+    markdown_files = await asyncio.to_thread(scan_markdown_docs, project.path)
 
     rag_context = ""
     MAX_RAG_CHARS = 100000
@@ -102,8 +109,7 @@ async def chat_with_docs(
             continue
 
         try:
-            with open(full_path, encoding="utf-8") as f:
-                content = f.read()
+            content = await async_read_text(full_path)
 
             chunk = f"\\n\\n--- FILE: {file_path} ---\\n{content}"
             if len(rag_context) + len(chunk) > MAX_RAG_CHARS:
@@ -158,8 +164,7 @@ async def generate_docblock(
         raise HTTPException(status_code=404, detail="Source file not found")
 
     try:
-        with open(full_path, encoding="utf-8") as f:
-            source_code = f.read()
+        source_code = await async_read_text(full_path)
     except Exception as e:
         logger.error(f"Error reading file {request.file_path}: {e}")
         raise HTTPException(status_code=500, detail="Could not read source file")
@@ -180,6 +185,28 @@ async def generate_docblock(
         raise HTTPException(status_code=500, detail="Error generating Auto-Doc from LLM")
 
     return {"documented_code": response}
+
+
+def _build_project_tree_sync(project_root: Path, ignored_dirs: set[str]) -> str:
+    """Walks project_root and renders an indented file tree, pruning ignored dirs.
+
+    Must stay a single synchronous function run via asyncio.to_thread rather
+    than exposing os.walk() across the thread boundary: os.walk relies on
+    mutating `dirs` in place *before* it recurses to prune a directory (e.g.
+    node_modules), which only works against the live generator — collecting
+    it into a list first would walk (and pay the I/O cost of) every ignored
+    directory before any pruning could happen.
+    """
+    tree_lines = []
+    for root, dirs, files in os.walk(project_root):
+        dirs[:] = [d for d in dirs if d not in ignored_dirs]
+        level = str(root).replace(str(project_root), "").count(os.sep)
+        indent = " " * 4 * (level)
+        tree_lines.append(f"{indent}{os.path.basename(root)}/")
+        subindent = " " * 4 * (level + 1)
+        for file_name in files:
+            tree_lines.append(f"{subindent}{file_name}")
+    return "\\n".join(tree_lines)[:10000]
 
 
 @router.post("/audit")
@@ -204,29 +231,14 @@ async def audit_doc(
         raise HTTPException(status_code=404, detail="Source file not found")
 
     try:
-        with open(full_path, encoding="utf-8") as file_obj:
-            doc_content = file_obj.read()
+        doc_content = await async_read_text(full_path)
     except Exception as e:
         logger.error(f"Error reading file {request.file_path}: {e}")
         raise HTTPException(status_code=500, detail="Could not read source file")
 
-    import os
-
-    from app.infrastructure.doc_inspector.doc_scanner import GLOBAL_IGNORED_DIRS
-
-    # Generate Tree
-    tree_lines = []
-    for root, dirs, files in os.walk(project_root):
-        dirs[:] = [d for d in dirs if d not in GLOBAL_IGNORED_DIRS]
-        level = str(root).replace(str(project_root), "").count(os.sep)
-        indent = " " * 4 * (level)
-        tree_lines.append(f"{indent}{os.path.basename(root)}/")
-        subindent = " " * 4 * (level + 1)
-        for file_name in files:
-            tree_lines.append(f"{subindent}{file_name}")
-
-    # Generate tree string (truncate if extremely large)
-    project_tree = "\\n".join(tree_lines)[:10000]
+    project_tree = await asyncio.to_thread(
+        _build_project_tree_sync, project_root, GLOBAL_IGNORED_DIRS
+    )
 
     # Gather manifests
     manifest_files = ["package.json", "composer.json", "requirements.txt", "pom.xml", "go.mod"]
@@ -235,15 +247,15 @@ async def audit_doc(
         m_path = project_root / m
         if m_path.exists() and m_path.is_file():
             try:
-                with open(m_path, encoding="utf-8") as manifest_file:
-                    manifests_content += f"\\n--- {m} ---\\n{manifest_file.read()}\\n"
+                manifest_text = await async_read_text(m_path)
+                manifests_content += f"\\n--- {m} ---\\n{manifest_text}\\n"
             except Exception:
                 logger.warning("Unhandled exception", exc_info=True)
     if not manifests_content:
         manifests_content = "No manifests found."
 
     # RAG Context (same logic as chat)
-    markdown_files = scan_markdown_docs(project.path)
+    markdown_files = await asyncio.to_thread(scan_markdown_docs, project.path)
     rag_context = ""
     MAX_RAG_CHARS = 100000
     for item in markdown_files:
@@ -253,10 +265,10 @@ async def audit_doc(
             break
         fp = project_root / item["file_path"]
         try:
-            with open(fp, encoding="utf-8") as f:
-                chunk = f"\\n--- FILE: {item['file_path']} ---\\n{f.read()}"
-                remaining = MAX_RAG_CHARS - len(rag_context)
-                rag_context += chunk[:remaining]
+            file_text = await async_read_text(fp)
+            chunk = f"\\n--- FILE: {item['file_path']} ---\\n{file_text}"
+            remaining = MAX_RAG_CHARS - len(rag_context)
+            rag_context += chunk[:remaining]
         except Exception:
             logger.warning("Unhandled exception", exc_info=True)
 
@@ -306,8 +318,7 @@ async def save_doc_file(
         raise HTTPException(status_code=404, detail="File not found")
 
     try:
-        with open(target_path, "w", encoding="utf-8") as f:
-            f.write(request.content)
+        await async_write_text(target_path, request.content)
     except Exception as e:
         logger.error(f"Error saving file {target_path}: {e}")
         raise HTTPException(status_code=500, detail="Could not save file")

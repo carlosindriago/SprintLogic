@@ -16,6 +16,7 @@ from app.infrastructure.repositories.tool_model_repository import (
     tool_model_label,
 )
 from app.infrastructure.test_inspector.test_scanner import scan_project_tests
+from app.utils.async_io import async_read_text
 from app.utils.security import resolve_project_path
 
 logger = logging.getLogger(__name__)
@@ -84,8 +85,7 @@ async def generate_tests(
         raise HTTPException(status_code=404, detail="Source file not found")
 
     try:
-        with open(full_path, encoding="utf-8") as f:
-            source_code = f.read()
+        source_code = await async_read_text(full_path)
     except Exception as e:
         logger.error(f"Error reading file {request.file_path}: {e}")
         raise HTTPException(status_code=500, detail="Could not read source file")
@@ -155,8 +155,7 @@ async def audit_tests(
         raise HTTPException(status_code=404, detail="Source file not found")
 
     try:
-        with open(full_path, encoding="utf-8") as f:
-            source_code = f.read()
+        source_code = await async_read_text(full_path)
     except Exception as e:
         logger.error(f"Error reading file {request.file_path}: {e}")
         raise HTTPException(status_code=500, detail="Could not read source file")
@@ -173,8 +172,7 @@ async def audit_tests(
 
         if test_full_path.exists() and test_full_path.is_file():
             try:
-                with open(test_full_path, encoding="utf-8") as f:
-                    current_tests = f.read()
+                current_tests = await async_read_text(test_full_path)
             except Exception:
                 logger.warning("Unhandled exception", exc_info=True)
                 current_tests = "Failed to read existing test file."

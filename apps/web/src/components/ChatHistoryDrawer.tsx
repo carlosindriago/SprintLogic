@@ -41,7 +41,12 @@ export default function ChatHistoryDrawer({
 
   const handleDelete = async (e: React.MouseEvent, id: number) => {
     e.stopPropagation();
-    if (!confirm("¿Eliminar este chat?")) return;
+    const { confirm } = await import('@tauri-apps/plugin-dialog');
+    const confirmed = await confirm("¿Eliminar este chat?", {
+      title: 'Eliminar Chat',
+      kind: 'warning',
+    });
+    if (!confirmed) return;
     
     try {
       await fetch(`${API_BASE_URL}/chat/conversations/${id}`, { method: "DELETE" });

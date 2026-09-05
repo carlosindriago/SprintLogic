@@ -119,8 +119,12 @@ export default function RootLayout({
                     m.includes('NotAllowedError') ||
                     m.includes('user agent or the platform in the current context') ||
                     m.includes('denied permission') ||
-                    m.includes('disposed') ||
-                    m.includes('TextModel') ||
+                    // Monaco's own disposal errors always name a Model
+                    // ('Model is disposed!', 'TextModelPart is disposed!',
+                    // 'TextModel got disposed before...') - requiring both
+                    // words avoids silencing an unrelated error that merely
+                    // happens to contain the word "disposed" on its own.
+                    (m.includes('disposed') && m.includes('Model')) ||
                     n === 'AbortError' ||
                     m.includes('AbortError')
                   ) {
@@ -141,7 +145,7 @@ export default function RootLayout({
                     m.includes('user agent or the platform in the current context') ||
                     m.includes('denied permission') ||
                     m.includes('Canceled: Canceled') ||
-                    m.includes('disposed')
+                    (m.includes('disposed') && m.includes('Model'))
                   ) {
                     event.preventDefault();
                     if (typeof event.stopImmediatePropagation === 'function') {

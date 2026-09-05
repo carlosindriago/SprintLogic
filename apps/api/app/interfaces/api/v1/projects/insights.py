@@ -37,7 +37,6 @@ IGNORE_DIRS = {
     "coverage",
 }
 SOURCE_EXTENSIONS = {".ts", ".tsx", ".js", ".jsx", ".py", ".rs", ".go", ".java", ".php"}
-MAX_FILE_BYTES = 500_000
 from app.infrastructure.kanban_sync import kanban_sync
 
 

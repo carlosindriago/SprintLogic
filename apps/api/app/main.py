@@ -37,6 +37,89 @@ import signal
 import threading
 from concurrent.futures import ProcessPoolExecutor
 from contextlib import asynccontextmanager
+from pathlib import Path
+
+# Determine base directory (PyInstaller vs Dev). Used both by the Alembic
+# migration bootstrap below and to locate the bundled frontend static
+# assets further down this file.
+if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+    # Running in a PyInstaller bundle (--onedir uses sys._MEIPASS too)
+    base_dir = Path(sys._MEIPASS)
+else:
+    # Running in normal Python environment
+    base_dir = Path(__file__).resolve().parent.parent
+
+
+# The last revision whose upgrade() only ALTERs a schema that
+# Base.metadata.create_all() already fully produces from the current ORM
+# models. Update this when (and only when) a new migration is added that
+# also fits that pattern *and* every migration after it up to the new one
+# does too — the moment a migration does something create_all cannot
+# (creates a FTS5 virtual table, drops a column SQLAlchemy can't express,
+# etc.), leave this constant where it is so that migration keeps running
+# for real instead of being silently stamped past on a fresh install.
+_CREATE_ALL_BASELINE_REVISION = "5f7aa4b1b973"
+
+
+def _run_migrations_bootstrap_sync(base_dir: Path, database_url: str) -> None:
+    """Bring the SQLite schema up to Alembic's ``head``.
+
+    ``Base.metadata.create_all`` (run just before this, in ``lifespan``)
+    only ever creates tables that don't exist yet — it never applies the
+    column/table changes tracked in migrations/versions/. Without this
+    step, updating the app on top of an existing user database can leave
+    it missing columns that a later revision added (e.g.
+    add_test_status_to_kanban_tickets), causing "no such column" errors.
+
+    Revisions up to and including ``_CREATE_ALL_BASELINE_REVISION`` only
+    ever ALTER a schema that create_all already produced (add a column/
+    table matching the current ORM models) — so a database with no
+    ``alembic_version`` table yet (a brand new install, or a pre-existing
+    "legacy" database from before this fix) is, by construction, already
+    shaped like that baseline once create_all has run, and gets *stamped*
+    there rather than having every ALTER replayed (which would fail on
+    columns that already exist). Any revision *after* the baseline may do
+    something create_all cannot (e.g. 7ce3aee9d476 creates FTS5 virtual
+    tables, which aren't representable as ORM models at all) and must
+    actually run via ``upgrade head`` even on a fresh database — stamping
+    straight to "head" would silently skip it, leaving those tables never
+    created. Once a database is fully stamped/upgraded, subsequent app
+    updates naturally apply any further migration via ``upgrade head``.
+    """
+    from alembic import command
+    from alembic.config import Config
+    from sqlalchemy.engine import make_url
+
+    alembic_ini = base_dir / "alembic.ini"
+    if not alembic_ini.exists():
+        logging.warning(
+            "alembic.ini not found at %s — skipping migration bootstrap", alembic_ini
+        )
+        return
+
+    cfg = Config(str(alembic_ini))
+    cfg.set_main_option("script_location", str(base_dir / "migrations"))
+    cfg.set_main_option("sqlalchemy.url", database_url)
+
+    db_path = make_url(database_url).database
+    already_versioned = False
+    if db_path and os.path.exists(db_path):
+        import sqlite3
+
+        conn = sqlite3.connect(db_path)
+        try:
+            row = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='alembic_version'"
+            ).fetchone()
+            already_versioned = row is not None
+        finally:
+            conn.close()
+
+    if already_versioned:
+        command.upgrade(cfg, "head")
+    else:
+        command.stamp(cfg, _CREATE_ALL_BASELINE_REVISION)
+        command.upgrade(cfg, "head")
 
 
 def kill_zombie_on_parent_death():
@@ -67,11 +150,17 @@ async def lifespan(app: FastAPI):
         threading.Thread(target=kill_zombie_on_parent_death, daemon=True).start()
 
     # Startup
-    from app.infrastructure.db.database import Base, get_engine, get_sessionmaker
+    import asyncio
+
+    from app.infrastructure.db.database import DATABASE_URL, Base, get_engine, get_sessionmaker
     from app.infrastructure.repositories.prompt_repository import initialize_prompts
 
     async with get_engine().begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+    # Run in a thread: Alembic's env.py drives its own asyncio.run(), which
+    # cannot be nested inside this already-running event loop.
+    await asyncio.to_thread(_run_migrations_bootstrap_sync, base_dir, DATABASE_URL)
 
     sessionmaker = get_sessionmaker()
     async with sessionmaker() as session:
@@ -126,6 +215,27 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# Minimal security headers, defense in depth. Matters most in `--web`
+# fallback mode (see start_dev.sh), where this server serves the frontend
+# directly to a plain browser at http://localhost:<port> with none of
+# Tauri's own CSP (tauri.conf.json) in effect — that CSP only applies
+# inside the Tauri-managed webview. Harmless on API/JSON responses too.
+@app.middleware("http")
+async def add_security_headers(request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    # Mirrors tauri.conf.json's CSP (including style-src 'unsafe-inline',
+    # required for the app's inline styles — see item #10's fix).
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; script-src 'self'; "
+        "style-src 'self' 'unsafe-inline'; connect-src 'self'"
+    )
+    return response
+
+
 app.include_router(projects_router, prefix="/api/v1")
 app.include_router(kanban_router, prefix="/api/v1")
 app.include_router(settings_router, prefix="/api/v1/settings")
@@ -148,8 +258,6 @@ app.include_router(omni_pad_router, prefix="/api/v1")
 app.include_router(execution_router, prefix="/api/v1")
 
 
-from pathlib import Path
-
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -158,14 +266,6 @@ from fastapi.staticfiles import StaticFiles
 async def healthcheck() -> dict[str, str]:
     return {"status": "ok"}
 
-
-# Determine base directory (PyInstaller vs Dev)
-if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
-    # Running in a PyInstaller bundle (--onedir uses sys._MEIPASS too)
-    base_dir = Path(sys._MEIPASS)
-else:
-    # Running in normal Python environment
-    base_dir = Path(__file__).resolve().parent.parent
 
 static_dir = base_dir / "static"
 next_assets_dir = static_dir / "_next"

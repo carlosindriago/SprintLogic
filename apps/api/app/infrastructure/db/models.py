@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import (
@@ -10,6 +10,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     LargeBinary,
     String,
@@ -27,6 +28,17 @@ from app.domain.kanban_models import (
     TicketType,
 )
 from app.infrastructure.db.database import Base
+
+
+def _utcnow() -> datetime:
+    """Timezone-aware replacement for the deprecated ``datetime.utcnow``.
+
+    Passed by reference (never called here) as a SQLAlchemy column
+    default/onupdate - it must stay a plain zero-argument callable, which
+    is why this exists instead of inlining ``datetime.now(UTC)`` everywhere
+    (``datetime.now()`` with no args returns local time, not UTC).
+    """
+    return datetime.now(UTC)
 
 
 class UserModel(Base):
@@ -76,7 +88,7 @@ class ProjectModel(Base):
     path: Mapped[str] = mapped_column(String(1024), nullable=False)
     last_opened: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=datetime.utcnow
+        DateTime(timezone=True), nullable=False, default=_utcnow
     )
     cached_schema: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     schema_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -95,10 +107,10 @@ class SchemaDraftModel(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     schema_data: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=datetime.utcnow
+        DateTime(timezone=True), nullable=False, default=_utcnow
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow
     )
 
 
@@ -115,7 +127,7 @@ class AIMemoryModel(Base):
     topic: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     content: Mapped[str] = mapped_column(String, nullable=False)  # Text equivalent
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.utcnow, index=True
+        DateTime(timezone=True), default=_utcnow, index=True
     )
 
 
@@ -128,7 +140,7 @@ class OmniNoteModel(Base):
     )
     content: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=datetime.utcnow
+        DateTime(timezone=True), nullable=False, default=_utcnow
     )
 
 
@@ -186,7 +198,7 @@ class ConversationModel(Base):
     title: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(default=True)
     insight_extracted: Mapped[bool] = mapped_column(default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 
 class MessageModel(Base):
@@ -199,7 +211,7 @@ class MessageModel(Base):
     role: Mapped[str] = mapped_column(String(50), nullable=False)
     content: Mapped[str] = mapped_column(String, nullable=False)
     context_snapshot: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 
 class AnalysisReportModel(Base):
@@ -216,7 +228,7 @@ class AnalysisReportModel(Base):
     ai_model_version: Mapped[str] = mapped_column(String(50), nullable=False)
     structural_metrics: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=datetime.utcnow
+        DateTime(timezone=True), nullable=False, default=_utcnow
     )
     is_deleted: Mapped[bool] = mapped_column(
         Boolean, server_default="0", default=False, nullable=False
@@ -225,25 +237,18 @@ class AnalysisReportModel(Base):
 
 
 
-class SearchIndexModel(Base):
-    __tablename__ = "search_index"
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    type: Mapped[str | None] = mapped_column(String, nullable=True)
-    name: Mapped[str | None] = mapped_column(String, nullable=True)
-    path: Mapped[str | None] = mapped_column(String, nullable=True)
-    content: Mapped[str | None] = mapped_column(String, nullable=True)
-    line: Mapped[int | None] = mapped_column(Integer, nullable=True)
-
-
-class ProjectMemoryModel(Base):
-    __tablename__ = "project_memories"
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    project_id: Mapped[str | None] = mapped_column(String, nullable=True)
-    agent_name: Mapped[str | None] = mapped_column(String, nullable=True)
-    context_type: Mapped[str | None] = mapped_column(String, nullable=True)
-    memory_content: Mapped[str | None] = mapped_column(String, nullable=True)
+## NOTE: search_index and project_memories are NOT declared here.
+##
+## They are real SQLite FTS5 virtual tables (see migration
+## 7ce3aee9d476_convert_search_tables_to_fts5.py), created and owned
+## exclusively by Alembic via raw `CREATE VIRTUAL TABLE ... USING fts5(...)`
+## DDL - FTS5 virtual tables cannot be expressed as ordinary SQLAlchemy
+## declarative models with typed columns, and Base.metadata.create_all()
+## would otherwise recreate them as plain tables, breaking every `MATCH`
+## query against them (exactly the bug this migration fixes). All access to
+## these two tables goes through raw text() SQL - see
+## interfaces/api/v1/projects/memory.py, infrastructure/ai/context_builder.py,
+## and application/ai_agent.py's search_codebase tool.
 
 
 class AdrChunkModel(Base):
@@ -258,9 +263,18 @@ class AdrChunkModel(Base):
 
 class TelemetryPingModel(Base):
     __tablename__ = "telemetry_pings"
+    __table_args__ = (
+        # Every insights-dashboard query filters on timestamp (always) and
+        # project_id (when a project is selected) — see
+        # interfaces/api/v1/projects/insights.py. Without these, every read
+        # is a full scan of a table that only ever grows (a background
+        # telemetry daemon inserts into it continuously).
+        Index("ix_telemetry_pings_project_id_timestamp", "project_id", "timestamp"),
+        Index("ix_telemetry_pings_timestamp", "timestamp"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     project_id: Mapped[str | None] = mapped_column(String, nullable=True)
     window_start_ms: Mapped[int] = mapped_column(BigInteger, nullable=False)
     window_end_ms: Mapped[int] = mapped_column(BigInteger, nullable=False)
@@ -291,10 +305,10 @@ class EpicModel(Base):
         SQLAlchemyEnum(EpicStatus), nullable=False, default=EpicStatus.ACTIVE
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=datetime.utcnow
+        DateTime(timezone=True), nullable=False, default=_utcnow
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow
     )
 
 
@@ -313,10 +327,10 @@ class SprintModel(Base):
         SQLAlchemyEnum(SprintStatus), nullable=False, default=SprintStatus.PLANNED
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=datetime.utcnow
+        DateTime(timezone=True), nullable=False, default=_utcnow
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow
     )
 
 
@@ -350,10 +364,10 @@ class KanbanTicketModel(Base):
     )
     subtasks: Mapped[list | dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=datetime.utcnow
+        DateTime(timezone=True), nullable=False, default=_utcnow
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow
     )
 
 
@@ -377,10 +391,10 @@ class PromptRegistryModel(Base):
     content: Mapped[str] = mapped_column(Text, nullable=False)
     required_variables: Mapped[list | dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=datetime.utcnow
+        DateTime(timezone=True), nullable=False, default=_utcnow
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow
     )
 
 
@@ -391,7 +405,7 @@ class CustomLLMProviderModel(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     base_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     keyring_service_id: Mapped[str] = mapped_column(String(255), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 
 class ToolModelMappingModel(Base):
@@ -402,7 +416,7 @@ class ToolModelMappingModel(Base):
     provider_id: Mapped[str] = mapped_column(String(255), nullable=False)
     model_name: Mapped[str] = mapped_column(String(255), nullable=False)
     fallback_models: Mapped[list | dict | None] = mapped_column(JSON, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 
 class UniversalBookmarkModel(Base):
@@ -418,7 +432,7 @@ class UniversalBookmarkModel(Base):
     start_line: Mapped[int | None] = mapped_column(Integer, nullable=True)
     end_line: Mapped[int | None] = mapped_column(Integer, nullable=True)
     item_type: Mapped[str] = mapped_column(String(50), nullable=False, default="document")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 
 class ModelHealthMetricModel(Base):
@@ -437,7 +451,7 @@ class ModelHealthMetricModel(Base):
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     last_status: Mapped[str] = mapped_column(String(50), nullable=False, default="untested")
     last_called_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 
 class WBSDocumentModel(Base):
@@ -452,9 +466,9 @@ class WBSDocumentModel(Base):
     )
     markdown_content: Mapped[str] = mapped_column(Text, nullable=False, default="")
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
     )
 
 
@@ -468,5 +482,5 @@ class WBSDocumentVersionModel(Base):
     markdown_content: Mapped[str] = mapped_column(Text, nullable=False)
     change_summary: Mapped[str | None] = mapped_column(String(255), nullable=True)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 

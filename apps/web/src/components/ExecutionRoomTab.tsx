@@ -209,8 +209,13 @@ export default function ExecutionRoomTab({ data }: ExecutionRoomTabProps) {
     }
   }, [openFiles, activeFilePath, ticketId]);
 
-  const clearChatHistory = () => {
-    if (window.confirm("¿Seguro que deseas borrar el historial del chat?")) {
+  const clearChatHistory = async () => {
+    const { confirm } = await import('@tauri-apps/plugin-dialog');
+    const confirmed = await confirm("¿Seguro que deseas borrar el historial del chat?", {
+      title: 'Borrar Historial',
+      kind: 'warning',
+    });
+    if (confirmed) {
       if (ticketId) {
         localStorage.removeItem(`sprintlogic_chat_${ticketId}`);
       }

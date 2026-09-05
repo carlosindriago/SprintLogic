@@ -16,6 +16,7 @@ from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.infrastructure.config import MAX_FILE_BYTES
 from app.infrastructure.db.database import get_db_session, get_sessionmaker
 from app.infrastructure.db.project_repository import SQLAlchemyProjectRepository
 from app.utils.async_io import (
@@ -39,7 +40,6 @@ IGNORE_DIRS = {
     "coverage",
 }
 SOURCE_EXTENSIONS = {".ts", ".tsx", ".js", ".jsx", ".py", ".rs", ".go", ".java", ".php"}
-MAX_FILE_BYTES = 500_000
 
 
 def _count_tech_stack(project_root: Path) -> tuple[dict[str, int], int]:
@@ -189,17 +189,16 @@ async def search_everywhere(
     q: str = Query(..., min_length=1, description="Search query"),
     session: AsyncSession = Depends(get_db_session),
 ):
-    sanitized = f"%{q.strip()}%"
-    if not sanitized or sanitized in ("%%", "%*%"):
+    sanitized = q.replace("'", "''").strip()
+    if not sanitized:
         return {"results": []}
+
+    query_str = sanitized + "*"
 
     try:
         result = await session.execute(
-            text(
-                "SELECT type, name, path, line FROM search_index "
-                "WHERE name LIKE :q OR path LIKE :q OR content LIKE :q LIMIT 50"
-            ),
-            {"q": sanitized},
+            text("SELECT type, name, path, line FROM search_index WHERE search_index MATCH :q LIMIT 50"),
+            {"q": query_str},
         )
         rows = result.fetchall()
 

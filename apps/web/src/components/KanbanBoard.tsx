@@ -7,7 +7,7 @@ import { arrayMove, SortableContext, verticalListSortingStrategy, useSortable } 
 import { CSS } from "@dnd-kit/utilities";
 import { Card, CardContent } from "@/components/ui/card";
 import ReactMarkdown from "react-markdown";
-import { getProjectTasks, saveProjectTasks, getKanbanConfig, saveKanbanConfig, syncKanbanCommits, KanbanColumn, fetchProjectTickets, updateKanbanTicket, deleteKanbanTicket, createKanbanTicket, createGitBranch, commitChanges, commitAndSwitchGitBranch, fetchEpics, fetchSprints, getGitStatus, discardGitChanges, checkoutGitBranch, deleteGitBranch } from '@/lib/api';
+import { getProjectTasks, saveProjectTasks, getKanbanConfig, saveKanbanConfig, syncKanbanCommits, KanbanColumn, fetchProjectTickets, updateKanbanTicket, deleteKanbanTicket, createKanbanTicket, createGitBranch, commitChanges, commitAndSwitchGitBranch, fetchEpics, fetchSprints, getGitStatus, discardGitChanges, checkoutGitBranch, deleteGitBranch, API_BASE_URL } from '@/lib/api';
 import { KanbanTicket, Epic, Sprint } from '@/types';
 import TicketDrawer from "./TicketDrawer";
 import { SprintEpicManagerModal } from "./SprintEpicManagerModal";
@@ -554,14 +554,25 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
     if (!projectId) return;
 
     // SSE setup for real-time updates
-    const evtSource = new EventSource(`http://127.0.0.1:8000/api/v1/projects/${projectId}/events`);
+    const evtSource = new EventSource(`${API_BASE_URL}/projects/${projectId}/events`);
     evtSource.onmessage = (event) => {
-      const data = JSON.parse(event.data);
+      let data;
+      try {
+        data = JSON.parse(event.data);
+      } catch (e) {
+        console.error("Failed to parse Kanban SSE message:", e);
+        return;
+      }
       if (data.type === "kanban_update" && active) {
         fetchConfig();
         fetchReferenceData();
         fetchTasks();
       }
+    };
+    evtSource.onerror = (event) => {
+      // EventSource auto-reconnects on its own by default; just surface it
+      // for diagnostics instead of failing silently.
+      console.error("Kanban SSE connection error:", event);
     };
 
     return () => {

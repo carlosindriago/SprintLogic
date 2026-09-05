@@ -36,6 +36,7 @@ from app.infrastructure.security.rate_limiter import require_rate_limit
 from app.interfaces.api.v1.project_schemas import (
     AnalyzeGraphRequest,
 )
+from app.utils.async_io import async_read_text
 from app.utils.security import resolve_project_path
 
 logger = logging.getLogger(__name__)
@@ -55,7 +56,6 @@ IGNORE_DIRS = {
     "coverage",
 }
 SOURCE_EXTENSIONS = {".ts", ".tsx", ".js", ".jsx", ".py", ".rs", ".go", ".java", ".php"}
-MAX_FILE_BYTES = 500_000
 
 
 @router.get("/projects/{project_id}/graph")
@@ -312,8 +312,7 @@ async def get_node_insight(
     file_content = ""
     try:
         full_path = resolve_project_path(project.path, node.file_path)
-        with open(full_path, encoding="utf-8") as f:
-            file_content = f.read()
+        file_content = await async_read_text(full_path)
     except Exception:
         file_content = f"// Archivo: {node.file_path} (Contenido no disponible)"
 

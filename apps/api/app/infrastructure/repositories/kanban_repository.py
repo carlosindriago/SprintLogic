@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import delete, select
@@ -32,7 +32,7 @@ class SQLAlchemyKanbanRepository:
         self.session = session
 
     async def bulk_import_wbs(self, project_id: UUID, tickets: list[WBSImportTicket]) -> int:
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         import datetime as dt
 
         epic_names = {t.epic.strip() for t in tickets if t.epic and t.epic.strip()}
@@ -152,7 +152,7 @@ class SQLAlchemyKanbanRepository:
         self, project_id: UUID, payload: KanbanTicketCreate
     ) -> KanbanTicketResponse:
         ticket_id = uuid.uuid4()
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         ticket_model = KanbanTicketModel(
             id=ticket_id,
             project_id=project_id,
@@ -312,7 +312,7 @@ class SQLAlchemyKanbanRepository:
         if payload.subtasks is not None:
             ticket.subtasks = payload.subtasks
 
-        ticket.updated_at = datetime.utcnow()
+        ticket.updated_at = datetime.now(UTC)
         await self.session.commit()
 
         node_query = select(KanbanTicketNodeModel).where(
@@ -359,7 +359,7 @@ class SQLAlchemyKanbanRepository:
     # --- Epics ---
     async def create_epic(self, project_id: UUID, payload: EpicCreate) -> EpicResponse:
         epic_id = uuid.uuid4()
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         epic_model = EpicModel(
             id=epic_id,
             project_id=project_id,
@@ -401,7 +401,7 @@ class SQLAlchemyKanbanRepository:
         if payload.color is not None:
             epic.color = payload.color
 
-        epic.updated_at = datetime.utcnow()
+        epic.updated_at = datetime.now(UTC)
         await self.session.commit()
         return EpicResponse.model_validate(epic)
 
@@ -415,14 +415,14 @@ class SQLAlchemyKanbanRepository:
             return False
 
         epic.status = EpicStatus.ARCHIVED
-        epic.updated_at = datetime.utcnow()
+        epic.updated_at = datetime.now(UTC)
         await self.session.commit()
         return True
 
     # --- Sprints ---
     async def create_sprint(self, project_id: UUID, payload: SprintCreate) -> SprintResponse:
         sprint_id = uuid.uuid4()
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         sprint_model = SprintModel(
             id=sprint_id,
             project_id=project_id,
@@ -467,7 +467,7 @@ class SQLAlchemyKanbanRepository:
         if payload.end_date is not None:
             sprint.end_date = payload.end_date
 
-        sprint.updated_at = datetime.utcnow()
+        sprint.updated_at = datetime.now(UTC)
         await self.session.commit()
         return SprintResponse.model_validate(sprint)
 
@@ -481,6 +481,6 @@ class SQLAlchemyKanbanRepository:
             return False
 
         sprint.status = SprintStatus.ARCHIVED
-        sprint.updated_at = datetime.utcnow()
+        sprint.updated_at = datetime.now(UTC)
         await self.session.commit()
         return True
