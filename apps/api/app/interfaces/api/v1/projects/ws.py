@@ -54,6 +54,19 @@ async def file_watcher_callback(project_id: str, change: Change, filepath: str):
             await q.put(event)
 
 
+async def push_project_event(project_id: str, event: dict[str, Any]) -> None:
+    """Push an event directly to a project's open /events SSE subscribers.
+
+    file_watcher intentionally ignores writes it made itself (see
+    FileWatcherService.mark_backend_write) to avoid re-triggering on its own
+    output, so a caller that persists a change through the API rather than
+    editing the file on disk - e.g. saving the Kanban board - must notify
+    subscribers here instead of relying on file_watcher_callback above.
+    """
+    for q in project_event_queues.get(project_id, []):
+        await q.put(event)
+
+
 @router.get("/projects/{project_id}/events")
 async def project_events(project_id: str, session: AsyncSession = Depends(get_db_session)):
     try:

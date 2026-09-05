@@ -33,7 +33,7 @@ from app.utils.async_io import async_exists
 from app.utils.security import resolve_project_path
 
 from .memory import _dump_json_file, _load_json_file
-from .ws import project_event_queues
+from .ws import project_event_queues, push_project_event
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Projects - Kanban"])
@@ -88,6 +88,9 @@ async def save_project_tasks(
         raise HTTPException(status_code=404, detail="Project not found")
 
     await asyncio.to_thread(kanban_sync.write_tasks, project.path, request.tasks)
+    # file_watcher ignores this write as backend-originated (mark_backend_write),
+    # so a second open tab/subscriber won't hear about it unless we say so here.
+    await push_project_event(project_id, {"type": "kanban_update"})
     return {"status": "success"}
 
 
