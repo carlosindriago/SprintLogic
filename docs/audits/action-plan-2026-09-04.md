@@ -6,7 +6,7 @@ Legend: **Area** = which app; **Effort** = rough size (S = under an hour, M = a 
 
 ## Progress at a glance
 
-**22 / 25 done** — all of Critical, all of High, all of Medium, and items 19–22 of Low (all backend Low items now done). Next up: item #23 (frontend Low items).
+**23 / 25 done** — all of Critical, all of High, all of Medium, and items 19–23 of Low. Next up: item #24.
 
 | # | Status | PR |
 |---|---|---|
@@ -32,7 +32,8 @@ Legend: **Area** = which app; **Effort** = rough size (S = under an hour, M = a 
 | 20 | ✅ Done | [#232](https://github.com/carlosindriago/SprintLogic/pull/232) |
 | 21 | ✅ Done | [#234](https://github.com/carlosindriago/SprintLogic/pull/234) |
 | 22 | ✅ Done | [#236](https://github.com/carlosindriago/SprintLogic/pull/236) |
-| 23–25 | ⬜ Not started | — |
+| 23 | ✅ Done | [#238](https://github.com/carlosindriago/SprintLogic/pull/238) |
+| 24–25 | ⬜ Not started | — |
 
 All merges land on `develop` (not `main`): each item gets its own ephemeral branch, a PR into `develop`, and is deleted after merge.
 
@@ -159,9 +160,9 @@ All merges land on `develop` (not `main`): each item gets its own ephemeral bran
   Area: Backend · Effort: S
   File: `app/interfaces/api/v1/settings.py:266-267,347-348`.
 
-- [ ] **23. Re-enable `reactStrictMode: true`**
+- [x] **23. Re-enable `reactStrictMode: true`** — ✅ [PR #238](https://github.com/carlosindriago/SprintLogic/pull/238)
   Area: Frontend · Effort: S (flag) / M (fixing whatever it surfaces)
-  File: `next.config.ts:5` — do this after items 3 and 9 are fixed, since Strict Mode's double-invoke will otherwise make those bugs noisier before they're gone.
+  File: `next.config.ts:5`. Flag flipped, production build verified clean; actual dev-mode double-invoke behavior needs the user's own interactive testing (no GUI available here).
 
 - [ ] **24. Resolve the React Compiler dependency**
   Area: Frontend · Effort: S
