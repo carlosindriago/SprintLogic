@@ -215,6 +215,27 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# Minimal security headers, defense in depth. Matters most in `--web`
+# fallback mode (see start_dev.sh), where this server serves the frontend
+# directly to a plain browser at http://localhost:<port> with none of
+# Tauri's own CSP (tauri.conf.json) in effect — that CSP only applies
+# inside the Tauri-managed webview. Harmless on API/JSON responses too.
+@app.middleware("http")
+async def add_security_headers(request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    # Mirrors tauri.conf.json's CSP (including style-src 'unsafe-inline',
+    # required for the app's inline styles — see item #10's fix).
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; script-src 'self'; "
+        "style-src 'self' 'unsafe-inline'; connect-src 'self'"
+    )
+    return response
+
+
 app.include_router(projects_router, prefix="/api/v1")
 app.include_router(kanban_router, prefix="/api/v1")
 app.include_router(settings_router, prefix="/api/v1/settings")
