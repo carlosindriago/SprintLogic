@@ -6,7 +6,7 @@ Legend: **Area** = which app; **Effort** = rough size (S = under an hour, M = a 
 
 ## Progress at a glance
 
-**15 / 25 done** — all of Critical, all of High, and items 11–15 of Medium. Next up: item #16.
+**16 / 25 done** — all of Critical, all of High, and items 11–16 of Medium. Next up: item #17.
 
 | # | Status | PR |
 |---|---|---|
@@ -25,7 +25,8 @@ Legend: **Area** = which app; **Effort** = rough size (S = under an hour, M = a 
 | 13 | ✅ Done | [#218](https://github.com/carlosindriago/SprintLogic/pull/218) |
 | 14 | ✅ Done | [#220](https://github.com/carlosindriago/SprintLogic/pull/220) |
 | 15 | ✅ Done | [#222](https://github.com/carlosindriago/SprintLogic/pull/222) |
-| 16–25 | ⬜ Not started | — |
+| 16 | ✅ Done | [#224](https://github.com/carlosindriago/SprintLogic/pull/224) |
+| 17–25 | ⬜ Not started | — |
 
 All merges land on `develop` (not `main`): each item gets its own ephemeral branch, a PR into `develop`, and is deleted after merge.
 
@@ -120,9 +121,9 @@ All merges land on `develop` (not `main`): each item gets its own ephemeral bran
   Area: Frontend · Effort: S
   File: `src/components/KanbanBoard.tsx:558-559` — added `try/catch` around `JSON.parse` and an `onerror` handler.
 
-- [ ] **16. Add keyboard support to clickable commit rows**
+- [x] **16. Add keyboard support to clickable commit rows** — ✅ [PR #224](https://github.com/carlosindriago/SprintLogic/pull/224)
   Area: Frontend · Effort: S
-  File: `src/components/git-studio/CommitGraph.tsx:91-94` — `role="button"`, `tabIndex={0}`, `onKeyDown`.
+  File: `src/components/git-studio/CommitGraph.tsx:91-94` — added `role="button"`, `tabIndex={0}`, `onKeyDown`, plus `aria-label` and a visible focus outline.
 
 - [ ] **17. Remove dead dependencies (or adopt them)**
   Area: Frontend · Effort: S
