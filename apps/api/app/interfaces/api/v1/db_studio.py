@@ -183,7 +183,7 @@ async def get_project_database_schema(
         project,
         cached_schema=schema.model_dump(),
         schema_hash=current_hash,
-        schema_updated_at=datetime.utcnow(),
+        schema_updated_at=datetime.now(UTC),
     )
     await repo.save(project)
     await session.commit()
@@ -223,7 +223,7 @@ async def rescan_project_database_schema(
         project,
         cached_schema=schema.model_dump(),
         schema_hash=current_hash,
-        schema_updated_at=datetime.utcnow(),
+        schema_updated_at=datetime.now(UTC),
     )
     await repo.save(project)
     await session.commit()
