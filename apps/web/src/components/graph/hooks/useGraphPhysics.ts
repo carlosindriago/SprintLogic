@@ -7,10 +7,20 @@ interface UseGraphPhysicsProps {
   fgRef: React.RefObject<ForceGraphMethods<NodeObject, LinkObject> | undefined>;
   hasGraphData: boolean;
   width: number;
-  displayGraphData: { nodes: ForceNode[] };
+  /**
+   * The full, unfiltered node set (useGraphData's `graphData.nodes`) — NOT
+   * `displayGraphData.nodes`. Force/layout targets (domain-group angles,
+   * clustering) must stay stable across focus/search/type-filter changes,
+   * which only ever produce a new `displayGraphData` (a filtered view of
+   * the same underlying graph), not a real structural change. Reheating
+   * the whole simulation and re-deriving group positions from whatever
+   * happens to currently be visible was why toggling a filter made
+   * unrelated nodes visibly jump.
+   */
+  graphNodes: ForceNode[];
 }
 
-export function useGraphPhysics({ fgRef, hasGraphData, width, displayGraphData }: UseGraphPhysicsProps) {
+export function useGraphPhysics({ fgRef, hasGraphData, width, graphNodes }: UseGraphPhysicsProps) {
   const [isPhysicsActive, setIsPhysicsActive] = useState(true);
   const initialFitDoneRef = useRef(false);
 
@@ -36,7 +46,7 @@ export function useGraphPhysics({ fgRef, hasGraphData, width, displayGraphData }
     const fg = fgRef.current;
     
     // Pre-calculate dynamic layout targets based on nodes present
-    const rawNodes = displayGraphData.nodes;
+    const rawNodes = graphNodes;
 
     const charge = fg.d3Force('charge');
     if (charge && 'strength' in charge && typeof (charge as { strength?: unknown }).strength === 'function') {
@@ -150,7 +160,7 @@ export function useGraphPhysics({ fgRef, hasGraphData, width, displayGraphData }
     fg.d3Force('radial', centerForce as unknown as Parameters<typeof fg.d3Force>[1]);
 
     fg.d3ReheatSimulation();
-  }, [hasGraphData, width, fgRef, displayGraphData.nodes]);
+  }, [hasGraphData, width, fgRef, graphNodes]);
 
   return {
     isPhysicsActive,
