@@ -1,7 +1,7 @@
 import uuid
 
 from fastapi import APIRouter, Depends, File, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,8 +23,7 @@ class OmniNoteResponse(BaseModel):
     project_id: uuid.UUID | None
     created_at: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 @router.get("/notes", response_model=list[OmniNoteResponse])
