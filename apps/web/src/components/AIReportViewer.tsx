@@ -72,7 +72,16 @@ export function AIReportViewer({ projectId, reportId, markdown: initialMarkdown 
         await writeTextFile(filePath, content);
       }
     } catch (err) {
+      // Only reachable if the native save genuinely fails (e.g. the fs
+      // capability/scope is missing, or the user's OS denies the write) -
+      // the fs:allow-write-text-file permission plus the fact that
+      // dialog.save() auto-grants scope for the chosen path (see Tauri
+      // docs) means this should not fire in normal use anymore. Surface it
+      // instead of failing silently into "downloaded somewhere else".
       console.warn("Fallback a descarga web normal:", err);
+      toast.warning("No se pudo guardar en la ruta elegida", {
+        description: "Se descargó el archivo por el navegador en su lugar.",
+      });
       const blob = new Blob([content], { type: "text/markdown;charset=utf-8" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
