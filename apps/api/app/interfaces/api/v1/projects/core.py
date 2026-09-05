@@ -49,7 +49,6 @@ IGNORE_DIRS = {
     "coverage",
 }
 SOURCE_EXTENSIONS = {".ts", ".tsx", ".js", ".jsx", ".py", ".rs", ".go", ".java", ".php"}
-MAX_FILE_BYTES = 500_000
 
 
 @router.get("/projects", response_model=ProjectListResponse)

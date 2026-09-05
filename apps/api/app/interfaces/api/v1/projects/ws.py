@@ -36,7 +36,6 @@ IGNORE_DIRS = {
     "coverage",
 }
 SOURCE_EXTENSIONS = {".ts", ".tsx", ".js", ".jsx", ".py", ".rs", ".go", ".java", ".php"}
-MAX_FILE_BYTES = 500_000
 import contextlib
 
 from watchfiles import Change

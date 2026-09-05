@@ -16,6 +16,7 @@ from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.infrastructure.config import MAX_FILE_BYTES
 from app.infrastructure.db.database import get_db_session, get_sessionmaker
 from app.infrastructure.db.project_repository import SQLAlchemyProjectRepository
 from app.utils.async_io import (
@@ -39,7 +40,6 @@ IGNORE_DIRS = {
     "coverage",
 }
 SOURCE_EXTENSIONS = {".ts", ".tsx", ".js", ".jsx", ".py", ".rs", ".go", ".java", ".php"}
-MAX_FILE_BYTES = 500_000
 
 
 def _count_tech_stack(project_root: Path) -> tuple[dict[str, int], int]:

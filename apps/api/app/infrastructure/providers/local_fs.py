@@ -19,6 +19,7 @@ import aiofiles  # type: ignore
 import pathspec
 
 from app.domain.ports.codebase_provider import CodebaseProvider
+from app.infrastructure.config import MAX_FILE_BYTES
 
 _logger = logging.getLogger(__name__)
 
@@ -58,9 +59,6 @@ _BASELINE_IGNORE_PATTERNS: list[str] = [
     ".DS_Store",
     "Thumbs.db",
 ]
-
-MAX_FILE_BYTES = 500_000  # 500 KB — skip auto-generated or minified blobs
-
 
 def _build_spec(root: Path) -> pathspec.PathSpec:
     """
