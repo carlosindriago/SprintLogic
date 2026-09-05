@@ -96,7 +96,12 @@ export function SprintEpicManagerModal({ projectId, isOpen, onClose, onDataChang
   };
 
   const handleArchiveEpic = async (epicId: string) => {
-    if (!confirm('Are you sure you want to archive this epic?')) return;
+    const { confirm } = await import('@tauri-apps/plugin-dialog');
+    const confirmed = await confirm('Are you sure you want to archive this epic?', {
+      title: 'Archive Epic',
+      kind: 'warning',
+    });
+    if (!confirmed) return;
     try {
       await api.archiveEpic(epicId);
       onDataChanged();
@@ -107,7 +112,12 @@ export function SprintEpicManagerModal({ projectId, isOpen, onClose, onDataChang
   };
 
   const handleArchiveSprint = async (sprintId: string) => {
-    if (!confirm('Are you sure you want to archive this sprint?')) return;
+    const { confirm } = await import('@tauri-apps/plugin-dialog');
+    const confirmed = await confirm('Are you sure you want to archive this sprint?', {
+      title: 'Archive Sprint',
+      kind: 'warning',
+    });
+    if (!confirmed) return;
     try {
       await api.archiveSprint(sprintId);
       onDataChanged();
