@@ -94,7 +94,7 @@ export default function GraphScene({ projectId, onNodeClick }: GraphSceneProps) 
     cutoffTimeRef
   } = useGraphAnimation({ graphData, idPairCache: caches.idPairCache });
 
-  const { isPhysicsActive, togglePhysics, initialFitDoneRef } = useGraphPhysics({ fgRef, hasGraphData, width: dimensions.width, displayGraphData });
+  const { isPhysicsActive, togglePhysics, initialFitDoneRef } = useGraphPhysics({ fgRef, hasGraphData, width: dimensions.width, graphNodes: graphData.nodes as ForceNode[] });
 
   const [showCyclesState, setShowCycles] = useState(false);
 
