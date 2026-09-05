@@ -6,7 +6,7 @@ Legend: **Area** = which app; **Effort** = rough size (S = under an hour, M = a 
 
 ## Progress at a glance
 
-**14 / 25 done** — all of Critical, all of High, and items 11–14 of Medium. Next up: item #15.
+**15 / 25 done** — all of Critical, all of High, and items 11–15 of Medium. Next up: item #16.
 
 | # | Status | PR |
 |---|---|---|
@@ -24,7 +24,8 @@ Legend: **Area** = which app; **Effort** = rough size (S = under an hour, M = a 
 | 12 | ✅ Done | [#216](https://github.com/carlosindriago/SprintLogic/pull/216) |
 | 13 | ✅ Done | [#218](https://github.com/carlosindriago/SprintLogic/pull/218) |
 | 14 | ✅ Done | [#220](https://github.com/carlosindriago/SprintLogic/pull/220) |
-| 15–25 | ⬜ Not started | — |
+| 15 | ✅ Done | [#222](https://github.com/carlosindriago/SprintLogic/pull/222) |
+| 16–25 | ⬜ Not started | — |
 
 All merges land on `develop` (not `main`): each item gets its own ephemeral branch, a PR into `develop`, and is deleted after merge.
 
@@ -115,9 +116,9 @@ All merges land on `develop` (not `main`): each item gets its own ephemeral bran
   File: `src/components/graph/hooks/useGraphPhysics.ts:32-153`
   Fix: switched to the raw unfiltered node set (`graphData.nodes`) instead of the filtered `displayGraphData.nodes` — also fixed a deeper bug where domain-group target positions were being recomputed from whatever was currently filtered, not just an unnecessary reheat.
 
-- [ ] **15. Harden the Kanban `EventSource` handler**
+- [x] **15. Harden the Kanban `EventSource` handler** — ✅ [PR #222](https://github.com/carlosindriago/SprintLogic/pull/222)
   Area: Frontend · Effort: S
-  File: `src/components/KanbanBoard.tsx:558-559` — add `try/catch` around `JSON.parse` and an `onerror` handler.
+  File: `src/components/KanbanBoard.tsx:558-559` — added `try/catch` around `JSON.parse` and an `onerror` handler.
 
 - [ ] **16. Add keyboard support to clickable commit rows**
   Area: Frontend · Effort: S
