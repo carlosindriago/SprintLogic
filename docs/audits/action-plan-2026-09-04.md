@@ -6,7 +6,7 @@ Legend: **Area** = which app; **Effort** = rough size (S = under an hour, M = a 
 
 ## Progress at a glance
 
-**8 / 25 done** — all of Critical, and items 4–8 of High. Next up: item #9.
+**9 / 25 done** — all of Critical, and items 4–9 of High (item 10 remaining). Next up: item #10.
 
 | # | Status | PR |
 |---|---|---|
@@ -18,7 +18,8 @@ Legend: **Area** = which app; **Effort** = rough size (S = under an hour, M = a 
 | 6 | ✅ Done | [#205](https://github.com/carlosindriago/SprintLogic/pull/205) |
 | 7 | ✅ Done | [#206](https://github.com/carlosindriago/SprintLogic/pull/206) |
 | 8 | ✅ Done | [#208](https://github.com/carlosindriago/SprintLogic/pull/208) |
-| 9–25 | ⬜ Not started | — |
+| 9 | ✅ Done | [#210](https://github.com/carlosindriago/SprintLogic/pull/210) |
+| 10–25 | ⬜ Not started | — |
 
 All merges land on `develop` (not `main`): each item gets its own ephemeral branch, a PR into `develop`, and is deleted after merge.
 
@@ -77,10 +78,10 @@ All merges land on `develop` (not `main`): each item gets its own ephemeral bran
   Files: `src/components/ChatHistoryDrawer.tsx:44`, `src/components/SprintEpicManagerModal.tsx:99,110`, `src/components/ExecutionRoomTab.tsx:213`
   Fix: replaced with `confirm` from `@tauri-apps/plugin-dialog`, matching `ReportHistoryPanel.tsx`/`AIReportViewer.tsx`. `clearChatHistory` in `ExecutionRoomTab.tsx` had to become `async` (was sync).
 
-- [ ] **9. Make the Sensei WebSocket reference-counted and project-scoped**
+- [x] **9. Make the Sensei WebSocket reference-counted and project-scoped** — ✅ [PR #210](https://github.com/carlosindriago/SprintLogic/pull/210)
   Area: Frontend · Effort: M
   Files: `src/components/editor/hooks/useSenseiContext.ts:22-25`, `src/store/senseiStore.ts:148-152`
-  Fix: track active consumer count, only disconnect at zero; use the real `projectId` argument instead of ignoring it.
+  Fix: added `socketRefCount` + `socketProjectId`; `EditorTab.tsx` now actually passes its real `projectId` prop through (it never did before). Also fixed a race found during implementation: the old socket's async `onclose` could otherwise clobber the new one's state after a project switch.
 
 - [ ] **10. Verify inline styles under the packaged-app CSP**
   Area: Frontend · Effort: S (verification) / M (fix if broken)
