@@ -27,6 +27,7 @@ from app.infrastructure.repositories.tool_model_repository import (
 )
 from app.infrastructure.security.sast_runner import SecurityEngine, SecurityFinding
 from app.infrastructure.security.toolchain import global_toolchain
+from app.utils.async_io import async_read_text
 from app.utils.security import resolve_project_path
 
 logger = logging.getLogger(__name__)
@@ -150,8 +151,7 @@ async def evaluate_finding(
         full_file_path = resolve_project_path(project.path, request.file_path)
         if os.path.isfile(full_file_path):
             try:
-                with open(full_file_path, encoding="utf-8", errors="ignore") as f:
-                    source_code = f.read()
+                source_code = await async_read_text(full_file_path, errors="ignore")
             except Exception as e:
                 logger.warning("Could not read file %s: %s", full_file_path, e)
                 source_code = f"# Error leyendo archivo en disco: {e}"
