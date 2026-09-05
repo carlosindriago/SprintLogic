@@ -118,6 +118,7 @@ export function EditorTab({
   const { handleEditorDidMount: handleSenseiMount } = useSenseiContext({
     nodeId: node.id,
     nodePath: node.file_path,
+    projectId,
     monacoRef
   });
 
