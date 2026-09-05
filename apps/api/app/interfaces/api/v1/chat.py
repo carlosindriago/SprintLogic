@@ -21,6 +21,7 @@ from app.infrastructure.repositories.tool_model_repository import (
 )
 from app.infrastructure.security.credential_manager import CredentialManager
 from app.infrastructure.security.rate_limiter import require_rate_limit
+from app.utils.async_io import async_read_text
 from app.utils.security import resolve_project_path
 
 router = APIRouter()
@@ -522,8 +523,7 @@ async def ticket_mentor(
     try:
         full_path = resolve_project_path(project.path, target_path)
 
-        with open(full_path, encoding="utf-8") as f:
-            file_content = f.read()
+        file_content = await async_read_text(full_path)
     except HTTPException:
         raise
     except Exception:
@@ -628,8 +628,7 @@ async def auto_fix(
     try:
         full_path = resolve_project_path(project.path, target_path)
 
-        with open(full_path, encoding="utf-8") as f:
-            file_content = f.read()
+        file_content = await async_read_text(full_path)
     except HTTPException:
         raise
     except Exception:
