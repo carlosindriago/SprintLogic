@@ -6,7 +6,7 @@ Legend: **Area** = which app; **Effort** = rough size (S = under an hour, M = a 
 
 ## Progress at a glance
 
-**13 / 25 done** — all of Critical, all of High, and items 11–13 of Medium (all backend Medium items now done). Next up: item #14 (frontend Medium items).
+**14 / 25 done** — all of Critical, all of High, and items 11–14 of Medium. Next up: item #15.
 
 | # | Status | PR |
 |---|---|---|
@@ -23,7 +23,8 @@ Legend: **Area** = which app; **Effort** = rough size (S = under an hour, M = a 
 | 11 | ✅ Done | [#214](https://github.com/carlosindriago/SprintLogic/pull/214) |
 | 12 | ✅ Done | [#216](https://github.com/carlosindriago/SprintLogic/pull/216) |
 | 13 | ✅ Done | [#218](https://github.com/carlosindriago/SprintLogic/pull/218) |
-| 14–25 | ⬜ Not started | — |
+| 14 | ✅ Done | [#220](https://github.com/carlosindriago/SprintLogic/pull/220) |
+| 15–25 | ⬜ Not started | — |
 
 All merges land on `develop` (not `main`): each item gets its own ephemeral branch, a PR into `develop`, and is deleted after merge.
 
@@ -109,9 +110,10 @@ All merges land on `develop` (not `main`): each item gets its own ephemeral bran
   Area: Backend · Effort: S
   File: `app/main.py` — `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, CSP mirroring `tauri.conf.json`.
 
-- [ ] **14. Decouple graph reheat from focus/filter changes**
+- [x] **14. Decouple graph reheat from focus/filter changes** — ✅ [PR #220](https://github.com/carlosindriago/SprintLogic/pull/220)
   Area: Frontend · Effort: M
   File: `src/components/graph/hooks/useGraphPhysics.ts:32-153`
+  Fix: switched to the raw unfiltered node set (`graphData.nodes`) instead of the filtered `displayGraphData.nodes` — also fixed a deeper bug where domain-group target positions were being recomputed from whatever was currently filtered, not just an unnecessary reheat.
 
 - [ ] **15. Harden the Kanban `EventSource` handler**
   Area: Frontend · Effort: S
