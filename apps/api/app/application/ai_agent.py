@@ -649,16 +649,23 @@ class AIAgent:
                         "'controller', 'service', or file names."
                     )
 
-                # Convert for LIKE query instead of MATCH
-                sanitized = f"%{query.strip()}%"
+                query_str = query.replace("'", "''") + "*"
 
-                search_res = await session.execute(
-                    text(
-                        "SELECT type, name, path, line FROM search_index "
-                        "WHERE name LIKE :q OR path LIKE :q OR content LIKE :q LIMIT 20"
-                    ),
-                    {"q": sanitized},
-                )
+                try:
+                    search_res = await session.execute(
+                        text(
+                            "SELECT type, name, path, line FROM search_index "
+                            "WHERE search_index MATCH :q LIMIT 20"
+                        ),
+                        {"q": query_str},
+                    )
+                except Exception as e:
+                    # A query with FTS5-reserved syntax (unbalanced quotes,
+                    # bare -/: etc.) raises here - surface it as a tool
+                    # error the model can react to, not an uncaught
+                    # exception that would kill the whole chat turn.
+                    logger.warning("search_codebase FTS5 query failed: %s", e)
+                    return f"ToolError: Invalid FTS5 query syntax for '{query}'. Try simpler keywords."
                 rows = search_res.fetchall()
                 if not rows:
                     return "No results found in codebase."

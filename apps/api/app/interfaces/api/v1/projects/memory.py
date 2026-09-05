@@ -189,17 +189,16 @@ async def search_everywhere(
     q: str = Query(..., min_length=1, description="Search query"),
     session: AsyncSession = Depends(get_db_session),
 ):
-    sanitized = f"%{q.strip()}%"
-    if not sanitized or sanitized in ("%%", "%*%"):
+    sanitized = q.replace("'", "''").strip()
+    if not sanitized:
         return {"results": []}
+
+    query_str = sanitized + "*"
 
     try:
         result = await session.execute(
-            text(
-                "SELECT type, name, path, line FROM search_index "
-                "WHERE name LIKE :q OR path LIKE :q OR content LIKE :q LIMIT 50"
-            ),
-            {"q": sanitized},
+            text("SELECT type, name, path, line FROM search_index WHERE search_index MATCH :q LIMIT 50"),
+            {"q": query_str},
         )
         rows = result.fetchall()
 
