@@ -5,12 +5,14 @@ import { useSenseiStore } from '@/store/senseiStore';
 interface UseSenseiContextProps {
   nodeId: string;
   nodePath?: string;
+  projectId: string;
   monacoRef: MutableRefObject<typeof import('monaco-editor') | null>;
 }
 
 export function useSenseiContext({
   nodeId,
   nodePath,
+  projectId,
   monacoRef
 }: UseSenseiContextProps) {
   const updateEditorContext = useSenseiStore((s) => s.updateEditorContext);
@@ -20,9 +22,9 @@ export function useSenseiContext({
   const disconnectSocket = useSenseiStore((s) => s.disconnectSocket);
 
   useEffect(() => {
-    connectSocket(1);
+    connectSocket(projectId);
     return () => disconnectSocket();
-  }, [connectSocket, disconnectSocket]);
+  }, [projectId, connectSocket, disconnectSocket]);
 
   useEffect(() => {
     setActiveTabId(nodeId);

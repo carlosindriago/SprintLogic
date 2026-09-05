@@ -96,9 +96,19 @@ interface SenseiStore {
   socket: WebSocket | null;
   /** Whether the socket is currently connected */
   isSocketConnected: boolean;
-  /** Initializes the global WebSocket */
-  connectSocket: (projectId: number) => void;
-  /** Disconnects the global WebSocket */
+  /**
+   * Number of active consumers (mounted EditorTab instances) sharing the
+   * socket. connectSocket()/disconnectSocket() increment/decrement it; the
+   * underlying WebSocket is only actually closed once it reaches zero, so
+   * closing one editor tab (in split view) no longer kills sync/linting
+   * for every other tab still open.
+   */
+  socketRefCount: number;
+  /** The project the current socket connection was opened for, if any. */
+  socketProjectId: string | null;
+  /** Initializes the global WebSocket (reusing it, or switching projects). */
+  connectSocket: (projectId: string) => void;
+  /** Releases this consumer's hold on the global WebSocket. */
   disconnectSocket: () => void;
   /** Used by EditorTab to subscribe to marker updates or sync errors */
   addSocketListener: (listener: (data: SocketEvent) => void) => () => void;
@@ -136,6 +146,8 @@ export const useSenseiStore = create<SenseiStore>((set, get) => ({
 
   socket: null,
   isSocketConnected: false,
+  socketRefCount: 0,
+  socketProjectId: null,
   socketListeners: [],
   addSocketListener: (listener) => {
     set((state) => ({ socketListeners: [...state.socketListeners, listener] }));
@@ -145,19 +157,37 @@ export const useSenseiStore = create<SenseiStore>((set, get) => ({
       }));
     };
   },
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  connectSocket: (_projectId: number) => {
-    const { socket } = get();
-    if (socket) return; // Already connected or connecting
+  connectSocket: (projectId) => {
+    const { socket, socketProjectId } = get();
+
+    if (socket && socketProjectId !== projectId) {
+      // A different project's tab is connecting: the existing connection's
+      // server-side DocumentState (file_path/content/versionId) belongs to
+      // the previous project's file and must not leak into this one. Hard
+      // switch instead of reusing it, regardless of how many consumers the
+      // old connection had (assumes switching the active project unmounts
+      // its editor tabs first, as the app's single-project workspace does).
+      socket.close();
+      set({ socket: null, isSocketConnected: false, socketRefCount: 0, socketProjectId: null });
+    } else if (socket) {
+      // Same project, another tab: just register as another consumer.
+      set((state) => ({ socketRefCount: state.socketRefCount + 1 }));
+      return;
+    }
+
+    set((state) => ({ socketRefCount: state.socketRefCount + 1, socketProjectId: projectId }));
 
     const wsUrl = apiWsUrl('/sync/ws');
     const ws = new window.WebSocket(wsUrl);
 
     ws.onopen = () => {
-      set({ isSocketConnected: true });
+      // Guard against a superseded connection's late event (see the
+      // project-switch path above) overwriting the current socket's state.
+      if (get().socket === ws) set({ isSocketConnected: true });
     };
 
     ws.onmessage = (event) => {
+      if (get().socket !== ws) return;
       try {
         const data = JSON.parse(event.data);
         const { socketListeners } = get();
@@ -168,17 +198,22 @@ export const useSenseiStore = create<SenseiStore>((set, get) => ({
     };
 
     ws.onclose = () => {
-      set({ isSocketConnected: false, socket: null });
+      if (get().socket === ws) {
+        set({ isSocketConnected: false, socket: null });
+      }
       // In a real app we'd have reconnection logic here with backoff
     };
 
     set({ socket: ws });
   },
   disconnectSocket: () => {
-    const { socket } = get();
-    if (socket) {
-      socket.close();
-      set({ socket: null, isSocketConnected: false });
+    const { socket, socketRefCount } = get();
+    const remaining = Math.max(0, socketRefCount - 1);
+    if (remaining > 0) {
+      set({ socketRefCount: remaining });
+      return;
     }
+    if (socket) socket.close();
+    set({ socket: null, isSocketConnected: false, socketRefCount: 0, socketProjectId: null });
   },
 }));
