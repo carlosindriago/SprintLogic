@@ -263,8 +263,8 @@ async def fetch_provider_models(
                             for m in data.get("data", data.get("models", []))
                             if m.get("id") or m.get("name")
                         ]
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning("Failed to list zai models, using static fallback: %s", e)
 
                 if not models:
                     models = [
@@ -344,8 +344,8 @@ async def fetch_provider_models(
                         )
                 except ProviderFetchError:
                     raise
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning("Failed to list GitHub models, using static fallback: %s", e)
 
                 if not models:
                     models = [
