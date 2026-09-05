@@ -6,7 +6,7 @@ Legend: **Area** = which app; **Effort** = rough size (S = under an hour, M = a 
 
 ## Progress at a glance
 
-**20 / 25 done** — all of Critical, all of High, all of Medium, and items 19–20 of Low. Next up: item #21.
+**21 / 25 done** — all of Critical, all of High, all of Medium, and items 19–21 of Low. Next up: item #22.
 
 | # | Status | PR |
 |---|---|---|
@@ -30,7 +30,8 @@ Legend: **Area** = which app; **Effort** = rough size (S = under an hour, M = a 
 | 18 | ✅ Done | [#228](https://github.com/carlosindriago/SprintLogic/pull/228) |
 | 19 | ✅ Done | [#230](https://github.com/carlosindriago/SprintLogic/pull/230) |
 | 20 | ✅ Done | [#232](https://github.com/carlosindriago/SprintLogic/pull/232) |
-| 21–25 | ⬜ Not started | — |
+| 21 | ✅ Done | [#234](https://github.com/carlosindriago/SprintLogic/pull/234) |
+| 22–25 | ⬜ Not started | — |
 
 All merges land on `develop` (not `main`): each item gets its own ephemeral branch, a PR into `develop`, and is deleted after merge.
 
@@ -149,9 +150,9 @@ All merges land on `develop` (not `main`): each item gets its own ephemeral bran
   Area: Backend · Effort: S
   Files: `omni_pad.py`, `prompt_schemas.py`, and `report_schemas.py` (a third file with the same pattern, not in the original list).
 
-- [ ] **21. Implement or remove the `debounced_lint()` stub**
+- [x] **21. Implement or remove the `debounced_lint()` stub** — ✅ [PR #234](https://github.com/carlosindriago/SprintLogic/pull/234)
   Area: Backend · Effort: M (implement) / S (remove)
-  File: `app/interfaces/api/v1/sync.py:66`.
+  File: `app/interfaces/api/v1/sync.py:66` — wired to the existing `run_lint_immediate` heuristic instead of building real tree-sitter AST auditing (a separate feature).
 
 - [ ] **22. Log the silent `except Exception: pass` blocks**
   Area: Backend · Effort: S
