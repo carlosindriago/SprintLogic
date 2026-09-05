@@ -6,9 +6,10 @@ from uuid import uuid4
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import delete
 
 from app.infrastructure.db.database import get_engine, get_sessionmaker
-from app.infrastructure.db.models import Base, ProjectModel
+from app.infrastructure.db.models import Base, KanbanTicketModel, ProjectModel
 from app.main import app
 
 
@@ -131,4 +132,21 @@ async def test_legal_studio_save_and_list_docs():
     finally:
         if os.path.exists(tmp_dir):
             shutil.rmtree(tmp_dir, ignore_errors=True)
+
+        # This test runs against the real app database - get_engine()/
+        # get_sessionmaker() are the actual connection helpers, not an
+        # isolated test DB (no fixture overrides DATABASE_URL). Without
+        # this, every run leaves a permanent "Test Legal Project" row (and
+        # its mitigation ticket) behind. Found the hard way: 9 leftover
+        # rows had accumulated in a single day of repeatedly running this
+        # suite, visible in SprintLogic's own project picker.
+        sessionmaker = get_sessionmaker()
+        async with sessionmaker() as cleanup_session:
+            await cleanup_session.execute(
+                delete(KanbanTicketModel).where(KanbanTicketModel.project_id == project_id)
+            )
+            await cleanup_session.execute(
+                delete(ProjectModel).where(ProjectModel.id == project_id)
+            )
+            await cleanup_session.commit()
 
