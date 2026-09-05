@@ -6,7 +6,9 @@ Legend: **Area** = which app; **Effort** = rough size (S = under an hour, M = a 
 
 ## Progress at a glance
 
-**24 / 25 done** — all of Critical, all of High, all of Medium, and items 19–24 of Low. Only item #25 (introduce Vitest) remains.
+**25 / 25 done — action plan complete.**
+
+Also fixed along the way (not part of the original 25, found via manual testing after item #25): `tests/test_legal_studio.py` was writing directly to the real dev database with no cleanup, leaving stray "Test Legal Project" rows behind on every run — see the PR list below.
 
 | # | Status | PR |
 |---|---|---|
@@ -34,7 +36,8 @@ Legend: **Area** = which app; **Effort** = rough size (S = under an hour, M = a 
 | 22 | ✅ Done | [#236](https://github.com/carlosindriago/SprintLogic/pull/236) |
 | 23 | ✅ Done | [#238](https://github.com/carlosindriago/SprintLogic/pull/238) |
 | 24 | ✅ Done | [#240](https://github.com/carlosindriago/SprintLogic/pull/240) |
-| 25 | ⬜ Not started | — |
+| 25 | ✅ Done | [#243](https://github.com/carlosindriago/SprintLogic/pull/243) |
+| *(extra)* | ✅ Done | [#242](https://github.com/carlosindriago/SprintLogic/pull/242) — `test_legal_studio.py` DB cleanup |
 
 All merges land on `develop` (not `main`): each item gets its own ephemeral branch, a PR into `develop`, and is deleted after merge.
 
@@ -169,9 +172,9 @@ All merges land on `develop` (not `main`): each item gets its own ephemeral bran
   Area: Frontend · Effort: S
   File: `next.config.ts` — enabled it (`reactCompiler: true`, a top-level key in Next 16, not `experimental.*`). Verified with hard evidence (`useMemoCache` present in 3 output chunks) that it's actually transforming components.
 
-- [ ] **25. Introduce Vitest + Testing Library**
+- [x] **25. Introduce Vitest + Testing Library** — ✅ [PR #243](https://github.com/carlosindriago/SprintLogic/pull/243)
   Area: Frontend · Effort: L
-  Start with `src/components/graph/hooks/*` and `src/lib/api.ts` (most reused, zero coverage). Split `lib/api.ts` into per-domain modules as part of this work (natural pairing, same file).
+  Scoped to infra + `src/components/graph/hooks/*` tests (confirmed with user). `lib/api.ts`'s split into per-domain modules deferred to its own future pass — separate refactor, separate blast radius.
 
 ---
 
