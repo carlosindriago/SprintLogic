@@ -6,7 +6,7 @@ Legend: **Area** = which app; **Effort** = rough size (S = under an hour, M = a 
 
 ## Progress at a glance
 
-**9 / 25 done** — all of Critical, and items 4–9 of High (item 10 remaining). Next up: item #10.
+**10 / 25 done** — all of Critical and all of High. Next up: item #11 (Medium tier starts).
 
 | # | Status | PR |
 |---|---|---|
@@ -19,7 +19,8 @@ Legend: **Area** = which app; **Effort** = rough size (S = under an hour, M = a 
 | 7 | ✅ Done | [#206](https://github.com/carlosindriago/SprintLogic/pull/206) |
 | 8 | ✅ Done | [#208](https://github.com/carlosindriago/SprintLogic/pull/208) |
 | 9 | ✅ Done | [#210](https://github.com/carlosindriago/SprintLogic/pull/210) |
-| 10–25 | ⬜ Not started | — |
+| 10 | ✅ Done | [#212](https://github.com/carlosindriago/SprintLogic/pull/212) |
+| 11–25 | ⬜ Not started | — |
 
 All merges land on `develop` (not `main`): each item gets its own ephemeral branch, a PR into `develop`, and is deleted after merge.
 
@@ -83,10 +84,10 @@ All merges land on `develop` (not `main`): each item gets its own ephemeral bran
   Files: `src/components/editor/hooks/useSenseiContext.ts:22-25`, `src/store/senseiStore.ts:148-152`
   Fix: added `socketRefCount` + `socketProjectId`; `EditorTab.tsx` now actually passes its real `projectId` prop through (it never did before). Also fixed a race found during implementation: the old socket's async `onclose` could otherwise clobber the new one's state after a project switch.
 
-- [ ] **10. Verify inline styles under the packaged-app CSP**
+- [x] **10. Verify inline styles under the packaged-app CSP** — ✅ [PR #212](https://github.com/carlosindriago/SprintLogic/pull/212)
   Area: Frontend · Effort: S (verification) / M (fix if broken)
   File: `src-tauri/tauri.conf.json`
-  Fix: build a packaged binary, check the 42 `style={{...}}` usages and `useVimMode.ts:52-61` DOM style mutations render correctly. If blocked, add an explicit `style-src` or migrate to Tailwind classes.
+  Fix: couldn't build+visually verify in this environment (no GUI/WebKitGTK harness available); verified the mechanism against Tauri's own docs/source instead (CSP only enforced in packaged builds, nonce injection doesn't cover the `style=""` attribute) and added `style-src 'self' 'unsafe-inline'` per user's choice, matching Tauri's own reference example.
 
 ---
 
