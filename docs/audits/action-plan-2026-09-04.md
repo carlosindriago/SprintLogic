@@ -6,7 +6,7 @@ Legend: **Area** = which app; **Effort** = rough size (S = under an hour, M = a 
 
 ## Progress at a glance
 
-**6 / 25 done** — all of Critical, and items 4–6 of High. Next up: item #7.
+**7 / 25 done** — all of Critical, and items 4–7 of High. Next up: item #8.
 
 | # | Status | PR |
 |---|---|---|
@@ -15,8 +15,9 @@ Legend: **Area** = which app; **Effort** = rough size (S = under an hour, M = a 
 | 3 | ✅ Done | [#202](https://github.com/carlosindriago/SprintLogic/pull/202) |
 | 4 | ✅ Done | [#203](https://github.com/carlosindriago/SprintLogic/pull/203) |
 | 5 | ✅ Done | [#204](https://github.com/carlosindriago/SprintLogic/pull/204) |
-| 6 | ⏳ Pending commit/PR (fix ready on `fix/6-blocking-io-off-event-loop`) | — |
-| 7–25 | ⬜ Not started | — |
+| 6 | ✅ Done | [#205](https://github.com/carlosindriago/SprintLogic/pull/205) |
+| 7 | ✅ Done | [#206](https://github.com/carlosindriago/SprintLogic/pull/206) |
+| 8–25 | ⬜ Not started | — |
 
 All merges land on `develop` (not `main`): each item gets its own ephemeral branch, a PR into `develop`, and is deleted after merge.
 
@@ -65,10 +66,10 @@ All merges land on `develop` (not `main`): each item gets its own ephemeral bran
   Files: `app/interfaces/api/v1/doc_studio.py` (incl. `os.walk` at line 219), `chat.py:525,631`, `test_studio.py:87,158,176`, `security_studio.py:153`, `graph.py:315`
   Fix: routed through the existing `app/utils/async_io.py` helpers. Also converted `doc_studio.py`'s `scan_markdown_docs`/`scan_undocumented_code` calls (same bug, same endpoints, not in the original file:line list) and extracted the tree-building `os.walk` into `_build_project_tree_sync()` run via `asyncio.to_thread` — kept as one function because the ignored-dir pruning needs the live generator, not a materialized list.
 
-- [ ] **7. Fix the `fs` capability / `writeTextFile` mismatch**
+- [x] **7. Fix the `fs` capability / `writeTextFile` mismatch** — ✅ [PR #206](https://github.com/carlosindriago/SprintLogic/pull/206)
   Area: Frontend · Effort: S
   Files: `src-tauri/capabilities/default.json`, `src/components/AIReportViewer.tsx:61,72`
-  Fix: either grant the specific `fs:*` permission needed, or remove the dead-end `writeTextFile` path and keep only the Blob-download fallback (pick one, don't silently do both).
+  Fix: granted `fs:allow-write-text-file` (verified against this repo's own generated `gen/schemas/desktop-schema.json`) — no static `fs:scope` needed, since Tauri's `dialog.save()` already grants scope for the chosen path at runtime. Fallback now also toasts instead of only `console.warn`.
 
 - [ ] **8. Finish the `confirm()` → Tauri dialog migration**
   Area: Frontend · Effort: S
