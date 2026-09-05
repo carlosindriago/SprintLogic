@@ -274,29 +274,31 @@ async def get_project_repo_insights(
 
     # Calculate Top Hotspots
     top_hotspots: list[dict[str, Any]] = []
+    from sqlalchemy import func, union_all
     try:
-        edges_res = await session.execute(
-            select(GraphEdgeModel.source_id, GraphEdgeModel.target_id).where(
-                GraphEdgeModel.project_id == project_uuid
-            )
-        )
-        edge_counts: dict[Any, int] = {}
-        for row in edges_res:
-            edge_counts[row.source_id] = edge_counts.get(row.source_id, 0) + 1
-            edge_counts[row.target_id] = edge_counts.get(row.target_id, 0) + 1
+        stmt1 = select(GraphEdgeModel.source_id.label('node_id')).where(GraphEdgeModel.project_id == project_uuid)
+        stmt2 = select(GraphEdgeModel.target_id.label('node_id')).where(GraphEdgeModel.project_id == project_uuid)
+        subq = union_all(stmt1, stmt2).alias('all_edges')
 
-        nodes_res = await session.execute(
-            select(GraphNodeModel.id, GraphNodeModel.file_path).where(
-                GraphNodeModel.project_id == project_uuid
-            )
-        )
-        node_paths = {row.id: row.file_path for row in nodes_res}
+        count_stmt = select(
+            subq.c.node_id,
+            func.count().label('impact_score')
+        ).group_by(subq.c.node_id).order_by(func.count().desc()).limit(5).subquery('top_edges')
 
-        for node_id, count in sorted(edge_counts.items(), key=lambda x: x[1], reverse=True):
-            if node_id in node_paths and len(top_hotspots) < 5:
-                top_hotspots.append(
-                    {"path": node_paths[node_id], "impact_score": count, "friction": 0}
-                )
+        final_stmt = select(
+            GraphNodeModel.file_path,
+            count_stmt.c.impact_score
+        ).join(
+            count_stmt,
+            GraphNodeModel.id == count_stmt.c.node_id
+        ).where(GraphNodeModel.project_id == project_uuid).order_by(count_stmt.c.impact_score.desc())
+
+        top_res = await session.execute(final_stmt)
+
+        for row in top_res:
+            top_hotspots.append(
+                {"path": row.file_path, "impact_score": row.impact_score, "friction": 0}
+            )
     except Exception:
         logger.warning("Unhandled exception", exc_info=True)
 
