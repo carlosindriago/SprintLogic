@@ -6,7 +6,7 @@ Legend: **Area** = which app; **Effort** = rough size (S = under an hour, M = a 
 
 ## Progress at a glance
 
-**21 / 25 done** — all of Critical, all of High, all of Medium, and items 19–21 of Low. Next up: item #22.
+**22 / 25 done** — all of Critical, all of High, all of Medium, and items 19–22 of Low (all backend Low items now done). Next up: item #23 (frontend Low items).
 
 | # | Status | PR |
 |---|---|---|
@@ -31,7 +31,8 @@ Legend: **Area** = which app; **Effort** = rough size (S = under an hour, M = a 
 | 19 | ✅ Done | [#230](https://github.com/carlosindriago/SprintLogic/pull/230) |
 | 20 | ✅ Done | [#232](https://github.com/carlosindriago/SprintLogic/pull/232) |
 | 21 | ✅ Done | [#234](https://github.com/carlosindriago/SprintLogic/pull/234) |
-| 22–25 | ⬜ Not started | — |
+| 22 | ✅ Done | [#236](https://github.com/carlosindriago/SprintLogic/pull/236) |
+| 23–25 | ⬜ Not started | — |
 
 All merges land on `develop` (not `main`): each item gets its own ephemeral branch, a PR into `develop`, and is deleted after merge.
 
@@ -154,7 +155,7 @@ All merges land on `develop` (not `main`): each item gets its own ephemeral bran
   Area: Backend · Effort: M (implement) / S (remove)
   File: `app/interfaces/api/v1/sync.py:66` — wired to the existing `run_lint_immediate` heuristic instead of building real tree-sitter AST auditing (a separate feature).
 
-- [ ] **22. Log the silent `except Exception: pass` blocks**
+- [x] **22. Log the silent `except Exception: pass` blocks** — ✅ [PR #236](https://github.com/carlosindriago/SprintLogic/pull/236)
   Area: Backend · Effort: S
   File: `app/interfaces/api/v1/settings.py:266-267,347-348`.
 
