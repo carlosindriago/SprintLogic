@@ -6,7 +6,7 @@ Legend: **Area** = which app; **Effort** = rough size (S = under an hour, M = a 
 
 ## Progress at a glance
 
-**19 / 25 done** — all of Critical, all of High, all of Medium, and item 19 of Low. Next up: item #20.
+**20 / 25 done** — all of Critical, all of High, all of Medium, and items 19–20 of Low. Next up: item #21.
 
 | # | Status | PR |
 |---|---|---|
@@ -29,7 +29,8 @@ Legend: **Area** = which app; **Effort** = rough size (S = under an hour, M = a 
 | 17 | ✅ Done | [#226](https://github.com/carlosindriago/SprintLogic/pull/226) |
 | 18 | ✅ Done | [#228](https://github.com/carlosindriago/SprintLogic/pull/228) |
 | 19 | ✅ Done | [#230](https://github.com/carlosindriago/SprintLogic/pull/230) |
-| 20–25 | ⬜ Not started | — |
+| 20 | ✅ Done | [#232](https://github.com/carlosindriago/SprintLogic/pull/232) |
+| 21–25 | ⬜ Not started | — |
 
 All merges land on `develop` (not `main`): each item gets its own ephemeral branch, a PR into `develop`, and is deleted after merge.
 
@@ -144,9 +145,9 @@ All merges land on `develop` (not `main`): each item gets its own ephemeral bran
   Area: Backend · Effort: S
   Files: `models.py` (30 sites, needed a zero-arg `_utcnow()` helper since it's passed by reference as a SQLAlchemy default), plus `kanban_repository.py` (9 sites) and `db_studio.py` (2 sites) not in the original scope.
 
-- [ ] **20. Migrate Pydantic v1 `class Config` to `ConfigDict`**
+- [x] **20. Migrate Pydantic v1 `class Config` to `ConfigDict`** — ✅ [PR #232](https://github.com/carlosindriago/SprintLogic/pull/232)
   Area: Backend · Effort: S
-  Files: `app/interfaces/api/v1/omni_pad.py:20`, `prompt_schemas.py:22`.
+  Files: `omni_pad.py`, `prompt_schemas.py`, and `report_schemas.py` (a third file with the same pattern, not in the original list).
 
 - [ ] **21. Implement or remove the `debounced_lint()` stub**
   Area: Backend · Effort: M (implement) / S (remove)
