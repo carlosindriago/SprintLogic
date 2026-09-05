@@ -6,7 +6,7 @@ Legend: **Area** = which app; **Effort** = rough size (S = under an hour, M = a 
 
 ## Progress at a glance
 
-**7 / 25 done** — all of Critical, and items 4–7 of High. Next up: item #8.
+**8 / 25 done** — all of Critical, and items 4–8 of High. Next up: item #9.
 
 | # | Status | PR |
 |---|---|---|
@@ -17,7 +17,8 @@ Legend: **Area** = which app; **Effort** = rough size (S = under an hour, M = a 
 | 5 | ✅ Done | [#204](https://github.com/carlosindriago/SprintLogic/pull/204) |
 | 6 | ✅ Done | [#205](https://github.com/carlosindriago/SprintLogic/pull/205) |
 | 7 | ✅ Done | [#206](https://github.com/carlosindriago/SprintLogic/pull/206) |
-| 8–25 | ⬜ Not started | — |
+| 8 | ✅ Done | [#208](https://github.com/carlosindriago/SprintLogic/pull/208) |
+| 9–25 | ⬜ Not started | — |
 
 All merges land on `develop` (not `main`): each item gets its own ephemeral branch, a PR into `develop`, and is deleted after merge.
 
@@ -71,10 +72,10 @@ All merges land on `develop` (not `main`): each item gets its own ephemeral bran
   Files: `src-tauri/capabilities/default.json`, `src/components/AIReportViewer.tsx:61,72`
   Fix: granted `fs:allow-write-text-file` (verified against this repo's own generated `gen/schemas/desktop-schema.json`) — no static `fs:scope` needed, since Tauri's `dialog.save()` already grants scope for the chosen path at runtime. Fallback now also toasts instead of only `console.warn`.
 
-- [ ] **8. Finish the `confirm()` → Tauri dialog migration**
+- [x] **8. Finish the `confirm()` → Tauri dialog migration** — ✅ [PR #208](https://github.com/carlosindriago/SprintLogic/pull/208)
   Area: Frontend · Effort: S
   Files: `src/components/ChatHistoryDrawer.tsx:44`, `src/components/SprintEpicManagerModal.tsx:99,110`, `src/components/ExecutionRoomTab.tsx:213`
-  Fix: replace with `confirm` from `@tauri-apps/plugin-dialog`, matching `ReportHistoryPanel.tsx`/`AIReportViewer.tsx`.
+  Fix: replaced with `confirm` from `@tauri-apps/plugin-dialog`, matching `ReportHistoryPanel.tsx`/`AIReportViewer.tsx`. `clearChatHistory` in `ExecutionRoomTab.tsx` had to become `async` (was sync).
 
 - [ ] **9. Make the Sensei WebSocket reference-counted and project-scoped**
   Area: Frontend · Effort: M
