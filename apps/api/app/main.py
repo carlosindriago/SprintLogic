@@ -4,6 +4,7 @@ import sys
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.infrastructure.file_watcher import file_watcher
 from app.interfaces.api.v1.ai import router as ai_router
 from app.interfaces.api.v1.chat import router as chat_router
 from app.interfaces.api.v1.db_studio import router as db_studio_router
@@ -17,6 +18,7 @@ from app.interfaces.api.v1.lsp import router as lsp_router
 from app.interfaces.api.v1.omni_pad import router as omni_pad_router
 from app.interfaces.api.v1.planning_studio import router as planning_studio_router
 from app.interfaces.api.v1.projects import router as projects_router
+from app.interfaces.api.v1.projects.ws import file_watcher_callback
 from app.interfaces.api.v1.prompts import router as prompts_router
 from app.interfaces.api.v1.providers import router as providers_router
 from app.interfaces.api.v1.security_studio import router as security_studio_router
@@ -24,6 +26,13 @@ from app.interfaces.api.v1.settings import router as settings_router
 from app.interfaces.api.v1.sync import router as sync_router
 from app.interfaces.api.v1.telemetry import router as telemetry_router
 from app.interfaces.api.v1.test_studio import router as test_studio_router
+
+# Wires external tasks.md changes (another tab, a `git pull`, a hand edit, an
+# external agent editing the file directly) into the /projects/{id}/events
+# SSE stream the Kanban board listens on. file_watcher, the SSE endpoint and
+# the frontend listener already existed - this registration was the missing
+# piece connecting them, so the board never live-refreshed on external edits.
+file_watcher.add_callback(file_watcher_callback)
 
 logging.basicConfig(
     level=logging.INFO,
