@@ -6,7 +6,7 @@ Legend: **Area** = which app; **Effort** = rough size (S = under an hour, M = a 
 
 ## Progress at a glance
 
-**10 / 25 done** — all of Critical and all of High. Next up: item #11 (Medium tier starts).
+**11 / 25 done** — all of Critical, all of High, and item 11 of Medium. Next up: item #12.
 
 | # | Status | PR |
 |---|---|---|
@@ -20,7 +20,8 @@ Legend: **Area** = which app; **Effort** = rough size (S = under an hour, M = a 
 | 8 | ✅ Done | [#208](https://github.com/carlosindriago/SprintLogic/pull/208) |
 | 9 | ✅ Done | [#210](https://github.com/carlosindriago/SprintLogic/pull/210) |
 | 10 | ✅ Done | [#212](https://github.com/carlosindriago/SprintLogic/pull/212) |
-| 11–25 | ⬜ Not started | — |
+| 11 | ✅ Done | [#214](https://github.com/carlosindriago/SprintLogic/pull/214) |
+| 12–25 | ⬜ Not started | — |
 
 All merges land on `develop` (not `main`): each item gets its own ephemeral branch, a PR into `develop`, and is deleted after merge.
 
@@ -93,9 +94,10 @@ All merges land on `develop` (not `main`): each item gets its own ephemeral bran
 
 ## Medium
 
-- [ ] **11. Implement real FTS5 search or correct the misleading docstring**
+- [x] **11. Implement real FTS5 search or correct the misleading docstring** — ✅ [PR #214](https://github.com/carlosindriago/SprintLogic/pull/214)
   Area: Backend · Effort: M
   File: `app/interfaces/api/v1/projects/memory.py` (+ `models.py:228-236`)
+  Turned out worse than documented: `project_memories` search was **completely broken** (MATCH against a plain table), not just slow. Implemented real FTS5 for both tables (user's explicit choice, accepting data loss on existing `project_memories` rows). Also had to fix a gap in item #1's bootstrap logic (`_CREATE_ALL_BASELINE_REVISION`) that this migration exposed, and reverted a pre-existing LIKE workaround in `ai_agent.py`'s `search_codebase` tool back to real MATCH.
 
 - [ ] **12. Centralize `MAX_FILE_BYTES`**
   Area: Backend · Effort: S
