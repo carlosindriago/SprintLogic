@@ -556,12 +556,23 @@ export default function KanbanBoard({ projectId, onNodeClick }: KanbanBoardProps
     // SSE setup for real-time updates
     const evtSource = new EventSource(`${API_BASE_URL}/projects/${projectId}/events`);
     evtSource.onmessage = (event) => {
-      const data = JSON.parse(event.data);
+      let data;
+      try {
+        data = JSON.parse(event.data);
+      } catch (e) {
+        console.error("Failed to parse Kanban SSE message:", e);
+        return;
+      }
       if (data.type === "kanban_update" && active) {
         fetchConfig();
         fetchReferenceData();
         fetchTasks();
       }
+    };
+    evtSource.onerror = (event) => {
+      // EventSource auto-reconnects on its own by default; just surface it
+      // for diagnostics instead of failing silently.
+      console.error("Kanban SSE connection error:", event);
     };
 
     return () => {
