@@ -6,7 +6,7 @@ Legend: **Area** = which app; **Effort** = rough size (S = under an hour, M = a 
 
 ## Progress at a glance
 
-**12 / 25 done** — all of Critical, all of High, and items 11–12 of Medium. Next up: item #13.
+**13 / 25 done** — all of Critical, all of High, and items 11–13 of Medium (all backend Medium items now done). Next up: item #14 (frontend Medium items).
 
 | # | Status | PR |
 |---|---|---|
@@ -22,7 +22,8 @@ Legend: **Area** = which app; **Effort** = rough size (S = under an hour, M = a 
 | 10 | ✅ Done | [#212](https://github.com/carlosindriago/SprintLogic/pull/212) |
 | 11 | ✅ Done | [#214](https://github.com/carlosindriago/SprintLogic/pull/214) |
 | 12 | ✅ Done | [#216](https://github.com/carlosindriago/SprintLogic/pull/216) |
-| 13–25 | ⬜ Not started | — |
+| 13 | ✅ Done | [#218](https://github.com/carlosindriago/SprintLogic/pull/218) |
+| 14–25 | ⬜ Not started | — |
 
 All merges land on `develop` (not `main`): each item gets its own ephemeral branch, a PR into `develop`, and is deleted after merge.
 
@@ -104,9 +105,9 @@ All merges land on `develop` (not `main`): each item gets its own ephemeral bran
   Area: Backend · Effort: S
   Files: 9 occurrences (not 8), moved into `app/infrastructure/config.py`. Turned out only 2 of the 9 were ever actually used — the other 7 were dead copy-pasted constants, removed outright.
 
-- [ ] **13. Add minimal security headers middleware**
+- [x] **13. Add minimal security headers middleware** — ✅ [PR #218](https://github.com/carlosindriago/SprintLogic/pull/218)
   Area: Backend · Effort: S
-  File: `app/main.py` — `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, basic CSP for the served static frontend.
+  File: `app/main.py` — `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, CSP mirroring `tauri.conf.json`.
 
 - [ ] **14. Decouple graph reheat from focus/filter changes**
   Area: Frontend · Effort: M
