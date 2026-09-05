@@ -6,7 +6,7 @@ Legend: **Area** = which app; **Effort** = rough size (S = under an hour, M = a 
 
 ## Progress at a glance
 
-**23 / 25 done** — all of Critical, all of High, all of Medium, and items 19–23 of Low. Next up: item #24.
+**24 / 25 done** — all of Critical, all of High, all of Medium, and items 19–24 of Low. Only item #25 (introduce Vitest) remains.
 
 | # | Status | PR |
 |---|---|---|
@@ -33,7 +33,8 @@ Legend: **Area** = which app; **Effort** = rough size (S = under an hour, M = a 
 | 21 | ✅ Done | [#234](https://github.com/carlosindriago/SprintLogic/pull/234) |
 | 22 | ✅ Done | [#236](https://github.com/carlosindriago/SprintLogic/pull/236) |
 | 23 | ✅ Done | [#238](https://github.com/carlosindriago/SprintLogic/pull/238) |
-| 24–25 | ⬜ Not started | — |
+| 24 | ✅ Done | [#240](https://github.com/carlosindriago/SprintLogic/pull/240) |
+| 25 | ⬜ Not started | — |
 
 All merges land on `develop` (not `main`): each item gets its own ephemeral branch, a PR into `develop`, and is deleted after merge.
 
@@ -164,9 +165,9 @@ All merges land on `develop` (not `main`): each item gets its own ephemeral bran
   Area: Frontend · Effort: S (flag) / M (fixing whatever it surfaces)
   File: `next.config.ts:5`. Flag flipped, production build verified clean; actual dev-mode double-invoke behavior needs the user's own interactive testing (no GUI available here).
 
-- [ ] **24. Resolve the React Compiler dependency**
+- [x] **24. Resolve the React Compiler dependency** — ✅ [PR #240](https://github.com/carlosindriago/SprintLogic/pull/240)
   Area: Frontend · Effort: S
-  File: `next.config.ts` — either add `experimental.reactCompiler: true` or drop the unused `babel-plugin-react-compiler` devDependency.
+  File: `next.config.ts` — enabled it (`reactCompiler: true`, a top-level key in Next 16, not `experimental.*`). Verified with hard evidence (`useMemoCache` present in 3 output chunks) that it's actually transforming components.
 
 - [ ] **25. Introduce Vitest + Testing Library**
   Area: Frontend · Effort: L
